@@ -54,10 +54,10 @@ learning, automatic progress tracking, and verifiable certificates.
 
 ### Environment
 
-Configure the keys in `.env.example`. Set `NEXT_PUBLIC_SITE_URL=https://digitalskillx.com` in
-production. `SUPABASE_SERVICE_ROLE_KEY` is required for admin actions, emails, automations and
+Configure the keys in `.env.example`. Copy to `.env.local` and run `npm run check-env` to
+validate. Set `NEXT_PUBLIC_SITE_URL=https://digitalskillx.com` in production. `SUPABASE_SERVICE_ROLE_KEY` is required for admin actions, emails, automations and
 certificate issuance. Optional integrations: `RESEND_API_KEY` (email), `YOUTUBE_API_KEY` (import),
-`ANTHROPIC_API_KEY` (AI), `CRON_SECRET` (scheduled jobs). Features degrade gracefully when a key
+`DEEPSEEK_API_KEY` or `ANTHROPIC_API_KEY` (AI), `CRON_SECRET` (scheduled jobs). Features degrade gracefully when a key
 is absent.
 
 ## Getting started
@@ -109,6 +109,7 @@ Open http://localhost:3000.
 | `npm run start`     | Run the production build          |
 | `npm run lint`      | ESLint                            |
 | `npm run typecheck` | TypeScript type check (no emit)   |
+| `npm run check-env` | Validate `.env.local` variables   |
 
 ## Folder structure
 
