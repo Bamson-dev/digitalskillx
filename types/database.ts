@@ -209,6 +209,20 @@ export type RateLimitBucket = {
   window_start: string;
 };
 
+export type PlatformSettings = {
+  id: string;
+  platform_name: string;
+  logo_url: string | null;
+  favicon_url: string | null;
+  primary_color: string;
+  default_timezone: string;
+  email_sender_name: string | null;
+  email_reply_to: string | null;
+  default_certificate_template_id: string | null;
+  updated_at: string;
+  updated_by: string | null;
+};
+
 export type LessonProgress = {
   id: string;
   student_id: string;
@@ -467,6 +481,19 @@ export type Database = {
         [Rel<"support_requests_student_id_fkey", "student_id", "profiles", "id">]
       >;
       rate_limit_buckets: Table<RateLimitBucket>;
+      platform_settings: Table<
+        PlatformSettings,
+        [
+          Rel<
+            "platform_settings_default_certificate_template_id_fkey",
+            "default_certificate_template_id",
+            "certificate_templates",
+            "id",
+            true
+          >,
+          Rel<"platform_settings_updated_by_fkey", "updated_by", "profiles", "id", true>,
+        ]
+      >;
       transactions: Table<
         Transaction,
         [

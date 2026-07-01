@@ -1,15 +1,14 @@
 import "server-only";
 import nodemailer from "nodemailer";
 import type SMTPTransport from "nodemailer/lib/smtp-transport";
+import { getEmailSenderConfig } from "@/lib/platform-settings";
 
 const smtpHost = process.env.ZEPTOMAIL_SMTP_HOST;
 const smtpPort = Number(process.env.ZEPTOMAIL_SMTP_PORT ?? 587);
 const smtpUser = process.env.ZEPTOMAIL_SMTP_USER;
 const smtpPassword = process.env.ZEPTOMAIL_SMTP_PASSWORD;
-const fromName = process.env.ZEPTOMAIL_FROM_NAME ?? "DigitalSkillX";
-const fromAddress = process.env.ZEPTOMAIL_FROM_EMAIL ?? "courses@digitalskillx.com";
 
-function isEmailConfigured() {
+function isEmailConfigured(fromAddress: string) {
   return Boolean(smtpHost && smtpUser && smtpPassword && fromAddress);
 }
 
@@ -39,7 +38,9 @@ export type SendEmailParams = {
  * when SMTP env vars are not configured, so local/dev flows don't crash.
  */
 export async function sendEmail(params: SendEmailParams) {
-  if (!isEmailConfigured()) {
+  const sender = await getEmailSenderConfig();
+
+  if (!isEmailConfigured(sender.fromAddress)) {
     console.warn("[email] ZeptoMail SMTP not configured — skipping:", params.subject);
     return { skipped: true as const };
   }
@@ -48,11 +49,11 @@ export async function sendEmail(params: SendEmailParams) {
 
   try {
     const info = await transporter.sendMail({
-      from: `${fromName} <${fromAddress}>`,
+      from: `${sender.fromName} <${sender.fromAddress}>`,
       to: params.to,
       subject: params.subject,
       html: params.html,
-      replyTo: params.replyTo,
+      replyTo: params.replyTo ?? sender.replyTo,
     });
     return { messageId: info.messageId };
   } catch (error) {

@@ -1,20 +1,34 @@
 import type { Metadata } from "next";
-import { SectionPlaceholder } from "@/components/admin/section-placeholder";
+import { requireAdmin } from "@/lib/auth";
+import { createClient } from "@/lib/supabase/server";
+import { getPlatformSettings } from "@/lib/platform-settings";
+import { SettingsForms } from "@/components/admin/settings-forms";
 
 export const metadata: Metadata = { title: "Settings" };
 
-export default function AdminSettingsPage() {
+export const dynamic = "force-dynamic";
+
+export default async function AdminSettingsPage() {
+  await requireAdmin();
+  const supabase = createClient();
+
+  const [settings, { data: templates }] = await Promise.all([
+    getPlatformSettings(supabase),
+    supabase
+      .from("certificate_templates")
+      .select("id, name, is_default, base_image_url")
+      .order("name"),
+  ]);
+
   return (
-    <SectionPlaceholder
-      title="Settings"
-      description="Configure the platform, branding and automations."
-      phase="Phase 4 / 5"
-      bullets={[
-        "Platform name, logo, favicon, primary colour, timezone",
-        "Email sender identity and templates (ZeptoMail)",
-        "Certificate default template",
-        "Automation rule builder and system logs",
-      ]}
-    />
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-bold">Settings</h1>
+        <p className="mt-1 text-sm text-muted">
+          Configure platform branding, email identity, and certificate defaults.
+        </p>
+      </div>
+      <SettingsForms settings={settings} templates={templates ?? []} />
+    </div>
   );
 }
