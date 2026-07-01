@@ -89,10 +89,6 @@ export default async function HomePage() {
         <section className="border-b border-surface-border bg-white px-4 py-10 sm:px-6 sm:py-14">
           <div className="mx-auto grid max-w-6xl gap-8 lg:grid-cols-2 lg:items-center lg:gap-12">
             <div className="order-2 lg:order-1">
-              <p className="mb-3 inline-flex items-center gap-2 rounded-full border border-brand/20 bg-brand/5 px-3 py-1 text-xs font-semibold text-brand">
-                <span className="h-1.5 w-1.5 rounded-full bg-brand" />
-                {ORG.tagline}
-              </p>
               <h1 className="font-display text-3xl font-bold leading-tight tracking-tight text-neutral-900 sm:text-4xl lg:text-[2.75rem] lg:leading-tight">
                 Master Profitable Digital Skills
               </h1>
