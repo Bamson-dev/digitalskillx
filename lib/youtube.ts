@@ -40,8 +40,12 @@ export function detectYoutubeInput(url: string): YoutubeInput | null {
 }
 
 function key() {
-  const k = process.env.YOUTUBE_API_KEY;
-  if (!k) throw new Error("YOUTUBE_API_KEY is not configured");
+  const k = process.env.YOUTUBE_API_KEY?.trim();
+  if (!k || k === "your-youtube-data-api-key") {
+    throw new Error(
+      "YOUTUBE_API_KEY is not configured on the server. In Coolify, set the variable name exactly as YOUTUBE_API_KEY (no NEXT_PUBLIC_ prefix), Save, then Redeploy so the running container picks it up.",
+    );
+  }
   return k;
 }
 

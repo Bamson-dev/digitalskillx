@@ -16,18 +16,19 @@ const VALID_SOURCES = new Set<LessonImportSource>([
   "loom",
 ]);
 
-/**
- * Imports video lessons from YouTube, Vimeo, Wistia, or Loom. Admin-only.
- */
-export async function POST(request: NextRequest) {
-  const limited = await rateLimitedResponse(request, "admin-lesson-import", 30);
-  if (limited) return limited;
+function youtubeKeyConfigured() {
+  const k = process.env.YOUTUBE_API_KEY?.trim();
+  return Boolean(k && k !== "your-youtube-data-api-key");
+}
 
+async function requireAdminApi() {
   const supabase = createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!user) {
+    return { error: NextResponse.json({ error: "Unauthorized" }, { status: 401 }) };
+  }
 
   const { data: profile } = await supabase
     .from("profiles")
@@ -35,9 +36,33 @@ export async function POST(request: NextRequest) {
     .eq("id", user.id)
     .single();
   if (profile?.role !== "admin" || profile?.is_suspended) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    return { error: NextResponse.json({ error: "Forbidden" }, { status: 403 }) };
   }
 
+  return { user };
+}
+
+/** Admin diagnostic: is YOUTUBE_API_KEY visible to the running server? */
+export async function GET() {
+  const auth = await requireAdminApi();
+  if ("error" in auth && auth.error) return auth.error;
+
+  return NextResponse.json({
+    youtubeApiKeyConfigured: youtubeKeyConfigured(),
+  });
+}
+
+/**
+ * Imports video lessons from YouTube, Vimeo, Wistia, or Loom. Admin-only.
+ */
+export async function POST(request: NextRequest) {
+  const limited = await rateLimitedResponse(request, "admin-lesson-import", 30);
+  if (limited) return limited;
+
+  const auth = await requireAdminApi();
+  if ("error" in auth && auth.error) return auth.error;
+
+  const supabase = createClient();
   const body = (await request.json()) as {
     courseId?: string;
     url?: string;
@@ -52,6 +77,16 @@ export async function POST(request: NextRequest) {
   const source = body.source ?? "youtube_playlist";
   if (!VALID_SOURCES.has(source)) {
     return NextResponse.json({ error: "Invalid import source." }, { status: 400 });
+  }
+
+  if (source.startsWith("youtube_") && !youtubeKeyConfigured()) {
+    return NextResponse.json(
+      {
+        error:
+          "YOUTUBE_API_KEY is not configured on the server. In Coolify, add YOUTUBE_API_KEY (exact name, no quotes), Save, then Redeploy.",
+      },
+      { status: 503 },
+    );
   }
 
   let lessons;
