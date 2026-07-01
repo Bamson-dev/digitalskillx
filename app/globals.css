@@ -4,18 +4,13 @@
 
 :root {
   --background: 255 255 255;
-  --foreground: 15 23 42;
-  --muted: 100 116 139;
+  --foreground: 23 23 23;
+  --muted: 107 114 128;
   --card: 255 255 255;
-  --border: 226 232 240;
-}
-
-.dark {
-  --background: 2 6 23;
-  --foreground: 226 232 240;
-  --muted: 148 163 184;
-  --card: 15 23 42;
-  --border: 30 41 59;
+  --border: 229 231 235;
+  --accent: 220 38 38;
+  --accent-hover: 185 28 28;
+  --surface-muted: 249 250 251;
 }
 
 html,
@@ -36,7 +31,37 @@ body {
   .bg-card {
     background-color: rgb(var(--card));
   }
+  .bg-surface-muted {
+    background-color: rgb(var(--surface-muted));
+  }
   .border-app {
     border-color: rgb(var(--border));
   }
+  .text-accent {
+    color: rgb(var(--accent));
+  }
+  .bg-accent {
+    background-color: rgb(var(--accent));
+  }
+  .hover\:bg-accent-hover:hover {
+    background-color: rgb(var(--accent-hover));
+  }
+  .ring-accent {
+    --tw-ring-color: rgb(var(--accent));
+  }
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-up {
+  animation: fade-up 0.5s ease-out forwards;
 }

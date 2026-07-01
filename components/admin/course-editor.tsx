@@ -60,7 +60,7 @@ function SettingsCard({
 }) {
   return (
     <Card>
-      <CardHeader title="Course settings" description="Title, visibility, completion & certificate rules." />
+      <CardHeader title="Course settings" description="Storefront listing, pricing, and completion rules." />
       <form action={updateCourseSettings} className="grid gap-4 sm:grid-cols-2">
         <input type="hidden" name="id" value={course.id} />
         <div className="sm:col-span-2">
@@ -68,12 +68,45 @@ function SettingsCard({
           <Input name="title" defaultValue={course.title} required />
         </div>
         <div className="sm:col-span-2">
-          <Label>Description</Label>
+          <Label>Short description (storefront card)</Label>
+          <Input name="short_description" defaultValue={course.short_description ?? ""} maxLength={160} />
+        </div>
+        <div className="sm:col-span-2">
+          <Label>Full description (sales page)</Label>
           <Textarea name="description" rows={3} defaultValue={course.description ?? ""} />
+        </div>
+        <div>
+          <Label>Price (₦ Naira)</Label>
+          <Input name="price_ngn" type="number" min={0} step={1} defaultValue={course.price_ngn ?? 0} />
+        </div>
+        <div>
+          <Label>Price ($ USD)</Label>
+          <Input name="price_usd" type="number" min={0} step={1} defaultValue={course.price_usd ?? 0} />
+        </div>
+        <div>
+          <Label>Promo video URL</Label>
+          <Input name="promo_video_url" defaultValue={course.promo_video_url ?? ""} placeholder="YouTube embed URL" />
         </div>
         <div>
           <Label>Thumbnail URL</Label>
           <Input name="thumbnail_url" defaultValue={course.thumbnail_url ?? ""} placeholder="https://…" />
+        </div>
+        <div className="sm:col-span-2">
+          <Label>What you&apos;ll learn (one outcome per line)</Label>
+          <Textarea
+            name="learning_outcomes"
+            rows={4}
+            defaultValue={(course.learning_outcomes ?? []).join("\n")}
+            placeholder="Launch profitable Facebook ad campaigns&#10;Build a high-converting landing page"
+          />
+        </div>
+        <div>
+          <Label>Instructor name</Label>
+          <Input name="instructor_name" defaultValue={course.instructor_name ?? ""} />
+        </div>
+        <div>
+          <Label>Instructor bio</Label>
+          <Input name="instructor_bio" defaultValue={course.instructor_bio ?? ""} />
         </div>
         <div>
           <Label>Category</Label>

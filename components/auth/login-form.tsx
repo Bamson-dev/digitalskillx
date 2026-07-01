@@ -9,8 +9,8 @@ import {
   type AuthState,
 } from "@/app/(auth)/actions";
 import { Input, Label } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { SubmitButton } from "@/components/auth/submit-button";
-import { OAuthButtons } from "@/components/auth/oauth-buttons";
 
 const initial: AuthState = {};
 
@@ -27,14 +27,6 @@ export function LoginForm({ next }: { next: string }) {
         <p className="mt-1 text-sm text-muted">
           Log in to continue your learning.
         </p>
-      </div>
-
-      <OAuthButtons />
-
-      <div className="flex items-center gap-3 text-xs text-muted">
-        <span className="h-px flex-1 bg-[rgb(var(--border))]" />
-        or
-        <span className="h-px flex-1 bg-[rgb(var(--border))]" />
       </div>
 
       {mode === "password" ? (
@@ -54,10 +46,9 @@ export function LoginForm({ next }: { next: string }) {
                 Forgot?
               </Link>
             </div>
-            <Input
+            <PasswordInput
               id="password"
               name="password"
-              type="password"
               required
               autoComplete="current-password"
             />

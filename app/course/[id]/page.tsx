@@ -1,0 +1,122 @@
+import type { Metadata } from "next";
+import { notFound } from "next/navigation";
+import { createClient } from "@/lib/supabase/server";
+import { ORG, siteUrl } from "@/lib/org";
+import { MarketplaceNav, MarketplaceFooter } from "@/components/marketplace/marketplace-chrome";
+import { CourseLandingView } from "@/components/marketplace/course-landing-view";
+
+export async function generateMetadata({
+  params,
+}: {
+  params: { id: string };
+}): Promise<Metadata> {
+  const supabase = createClient();
+  const { data: course } = await supabase
+    .from("courses")
+    .select("title, short_description, description, thumbnail_url")
+    .eq("id", params.id)
+    .eq("visibility", "published")
+    .maybeSingle();
+  if (!course) return { title: "Course" };
+
+  const title = course.title;
+  const description = course.short_description ?? course.description ?? ORG.tagline;
+  const url = `${siteUrl()}/course/${params.id}`;
+
+  return {
+    title,
+    description,
+    openGraph: {
+      type: "website",
+      title,
+      description,
+      url,
+      siteName: "DigitalSkillX",
+      images: course.thumbnail_url ? [{ url: course.thumbnail_url, alt: title }] : undefined,
+    },
+    twitter: {
+      card: "summary_large_image",
+      title,
+      description,
+      images: course.thumbnail_url ? [course.thumbnail_url] : undefined,
+    },
+  };
+}
+
+export default async function CourseLandingPage({
+  params,
+  searchParams,
+}: {
+  params: { id: string };
+  searchParams: { enroll?: string; payment?: string };
+}) {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  const { data: course } = await supabase
+    .from("courses")
+    .select(
+      "id, title, description, short_description, thumbnail_url, price_ngn, price_usd, learning_outcomes, instructor_name, instructor_bio, promo_video_url, category:course_categories(name), modules(id, title, position, lessons(id, title, position, lesson_type))",
+    )
+    .eq("id", params.id)
+    .eq("visibility", "published")
+    .single();
+
+  if (!course) notFound();
+
+  let profile = null;
+  let isEnrolled = false;
+  if (user) {
+    const { data: p } = await supabase
+      .from("profiles")
+      .select("full_name, email, role")
+      .eq("id", user.id)
+      .single();
+    profile = p;
+    const { data: e } = await supabase
+      .from("enrollments")
+      .select("id")
+      .eq("student_id", user.id)
+      .eq("course_id", course.id)
+      .maybeSingle();
+    isEnrolled = Boolean(e);
+  }
+
+  const { data: relatedRaw } = await supabase
+    .from("courses")
+    .select("id, title, description, short_description, thumbnail_url, price_ngn, price_usd, instructor_name")
+    .eq("visibility", "published")
+    .neq("id", course.id)
+    .limit(2);
+
+  const modules = [...(course.modules ?? [])].sort((a, b) => a.position - b.position);
+  const lessonCount = modules.reduce((n, m) => n + (m.lessons?.length ?? 0), 0);
+  const category = Array.isArray(course.category) ? course.category[0] : course.category;
+
+  return (
+    <div className="flex min-h-screen flex-col bg-white text-neutral-900">
+      <MarketplaceNav user={profile} role={profile?.role} />
+
+      <main className="flex-1">
+        <CourseLandingView
+          course={{
+            ...course,
+            modules,
+            category_name: category?.name ?? null,
+          }}
+          isEnrolled={isEnrolled}
+          isLoggedIn={Boolean(user)}
+          showPaymentSuccess={searchParams.payment === "success"}
+          related={relatedRaw ?? []}
+          lessonCount={lessonCount}
+        />
+      </main>
+
+      <div className="hidden lg:block">
+        <MarketplaceFooter />
+      </div>
+    </div>
+  );
+}

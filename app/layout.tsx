@@ -1,10 +1,12 @@
-import type { Metadata, Viewport } from "next";
-import { Inter } from "next/font/google";
+import type { Metadata } from "next";
+import { Space_Grotesk, Inter } from "next/font/google";
 import "./globals.css";
 import { RegisterSW } from "@/components/register-sw";
+import { CurrencyProvider } from "@/components/providers/currency-provider";
 import { ORG, siteUrl } from "@/lib/org";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-sans" });
+const display = Space_Grotesk({ subsets: ["latin"], variable: "--font-display" });
 
 const defaultDescription = `${ORG.tagline} Learn digital skills at your pace and earn verifiable certificates.`;
 
@@ -16,7 +18,7 @@ export const metadata: Metadata = {
   description: defaultDescription,
   metadataBase: new URL(siteUrl()),
   manifest: "/manifest.webmanifest",
-  appleWebApp: { capable: true, title: "DigitalSkillX", statusBarStyle: "default" },
+  appleWebApp: { capable: true, title: "DigitalSkillX", statusBarStyle: "black-translucent" },
   icons: { icon: "/icon.svg", apple: "/icon.svg" },
   openGraph: {
     type: "website",
@@ -32,8 +34,8 @@ export const metadata: Metadata = {
   },
 };
 
-export const viewport: Viewport = {
-  themeColor: "#2563eb",
+export const viewport = {
+  themeColor: "#ffffff",
   width: "device-width",
   initialScale: 1,
 };
@@ -45,8 +47,8 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={`${inter.variable} font-sans`}>
-        {children}
+      <body className={`${inter.variable} ${display.variable} font-sans antialiased`}>
+        <CurrencyProvider>{children}</CurrencyProvider>
         <RegisterSW />
       </body>
     </html>

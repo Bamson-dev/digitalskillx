@@ -2,6 +2,8 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import type { Database } from "@/types/database";
 
+const PUBLIC_PREFIXES = ["/verify", "/auth", "/course", "/api/webhooks", "/api/health"];
+
 const PUBLIC_PATHS = [
   "/",
   "/login",
@@ -9,12 +11,15 @@ const PUBLIC_PATHS = [
   "/forgot-password",
   "/reset-password",
   "/admin/login",
+  "/about",
+  "/privacy",
+  "/terms",
+  "/refund-policy",
 ];
 
 function isPublic(pathname: string) {
   if (PUBLIC_PATHS.includes(pathname)) return true;
-  // Public certificate verification + auth callback.
-  return pathname.startsWith("/verify") || pathname.startsWith("/auth");
+  return PUBLIC_PREFIXES.some((p) => pathname.startsWith(p));
 }
 
 /**
@@ -61,7 +66,11 @@ export async function updateSession(request: NextRequest) {
 
   if (!user && !isPublic(pathname)) {
     const url = request.nextUrl.clone();
-    url.pathname = pathname.startsWith("/admin") ? "/admin/login" : "/login";
+    if (pathname.startsWith("/admin/mfa")) {
+      url.pathname = "/admin/login";
+    } else {
+      url.pathname = pathname.startsWith("/admin") ? "/admin/login" : "/login";
+    }
     url.searchParams.set("next", pathname);
     return NextResponse.redirect(url);
   }

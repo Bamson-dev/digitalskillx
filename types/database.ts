@@ -21,7 +21,9 @@ export type Json =
 export type UserRole = "admin" | "student";
 export type CourseVisibility = "draft" | "published" | "archived";
 export type EnrollmentType = "open" | "manual";
-export type EnrollmentSource = "self" | "admin";
+export type EnrollmentSource = "self" | "admin" | "purchase";
+export type TransactionStatus = "pending" | "success" | "failed";
+export type PaymentProvider = "paystack";
 export type LessonType =
   | "video"
   | "pdf"
@@ -132,6 +134,13 @@ export type Course = Timestamps & {
   drip_enabled: boolean;
   tags: string[];
   created_by: string | null;
+  price_ngn: number;
+  price_usd: number;
+  short_description: string | null;
+  learning_outcomes: string[];
+  instructor_name: string | null;
+  instructor_bio: string | null;
+  promo_video_url: string | null;
   updated_at: string;
 };
 
@@ -170,6 +179,34 @@ export type Enrollment = {
   completed_at: string | null;
   enrolled_by: string | null;
   source: EnrollmentSource;
+};
+
+export type Transaction = Timestamps & {
+  id: string;
+  student_id: string | null;
+  course_id: string;
+  amount: number;
+  currency: string;
+  provider: PaymentProvider;
+  reference: string;
+  status: TransactionStatus;
+  paystack_data: Json | null;
+  anonymized: boolean;
+  updated_at: string;
+};
+
+export type SupportRequest = Timestamps & {
+  id: string;
+  student_id: string | null;
+  email: string | null;
+  message: string;
+  status: "open" | "in_progress" | "resolved";
+};
+
+export type RateLimitBucket = {
+  bucket_key: string;
+  request_count: number;
+  window_start: string;
 };
 
 export type LessonProgress = {
@@ -425,6 +462,18 @@ export type Database = {
       admin_notes: Table<AdminNote>;
       audit_logs: Table<AuditLog>;
       ai_conversations: Table<AiConversation>;
+      support_requests: Table<
+        SupportRequest,
+        [Rel<"support_requests_student_id_fkey", "student_id", "profiles", "id">]
+      >;
+      rate_limit_buckets: Table<RateLimitBucket>;
+      transactions: Table<
+        Transaction,
+        [
+          Rel<"transactions_student_id_fkey", "student_id", "profiles", "id">,
+          Rel<"transactions_course_id_fkey", "course_id", "courses", "id">,
+        ]
+      >;
     };
     Views: Record<string, never>;
     Functions: {
@@ -445,6 +494,8 @@ export type Database = {
       submission_status: SubmissionStatus;
       notification_type: NotificationType;
       automation_trigger: AutomationTrigger;
+      transaction_status: TransactionStatus;
+      payment_provider: PaymentProvider;
     };
     CompositeTypes: Record<string, never>;
   };

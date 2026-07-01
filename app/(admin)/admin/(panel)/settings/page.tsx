@@ -11,7 +11,7 @@ export default function AdminSettingsPage() {
       phase="Phase 4 / 5"
       bullets={[
         "Platform name, logo, favicon, primary colour, timezone",
-        "Email sender identity and templates (Resend)",
+        "Email sender identity and templates (ZeptoMail)",
         "Certificate default template",
         "Automation rule builder and system logs",
       ]}

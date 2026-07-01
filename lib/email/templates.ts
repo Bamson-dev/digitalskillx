@@ -1,4 +1,4 @@
-const BRAND = "#2563eb";
+const BRAND = "#dc2626";
 const PLATFORM = "DigitalSkillX";
 const PARENT = "Pdigital MarketStore Ltd";
 
@@ -84,6 +84,15 @@ export const emailTemplates = {
       "Pick up where you left off",
       `Hi ${p.name}, you haven't logged in for a few days. Your courses are waiting!`,
       { label: "Continue learning", url: p.url },
+    ),
+  }),
+
+  purchaseConfirmation: (p: { name: string; courseTitle: string; url: string }) => ({
+    subject: `Purchase confirmed: ${p.courseTitle}`,
+    html: shell(
+      "You're in!",
+      `Hi ${p.name}, your payment was successful. <b>${p.courseTitle}</b> is now unlocked and ready to learn.`,
+      { label: "Start learning", url: p.url },
     ),
   }),
 

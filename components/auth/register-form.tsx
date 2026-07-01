@@ -4,8 +4,8 @@ import Link from "next/link";
 import { useFormState } from "react-dom";
 import { signUpWithPassword, type AuthState } from "@/app/(auth)/actions";
 import { Input, Label } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { SubmitButton } from "@/components/auth/submit-button";
-import { OAuthButtons } from "@/components/auth/oauth-buttons";
 
 const initial: AuthState = {};
 
@@ -21,14 +21,6 @@ export function RegisterForm() {
         </p>
       </div>
 
-      <OAuthButtons />
-
-      <div className="flex items-center gap-3 text-xs text-muted">
-        <span className="h-px flex-1 bg-[rgb(var(--border))]" />
-        or
-        <span className="h-px flex-1 bg-[rgb(var(--border))]" />
-      </div>
-
       <form action={action} className="space-y-4">
         <div>
           <Label htmlFor="full_name">Full name</Label>
@@ -40,10 +32,9 @@ export function RegisterForm() {
         </div>
         <div>
           <Label htmlFor="password">Password</Label>
-          <Input
+          <PasswordInput
             id="password"
             name="password"
-            type="password"
             required
             minLength={8}
             autoComplete="new-password"

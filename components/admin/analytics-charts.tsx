@@ -23,7 +23,7 @@ export function SignupsChart({ data }: { data: { month: string; count: number }[
           <XAxis dataKey="month" fontSize={12} stroke="#94a3b8" />
           <YAxis allowDecimals={false} fontSize={12} stroke="#94a3b8" />
           <Tooltip />
-          <Line type="monotone" dataKey="count" stroke="#2563eb" strokeWidth={2} dot={{ r: 3 }} />
+          <Line type="monotone" dataKey="count" stroke="#dc2626" strokeWidth={2} dot={{ r: 3 }} />
         </LineChart>
       </ResponsiveContainer>
     </Card>
@@ -41,7 +41,7 @@ export function EnrollmentsChart({ data }: { data: { course: string; enrolled: n
           <YAxis allowDecimals={false} fontSize={12} stroke="#94a3b8" />
           <Tooltip />
           <Bar dataKey="enrolled" fill="#93c5fd" radius={[4, 4, 0, 0]} />
-          <Bar dataKey="completed" fill="#2563eb" radius={[4, 4, 0, 0]} />
+          <Bar dataKey="completed" fill="#dc2626" radius={[4, 4, 0, 0]} />
         </BarChart>
       </ResponsiveContainer>
     </Card>

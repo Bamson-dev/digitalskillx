@@ -28,24 +28,58 @@ export async function updateCourseSettings(formData: FormData) {
   const supabase = createClient();
   const id = String(formData.get("id"));
 
+  const { data: before } = await supabase
+    .from("courses")
+    .select("price_ngn, price_usd")
+    .eq("id", id)
+    .single();
+
   const required = Number(formData.get("required_completion_pct") ?? 100);
+  const priceNgn = Number(formData.get("price_ngn") ?? 0);
+  const priceUsd = Number(formData.get("price_usd") ?? 0);
+  const outcomes = String(formData.get("learning_outcomes") ?? "")
+    .split("\n")
+    .map((s) => s.trim())
+    .filter(Boolean);
+
   const { error } = await supabase
     .from("courses")
     .update({
       title: String(formData.get("title") ?? "").trim(),
       description: String(formData.get("description") ?? ""),
+      short_description: String(formData.get("short_description") ?? "") || null,
       thumbnail_url: String(formData.get("thumbnail_url") ?? "") || null,
+      promo_video_url: String(formData.get("promo_video_url") ?? "") || null,
       category_id: String(formData.get("category_id") ?? "") || null,
       visibility: String(formData.get("visibility") ?? "draft") as CourseVisibility,
-      enrollment_type: String(formData.get("enrollment_type") ?? "manual") as EnrollmentType,
+      enrollment_type: String(formData.get("enrollment_type") ?? "open") as EnrollmentType,
       certificate_enabled: formData.get("certificate_enabled") === "on",
       drip_enabled: formData.get("drip_enabled") === "on",
       required_completion_pct: Number.isFinite(required) ? required : 100,
+      price_ngn: Number.isFinite(priceNgn) && priceNgn >= 0 ? Math.round(priceNgn) : 0,
+      price_usd: Number.isFinite(priceUsd) && priceUsd >= 0 ? Math.round(priceUsd) : 0,
+      learning_outcomes: outcomes,
+      instructor_name: String(formData.get("instructor_name") ?? "") || null,
+      instructor_bio: String(formData.get("instructor_bio") ?? "") || null,
     })
     .eq("id", id);
   if (error) throw new Error(error.message);
 
-  await logAudit({ action: "course_updated", targetType: "course", targetId: id });
+  if (before && (before.price_ngn !== priceNgn || before.price_usd !== priceUsd)) {
+    await logAudit({
+      action: "price_changed",
+      targetType: "course",
+      targetId: id,
+      metadata: {
+        price_ngn_before: before.price_ngn,
+        price_ngn_after: priceNgn,
+        price_usd_before: before.price_usd,
+        price_usd_after: priceUsd,
+      },
+    });
+  }
+
+  await logAudit({ action: "course_edited", targetType: "course", targetId: id });
   revalidatePath(`/admin/courses/${id}`);
 }
 

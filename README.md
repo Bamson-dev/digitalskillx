@@ -14,7 +14,7 @@ learning, automatic progress tracking, and verifiable certificates.
 | Frontend     | Next.js 14 (App Router), TypeScript, Tailwind CSS |
 | Backend / DB | Supabase (Postgres, Auth, Storage, Edge Functions)|
 | Hosting      | Vercel                                            |
-| Email        | Resend                                            |
+| Email        | ZeptoMail (SMTP via Nodemailer)                   |
 | AI assistant | Claude API                                        |
 
 ## Project status — Phases 1–6 ✅
@@ -22,7 +22,7 @@ learning, automatic progress tracking, and verifiable certificates.
 **Phase 1 — Foundation**
 - Route groups `(auth)`, `(student)`, `(admin)`; full Supabase schema (24 tables, enums, triggers)
 - RLS on every table + `is_admin` / `is_enrolled` helpers; storage buckets with policies
-- Student auth (password, Google/Facebook OAuth, magic link, reset) + admin login with role guard
+- Student auth (email/password, magic link, reset) + admin login with role guard
 - Session-refresh + route-protection middleware
 
 **Phase 2 — Course delivery**
@@ -39,7 +39,7 @@ learning, automatic progress tracking, and verifiable certificates.
 
 **Phase 4 — Certificates & comms**
 - Auto-issued certificates on completion, printable certificate view, QR + public `/verify/[number]`
-- LinkedIn "add to profile"; Resend transactional emails; in-app notification center (bell)
+- LinkedIn "add to profile"; ZeptoMail transactional emails; in-app notification center (bell)
 
 **Phase 5 — Growth tooling**
 - YouTube import (video / playlist / channel) via Data API v3 with dedupe
@@ -56,7 +56,7 @@ learning, automatic progress tracking, and verifiable certificates.
 
 Configure the keys in `.env.example`. Copy to `.env.local` and run `npm run check-env` to
 validate. Set `NEXT_PUBLIC_SITE_URL=https://digitalskillx.com` in production. `SUPABASE_SERVICE_ROLE_KEY` is required for admin actions, emails, automations and
-certificate issuance. Optional integrations: `RESEND_API_KEY` (email), `YOUTUBE_API_KEY` (import),
+certificate issuance. Optional integrations: ZeptoMail SMTP vars (email), `YOUTUBE_API_KEY` (import),
 `DEEPSEEK_API_KEY` or `ANTHROPIC_API_KEY` (AI), `CRON_SECRET` (scheduled jobs). Features degrade gracefully when a key
 is absent.
 

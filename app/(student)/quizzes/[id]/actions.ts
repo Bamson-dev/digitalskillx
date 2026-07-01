@@ -3,6 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { requireAdmin } from "@/lib/auth";
+import { logAudit } from "@/lib/audit";
 import { runAutomations } from "@/lib/automation";
 import { notify } from "@/lib/notifications";
 import type { Json } from "@/types/database";
@@ -103,7 +105,7 @@ export async function submitQuiz(
 
 /** Admin manual grading of an attempt (PRD §9.3). */
 export async function gradeAttempt(formData: FormData) {
-  await createClient(); // ensure server context
+  await requireAdmin();
   const admin = createAdminClient();
   const attemptId = String(formData.get("attempt_id"));
   const score = Number(formData.get("score") ?? 0);
@@ -123,6 +125,12 @@ export async function gradeAttempt(formData: FormData) {
       type: "quiz_graded",
       title: "Quiz graded",
       message: `Your quiz was graded: ${score}% (${passed ? "passed" : "not passed"}).`,
+    });
+    await logAudit({
+      action: "quiz_attempt_graded",
+      targetType: "quiz_attempt",
+      targetId: attemptId,
+      metadata: { score, passed },
     });
   }
   revalidatePath("/admin/grading");

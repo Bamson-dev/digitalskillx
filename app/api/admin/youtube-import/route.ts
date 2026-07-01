@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { logAudit } from "@/lib/audit";
+import { rateLimitedResponse } from "@/lib/api-rate-limit";
 import {
   detectYoutubeInput,
   fetchVideosForInput,
@@ -11,14 +12,23 @@ import {
  * none is supplied, skips videos already imported (dedupe on youtube_video_id).
  */
 export async function POST(request: NextRequest) {
+  const limited = await rateLimitedResponse(request, "admin-youtube-import", 30);
+  if (limited) return limited;
+
   const supabase = createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single();
-  if (profile?.role !== "admin") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("role, is_suspended")
+    .eq("id", user.id)
+    .single();
+  if (profile?.role !== "admin" || profile?.is_suspended) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
 
   const body = (await request.json()) as { courseId?: string; url?: string; moduleId?: string };
   if (!body.courseId || !body.url) {

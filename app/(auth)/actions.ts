@@ -106,20 +106,6 @@ export async function updatePassword(
   redirect("/dashboard");
 }
 
-/** OAuth sign-in (Google / Facebook, PRD §4.1). Returns provider URL. */
-export async function signInWithOAuth(formData: FormData) {
-  const provider = String(formData.get("provider") ?? "google") as
-    | "google"
-    | "facebook";
-  const supabase = createClient();
-  const { data, error } = await supabase.auth.signInWithOAuth({
-    provider,
-    options: { redirectTo: `${siteOrigin()}/auth/callback` },
-  });
-  if (error) redirect(`/login?error=${encodeURIComponent(error.message)}`);
-  if (data.url) redirect(data.url);
-}
-
 export async function signOut() {
   const supabase = createClient();
   await supabase.auth.signOut();

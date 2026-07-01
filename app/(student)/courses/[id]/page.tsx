@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, PlayCircle, Download } from "lucide-react";
+import { ArrowLeft, PlayCircle, Download, Lock } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { requireStudent } from "@/lib/auth";
 import { Card } from "@/components/ui/card";
@@ -13,10 +13,20 @@ export default async function CourseDetailPage({
 }: {
   params: { id: string };
 }) {
-  await requireStudent();
+  const profile = await requireStudent();
   const supabase = createClient();
 
-  // RLS ensures the student can only read this if enrolled (or it's published).
+  const { data: enrollment } = await supabase
+    .from("enrollments")
+    .select("id")
+    .eq("student_id", profile.id)
+    .eq("course_id", params.id)
+    .maybeSingle();
+
+  if (!enrollment) {
+    redirect(`/course/${params.id}`);
+  }
+
   const { data: course } = await supabase
     .from("courses")
     .select("id, title, description, modules(id, title, position, lessons(id, title, position))")

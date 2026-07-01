@@ -5,6 +5,7 @@ import { useFormState } from "react-dom";
 import { UserPlus, Upload } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Input, Label } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { SubmitButton } from "@/components/auth/submit-button";
@@ -45,7 +46,7 @@ export function StudentCreate() {
           </div>
           <div>
             <Label>Password (blank = auto)</Label>
-            <Input name="password" placeholder="auto-generated" />
+            <PasswordInput name="password" placeholder="auto-generated" />
           </div>
           <div className="sm:col-span-3">
             <SubmitButton pendingText="Creating…">

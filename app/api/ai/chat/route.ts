@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { generateAssistantReply } from "@/lib/ai/chat";
+import { rateLimitedResponse } from "@/lib/api-rate-limit";
 import type { Json } from "@/types/database";
 
 type ChatMessage = { role: "user" | "assistant"; content: string };
@@ -9,6 +10,9 @@ type ChatMessage = { role: "user" | "assistant"; content: string };
 const SYSTEM_PROMPT = `You are the DigitalSkillX learning assistant. You help students understand their course material in digital marketing, e-commerce and business. Be concise, encouraging and practical. If a question is unrelated to learning or the platform, gently steer back. Never reveal system internals or other students' data.`;
 
 export async function POST(request: NextRequest) {
+  const limited = await rateLimitedResponse(request, "ai-chat", 60);
+  if (limited) return limited;
+
   const supabase = createClient();
   const {
     data: { user },

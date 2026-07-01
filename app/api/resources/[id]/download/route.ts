@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { rateLimitedResponse } from "@/lib/api-rate-limit";
 
 /**
  * Issues a short-lived signed URL for a private resource file (PRD §18, §20).
@@ -8,14 +9,17 @@ import { createAdminClient } from "@/lib/supabase/admin";
  * row if the student is enrolled in the course (or is admin).
  */
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: { id: string } },
 ) {
+  const limited = await rateLimitedResponse(request, "resources-download", 100);
+  if (limited) return limited;
+
   const supabase = createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return NextResponse.redirect(new URL("/login", _request.url));
+  if (!user) return NextResponse.redirect(new URL("/login", request.url));
 
   const { data: resource } = await supabase
     .from("resources")

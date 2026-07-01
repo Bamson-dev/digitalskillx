@@ -2,7 +2,8 @@
 
 import { useFormState } from "react-dom";
 import { updatePassword, type AuthState } from "@/app/(auth)/actions";
-import { Input, Label } from "@/components/ui/input";
+import { Label } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { SubmitButton } from "@/components/auth/submit-button";
 
 const initial: AuthState = {};
@@ -22,10 +23,9 @@ export function ResetPasswordForm() {
       <form action={action} className="space-y-4">
         <div>
           <Label htmlFor="password">New password</Label>
-          <Input
+          <PasswordInput
             id="password"
             name="password"
-            type="password"
             required
             minLength={8}
             autoComplete="new-password"

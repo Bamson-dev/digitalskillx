@@ -17,10 +17,10 @@ export function StudentNav({ name }: { name: string }) {
   const pathname = usePathname();
 
   return (
-    <header className="sticky top-0 z-20 border-b border-app bg-card/80 backdrop-blur">
+    <header className="sticky top-0 z-20 border-b border-surface-border bg-black/80 backdrop-blur-xl">
       <div className="mx-auto flex h-14 max-w-6xl items-center justify-between gap-4 px-4">
-        <Link href="/dashboard" className="font-bold tracking-tight text-brand">
-          DigitalSkillX
+        <Link href="/dashboard" className="font-display text-lg font-bold tracking-tight text-white">
+          Digital<span className="text-brand">SkillX</span>
         </Link>
 
         <nav className="hidden items-center gap-1 sm:flex">
@@ -31,10 +31,8 @@ export function StudentNav({ name }: { name: string }) {
                 key={href}
                 href={href}
                 className={cn(
-                  "flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
-                  active
-                    ? "bg-brand-50 text-brand-700"
-                    : "text-muted hover:bg-brand-50 hover:text-foreground",
+                  "inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition",
+                  active ? "bg-brand/10 text-brand" : "text-neutral-400 hover:text-white",
                 )}
               >
                 <Icon className="h-4 w-4" />
@@ -45,38 +43,25 @@ export function StudentNav({ name }: { name: string }) {
         </nav>
 
         <div className="flex items-center gap-2">
+          <Link
+            href="/"
+            className="hidden text-xs text-neutral-500 hover:text-white sm:inline"
+          >
+            Store
+          </Link>
           <NotificationBell />
-          <span className="hidden text-sm text-muted md:inline">{name}</span>
+          <span className="hidden text-sm text-neutral-500 md:inline">{name}</span>
           <form action={signOut}>
             <button
               type="submit"
+              className="rounded-lg p-2 text-neutral-400 transition hover:bg-neutral-900 hover:text-white"
               aria-label="Sign out"
-              className="rounded-lg p-2 text-muted hover:bg-brand-50"
             >
               <LogOut className="h-5 w-5" />
             </button>
           </form>
         </div>
       </div>
-
-      <nav className="flex items-center justify-around border-t border-app px-2 py-1 sm:hidden">
-        {nav.map(({ href, label, icon: Icon }) => {
-          const active = pathname === href || pathname.startsWith(`${href}/`);
-          return (
-            <Link
-              key={href}
-              href={href}
-              className={cn(
-                "flex flex-1 flex-col items-center gap-0.5 rounded-lg py-1.5 text-xs font-medium",
-                active ? "text-brand-700" : "text-muted",
-              )}
-            >
-              <Icon className="h-5 w-5" />
-              {label}
-            </Link>
-          );
-        })}
-      </nav>
     </header>
   );
 }

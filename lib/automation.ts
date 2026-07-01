@@ -123,7 +123,7 @@ async function executeAction(
       break;
     }
     case "notify_admin": {
-      const adminAddr = process.env.EMAIL_FROM_ADDRESS;
+      const adminAddr = process.env.ZEPTOMAIL_FROM_EMAIL;
       if (adminAddr) {
         await sendEmail({
           to: adminAddr,

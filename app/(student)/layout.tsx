@@ -1,5 +1,5 @@
 import { requireStudent } from "@/lib/auth";
-import { StudentNav } from "@/components/student/student-nav";
+import { StudentShell } from "@/components/student/student-shell";
 import { AiAssistant } from "@/components/student/ai-assistant";
 
 export default async function StudentLayout({
@@ -10,10 +10,9 @@ export default async function StudentLayout({
   const profile = await requireStudent();
 
   return (
-    <div className="min-h-screen">
-      <StudentNav name={profile.full_name ?? profile.email} />
-      <main className="mx-auto max-w-6xl px-4 py-8">{children}</main>
+    <>
+      <StudentShell name={profile.full_name ?? profile.email}>{children}</StudentShell>
       <AiAssistant />
-    </div>
+    </>
   );
 }
