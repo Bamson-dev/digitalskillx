@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { useFormState } from "react-dom";
-import Image from "next/image";
 import { confirmAdminMfaEnrollment, enrollAdminMfa } from "@/app/(admin)/admin/actions";
 import type { AuthState } from "@/app/(auth)/actions";
 import { SubmitButton } from "@/components/auth/submit-button";
@@ -37,12 +36,13 @@ export function AdminMfaEnrollForm() {
     <form action={action} className="space-y-4">
       <input type="hidden" name="factor_id" value={enroll.factorId} />
       <div className="flex justify-center rounded-lg bg-white p-4">
-        <Image
+        {/* Supabase returns a data: URI — next/image rejects those and crashes the page */}
+        <img
           src={enroll.qrCode}
           alt="Authenticator QR code"
           width={200}
           height={200}
-          unoptimized
+          className="h-[200px] w-[200px]"
         />
       </div>
       <p className="text-center text-xs text-slate-500">
