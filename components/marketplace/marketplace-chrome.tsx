@@ -11,13 +11,7 @@ import { cn } from "@/lib/utils";
 
 type NavUser = { email: string; full_name: string | null } | null;
 
-export function MarketplaceNav({
-  user,
-  role,
-}: {
-  user: NavUser;
-  role?: string | null;
-}) {
+export function MarketplaceNav({ user }: { user: NavUser }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
 
@@ -77,22 +71,12 @@ export function MarketplaceNav({
             <CurrencyToggle className="shrink-0" />
 
             {user ? (
-              <div className="flex items-center gap-1 sm:gap-2">
-                {role === "admin" ? (
-                  <Link
-                    href="/admin/dashboard"
-                    className="hidden rounded-lg px-2 py-2 text-sm text-neutral-500 hover:text-neutral-900 sm:inline-flex"
-                  >
-                    Admin
-                  </Link>
-                ) : null}
-                <Link
-                  href="/dashboard"
-                  className="inline-flex h-9 items-center rounded-lg px-2 text-sm font-medium text-neutral-700 hover:text-neutral-900 sm:px-3"
-                >
-                  Dashboard
-                </Link>
-              </div>
+              <Link
+                href="/dashboard"
+                className="inline-flex h-9 items-center rounded-lg px-2 text-sm font-medium text-neutral-700 hover:text-neutral-900 sm:px-3"
+              >
+                Dashboard
+              </Link>
             ) : (
               <div className="flex items-center gap-1 sm:gap-2">
                 <Link

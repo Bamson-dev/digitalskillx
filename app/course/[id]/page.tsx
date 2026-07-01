@@ -97,7 +97,7 @@ export default async function CourseLandingPage({
 
   return (
     <div className="flex min-h-screen flex-col bg-white text-neutral-900">
-      <MarketplaceNav user={profile} role={profile?.role} />
+      <MarketplaceNav user={profile} />
 
       <main className="flex-1">
         <CourseLandingView
