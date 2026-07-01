@@ -1,11 +1,28 @@
 "use client";
 
-import { useState } from "react";
-import { Youtube, Loader2 } from "lucide-react";
+import { useMemo, useState } from "react";
+import { Download, Loader2 } from "lucide-react";
 import { Card, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
+import type { LessonImportSource } from "@/lib/lesson-import-shared";
+
+const SOURCE_OPTIONS: { value: LessonImportSource; label: string }[] = [
+  { value: "youtube_playlist", label: "YouTube playlist" },
+  { value: "youtube_video", label: "YouTube single video" },
+  { value: "vimeo", label: "Vimeo video" },
+  { value: "wistia", label: "Wistia video" },
+  { value: "loom", label: "Loom video" },
+];
+
+const PLACEHOLDERS: Record<LessonImportSource, string> = {
+  youtube_playlist: "https://www.youtube.com/playlist?list=…",
+  youtube_video: "https://www.youtube.com/watch?v=…",
+  vimeo: "https://vimeo.com/123456789",
+  wistia: "https://yourcompany.wistia.com/medias/…",
+  loom: "https://www.loom.com/share/…",
+};
 
 export function YoutubeImport({
   courseId,
@@ -14,21 +31,24 @@ export function YoutubeImport({
   courseId: string;
   modules: { id: string; title: string }[];
 }) {
+  const [source, setSource] = useState<LessonImportSource>("youtube_playlist");
   const [url, setUrl] = useState("");
   const [moduleId, setModuleId] = useState("");
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  const placeholder = useMemo(() => PLACEHOLDERS[source], [source]);
+
   async function run() {
     setLoading(true);
     setResult(null);
     setError(null);
     try {
-      const res = await fetch("/api/admin/youtube-import", {
+      const res = await fetch("/api/admin/lesson-import", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ courseId, url, moduleId: moduleId || undefined }),
+        body: JSON.stringify({ courseId, url, moduleId: moduleId || undefined, source }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "Import failed");
@@ -44,15 +64,27 @@ export function YoutubeImport({
   return (
     <Card>
       <CardHeader
-        title="Import from YouTube"
-        description="Paste a video, playlist or channel URL — lessons are created automatically."
+        title="Import lessons"
+        description="Import videos from YouTube, Vimeo, Wistia, or Loom as course lessons."
       />
-      <div className="flex flex-col gap-2 sm:flex-row">
+      <div className="flex flex-col gap-2 lg:flex-row lg:flex-wrap">
+        <Select
+          value={source}
+          onChange={(e) => setSource(e.target.value as LessonImportSource)}
+          className="lg:w-52"
+          aria-label="Import source"
+        >
+          {SOURCE_OPTIONS.map((opt) => (
+            <option key={opt.value} value={opt.value}>
+              {opt.label}
+            </option>
+          ))}
+        </Select>
         <Input
           value={url}
           onChange={(e) => setUrl(e.target.value)}
-          placeholder="https://youtube.com/playlist?list=…"
-          className="flex-1"
+          placeholder={placeholder}
+          className="min-w-0 flex-1"
         />
         <Select value={moduleId} onChange={(e) => setModuleId(e.target.value)} className="sm:w-56">
           <option value="">New module</option>
@@ -62,8 +94,8 @@ export function YoutubeImport({
             </option>
           ))}
         </Select>
-        <Button onClick={run} disabled={loading || !url}>
-          {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Youtube className="h-4 w-4" />}
+        <Button onClick={run} disabled={loading || !url.trim()} className="shrink-0">
+          {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
           Import
         </Button>
       </div>
