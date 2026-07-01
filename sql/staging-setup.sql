@@ -4,8 +4,6 @@
 -- Safe to re-run (idempotent where noted).
 -- ============================================================================
 --
--- Also in sidebar: sql/staging-setup.sql
---
 -- FULL FIRST-TIME SETUP (if DB is empty):
 --   Use sql/full-database-setup.sql instead (longer file).
 --

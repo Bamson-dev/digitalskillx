@@ -4,8 +4,10 @@
 -- Safe to re-run (idempotent where noted).
 -- ============================================================================
 --
+-- Also in sidebar: sql/staging-setup.sql
+--
 -- FULL FIRST-TIME SETUP (if DB is empty):
---   Use supabase/ONE_PASTE_SETUP.sql instead (longer file).
+--   Use sql/full-database-setup.sql instead (longer file).
 --
 -- THIS FILE covers common staging fixes + latest features:
 --   1. Make admin user
