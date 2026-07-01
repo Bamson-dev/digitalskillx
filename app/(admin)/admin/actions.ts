@@ -37,7 +37,11 @@ export async function signInAdmin(
   if (error) {
     await recordAdminLoginFailure(ip, email);
     await logAudit({ action: "admin_login_failed", metadata: { email, ip } });
-    return { error: error.message };
+    const hint =
+      error.message === "Invalid login credentials"
+        ? " Check that this email exists in Supabase Auth and matches ADMIN_EMAIL on the server. If you set ADMIN_PASSWORD in Coolify, run POST /api/admin/sync-password once (with CRON_SECRET) or reset the password in Supabase Dashboard → Authentication → Users."
+        : "";
+    return { error: `${error.message}${hint}` };
   }
 
   const { data: profile } = await supabase

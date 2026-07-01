@@ -2,7 +2,15 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import type { Database } from "@/types/database";
 
-const PUBLIC_PREFIXES = ["/verify", "/auth", "/course", "/api/webhooks", "/api/health"];
+const PUBLIC_PREFIXES = [
+  "/verify",
+  "/auth",
+  "/course",
+  "/api/webhooks",
+  "/api/health",
+  "/api/cron",
+  "/api/admin/sync-password",
+];
 
 const PUBLIC_PATHS = [
   "/",

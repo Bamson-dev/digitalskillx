@@ -7,12 +7,12 @@ export const metadata: Metadata = { title: "Admin login" };
 export default function AdminLoginPage() {
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-slate-950 px-4 py-10 text-slate-100">
-      <Link href="/" className="mb-8 text-xl font-bold tracking-tight text-brand-400">
-        DigitalSkillX
+      <Link href="/" className="mb-8 text-xl font-bold tracking-tight text-white">
+        DigitalSkill<span className="text-brand">X</span>
       </Link>
       <div className="w-full max-w-md rounded-2xl border border-slate-800 bg-slate-900 p-8 shadow-xl">
         <div className="mb-6">
-          <span className="text-xs font-semibold uppercase tracking-wide text-brand-400">
+          <span className="text-xs font-semibold uppercase tracking-wide text-brand">
             Admin Control Center
           </span>
           <h1 className="mt-1 text-xl font-bold">Sign in to manage</h1>
