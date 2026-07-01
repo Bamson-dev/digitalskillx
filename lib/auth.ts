@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { getAdminMfaStatus } from "@/lib/admin-mfa";
+import { getAdminMfaStatus, isAdminMfaRequired } from "@/lib/admin-mfa";
 import type { Profile } from "@/types/database";
 
 /** Returns the current user's profile, or null if signed out. */
@@ -53,8 +53,10 @@ export async function requireAdmin(): Promise<Profile> {
   }
 
   const mfa = await getAdminMfaStatus();
-  if (!mfa.enrolled) redirect("/admin/mfa/enroll");
-  if (!mfa.verified) redirect("/admin/login");
+  if (isAdminMfaRequired()) {
+    if (!mfa.enrolled) redirect("/admin/mfa/enroll");
+    if (!mfa.verified) redirect("/admin/login");
+  }
 
   return profile;
 }

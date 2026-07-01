@@ -1,13 +1,15 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { requireAdminPasswordOnly } from "@/lib/auth";
-import { getAdminMfaStatus } from "@/lib/admin-mfa";
+import { getAdminMfaStatus, isAdminMfaRequired } from "@/lib/admin-mfa";
 import { AdminMfaEnrollForm } from "@/components/auth/admin-mfa-enroll-form";
 
 export const metadata: Metadata = { title: "Set up authenticator" };
 
 export default async function AdminMfaEnrollPage() {
   await requireAdminPasswordOnly();
+  if (!isAdminMfaRequired()) redirect("/admin/dashboard");
+
   const mfa = await getAdminMfaStatus();
   if (mfa.enrolled && mfa.verified) redirect("/admin/dashboard");
 

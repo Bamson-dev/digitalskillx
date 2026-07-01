@@ -18,10 +18,14 @@ export function AdminMfaEnrollForm() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    enrollAdminMfa().then((res) => {
-      if ("error" in res) setError(res.error);
-      else setEnroll({ factorId: res.factorId, qrCode: res.qrCode, secret: res.secret });
-    });
+    enrollAdminMfa()
+      .then((res) => {
+        if ("error" in res) setError(res.error);
+        else setEnroll({ factorId: res.factorId, qrCode: res.qrCode, secret: res.secret });
+      })
+      .catch((err) => {
+        setError(err instanceof Error ? err.message : "Could not start MFA enrollment.");
+      });
   }, []);
 
   if (error) {

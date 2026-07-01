@@ -6,6 +6,7 @@ import type { AuthState } from "@/app/(auth)/actions";
 import { isAdminLoginBlocked, recordAdminLoginFailure } from "@/lib/rate-limit";
 import { clientIpFromHeaders } from "@/lib/request-ip";
 import { logAudit } from "@/lib/audit";
+import { isAdminMfaRequired } from "@/lib/admin-mfa";
 
 export type AdminLoginState = AuthState & {
   needsMfa?: boolean;
@@ -61,6 +62,9 @@ export async function signInAdmin(
 
   if (!totp) {
     await logAudit({ action: "admin_login_password_ok", metadata: { email } });
+    if (!isAdminMfaRequired()) {
+      redirect("/admin/dashboard");
+    }
     redirect("/admin/mfa/enroll");
   }
 
