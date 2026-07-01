@@ -11,23 +11,27 @@ type RateLimitResult = {
 };
 
 async function readBucket(key: string, limit: number, windowMs: number): Promise<RateLimitResult> {
-  const admin = createAdminClient();
-  const now = Date.now();
-  const { data: row } = await admin
-    .from("rate_limit_buckets")
-    .select("request_count, window_start")
-    .eq("bucket_key", key)
-    .maybeSingle();
+  try {
+    const admin = createAdminClient();
+    const now = Date.now();
+    const { data: row } = await admin
+      .from("rate_limit_buckets")
+      .select("request_count, window_start")
+      .eq("bucket_key", key)
+      .maybeSingle();
 
-  if (!row) return { ok: true, remaining: limit };
+    if (!row) return { ok: true, remaining: limit };
 
-  const elapsed = now - new Date(row.window_start).getTime();
-  if (elapsed > windowMs) return { ok: true, remaining: limit };
+    const elapsed = now - new Date(row.window_start).getTime();
+    if (elapsed > windowMs) return { ok: true, remaining: limit };
 
-  if (row.request_count >= limit) {
-    return { ok: false, remaining: 0, retryAfterSec: Math.ceil((windowMs - elapsed) / 1000) };
+    if (row.request_count >= limit) {
+      return { ok: false, remaining: 0, retryAfterSec: Math.ceil((windowMs - elapsed) / 1000) };
+    }
+    return { ok: true, remaining: limit - row.request_count };
+  } catch {
+    return { ok: true, remaining: limit };
   }
-  return { ok: true, remaining: limit - row.request_count };
 }
 
 /**

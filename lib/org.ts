@@ -13,7 +13,13 @@ export const ORG = {
 };
 
 export function siteUrl() {
-  return (
-    process.env.NEXT_PUBLIC_SITE_URL ?? "https://digitalskillx.com"
-  ).replace(/\/$/, "");
+  const raw = process.env.NEXT_PUBLIC_SITE_URL?.trim();
+  if (!raw) return "https://digitalskillx.com";
+  const normalized = raw.replace(/\/$/, "");
+  try {
+    new URL(normalized);
+    return normalized;
+  } catch {
+    return "https://digitalskillx.com";
+  }
 }

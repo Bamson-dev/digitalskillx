@@ -7,10 +7,24 @@ import { createClient } from "@/lib/supabase/server";
 export type AuthState = { error?: string; message?: string };
 
 function siteOrigin() {
-  const fromEnv = process.env.NEXT_PUBLIC_SITE_URL;
-  if (fromEnv) return fromEnv.replace(/\/$/, "");
-  const h = headers();
-  return `${h.get("x-forwarded-proto") ?? "https"}://${h.get("host")}`;
+  const fromEnv = process.env.NEXT_PUBLIC_SITE_URL?.trim();
+  if (fromEnv) {
+    try {
+      return new URL(fromEnv.replace(/\/$/, "")).origin;
+    } catch {
+      // fall through to headers / default
+    }
+  }
+  try {
+    const h = headers();
+    const host = h.get("host");
+    if (host) {
+      return `${h.get("x-forwarded-proto") ?? "https"}://${host}`;
+    }
+  } catch {
+    // headers unavailable outside a request
+  }
+  return "https://digitalskillx.com";
 }
 
 /** Email + password sign-in (PRD §4.1). */
@@ -24,8 +38,19 @@ export async function signInWithPassword(
   if (!email || !password) return { error: "Email and password are required." };
 
   const supabase = createClient();
-  const { error } = await supabase.auth.signInWithPassword({ email, password });
+  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
   if (error) return { error: error.message };
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", data.user.id)
+    .maybeSingle();
+
+  if (profile?.role === "admin") {
+    redirect("/admin/dashboard");
+  }
+
   redirect(next);
 }
 
