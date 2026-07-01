@@ -73,7 +73,10 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    const { error: pwError } = await admin.auth.admin.updateUserById(userId, { password });
+    const { error: pwError } = await admin.auth.admin.updateUserById(userId, {
+      password,
+      email_confirm: true,
+    });
     if (pwError) {
       return NextResponse.json({ error: pwError.message }, { status: 500 });
     }

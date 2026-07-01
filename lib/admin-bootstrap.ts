@@ -13,7 +13,10 @@ async function syncAdminPassword(
   email: string,
   password: string,
 ) {
-  const { error } = await admin.auth.admin.updateUserById(userId, { password });
+  const { error } = await admin.auth.admin.updateUserById(userId, {
+    password,
+    email_confirm: true,
+  });
   if (error) {
     console.error(`[admin-bootstrap] Failed to sync admin password: ${error.message}`);
     return;
