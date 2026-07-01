@@ -1,0 +1,10 @@
+.git
+.next
+node_modules
+.env.local
+.env*.local
+design-reference
+.cursor
+*.log
+coverage
+.DS_Store
