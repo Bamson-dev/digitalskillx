@@ -192,6 +192,9 @@ export function CourseSettingsForm({
 
         <div className="sm:col-span-2">
           <Label>Course image</Label>
+          <p className="mb-1.5 text-xs text-muted">
+            Storefront and sales page cover — follow the size requirements below.
+          </p>
           <div className="mt-1.5">
             <CourseThumbnailUpload
               key={`${course.id}-${state.thumbnail_url ?? course.thumbnail_url ?? "none"}`}

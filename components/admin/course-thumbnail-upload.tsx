@@ -8,6 +8,29 @@ import { cn } from "@/lib/utils";
 const MAX_BYTES = 2 * 1024 * 1024;
 const ACCEPT = "image/png,image/jpeg,image/webp";
 
+const IMAGE_REQUIREMENTS = [
+  { label: "Size", value: "1280 × 720 pixels (16:9 landscape)" },
+  { label: "Max file size", value: "2 MB" },
+  { label: "Formats", value: "JPG, PNG, or WebP" },
+  { label: "Tip", value: "Use a sharp image with minimal text — it appears on cards and the sales page" },
+] as const;
+
+function ImageRequirementsNote() {
+  return (
+    <div className="rounded-lg border border-amber-200/80 bg-amber-50/80 px-3 py-2.5">
+      <p className="text-xs font-semibold text-amber-950">Image requirements</p>
+      <ul className="mt-1.5 space-y-1 text-xs text-amber-900/90">
+        {IMAGE_REQUIREMENTS.map((item) => (
+          <li key={item.label} className="flex gap-2">
+            <span className="shrink-0 font-medium">{item.label}:</span>
+            <span>{item.value}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 type Props = {
   initialUrl: string | null;
   courseTitle: string;
@@ -90,7 +113,9 @@ export function CourseThumbnailUpload({ initialUrl, courseTitle }: Props) {
   }
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-3">
+      <ImageRequirementsNote />
+
       <input type="hidden" name="thumbnail_url" value={cleared ? "" : persistedUrl} />
       <input type="hidden" name="clear_thumbnail" value={cleared ? "1" : "0"} />
 
@@ -148,11 +173,9 @@ export function CourseThumbnailUpload({ initialUrl, courseTitle }: Props) {
             </div>
             <div>
               <p className="text-sm font-semibold text-neutral-900">Upload course image</p>
-              <p className="mt-1 text-xs text-muted">
-                Drag and drop, or click to browse · JPG, PNG, or WebP · max 2 MB
-              </p>
-              <p className="mt-2 text-xs text-muted">
-                Recommended 1280×720 — shown on your storefront and sales page
+              <p className="mt-1 text-xs text-muted">Drag and drop, or click to browse</p>
+              <p className="mt-2 text-xs font-medium text-neutral-700">
+                Use 1280×720 px · max 2 MB · JPG, PNG, or WebP
               </p>
             </div>
           </button>
@@ -179,13 +202,6 @@ export function CourseThumbnailUpload({ initialUrl, courseTitle }: Props) {
       ) : null}
 
       {error ? <p className="text-sm text-red-600">{error}</p> : null}
-
-      {!displayUrl ? (
-        <p className="text-xs text-muted">
-          This is the main image students see before they enroll. Use a clear, high-quality visual that
-          represents the course.
-        </p>
-      ) : null}
     </div>
   );
 }
