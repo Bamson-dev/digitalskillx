@@ -7,6 +7,7 @@ import { Card } from "@/components/ui/card";
 import { Input, Label } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
 import { Textarea } from "@/components/ui/textarea";
+import { Select } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { SubmitButton } from "@/components/auth/submit-button";
 import {
@@ -17,7 +18,54 @@ import {
 
 const initial: StudentActionState = {};
 
-export function StudentCreate() {
+type PublishedCourse = { id: string; title: string };
+
+function Feedback({ state }: { state: StudentActionState }) {
+  return (
+    <>
+      {state.error ? (
+        <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{state.error}</p>
+      ) : null}
+      {state.message ? (
+        <p className="rounded-lg bg-green-50 px-3 py-2 text-sm text-green-700">{state.message}</p>
+      ) : null}
+      {state.bulkSummary ? (
+        <div className="rounded-lg border border-app bg-surface-muted/30 p-4 text-sm">
+          <p className="font-semibold text-neutral-900">Upload summary</p>
+          <ul className="mt-2 space-y-1 text-neutral-700">
+            <li>Created: {state.bulkSummary.created}</li>
+            <li>Skipped (duplicate email): {state.bulkSummary.skipped}</li>
+            <li>Failed: {state.bulkSummary.failed.length}</li>
+          </ul>
+          {state.bulkSummary.failed.length > 0 ? (
+            <div className="mt-3 max-h-40 overflow-y-auto rounded border border-app bg-white">
+              <table className="w-full text-xs">
+                <thead className="bg-surface-muted/60 text-left text-muted">
+                  <tr>
+                    <th className="px-2 py-1.5">Row</th>
+                    <th className="px-2 py-1.5">Email</th>
+                    <th className="px-2 py-1.5">Reason</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {state.bulkSummary.failed.map((item) => (
+                    <tr key={`${item.row}-${item.email}`} className="border-t border-app">
+                      <td className="px-2 py-1.5">{item.row}</td>
+                      <td className="px-2 py-1.5">{item.email}</td>
+                      <td className="px-2 py-1.5 text-red-700">{item.reason}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+    </>
+  );
+}
+
+export function StudentCreate({ courses }: { courses: PublishedCourse[] }) {
   const [tab, setTab] = useState<"single" | "csv">("single");
   const [createState, createAction] = useFormState(createStudent, initial);
   const [csvState, csvAction] = useFormState(bulkUploadStudents, initial);
@@ -35,48 +83,96 @@ export function StudentCreate() {
       </div>
 
       {tab === "single" ? (
-        <form action={createAction} className="grid gap-3 sm:grid-cols-3">
+        <form action={createAction} className="space-y-4">
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div>
+              <Label htmlFor="full_name">Full name</Label>
+              <Input id="full_name" name="full_name" required />
+            </div>
+            <div>
+              <Label htmlFor="email">Email</Label>
+              <Input id="email" name="email" type="email" required />
+            </div>
+          </div>
+
           <div>
-            <Label>Full name</Label>
-            <Input name="full_name" required />
+            <Label htmlFor="course_ids">Courses</Label>
+            <Select id="course_ids" name="course_ids" multiple className="min-h-[9rem] py-2" size={6}>
+              {courses.length === 0 ? (
+                <option value="" disabled>
+                  No published courses yet
+                </option>
+              ) : (
+                courses.map((course) => (
+                  <option key={course.id} value={course.id}>
+                    {course.title}
+                  </option>
+                ))
+              )}
+            </Select>
+            <p className="mt-1 text-xs text-muted">
+              Hold Cmd (Mac) or Ctrl (Windows) to select more than one published course.
+            </p>
           </div>
-          <div>
-            <Label>Email</Label>
-            <Input name="email" type="email" required />
+
+          <div className="max-w-md">
+            <Label htmlFor="password">Password</Label>
+            <PasswordInput id="password" name="password" placeholder="Leave blank to auto-generate" />
           </div>
-          <div>
-            <Label>Password (blank = auto)</Label>
-            <PasswordInput name="password" placeholder="auto-generated" />
-          </div>
-          <div className="sm:col-span-3">
-            <SubmitButton pendingText="Creating…">
-              <UserPlus className="h-4 w-4" /> Create student
-            </SubmitButton>
-          </div>
+
+          <SubmitButton pendingText="Creating…">
+            <UserPlus className="h-4 w-4" /> Create student
+          </SubmitButton>
         </form>
       ) : (
-        <form action={csvAction} className="space-y-3">
+        <form action={csvAction} className="space-y-4" encType="multipart/form-data">
+          <div className="grid gap-3 lg:grid-cols-2">
+            <div>
+              <Label htmlFor="csv_file">CSV file</Label>
+              <Input id="csv_file" name="csv_file" type="file" accept=".csv,text/csv" />
+            </div>
+            <div>
+              <Label htmlFor="default_course_id">Course for this upload</Label>
+              <Select id="default_course_id" name="default_course_id" defaultValue="">
+                <option value="">— None —</option>
+                {courses.map((course) => (
+                  <option key={course.id} value={course.id}>
+                    {course.title}
+                  </option>
+                ))}
+              </Select>
+              <p className="mt-1 text-xs text-muted">
+                Used when a CSV row has no course column. Row course values override this default.
+              </p>
+            </div>
+          </div>
+
           <div>
-            <Label>CSV rows — first_name,last_name,email,course_id (optional)</Label>
+            <Label htmlFor="csv">Or paste CSV rows</Label>
             <Textarea
+              id="csv"
               name="csv"
-              rows={5}
-              placeholder={"first_name,last_name,email,course_id\nAda,Lovelace,ada@example.com,\n"}
+              rows={6}
+              placeholder={
+                "full_name,email,course\nJane Akande,jane@example.com,Facebook Ad Mastery\nJohn Doe,john@example.com,"
+              }
               className="font-mono text-xs"
             />
+            <p className="mt-1 text-xs text-muted">
+              Columns: <code>full_name</code>, <code>email</code>, optional <code>course</code> (course title or
+              id). Duplicates are skipped. Failed rows do not stop the batch.
+            </p>
           </div>
+
           <SubmitButton pendingText="Uploading…">
             <Upload className="h-4 w-4" /> Import students
           </SubmitButton>
         </form>
       )}
 
-      {state.error ? (
-        <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{state.error}</p>
-      ) : null}
-      {state.message ? (
-        <p className="mt-3 rounded-lg bg-green-50 px-3 py-2 text-sm text-green-700">{state.message}</p>
-      ) : null}
+      <div className="mt-4 space-y-3">
+        <Feedback state={state} />
+      </div>
     </Card>
   );
 }

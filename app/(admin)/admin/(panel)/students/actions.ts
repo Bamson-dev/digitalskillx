@@ -10,6 +10,17 @@ import { sendEmail } from "@/lib/email";
 import { emailTemplates } from "@/lib/email/templates";
 import { runAutomations } from "@/lib/automation";
 import { issueCertificate } from "@/lib/certificates";
+import { getPlatformSettingsAdmin } from "@/lib/platform-settings";
+import {
+  buildCourseResolver,
+  enrollStudentInCourses,
+  generateStrongPassword,
+  isValidStudentEmail,
+  parseStudentCsv,
+  profileEmailExists,
+  sendStudentWelcomeEmail,
+  type CourseLookup,
+} from "@/lib/admin-student-onboarding";
 
 function siteUrl() {
   return (process.env.NEXT_PUBLIC_SITE_URL ?? "https://digitalskillx.com").replace(
@@ -18,106 +29,247 @@ function siteUrl() {
   );
 }
 
-function generatePassword() {
-  return (
-    Math.random().toString(36).slice(2, 8) +
-    Math.random().toString(36).toUpperCase().slice(2, 5) +
-    "!" +
-    Math.floor(Math.random() * 90 + 10)
-  );
+export type BulkUploadFailure = {
+  row: number;
+  email: string;
+  reason: string;
+};
+
+export type StudentActionState = {
+  error?: string;
+  message?: string;
+  bulkSummary?: {
+    created: number;
+    skipped: number;
+    failed: BulkUploadFailure[];
+  };
+};
+
+async function loadPublishedCourses(admin: ReturnType<typeof createAdminClient>) {
+  const { data, error } = await admin
+    .from("courses")
+    .select("id, title")
+    .eq("visibility", "published")
+    .order("title");
+  if (error) throw new Error(error.message);
+  return (data ?? []) as CourseLookup[];
 }
 
-export type StudentActionState = { error?: string; message?: string };
+function courseNamesForIds(courses: CourseLookup[], courseIds: string[]) {
+  const byId = new Map(courses.map((c) => [c.id, c.title]));
+  return courseIds.map((id) => byId.get(id)).filter((t): t is string => Boolean(t));
+}
 
-/** Create a single student account + send welcome email (PRD §5.1). */
+/** Create a single student account, enroll in selected courses, and send welcome email. */
 export async function createStudent(
   _prev: StudentActionState,
   formData: FormData,
 ): Promise<StudentActionState> {
-  await requireAdmin();
-  const fullName = String(formData.get("full_name") ?? "").trim();
-  const email = String(formData.get("email") ?? "").trim().toLowerCase();
-  let password = String(formData.get("password") ?? "");
-  const autoPassword = !password;
-  if (autoPassword) password = generatePassword();
-  if (!fullName || !email) return { error: "Name and email are required." };
+  try {
+    const adminUser = await requireAdmin();
+    const fullName = String(formData.get("full_name") ?? "").trim();
+    const email = String(formData.get("email") ?? "").trim().toLowerCase();
+    const passwordInput = String(formData.get("password") ?? "").trim();
+    const courseIds = formData
+      .getAll("course_ids")
+      .map((value) => String(value).trim())
+      .filter(Boolean);
 
-  const admin = createAdminClient();
-  const { data: created, error } = await admin.auth.admin.createUser({
-    email,
-    password,
-    email_confirm: true,
-    user_metadata: { full_name: fullName },
-  });
-  if (error) return { error: error.message };
+    if (!fullName || !email) return { error: "Name and email are required." };
+    if (!isValidStudentEmail(email)) return { error: "Enter a valid email address." };
 
-  await admin.from("profiles").update({ full_name: fullName }).eq("id", created.user.id);
+    const admin = createAdminClient();
+    const publishedCourses = await loadPublishedCourses(admin);
+    const validCourseIds = courseIds.filter((id) => publishedCourses.some((c) => c.id === id));
 
-  await runAutomations("account_created", { studentId: created.user.id });
+    if (await profileEmailExists(admin, email)) {
+      return { error: "A student with this email already exists." };
+    }
 
-  const tpl = emailTemplates.welcome({
-    name: fullName,
-    email,
-    password: autoPassword ? password : undefined,
-    loginUrl: `${siteUrl()}/login`,
-  });
-  await sendEmail({ to: email, subject: tpl.subject, html: tpl.html });
+    const password = passwordInput || generateStrongPassword();
 
-  await logAudit({ action: "student_created", targetType: "profile", targetId: created.user.id });
-  revalidatePath("/admin/students");
-  return { message: `Student ${fullName} created.` };
-}
-
-/** CSV bulk upload (PRD §5.3): first_name,last_name,email,course_id(optional). */
-export async function bulkUploadStudents(
-  _prev: StudentActionState,
-  formData: FormData,
-): Promise<StudentActionState> {
-  await requireAdmin();
-  const csv = String(formData.get("csv") ?? "").trim();
-  if (!csv) return { error: "Paste CSV rows first." };
-
-  const admin = createAdminClient();
-  const lines = csv.split(/\r?\n/).filter(Boolean);
-  // Skip header if present.
-  const start = /first_name/i.test(lines[0] ?? "") ? 1 : 0;
-  let created = 0;
-  const errors: string[] = [];
-
-  for (let i = start; i < lines.length; i++) {
-    const [firstName, lastName, email, courseId] = lines[i].split(",").map((s) => s.trim());
-    if (!email) continue;
-    const fullName = [firstName, lastName].filter(Boolean).join(" ") || email;
-    const password = generatePassword();
-
-    const { data: c, error } = await admin.auth.admin.createUser({
-      email: email.toLowerCase(),
+    const { data: created, error } = await admin.auth.admin.createUser({
+      email,
       password,
       email_confirm: true,
       user_metadata: { full_name: fullName },
     });
     if (error) {
-      errors.push(`${email}: ${error.message}`);
-      continue;
+      if (error.message.toLowerCase().includes("already")) {
+        return { error: "A student with this email already exists." };
+      }
+      return { error: error.message };
     }
-    await admin.from("profiles").update({ full_name: fullName }).eq("id", c.user.id);
-    if (courseId) {
-      await admin.from("enrollments").insert({
-        student_id: c.user.id,
-        course_id: courseId,
-        source: "admin",
+
+    await admin.from("profiles").update({ full_name: fullName }).eq("id", created.user.id);
+    await runAutomations("account_created", { studentId: created.user.id });
+
+    if (validCourseIds.length > 0) {
+      await enrollStudentInCourses(admin, {
+        studentId: created.user.id,
+        courseIds: validCourseIds,
+        enrolledBy: adminUser.id,
       });
     }
-    const tpl = emailTemplates.welcome({ name: fullName, email, password, loginUrl: `${siteUrl()}/login` });
-    await sendEmail({ to: email, subject: tpl.subject, html: tpl.html });
-    created++;
-  }
 
-  await logAudit({ action: "students_bulk_created", metadata: { created, errors } });
-  revalidatePath("/admin/students");
-  return {
-    message: `Created ${created} student(s).${errors.length ? ` ${errors.length} failed.` : ""}`,
-  };
+    const settings = await getPlatformSettingsAdmin();
+    await sendStudentWelcomeEmail({
+      fullName,
+      email,
+      password,
+      courseNames: courseNamesForIds(publishedCourses, validCourseIds),
+      siteUrl: siteUrl(),
+      brandColor: settings.primary_color,
+    });
+
+    await logAudit({
+      action: "student_created",
+      targetType: "profile",
+      targetId: created.user.id,
+      metadata: { courseIds: validCourseIds },
+    });
+    revalidatePath("/admin/students");
+    revalidatePath("/admin/analytics");
+
+    const courseNote =
+      validCourseIds.length > 0
+        ? ` Enrolled in ${validCourseIds.length} course(s).`
+        : "";
+    return { message: `Student ${fullName} created.${courseNote} Welcome email sent.` };
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "Could not create student." };
+  }
+}
+
+/** CSV bulk upload: full_name, email, optional course (name or id). */
+export async function bulkUploadStudents(
+  _prev: StudentActionState,
+  formData: FormData,
+): Promise<StudentActionState> {
+  try {
+    const adminUser = await requireAdmin();
+    const defaultCourseId = String(formData.get("default_course_id") ?? "").trim() || null;
+    const file = formData.get("csv_file");
+    const pasted = String(formData.get("csv") ?? "").trim();
+
+    let csvText = pasted;
+    if (file instanceof File && file.size > 0) {
+      csvText = await file.text();
+    }
+    if (!csvText.trim()) return { error: "Upload a CSV file or paste CSV rows." };
+
+    const admin = createAdminClient();
+    const publishedCourses = await loadPublishedCourses(admin);
+    const resolveCourse = buildCourseResolver(publishedCourses);
+    const settings = await getPlatformSettingsAdmin();
+    const { rows } = parseStudentCsv(csvText);
+
+    if (rows.length === 0) return { error: "No data rows found in the CSV." };
+
+    let created = 0;
+    let skipped = 0;
+    const failed: BulkUploadFailure[] = [];
+
+    for (const row of rows) {
+      const rowNumber = row.rowNumber;
+      const [fullNameRaw, emailRaw, courseRefRaw] = row.cells;
+      const fullName = fullNameRaw?.trim() ?? "";
+      const email = emailRaw?.trim().toLowerCase() ?? "";
+
+      if (!fullName && !email) continue;
+      if (!fullName || !email) {
+        failed.push({
+          row: rowNumber,
+          email: email || "(missing)",
+          reason: "full_name and email are required",
+        });
+        continue;
+      }
+      if (!isValidStudentEmail(email)) {
+        failed.push({ row: rowNumber, email, reason: "Invalid email format" });
+        continue;
+      }
+
+      if (await profileEmailExists(admin, email)) {
+        skipped++;
+        continue;
+      }
+
+      const resolved = resolveCourse(courseRefRaw, defaultCourseId);
+      if (resolved.error) {
+        failed.push({ row: rowNumber, email, reason: resolved.error });
+        continue;
+      }
+      if (!resolved.courseId) {
+        failed.push({
+          row: rowNumber,
+          email,
+          reason: "No course on row and no default course selected for this upload",
+        });
+        continue;
+      }
+
+      const password = generateStrongPassword();
+
+      const { data: createdUser, error } = await admin.auth.admin.createUser({
+        email,
+        password,
+        email_confirm: true,
+        user_metadata: { full_name: fullName },
+      });
+
+      if (error) {
+        if (error.message.toLowerCase().includes("already")) {
+          skipped++;
+          continue;
+        }
+        failed.push({ row: rowNumber, email, reason: error.message });
+        continue;
+      }
+
+      try {
+        await admin
+          .from("profiles")
+          .update({ full_name: fullName })
+          .eq("id", createdUser.user.id);
+        await runAutomations("account_created", { studentId: createdUser.user.id });
+        await enrollStudentInCourses(admin, {
+          studentId: createdUser.user.id,
+          courseIds: [resolved.courseId],
+          enrolledBy: adminUser.id,
+        });
+        await sendStudentWelcomeEmail({
+          fullName,
+          email,
+          password,
+          courseNames: resolved.courseTitle ? [resolved.courseTitle] : [],
+          siteUrl: siteUrl(),
+          brandColor: settings.primary_color,
+        });
+        created++;
+      } catch (rowError) {
+        failed.push({
+          row: rowNumber,
+          email,
+          reason: rowError instanceof Error ? rowError.message : "Enrollment or email failed",
+        });
+      }
+    }
+
+    await logAudit({
+      action: "students_bulk_created",
+      metadata: { created, skipped, failedCount: failed.length },
+    });
+    revalidatePath("/admin/students");
+    revalidatePath("/admin/analytics");
+
+    return {
+      message: `Bulk upload finished: ${created} created, ${skipped} duplicate(s) skipped, ${failed.length} failed.`,
+      bulkSummary: { created, skipped, failed },
+    };
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "Bulk upload failed." };
+  }
 }
 
 export async function suspendStudent(formData: FormData) {
@@ -149,7 +301,7 @@ export async function resetStudentPassword(formData: FormData) {
   const admin = createAdminClient();
   const id = String(formData.get("id"));
   const email = String(formData.get("email"));
-  const newPassword = generatePassword();
+  const newPassword = generateStrongPassword();
   await admin.auth.admin.updateUserById(id, { password: newPassword });
   const tpl = emailTemplates.welcome({
     name: String(formData.get("full_name") ?? "there"),

@@ -17,6 +17,12 @@ export default async function AdminStudentsPage({
 }) {
   const supabase = createClient();
 
+  const { data: publishedCourses } = await supabase
+    .from("courses")
+    .select("id, title")
+    .eq("visibility", "published")
+    .order("title");
+
   let query = supabase
     .from("profiles")
     .select("id, full_name, email, is_suspended, tags, last_active_at, created_at")
@@ -39,7 +45,7 @@ export default async function AdminStudentsPage({
         <p className="mt-1 text-sm text-muted">Manage every learner on the platform.</p>
       </div>
 
-      <StudentCreate />
+      <StudentCreate courses={publishedCourses ?? []} />
 
       <Card>
         <form className="mb-4 flex flex-wrap items-center gap-2">
