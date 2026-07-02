@@ -3,10 +3,17 @@ import { createClient } from "@/lib/supabase/server";
 import { logAudit } from "@/lib/audit";
 import { rateLimitedResponse } from "@/lib/api-rate-limit";
 import {
+  youtubeApiKeyConfigured,
+  youtubeApiKeyError,
+  youtubeApiKeyStatus,
+} from "@/lib/env-youtube";
+import {
   defaultModuleTitle,
   fetchLessonsForImport,
   type LessonImportSource,
 } from "@/lib/lesson-import";
+
+export const dynamic = "force-dynamic";
 
 const VALID_SOURCES = new Set<LessonImportSource>([
   "youtube_playlist",
@@ -15,11 +22,6 @@ const VALID_SOURCES = new Set<LessonImportSource>([
   "wistia",
   "loom",
 ]);
-
-function youtubeKeyConfigured() {
-  const k = process.env.YOUTUBE_API_KEY?.trim();
-  return Boolean(k && k !== "your-youtube-data-api-key");
-}
 
 async function requireAdminApi() {
   const supabase = createClient();
@@ -48,7 +50,8 @@ export async function GET() {
   if ("error" in auth && auth.error) return auth.error;
 
   return NextResponse.json({
-    youtubeApiKeyConfigured: youtubeKeyConfigured(),
+    youtubeApiKeyConfigured: youtubeApiKeyConfigured(),
+    youtubeApiKeyStatus: youtubeApiKeyStatus(),
   });
 }
 
@@ -79,14 +82,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid import source." }, { status: 400 });
   }
 
-  if (source.startsWith("youtube_") && !youtubeKeyConfigured()) {
-    return NextResponse.json(
-      {
-        error:
-          "YOUTUBE_API_KEY is not configured on the server. In Coolify, add YOUTUBE_API_KEY (exact name, no quotes), Save, then Redeploy.",
-      },
-      { status: 503 },
-    );
+  if (source.startsWith("youtube_") && !youtubeApiKeyConfigured()) {
+    return NextResponse.json({ error: youtubeApiKeyError() }, { status: 503 });
   }
 
   let lessons;

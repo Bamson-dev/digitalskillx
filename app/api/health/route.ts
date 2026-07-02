@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { youtubeApiKeyStatus } from "@/lib/env-youtube";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
@@ -9,6 +10,7 @@ export async function GET() {
     timestamp: new Date().toISOString(),
     database: "unknown",
     paystack: "unknown",
+    youtubeApiKey: youtubeApiKeyStatus(),
   };
 
   try {
