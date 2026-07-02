@@ -90,7 +90,28 @@ export function EnrollButton({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ courseId, currency: "NGN" }),
       });
-      const json = await res.json();
+
+      const text = await res.text();
+      let json: {
+        error?: string;
+        enrolled?: boolean;
+        authorizationUrl?: string;
+      } = {};
+
+      if (text) {
+        try {
+          json = JSON.parse(text) as typeof json;
+        } catch {
+          throw new Error(
+            res.ok
+              ? "Server returned an invalid response. Please try again."
+              : `Enrollment failed (${res.status}). Please try again or contact support.`,
+          );
+        }
+      } else if (!res.ok) {
+        throw new Error(`Enrollment failed (${res.status}). Please try again or contact support.`);
+      }
+
       if (!res.ok) throw new Error(json.error ?? "Payment could not start");
       if (json.enrolled) {
         router.push(`/courses/${courseId}`);

@@ -16,6 +16,8 @@ const RUNTIME_KEYS = [
   "YOUTUBE_API_KEY",
   "DEEPSEEK_API_KEY",
   "DEEPSEEK_MODEL",
+  "PAYSTACK_SECRET_KEY",
+  "PAYSTACK_USD_ENABLED",
 ];
 
 function readEnv(name) {
@@ -71,6 +73,7 @@ if (status === "ok") {
   console.log(`  YOUTUBE_API_KEY prefix=${key.slice(0, 8)}…`);
 }
 console.log(`  DEEPSEEK_API_KEY=${secretStatus("DEEPSEEK_API_KEY")}`);
+console.log(`  PAYSTACK_SECRET_KEY=${secretStatus("PAYSTACK_SECRET_KEY")}`);
 
 const nextBin = join(root, "node_modules", "next", "dist", "bin", "next");
 const fallbackBin = join(root, "node_modules", ".bin", "next");

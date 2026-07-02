@@ -1,16 +1,21 @@
 import "server-only";
 import crypto from "crypto";
+import { runtimeEnv } from "@/lib/runtime-env";
 
 const BASE = "https://api.paystack.co";
 
 function secretKey() {
-  const key = process.env.PAYSTACK_SECRET_KEY;
+  const key = runtimeEnv("PAYSTACK_SECRET_KEY");
   if (!key) throw new Error("PAYSTACK_SECRET_KEY is not configured");
   return key;
 }
 
+export function paystackConfigured() {
+  return Boolean(runtimeEnv("PAYSTACK_SECRET_KEY")?.trim());
+}
+
 export function publicKey() {
-  return process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY ?? "";
+  return runtimeEnv("NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY") ?? "";
 }
 
 export type InitializeParams = {
@@ -77,5 +82,5 @@ export function generateReference() {
 
 /** Set PAYSTACK_USD_ENABLED=true when your Paystack account supports USD settlement. */
 export function paystackUsdEnabled() {
-  return process.env.PAYSTACK_USD_ENABLED === "true";
+  return runtimeEnv("PAYSTACK_USD_ENABLED") === "true";
 }

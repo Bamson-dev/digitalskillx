@@ -78,7 +78,23 @@ ALTER TABLE public.platform_secrets
   ADD COLUMN IF NOT EXISTS deepseek_api_key text;
 
 
--- ── 4. Quick check (optional — read results below) ─────────────────────────
+-- ── 4. Student checkout transactions (Enroll Now / Paystack) ────────────────
+
+DROP POLICY IF EXISTS "transactions: insert own pending checkout" ON public.transactions;
+CREATE POLICY "transactions: insert own pending checkout" ON public.transactions
+  FOR INSERT WITH CHECK (
+    student_id = auth.uid()
+    AND status = 'pending'
+    AND EXISTS (
+      SELECT 1 FROM public.courses c
+      WHERE c.id = course_id
+        AND c.visibility = 'published'
+        AND c.enrollment_type = 'open'
+    )
+  );
+
+
+-- ── 5. Quick check (optional — read results below) ─────────────────────────
 
 SELECT
   (SELECT count(*) FROM auth.users WHERE lower(email) = 'admin@digitalskillx.com') AS admin_auth_users,
