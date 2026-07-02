@@ -1,10 +1,11 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { getEmailSenderConfig } from "@/lib/platform-settings";
-import { sendEmail } from "@/lib/email";
-import { studentWelcomeEmail } from "@/lib/email/student-welcome";
 import { runAutomations } from "@/lib/automation";
 import type { Database } from "@/types/database";
+import { sendWelcomeEmailIfNeeded } from "@/lib/system-email-triggers";
+import { studentFirstName } from "@/lib/student-name";
+
+export { studentFirstName };
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const UUID_RE =
@@ -13,14 +14,6 @@ const UUID_RE =
 export function isValidStudentEmail(email: string) {
   return EMAIL_RE.test(email.trim());
 }
-
-export function studentFirstName(fullName: string) {
-  const trimmed = fullName.trim();
-  if (!trimmed) return "there";
-  return trimmed.split(/\s+/)[0] ?? trimmed;
-}
-
-/** Generate a strong random password for new student accounts. */
 export function generateStrongPassword() {
   const lower = "abcdefghjkmnpqrstuvwxyz";
   const upper = "ABCDEFGHJKMNPQRSTUVWXYZ";
@@ -158,6 +151,7 @@ export async function enrollStudentInCourses(
 }
 
 export async function sendStudentWelcomeEmail(params: {
+  studentId: string;
   fullName: string;
   email: string;
   password: string;
@@ -165,22 +159,13 @@ export async function sendStudentWelcomeEmail(params: {
   siteUrl: string;
   brandColor?: string;
 }) {
-  const sender = await getEmailSenderConfig();
-  const tpl = studentWelcomeEmail({
-    firstName: studentFirstName(params.fullName),
+  void params.siteUrl;
+  void params.brandColor;
+  void params.courseNames;
+  await sendWelcomeEmailIfNeeded({
+    studentId: params.studentId,
+    fullName: params.fullName,
     email: params.email,
     password: params.password,
-    courseNames: params.courseNames,
-    loginUrl: `${params.siteUrl}/login`,
-    settingsUrl: `${params.siteUrl}/settings`,
-    supportEmail: sender.replyTo ?? sender.fromAddress,
-    brandColor: params.brandColor,
-  });
-
-  await sendEmail({
-    to: params.email,
-    subject: tpl.subject,
-    html: tpl.html,
-    replyTo: sender.replyTo,
   });
 }

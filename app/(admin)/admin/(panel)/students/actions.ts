@@ -114,6 +114,7 @@ export async function createStudent(
 
     const settings = await getPlatformSettingsAdmin();
     await sendStudentWelcomeEmail({
+      studentId: created.user.id,
       fullName,
       email,
       password,
@@ -239,6 +240,7 @@ export async function bulkUploadStudents(
           enrolledBy: adminUser.id,
         });
         await sendStudentWelcomeEmail({
+          studentId: createdUser.user.id,
           fullName,
           email,
           password,

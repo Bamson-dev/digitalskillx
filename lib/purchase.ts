@@ -1,9 +1,7 @@
 import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { notify } from "@/lib/notifications";
-import { sendEmail } from "@/lib/email";
-import { emailTemplates } from "@/lib/email/templates";
-import { siteUrl } from "@/lib/org";
+import { sendPaymentReceiptEmail, sendWelcomeEmailIfNeeded } from "@/lib/system-email-triggers";
 
 /** Grant course access after a verified purchase. Idempotent for webhook retries. */
 export async function fulfillPurchase(params: {
@@ -59,13 +57,19 @@ export async function fulfillPurchase(params: {
     });
   }
 
-  if (profile?.email && course) {
-    const tpl = emailTemplates.purchaseConfirmation({
-      name: profile.full_name ?? "there",
-      courseTitle: course.title,
-      url: `${siteUrl()}/courses/${params.courseId}`,
+  if (profile?.email) {
+    void sendWelcomeEmailIfNeeded({
+      studentId: params.studentId,
+      fullName: profile.full_name ?? "there",
+      email: profile.email,
+      checkoutCourseId: params.courseId,
     });
-    await sendEmail({ to: profile.email, subject: tpl.subject, html: tpl.html });
+
+    void sendPaymentReceiptEmail({
+      studentId: params.studentId,
+      courseId: params.courseId,
+      reference: params.reference,
+    });
   }
 
   return { fulfilled: true };

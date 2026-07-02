@@ -14,11 +14,32 @@ export async function GET(request: NextRequest) {
     const supabase = createClient();
     const { error } = await supabase.auth.exchangeCodeForSession(code);
     if (!error) {
-      if (next) return NextResponse.redirect(`${origin}${next}`);
-
       const {
         data: { user },
       } = await supabase.auth.getUser();
+
+      if (user) {
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("full_name, email, role")
+          .eq("id", user.id)
+          .single();
+
+        if (profile?.role === "student" && profile.email) {
+          const { sendWelcomeEmailIfNeeded, parseCourseIdFromNext } = await import(
+            "@/lib/system-email-triggers"
+          );
+          void sendWelcomeEmailIfNeeded({
+            studentId: user.id,
+            fullName: profile.full_name ?? user.user_metadata?.full_name ?? "there",
+            email: profile.email,
+            checkoutCourseId: parseCourseIdFromNext(next),
+          });
+        }
+      }
+
+      if (next) return NextResponse.redirect(`${origin}${next}`);
+
       if (user) {
         const { data: profile } = await supabase
           .from("profiles")

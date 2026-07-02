@@ -102,6 +102,7 @@ export type Profile = Timestamps & {
   is_suspended: boolean;
   tags: string[];
   last_active_at: string | null;
+  welcome_email_sent_at: string | null;
   updated_at: string;
 };
 
@@ -182,6 +183,8 @@ export type Enrollment = {
   completed_at: string | null;
   enrolled_by: string | null;
   source: EnrollmentSource;
+  completion_email_sent_at: string | null;
+  idle_reminder_sent_at: string | null;
 };
 
 export type Transaction = Timestamps & {
@@ -195,7 +198,18 @@ export type Transaction = Timestamps & {
   status: TransactionStatus;
   paystack_data: Json | null;
   anonymized: boolean;
+  receipt_email_sent_at: string | null;
   updated_at: string;
+};
+
+export type SystemEmailFailure = {
+  id: string;
+  email_type: string;
+  recipient: string;
+  subject: string;
+  payload: Json;
+  error_message: string;
+  created_at: string;
 };
 
 export type SupportRequest = Timestamps & {
@@ -519,6 +533,7 @@ export type Database = {
           Rel<"transactions_course_id_fkey", "course_id", "courses", "id">,
         ]
       >;
+      system_email_failures: Table<SystemEmailFailure, []>;
     };
     Views: Record<string, never>;
     Functions: {

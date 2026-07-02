@@ -26,6 +26,7 @@ export async function issueCertificate(params: {
   studentId: string;
   courseId: string;
   completedAt?: string;
+  sendEmail?: boolean;
 }) {
   const supabase = createAdminClient();
 
@@ -67,7 +68,7 @@ export async function issueCertificate(params: {
     linkUrl: "/certificates",
   });
 
-  if (profile?.email) {
+  if (profile?.email && params.sendEmail) {
     const tpl = emailTemplates.certificateReady({
       name: profile.full_name ?? "there",
       courseTitle: course?.title ?? "your course",

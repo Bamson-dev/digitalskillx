@@ -1,0 +1,56 @@
+import "server-only";
+import type { Json } from "@/types/database";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { sendEmail } from "@/lib/email";
+
+export type SystemEmailType =
+  | "welcome"
+  | "payment_receipt"
+  | "course_completion_certificate"
+  | "idle_reminder";
+
+export type SendSystemEmailParams = {
+  type: SystemEmailType;
+  to: string;
+  subject: string;
+  html: string;
+  replyTo?: string;
+  payload?: Record<string, Json>;
+};
+
+/** Send a system email; log failures for retry without throwing. */
+export async function sendSystemEmail(params: SendSystemEmailParams) {
+  const result = await sendEmail({
+    to: params.to,
+    subject: params.subject,
+    html: params.html,
+    replyTo: params.replyTo,
+  });
+
+  if ("error" in result && result.error) {
+    const message =
+      result.error instanceof Error ? result.error.message : String(result.error);
+    console.error(`[system-email] ${params.type} failed for ${params.to}:`, message);
+
+    try {
+      const admin = createAdminClient();
+      await admin.from("system_email_failures").insert({
+        email_type: params.type,
+        recipient: params.to,
+        subject: params.subject,
+        payload: (params.payload ?? {}) as Json,
+        error_message: message,
+      });
+    } catch (logError) {
+      console.error("[system-email] could not log failure:", logError);
+    }
+
+    return { sent: false as const, error: message };
+  }
+
+  if ("skipped" in result && result.skipped) {
+    return { sent: false as const, skipped: true as const };
+  }
+
+  return { sent: true as const, messageId: result.messageId };
+}

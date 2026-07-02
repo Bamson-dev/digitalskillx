@@ -81,6 +81,14 @@ export async function POST(request: NextRequest) {
         return jsonError(enrollError.message, 500);
       }
 
+      const { sendWelcomeEmailIfNeeded } = await import("@/lib/system-email-triggers");
+      void sendWelcomeEmailIfNeeded({
+        studentId: user.id,
+        fullName: profile.full_name ?? "there",
+        email: profile.email,
+        checkoutCourseId: course.id,
+      });
+
       return NextResponse.json({ enrolled: true });
     }
 

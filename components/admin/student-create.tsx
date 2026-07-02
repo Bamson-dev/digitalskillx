@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useFormState } from "react-dom";
-import { UserPlus, Upload } from "lucide-react";
+import { Search, UserPlus, Upload } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Input, Label } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
@@ -19,6 +19,85 @@ import {
 const initial: StudentActionState = {};
 
 type PublishedCourse = { id: string; title: string };
+
+function CourseCheckboxList({ courses }: { courses: PublishedCourse[] }) {
+  const [query, setQuery] = useState("");
+  const [selected, setSelected] = useState<Set<string>>(() => new Set());
+
+  const filtered = useMemo(() => {
+    const term = query.trim().toLowerCase();
+    if (!term) return courses;
+    return courses.filter((course) => course.title.toLowerCase().includes(term));
+  }, [courses, query]);
+
+  const selectedCount = selected.size;
+  const countLabel =
+    selectedCount === 1 ? "1 course selected" : `${selectedCount} courses selected`;
+
+  function toggleCourse(courseId: string, checked: boolean) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (checked) next.add(courseId);
+      else next.delete(courseId);
+      return next;
+    });
+  }
+
+  if (courses.length === 0) {
+    return (
+      <p className="rounded-lg border border-app bg-surface-muted/30 px-3 py-4 text-sm text-muted">
+        No published courses yet.
+      </p>
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      <div className="relative">
+        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
+        <Input
+          type="search"
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder="Search courses…"
+          className="pl-9"
+          aria-label="Search courses"
+        />
+      </div>
+
+      <p className="text-sm font-medium text-neutral-700">{countLabel}</p>
+
+      <div className="max-h-56 overflow-y-auto rounded-lg border border-app bg-white">
+        {filtered.length === 0 ? (
+          <p className="px-3 py-4 text-sm text-muted">No courses match your search.</p>
+        ) : (
+          <ul className="divide-y divide-app">
+            {filtered.map((course) => {
+              const checked = selected.has(course.id);
+              return (
+                <li key={course.id}>
+                  <label className="flex min-h-[44px] cursor-pointer items-center gap-3 px-3 py-3 active:bg-surface-muted/40">
+                    <input
+                      type="checkbox"
+                      name="course_ids"
+                      value={course.id}
+                      checked={checked}
+                      onChange={(event) => toggleCourse(course.id, event.target.checked)}
+                      className="h-5 w-5 shrink-0 rounded border-neutral-300 text-brand focus:ring-brand"
+                    />
+                    <span className="text-sm font-medium leading-snug text-neutral-900">
+                      {course.title}
+                    </span>
+                  </label>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </div>
+    </div>
+  );
+}
 
 function Feedback({ state }: { state: StudentActionState }) {
   return (
@@ -96,23 +175,10 @@ export function StudentCreate({ courses }: { courses: PublishedCourse[] }) {
           </div>
 
           <div>
-            <Label htmlFor="course_ids">Courses</Label>
-            <Select id="course_ids" name="course_ids" multiple className="min-h-[9rem] py-2" size={6}>
-              {courses.length === 0 ? (
-                <option value="" disabled>
-                  No published courses yet
-                </option>
-              ) : (
-                courses.map((course) => (
-                  <option key={course.id} value={course.id}>
-                    {course.title}
-                  </option>
-                ))
-              )}
-            </Select>
-            <p className="mt-1 text-xs text-muted">
-              Hold Cmd (Mac) or Ctrl (Windows) to select more than one published course.
-            </p>
+            <Label>Courses</Label>
+            <div className="mt-1.5">
+              <CourseCheckboxList courses={courses} />
+            </div>
           </div>
 
           <div className="max-w-md">

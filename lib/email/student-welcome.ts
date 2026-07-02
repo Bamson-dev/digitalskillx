@@ -12,7 +12,7 @@ function escapeHtml(value: string) {
 export type StudentWelcomeEmailParams = {
   firstName: string;
   email: string;
-  password: string;
+  password?: string;
   courseNames: string[];
   loginUrl: string;
   settingsUrl: string;
@@ -73,13 +73,17 @@ export function studentWelcomeEmail(p: StudentWelcomeEmailParams) {
               <div style="margin:0 0 24px;padding:18px;background:#fff7ed;border:1px solid #fed7aa;border-radius:12px;">
                 <p style="margin:0 0 12px;font-size:14px;font-weight:700;color:#9a3412;">Your login details</p>
                 <p style="margin:0 0 8px;font-size:14px;line-height:1.6;color:#334155;"><strong>Email:</strong> ${escapeHtml(p.email)}</p>
-                <p style="margin:0;font-size:14px;line-height:1.6;color:#334155;"><strong>Password:</strong> <code style="font-size:15px;font-weight:700;color:#111827;background:#fff;padding:4px 8px;border-radius:6px;border:1px solid #e2e8f0;">${escapeHtml(p.password)}</code></p>
+                ${
+                  p.password
+                    ? `<p style="margin:0;font-size:14px;line-height:1.6;color:#334155;"><strong>Password:</strong> <code style="font-size:15px;font-weight:700;color:#111827;background:#fff;padding:4px 8px;border-radius:6px;border:1px solid #e2e8f0;">${escapeHtml(p.password)}</code></p>`
+                    : `<p style="margin:0;font-size:14px;line-height:1.6;color:#334155;">Use the password you chose when you signed up.</p>`
+                }
               </div>
 
               <p style="margin:0 0 20px;font-size:14px;line-height:1.7;color:#475569;">
-                For your security, please log in and change your password on first use.
+                ${p.password ? "For your security, please log in and change your password on first use." : "Log in anytime to access your courses."}
                 Open <a href="${escapeHtml(p.settingsUrl)}" style="color:${brand};font-weight:600;">Account &amp; privacy settings</a>
-                after signing in, or use <strong>Forgot password</strong> on the login page if you need to reset it.
+                after signing in${p.password ? ", or use <strong>Forgot password</strong> on the login page if you need to reset it" : ""}.
               </p>
 
               <table role="presentation" cellspacing="0" cellpadding="0" style="margin:0 0 8px;">

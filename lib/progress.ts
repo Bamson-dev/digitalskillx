@@ -1,17 +1,10 @@
 import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { runAutomations } from "@/lib/automation";
-import { issueCertificate } from "@/lib/certificates";
-import { notify } from "@/lib/notifications";
-import { sendEmail } from "@/lib/email";
-import { emailTemplates } from "@/lib/email/templates";
-
-function siteUrl() {
-  return (process.env.NEXT_PUBLIC_SITE_URL ?? "https://digitalskillx.com").replace(
-    /\/$/,
-    "",
-  );
-}
+import {
+  clearIdleReminderForCourse,
+  evaluateAndCompleteCourse,
+} from "@/lib/course-completion";
 
 /** All lesson ids belonging to a course (via its modules). */
 async function courseLessonIds(courseId: string): Promise<string[]> {
@@ -69,8 +62,6 @@ export async function recordLessonProgress(params: {
     { onConflict: "student_id,lesson_id" },
   );
 
-  if (!completed) return { completed: false };
-
   // Find the course this lesson belongs to.
   const { data: lesson } = await supabase
     .from("lessons")
@@ -79,7 +70,13 @@ export async function recordLessonProgress(params: {
     .single();
   const moduleRel = lesson?.module as { course_id: string } | { course_id: string }[] | null;
   const courseId = Array.isArray(moduleRel) ? moduleRel[0]?.course_id : moduleRel?.course_id;
-  if (!courseId) return { completed: true };
+  if (!courseId) return { completed: false };
+
+  if (completed) {
+    await clearIdleReminderForCourse(params.studentId, courseId);
+  }
+
+  if (!completed) return { completed: false };
 
   await runAutomations("lesson_completed", {
     studentId: params.studentId,
@@ -87,61 +84,8 @@ export async function recordLessonProgress(params: {
     lessonId: params.lessonId,
   });
 
-  // Re-evaluate course completion.
-  const { data: course } = await supabase
-    .from("courses")
-    .select("title, required_completion_pct, certificate_enabled")
-    .eq("id", courseId)
-    .single();
-  const pct = await courseCompletionPct(params.studentId, courseId);
+  const completion = await evaluateAndCompleteCourse(params.studentId, courseId);
+  const pct = completion.coursePct ?? (await courseCompletionPct(params.studentId, courseId));
 
-  if (course && pct >= (course.required_completion_pct ?? 100)) {
-    const { data: enrollment } = await supabase
-      .from("enrollments")
-      .select("id, completed_at")
-      .eq("student_id", params.studentId)
-      .eq("course_id", courseId)
-      .maybeSingle();
-
-    if (enrollment && !enrollment.completed_at) {
-      await supabase
-        .from("enrollments")
-        .update({ completed_at: new Date().toISOString() })
-        .eq("id", enrollment.id);
-
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("full_name, email")
-        .eq("id", params.studentId)
-        .single();
-
-      await notify({
-        studentId: params.studentId,
-        type: "announcement",
-        title: "Course complete",
-        message: `You completed "${course.title}". Congratulations!`,
-        linkUrl: "/courses",
-      });
-
-      if (profile?.email) {
-        const tpl = emailTemplates.courseCompletion({
-          name: profile.full_name ?? "there",
-          courseTitle: course.title,
-          url: `${siteUrl()}/courses`,
-        });
-        await sendEmail({ to: profile.email, subject: tpl.subject, html: tpl.html });
-      }
-
-      if (course.certificate_enabled) {
-        await issueCertificate({ studentId: params.studentId, courseId });
-      }
-
-      await runAutomations("course_completed", {
-        studentId: params.studentId,
-        courseId,
-      });
-    }
-  }
-
-  return { completed: true, coursePct: pct };
+  return { completed: true, coursePct: pct, courseCompleted: completion.completed };
 }

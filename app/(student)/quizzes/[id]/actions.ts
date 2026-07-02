@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAdmin } from "@/lib/auth";
 import { logAudit } from "@/lib/audit";
+import { evaluateAndCompleteCourse } from "@/lib/course-completion";
 import { runAutomations } from "@/lib/automation";
 import { notify } from "@/lib/notifications";
 import type { Json } from "@/types/database";
@@ -95,6 +96,9 @@ export async function submitQuiz(
 
   if (passed === true) {
     await runAutomations("quiz_passed", { studentId: user.id, courseId, quizId });
+    if (courseId) {
+      await evaluateAndCompleteCourse(user.id, courseId);
+    }
   } else if (passed === false) {
     await runAutomations("quiz_failed", { studentId: user.id, courseId, quizId });
   }
