@@ -124,31 +124,6 @@ export function CourseSettingsForm({
       <form action={action} className="grid gap-4 sm:grid-cols-2">
         <input type="hidden" name="id" value={course.id} />
 
-        <div className="sm:col-span-2 rounded-xl border border-brand/25 bg-brand-50/60 p-4">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <p className="flex items-center gap-2 text-sm font-semibold text-brand">
-                <Sparkles className="h-4 w-4" />
-                AI copywriter
-              </p>
-              <p className="mt-1 text-xs text-muted">
-                Enter a title below, then generate storefront copy with DeepSeek. Edit anything before saving.
-              </p>
-            </div>
-            <Button
-              type="button"
-              variant="primary"
-              size="sm"
-              disabled={titleMissing || isGenerating}
-              onClick={() => requestCopy("all")}
-              className="shrink-0"
-            >
-              <Sparkles className="h-4 w-4" />
-              {copyLoading === "all" ? "Generating all copy…" : "Generate all copy"}
-            </Button>
-          </div>
-        </div>
-
         <div className="sm:col-span-2">
           <Label htmlFor="course-title">Title</Label>
           <Input
@@ -158,9 +133,6 @@ export function CourseSettingsForm({
             onChange={(e) => setTitle(e.target.value)}
             required
           />
-          {titleMissing ? (
-            <p className="mt-1 text-xs text-amber-700">Add a title to unlock AI copy generation.</p>
-          ) : null}
         </div>
 
         {copyError ? (
