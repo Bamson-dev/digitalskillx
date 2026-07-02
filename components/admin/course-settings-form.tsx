@@ -15,6 +15,7 @@ import {
   type CourseSettingsState,
 } from "@/app/(admin)/admin/(panel)/courses/actions";
 import type { CourseCopyField, CourseCopyResult } from "@/lib/ai/course-copy-shared";
+import { CourseThumbnailUpload } from "@/components/admin/course-thumbnail-upload";
 
 const courseSettingsInitial: CourseSettingsState = {};
 
@@ -121,7 +122,7 @@ export function CourseSettingsForm({
   return (
     <Card>
       <CardHeader title="Course settings" description="Storefront listing, pricing, and completion rules." />
-      <form action={action} className="grid gap-4 sm:grid-cols-2">
+      <form action={action} className="grid gap-4 sm:grid-cols-2" encType="multipart/form-data">
         <input type="hidden" name="id" value={course.id} />
 
         <div className="sm:col-span-2">
@@ -179,13 +180,25 @@ export function CourseSettingsForm({
           <Label>Price ($ USD)</Label>
           <Input name="price_usd" type="number" min={0} step={1} defaultValue={course.price_usd ?? 0} />
         </div>
-        <div>
+        <div className="sm:col-span-2">
           <Label>Promo video URL</Label>
-          <Input name="promo_video_url" defaultValue={course.promo_video_url ?? ""} placeholder="YouTube embed URL" />
+          <Input
+            name="promo_video_url"
+            defaultValue={course.promo_video_url ?? ""}
+            placeholder="https://youtu.be/… or YouTube embed URL"
+          />
+          <p className="mt-1 text-xs text-muted">Optional. Plays above the course image when set.</p>
         </div>
-        <div>
-          <Label>Thumbnail URL</Label>
-          <Input name="thumbnail_url" defaultValue={course.thumbnail_url ?? ""} placeholder="https://…" />
+
+        <div className="sm:col-span-2">
+          <Label>Course image</Label>
+          <div className="mt-1.5">
+            <CourseThumbnailUpload
+              key={`${course.id}-${state.thumbnail_url ?? course.thumbnail_url ?? "none"}`}
+              initialUrl={state.thumbnail_url ?? course.thumbnail_url}
+              courseTitle={title}
+            />
+          </div>
         </div>
 
         <div className="sm:col-span-2">

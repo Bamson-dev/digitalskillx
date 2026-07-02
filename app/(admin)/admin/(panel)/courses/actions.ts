@@ -9,10 +9,21 @@ import {
   inferAttachmentType,
   uploadLessonAttachmentFile,
 } from "@/lib/upload-lesson-attachment";
+import { uploadPublicAsset } from "@/lib/upload-public-asset";
 import type { CourseVisibility, EnrollmentType, LessonType } from "@/types/database";
 
 export type LessonAttachmentState = { error?: string; message?: string };
-export type CourseSettingsState = { error?: string; message?: string };
+export type CourseSettingsState = {
+  error?: string;
+  message?: string;
+  thumbnail_url?: string | null;
+};
+
+function fileFrom(formData: FormData, key: string): File | null {
+  const value = formData.get(key);
+  if (!(value instanceof File) || value.size <= 0) return null;
+  return value;
+}
 
 export async function createCourse(formData: FormData) {
   const admin = await requireAdmin();
@@ -63,13 +74,32 @@ export async function updateCourseSettings(
       .map((s) => s.trim())
       .filter(Boolean);
 
+    const clearThumbnail = formData.get("clear_thumbnail") === "1";
+    const thumbnailFile = fileFrom(formData, "thumbnail");
+    let thumbnailUrl = String(formData.get("thumbnail_url") ?? "").trim() || null;
+
+    if (thumbnailFile) {
+      try {
+        thumbnailUrl = await uploadPublicAsset(thumbnailFile, `courses/${id}`);
+      } catch (uploadError) {
+        return {
+          error:
+            uploadError instanceof Error
+              ? uploadError.message
+              : "Could not upload course image.",
+        };
+      }
+    } else if (clearThumbnail) {
+      thumbnailUrl = null;
+    }
+
     const { error } = await supabase
       .from("courses")
       .update({
         title: String(formData.get("title") ?? "").trim(),
         description: String(formData.get("description") ?? ""),
         short_description: String(formData.get("short_description") ?? "") || null,
-        thumbnail_url: String(formData.get("thumbnail_url") ?? "") || null,
+        thumbnail_url: thumbnailUrl,
         promo_video_url: String(formData.get("promo_video_url") ?? "") || null,
         category_id: String(formData.get("category_id") ?? "") || null,
         visibility: String(formData.get("visibility") ?? "draft") as CourseVisibility,
@@ -110,7 +140,8 @@ export async function updateCourseSettings(
 
     await logAudit({ action: "course_edited", targetType: "course", targetId: id });
     revalidatePath(`/admin/courses/${id}`);
-    return { message: "Course settings saved." };
+    revalidatePath(`/course/${id}`);
+    return { message: "Course settings saved.", thumbnail_url: thumbnailUrl };
   } catch (err) {
     return { error: err instanceof Error ? err.message : "Could not save course settings." };
   }
