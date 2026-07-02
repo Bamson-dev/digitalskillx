@@ -45,12 +45,12 @@ async function requireAdminApi() {
   return { user };
 }
 
-/** Admin diagnostic: is YOUTUBE_API_KEY visible to the running server? */
+/** Admin diagnostic: is YouTube API key configured? */
 export async function GET() {
   const auth = await requireAdminApi();
   if ("error" in auth && auth.error) return auth.error;
 
-  const youtube = youtubeApiKeyDiagnostics();
+  const youtube = await youtubeApiKeyDiagnostics();
   return NextResponse.json({
     youtubeApiKeyConfigured: youtube.status === "ok",
     youtubeApiKeyStatus: youtube.status,
@@ -85,8 +85,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid import source." }, { status: 400 });
   }
 
-  if (source.startsWith("youtube_") && !youtubeApiKeyConfigured()) {
-    return NextResponse.json({ error: youtubeApiKeyError() }, { status: 503 });
+  if (source.startsWith("youtube_") && !(await youtubeApiKeyConfigured())) {
+    return NextResponse.json({ error: await youtubeApiKeyError() }, { status: 503 });
   }
 
   let lessons;

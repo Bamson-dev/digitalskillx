@@ -41,7 +41,7 @@ export function detectYoutubeInput(url: string): YoutubeInput | null {
 
 import { getYoutubeApiKey } from "@/lib/env-youtube";
 
-function key() {
+async function key() {
   return getYoutubeApiKey();
 }
 

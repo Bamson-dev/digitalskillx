@@ -9,6 +9,7 @@ import { SubmitButton } from "@/components/auth/submit-button";
 import {
   saveCertificateSettings,
   saveEmailSettings,
+  saveIntegrationSettings,
   savePlatformSettings,
   type SettingsState,
 } from "@/app/(admin)/admin/(panel)/settings/actions";
@@ -171,6 +172,39 @@ function EmailSettingsForm({ settings }: { settings: PlatformSettingsValues }) {
   );
 }
 
+function IntegrationSettingsForm({ youtubeConfigured }: { youtubeConfigured: boolean }) {
+  const [state, action] = useFormState(saveIntegrationSettings, initial);
+
+  return (
+    <Card>
+      <CardHeader
+        title="Integrations"
+        description="API keys stored in Supabase (recommended). Coolify env vars often do not reach Next.js route handlers."
+      />
+      <form action={action} className="space-y-4">
+        <div>
+          <Label htmlFor="youtube_api_key">YouTube Data API key</Label>
+          <Input
+            id="youtube_api_key"
+            name="youtube_api_key"
+            type="password"
+            autoComplete="off"
+            placeholder={youtubeConfigured ? "Key saved — paste to replace" : "AIzaSy…"}
+            required={!youtubeConfigured}
+          />
+          <p className="mt-1 text-xs text-muted">
+            {youtubeConfigured
+              ? "A key is configured. Paste a new value only if you need to replace it."
+              : "Required for Admin → Courses → Import lessons (YouTube playlist/video)."}
+          </p>
+        </div>
+        <SubmitButton pendingText="Saving…">Save integration settings</SubmitButton>
+        <Feedback state={state} />
+      </form>
+    </Card>
+  );
+}
+
 function CertificateSettingsForm({
   settings,
   templates,
@@ -244,14 +278,17 @@ function CertificateSettingsForm({
 export function SettingsForms({
   settings,
   templates,
+  youtubeConfigured,
 }: {
   settings: PlatformSettingsValues;
   templates: CertTemplate[];
+  youtubeConfigured: boolean;
 }) {
   return (
     <div className="space-y-6">
       <PlatformSettingsForm settings={settings} />
       <EmailSettingsForm settings={settings} />
+      <IntegrationSettingsForm youtubeConfigured={youtubeConfigured} />
       <CertificateSettingsForm settings={settings} templates={templates} />
     </div>
   );

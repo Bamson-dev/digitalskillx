@@ -223,6 +223,13 @@ export type PlatformSettings = {
   updated_by: string | null;
 };
 
+export type PlatformSecrets = {
+  id: string;
+  youtube_api_key: string | null;
+  updated_at: string;
+  updated_by: string | null;
+};
+
 export type LessonProgress = {
   id: string;
   student_id: string;
@@ -493,6 +500,10 @@ export type Database = {
           >,
           Rel<"platform_settings_updated_by_fkey", "updated_by", "profiles", "id", true>,
         ]
+      >;
+      platform_secrets: Table<
+        PlatformSecrets,
+        [Rel<"platform_secrets_updated_by_fkey", "updated_by", "profiles", "id", true>]
       >;
       transactions: Table<
         Transaction,

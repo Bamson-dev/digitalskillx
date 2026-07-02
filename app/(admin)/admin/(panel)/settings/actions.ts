@@ -164,3 +164,39 @@ export async function saveCertificateSettings(
     return { error: err instanceof Error ? err.message : "Could not save certificate settings." };
   }
 }
+
+export async function saveIntegrationSettings(
+  _prev: SettingsState,
+  formData: FormData,
+): Promise<SettingsState> {
+  const profile = await requireAdmin();
+  const youtubeApiKey = String(formData.get("youtube_api_key") ?? "").trim();
+
+  if (!youtubeApiKey) {
+    return { error: "Paste your YouTube Data API key to save." };
+  }
+  if (youtubeApiKey === "your-youtube-data-api-key") {
+    return { error: "Replace the placeholder with your real Google API key." };
+  }
+
+  try {
+    const admin = createAdminClient();
+    const { error } = await admin.from("platform_secrets").upsert(
+      {
+        id: "default",
+        youtube_api_key: youtubeApiKey,
+        updated_by: profile.id,
+      },
+      { onConflict: "id" },
+    );
+    if (error) throw new Error(error.message);
+
+    await logAudit({ action: "settings_integrations_saved" });
+    revalidatePath(SETTINGS_PATH);
+    return { message: "Integration settings saved. YouTube import is ready to use." };
+  } catch (err) {
+    return {
+      error: err instanceof Error ? err.message : "Could not save integration settings.",
+    };
+  }
+}

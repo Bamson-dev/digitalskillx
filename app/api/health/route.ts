@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 export async function GET() {
-  const youtube = youtubeApiKeyDiagnostics();
+  const youtube = await youtubeApiKeyDiagnostics();
   const checks: Record<string, string> = {
     status: "ok",
     timestamp: new Date().toISOString(),
@@ -47,7 +47,7 @@ export async function GET() {
     {
       ...checks,
       runtimeEnv: runtimeEnvDiagnostics(),
-      youtube: youtubeApiKeyDiagnostics(),
+      youtube: await youtubeApiKeyDiagnostics(),
     },
     { status: httpStatus },
   );
