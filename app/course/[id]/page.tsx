@@ -55,19 +55,8 @@ export default async function CourseLandingPage({
     data: { user },
   } = await supabase.auth.getUser();
 
-  const { data: course } = await supabase
-    .from("courses")
-    .select(
-      "id, title, description, short_description, thumbnail_url, price_ngn, price_usd, learning_outcomes, instructor_name, instructor_bio, promo_video_url, category:course_categories(name), modules(id, title, position, lessons(id, title, position, lesson_type))",
-    )
-    .eq("id", params.id)
-    .eq("visibility", "published")
-    .single();
-
-  if (!course) notFound();
-
-  let profile = null;
-  let isEnrolled = false;
+  let profile: { full_name: string | null; email: string; role: string } | null = null;
+  let isAdmin = false;
   if (user) {
     const { data: p } = await supabase
       .from("profiles")
@@ -75,6 +64,26 @@ export default async function CourseLandingPage({
       .eq("id", user.id)
       .single();
     profile = p;
+    isAdmin = p?.role === "admin";
+  }
+
+  let courseQuery = supabase
+    .from("courses")
+    .select(
+      "id, title, description, short_description, thumbnail_url, price_ngn, price_usd, learning_outcomes, instructor_name, instructor_bio, promo_video_url, category:course_categories(name), modules(id, title, position, lessons(id, title, position, lesson_type))",
+    )
+    .eq("id", params.id);
+
+  if (!isAdmin) {
+    courseQuery = courseQuery.eq("visibility", "published");
+  }
+
+  const { data: course } = await courseQuery.single();
+
+  if (!course) notFound();
+
+  let isEnrolled = false;
+  if (user) {
     const { data: e } = await supabase
       .from("enrollments")
       .select("id")

@@ -15,6 +15,7 @@ export default async function CourseDetailPage({
 }) {
   const profile = await requireStudent();
   const supabase = createClient();
+  const isAdminPreview = profile.role === "admin";
 
   const { data: enrollment } = await supabase
     .from("enrollments")
@@ -23,7 +24,7 @@ export default async function CourseDetailPage({
     .eq("course_id", params.id)
     .maybeSingle();
 
-  if (!enrollment) {
+  if (!enrollment && !isAdminPreview) {
     redirect(`/course/${params.id}`);
   }
 
@@ -56,6 +57,11 @@ export default async function CourseDetailPage({
 
       <div>
         <h1 className="text-2xl font-bold">{course.title}</h1>
+        {isAdminPreview && !enrollment ? (
+          <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">
+            Admin preview — you are viewing this course as a student would, without enrolling.
+          </p>
+        ) : null}
         {course.description ? (
           <p className="mt-1 text-sm text-muted">{course.description}</p>
         ) : null}
