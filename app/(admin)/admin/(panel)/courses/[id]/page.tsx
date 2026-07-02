@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { requireAdmin } from "@/lib/auth";
 import { CourseEditor } from "@/components/admin/course-editor";
 import { YoutubeImport } from "@/components/admin/youtube-import";
+import type { AttachmentDisplay } from "@/lib/lesson-attachments-shared";
 import { Card, CardHeader } from "@/components/ui/card";
 import { Input, Label } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -39,10 +40,30 @@ export default async function AdminCourseEditorPage({
 
   const { data: resources } = await supabase
     .from("resources")
-    .select("id, title, file_url, file_type")
+    .select("id, title, file_url, file_type, lesson_id")
     .eq("course_id", params.id)
+    .is("lesson_id", null)
     .eq("is_archived", false)
     .order("created_at", { ascending: false });
+
+  const { data: lessonResources } = await supabase
+    .from("resources")
+    .select("id, title, file_url, file_type, lesson_id")
+    .eq("course_id", params.id)
+    .not("lesson_id", "is", null)
+    .eq("is_archived", false)
+    .order("created_at", { ascending: true });
+
+  const lessonAttachments: Record<string, AttachmentDisplay[]> = {};
+  for (const resource of lessonResources ?? []) {
+    if (!resource.lesson_id) continue;
+    (lessonAttachments[resource.lesson_id] ??= []).push({
+      id: resource.id,
+      title: resource.title,
+      file_url: resource.file_url,
+      file_type: resource.file_type,
+    });
+  }
 
   const modules = [...(course.modules ?? [])].sort((a, b) => a.position - b.position);
 
@@ -68,6 +89,7 @@ export default async function AdminCourseEditorPage({
         course={course}
         modules={modules}
         categories={categories ?? []}
+        lessonAttachments={lessonAttachments}
       />
 
       <YoutubeImport

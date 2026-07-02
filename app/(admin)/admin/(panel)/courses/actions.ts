@@ -5,7 +5,14 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { requireAdmin } from "@/lib/auth";
 import { logAudit } from "@/lib/audit";
+import {
+  inferAttachmentType,
+  uploadLessonAttachmentFile,
+} from "@/lib/upload-lesson-attachment";
 import type { CourseVisibility, EnrollmentType, LessonType } from "@/types/database";
+
+export type LessonAttachmentState = { error?: string; message?: string };
+export type CourseSettingsState = { error?: string; message?: string };
 
 export async function createCourse(formData: FormData) {
   const admin = await requireAdmin();
@@ -23,64 +30,90 @@ export async function createCourse(formData: FormData) {
   redirect(`/admin/courses/${data.id}`);
 }
 
-export async function updateCourseSettings(formData: FormData) {
-  await requireAdmin();
-  const supabase = createClient();
-  const id = String(formData.get("id"));
+export async function updateCourseSettings(
+  _prev: CourseSettingsState,
+  formData: FormData,
+): Promise<CourseSettingsState> {
+  try {
+    await requireAdmin();
+    const supabase = createClient();
+    const id = String(formData.get("id"));
 
-  const { data: before } = await supabase
-    .from("courses")
-    .select("price_ngn, price_usd")
-    .eq("id", id)
-    .single();
+    const { data: before, error: beforeError } = await supabase
+      .from("courses")
+      .select("price_ngn, price_usd")
+      .eq("id", id)
+      .single();
 
-  const required = Number(formData.get("required_completion_pct") ?? 100);
-  const priceNgn = Number(formData.get("price_ngn") ?? 0);
-  const priceUsd = Number(formData.get("price_usd") ?? 0);
-  const outcomes = String(formData.get("learning_outcomes") ?? "")
-    .split("\n")
-    .map((s) => s.trim())
-    .filter(Boolean);
+    if (beforeError) {
+      if (beforeError.message.includes("price_usd") && beforeError.message.includes("does not exist")) {
+        return {
+          error:
+            "The price_usd column is missing on courses. Run supabase/migrations/0006_price_usd.sql in the Supabase SQL Editor, then try again.",
+        };
+      }
+      return { error: beforeError.message };
+    }
 
-  const { error } = await supabase
-    .from("courses")
-    .update({
-      title: String(formData.get("title") ?? "").trim(),
-      description: String(formData.get("description") ?? ""),
-      short_description: String(formData.get("short_description") ?? "") || null,
-      thumbnail_url: String(formData.get("thumbnail_url") ?? "") || null,
-      promo_video_url: String(formData.get("promo_video_url") ?? "") || null,
-      category_id: String(formData.get("category_id") ?? "") || null,
-      visibility: String(formData.get("visibility") ?? "draft") as CourseVisibility,
-      enrollment_type: String(formData.get("enrollment_type") ?? "open") as EnrollmentType,
-      certificate_enabled: formData.get("certificate_enabled") === "on",
-      drip_enabled: formData.get("drip_enabled") === "on",
-      required_completion_pct: Number.isFinite(required) ? required : 100,
-      price_ngn: Number.isFinite(priceNgn) && priceNgn >= 0 ? Math.round(priceNgn) : 0,
-      price_usd: Number.isFinite(priceUsd) && priceUsd >= 0 ? Math.round(priceUsd) : 0,
-      learning_outcomes: outcomes,
-      instructor_name: String(formData.get("instructor_name") ?? "") || null,
-      instructor_bio: String(formData.get("instructor_bio") ?? "") || null,
-    })
-    .eq("id", id);
-  if (error) throw new Error(error.message);
+    const required = Number(formData.get("required_completion_pct") ?? 100);
+    const priceNgn = Number(formData.get("price_ngn") ?? 0);
+    const priceUsd = Number(formData.get("price_usd") ?? 0);
+    const outcomes = String(formData.get("learning_outcomes") ?? "")
+      .split("\n")
+      .map((s) => s.trim())
+      .filter(Boolean);
 
-  if (before && (before.price_ngn !== priceNgn || before.price_usd !== priceUsd)) {
-    await logAudit({
-      action: "price_changed",
-      targetType: "course",
-      targetId: id,
-      metadata: {
-        price_ngn_before: before.price_ngn,
-        price_ngn_after: priceNgn,
-        price_usd_before: before.price_usd,
-        price_usd_after: priceUsd,
-      },
-    });
+    const { error } = await supabase
+      .from("courses")
+      .update({
+        title: String(formData.get("title") ?? "").trim(),
+        description: String(formData.get("description") ?? ""),
+        short_description: String(formData.get("short_description") ?? "") || null,
+        thumbnail_url: String(formData.get("thumbnail_url") ?? "") || null,
+        promo_video_url: String(formData.get("promo_video_url") ?? "") || null,
+        category_id: String(formData.get("category_id") ?? "") || null,
+        visibility: String(formData.get("visibility") ?? "draft") as CourseVisibility,
+        enrollment_type: String(formData.get("enrollment_type") ?? "open") as EnrollmentType,
+        certificate_enabled: formData.get("certificate_enabled") === "on",
+        drip_enabled: formData.get("drip_enabled") === "on",
+        required_completion_pct: Number.isFinite(required) ? required : 100,
+        price_ngn: Number.isFinite(priceNgn) && priceNgn >= 0 ? Math.round(priceNgn) : 0,
+        price_usd: Number.isFinite(priceUsd) && priceUsd >= 0 ? Math.round(priceUsd) : 0,
+        learning_outcomes: outcomes,
+        instructor_name: String(formData.get("instructor_name") ?? "") || null,
+        instructor_bio: String(formData.get("instructor_bio") ?? "") || null,
+      })
+      .eq("id", id);
+    if (error) {
+      if (error.message.includes("price_usd") && error.message.includes("does not exist")) {
+        return {
+          error:
+            "The price_usd column is missing on courses. Run supabase/migrations/0006_price_usd.sql in the Supabase SQL Editor, then try again.",
+        };
+      }
+      return { error: error.message };
+    }
+
+    if (before && (before.price_ngn !== priceNgn || before.price_usd !== priceUsd)) {
+      await logAudit({
+        action: "price_changed",
+        targetType: "course",
+        targetId: id,
+        metadata: {
+          price_ngn_before: before.price_ngn,
+          price_ngn_after: priceNgn,
+          price_usd_before: before.price_usd,
+          price_usd_after: priceUsd,
+        },
+      });
+    }
+
+    await logAudit({ action: "course_edited", targetType: "course", targetId: id });
+    revalidatePath(`/admin/courses/${id}`);
+    return { message: "Course settings saved." };
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "Could not save course settings." };
   }
-
-  await logAudit({ action: "course_edited", targetType: "course", targetId: id });
-  revalidatePath(`/admin/courses/${id}`);
 }
 
 export async function deleteCourse(formData: FormData) {
@@ -205,6 +238,82 @@ export async function reorderLessons(
   const failed = results.find((r) => r.error);
   if (failed?.error) throw new Error(failed.error.message);
 
+  revalidatePath(`/admin/courses/${courseId}`);
+}
+
+export async function addLessonAttachment(
+  _prev: LessonAttachmentState,
+  formData: FormData,
+): Promise<LessonAttachmentState> {
+  await requireAdmin();
+  const supabase = createClient();
+
+  const courseId = String(formData.get("course_id") ?? "");
+  const lessonId = String(formData.get("lesson_id") ?? "");
+  const title = String(formData.get("title") ?? "").trim();
+  const mode = String(formData.get("mode") ?? "file");
+
+  if (!courseId || !lessonId) return { error: "Missing course or lesson." };
+  if (!title) return { error: "Enter a display name for the attachment." };
+
+  try {
+    let fileUrl = "";
+    let fileType: string | null = null;
+
+    if (mode === "link") {
+      fileUrl = String(formData.get("link_url") ?? "").trim();
+      if (!/^https?:\/\//i.test(fileUrl)) {
+        return { error: "Enter a valid URL starting with http:// or https://." };
+      }
+      fileType = "link";
+    } else {
+      const file = formData.get("file");
+      if (!(file instanceof File) || file.size <= 0) {
+        return { error: "Choose a file to upload." };
+      }
+      fileUrl = await uploadLessonAttachmentFile(file, courseId, lessonId);
+      fileType = inferAttachmentType(file);
+    }
+
+    const { error } = await supabase.from("resources").insert({
+      course_id: courseId,
+      lesson_id: lessonId,
+      title,
+      file_url: fileUrl,
+      file_type: fileType,
+    });
+    if (error) return { error: error.message };
+
+    await logAudit({
+      action: "lesson_attachment_added",
+      targetType: "lesson",
+      targetId: lessonId,
+      metadata: { title, file_type: fileType },
+    });
+    revalidatePath(`/admin/courses/${courseId}`);
+    return { message: "Attachment added." };
+  } catch (err) {
+    return {
+      error: err instanceof Error ? err.message : "Could not add attachment.",
+    };
+  }
+}
+
+export async function deleteLessonResource(formData: FormData) {
+  await requireAdmin();
+  const supabase = createClient();
+  const id = String(formData.get("id"));
+  const courseId = String(formData.get("course_id"));
+  const lessonId = String(formData.get("lesson_id"));
+
+  const { error } = await supabase.from("resources").delete().eq("id", id);
+  if (error) throw new Error(error.message);
+
+  await logAudit({
+    action: "lesson_attachment_removed",
+    targetType: "lesson",
+    targetId: lessonId,
+  });
   revalidatePath(`/admin/courses/${courseId}`);
 }
 

@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { requireStudent } from "@/lib/auth";
 import { LessonOutline } from "@/components/student/lesson-outline";
 import { LessonPlayer } from "@/components/student/lesson-player";
+import { LessonAttachments } from "@/components/student/lesson-attachments";
 import { Card } from "@/components/ui/card";
 import type { Lesson, Module } from "@/types/database";
 
@@ -29,7 +30,7 @@ export default async function LessonPage({ params }: { params: { id: string } })
   const courseId = moduleRow?.course_id;
   if (!courseId) notFound();
 
-  const [{ data: course }, { data: modules }, { data: progress }, { data: note }, { data: bookmarks }, { data: enrollment }] =
+  const [{ data: course }, { data: modules }, { data: progress }, { data: note }, { data: bookmarks }, { data: enrollment }, { data: attachments }] =
     await Promise.all([
       supabase.from("courses").select("id, title").eq("id", courseId).single(),
       supabase.from("modules").select("*, lessons(*)").eq("course_id", courseId),
@@ -37,6 +38,12 @@ export default async function LessonPage({ params }: { params: { id: string } })
       supabase.from("student_notes").select("content").eq("student_id", profile.id).eq("lesson_id", params.id).maybeSingle(),
       supabase.from("bookmarks").select("*").eq("student_id", profile.id).eq("lesson_id", params.id).order("timestamp_seconds"),
       supabase.from("enrollments").select("enrolled_at").eq("student_id", profile.id).eq("course_id", courseId).maybeSingle(),
+      supabase
+        .from("resources")
+        .select("id, title, file_url, file_type")
+        .eq("lesson_id", params.id)
+        .eq("is_archived", false)
+        .order("created_at", { ascending: true }),
     ]);
 
   const sortedModules = [...((modules as ModuleWithLessons[]) ?? [])].sort((a, b) => a.position - b.position);
@@ -87,6 +94,7 @@ export default async function LessonPage({ params }: { params: { id: string } })
               note={note?.content ?? ""}
               bookmarks={bookmarks ?? []}
             />
+            <LessonAttachments attachments={attachments ?? []} />
             {quiz ? (
               <Card className="flex items-center justify-between">
                 <div>
