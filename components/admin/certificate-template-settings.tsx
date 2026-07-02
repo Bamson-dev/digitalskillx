@@ -13,7 +13,6 @@ import { CertificatePreview } from "@/components/certificates/certificate-previe
 import {
   CERTIFICATE_TEMPLATE_KEYS,
   CERTIFICATE_TEMPLATE_LABELS,
-  DEFAULT_CERTIFICATE_TEMPLATE_KEY,
   normalizeCertificateTemplateKey,
   type CertificateTemplateKey,
 } from "@/lib/certificate-templates";
@@ -63,15 +62,19 @@ export function CertificateTemplateSettings({
 
   return (
     <div className="space-y-6">
-      <Card>
+      {/* 1. Template previews */}
+      <Card className="overflow-hidden">
         <CardHeader
           title="Certificate templates"
-          description="Three built-in designs. Each preview uses sample data and a scannable sample QR code."
+          description="Three built-in designs. Previews use sample data and a scannable sample QR code."
         />
-        <div className="grid gap-6 lg:grid-cols-3">
+        <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
           {CERTIFICATE_TEMPLATE_KEYS.map((key) => (
-            <div key={key} className="space-y-2">
-              <p className="text-sm font-semibold text-neutral-800">
+            <div
+              key={key}
+              className="flex flex-col overflow-hidden rounded-xl border border-app bg-surface-muted/30 p-4"
+            >
+              <p className="mb-3 text-sm font-semibold text-neutral-900">
                 {CERTIFICATE_TEMPLATE_LABELS[key]}
               </p>
               <CertificatePreview templateKey={key} compact />
@@ -80,50 +83,55 @@ export function CertificateTemplateSettings({
         </div>
       </Card>
 
+      {/* 2 & 3. Category mapping + global default */}
       <Card>
         <CardHeader
           title="Certificate defaults"
-          description="Map categories to a template and set the global fallback for courses without an override or category mapping."
+          description="Set the global fallback and map each course category to a template."
         />
-        <form action={action} className="space-y-6">
-          <div>
+        <form action={action} className="space-y-8">
+          <div className="rounded-xl border border-app bg-surface-muted/20 p-4 sm:p-5">
             <Label htmlFor="default_certificate_template_key">Global default template</Label>
             <Select
               id="default_certificate_template_key"
               name="default_certificate_template_key"
               defaultValue={globalDefaultTemplateKey}
-              className="mt-1.5 max-w-xs"
+              className="mt-2 max-w-sm"
             >
               <TemplateOptions />
             </Select>
-            <p className="mt-1 text-xs text-muted">
-              Used when a course has no template override and its category has no mapping.
+            <p className="mt-2 text-xs text-muted">
+              Used when a course has no template override and its category has no mapping. Defaults
+              to Gold Charcoal.
             </p>
           </div>
 
           <div>
-            <p className="mb-3 text-sm font-medium text-neutral-800">Category template mapping</p>
-            <div className="overflow-x-auto rounded-lg border border-app">
+            <p className="text-sm font-semibold text-neutral-900">Category template mapping</p>
+            <p className="mt-1 text-xs text-muted">
+              Each category can use a different certificate design for its courses.
+            </p>
+            <div className="mt-4 overflow-hidden rounded-xl border border-app">
               <table className="min-w-full text-sm">
-                <thead className="bg-surface-muted/60 text-left text-xs uppercase tracking-wide text-muted">
+                <thead className="border-b border-app bg-surface-muted/60 text-left text-xs uppercase tracking-wide text-muted">
                   <tr>
                     <th className="px-4 py-3 font-semibold">Category</th>
                     <th className="px-4 py-3 font-semibold">Certificate template</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-[rgb(var(--border))]">
+                <tbody className="divide-y divide-[rgb(var(--border))] bg-white">
                   {categories.length === 0 ? (
                     <tr>
-                      <td colSpan={2} className="px-4 py-6 text-muted">
-                        No course categories yet. Create categories first when editing a course, then
-                        return here to assign certificate templates.
+                      <td colSpan={2} className="px-4 py-8 text-center text-sm text-muted">
+                        No course categories yet. Create categories first when editing a course,
+                        then return here to assign certificate templates.
                       </td>
                     </tr>
                   ) : (
                     categories.map((category) => (
-                      <tr key={category.id}>
-                        <td className="px-4 py-3 font-medium">{category.name}</td>
-                        <td className="px-4 py-3">
+                      <tr key={category.id} className="hover:bg-surface-muted/30">
+                        <td className="px-4 py-3.5 font-medium text-neutral-900">{category.name}</td>
+                        <td className="px-4 py-3.5">
                           <Select
                             name={`category_${category.id}`}
                             defaultValue={
@@ -143,8 +151,10 @@ export function CertificateTemplateSettings({
             </div>
           </div>
 
-          <SubmitButton pendingText="Saving…">Save certificate settings</SubmitButton>
-          <Feedback state={state} />
+          <div className="flex flex-col gap-3 border-t border-app pt-4 sm:flex-row sm:items-center sm:justify-between">
+            <SubmitButton pendingText="Saving…">Save certificate settings</SubmitButton>
+            <Feedback state={state} />
+          </div>
         </form>
       </Card>
     </div>

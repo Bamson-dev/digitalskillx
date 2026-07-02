@@ -320,8 +320,8 @@ export function CourseSettingsForm({
             Category default: {CERTIFICATE_TEMPLATE_LABELS[categoryDefaultKey]}
             {certificateTemplateOverride ? "" : " (active when saved with no override)"}
           </p>
-          <div className="mt-4">
-            <p className="mb-2 text-sm font-medium text-neutral-800">Template preview</p>
+          <div className="mt-4 overflow-hidden rounded-xl border border-app bg-surface-muted/20 p-4">
+            <p className="mb-3 text-sm font-medium text-neutral-800">Template preview</p>
             <CertificatePreview templateKey={previewTemplateKey} />
           </div>
         </div>
