@@ -1,5 +1,6 @@
 import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { resolveCertificateTemplateKey } from "@/lib/certificate-template-resolve";
 import { notify } from "@/lib/notifications";
 import { sendEmail } from "@/lib/email";
 import { emailTemplates } from "@/lib/email/templates";
@@ -37,6 +38,8 @@ export async function issueCertificate(params: {
 
   if (existing) return existing;
 
+  const templateKey = await resolveCertificateTemplateKey(supabase, params.courseId);
+
   const { data: cert, error } = await supabase
     .from("certificates")
     .insert({
@@ -45,6 +48,7 @@ export async function issueCertificate(params: {
       certificate_number: generateCertificateNumber(),
       completed_at: params.completedAt ?? new Date().toISOString(),
       is_valid: true,
+      template_key: templateKey,
     })
     .select("*")
     .single();

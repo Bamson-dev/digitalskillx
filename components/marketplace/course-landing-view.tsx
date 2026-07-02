@@ -1,13 +1,13 @@
 "use client";
 
-import Image from "next/image";
 import { useState } from "react";
-import { CheckCircle2, PlayCircle, Users } from "lucide-react";
+import { CheckCircle2, Users } from "lucide-react";
 import { ORG } from "@/lib/org";
 import { useCurrency } from "@/components/providers/currency-provider";
 import { EnrollButton } from "@/components/marketplace/enroll-button";
 import { PriceDisplay } from "@/components/marketplace/price-display";
 import { CurriculumAccordion } from "@/components/marketplace/curriculum-accordion";
+import { CourseHeroMedia } from "@/components/marketplace/course-hero-media";
 import { CourseCard, type MarketplaceCourse } from "@/components/marketplace/course-card";
 import { cn } from "@/lib/utils";
 
@@ -93,26 +93,12 @@ export function CourseLandingView({
 
       {/* Mobile hero: video/image first */}
       <section className="border-b border-surface-border lg:hidden">
-        <div className="relative aspect-video w-full bg-neutral-100">
-          {course.promo_video_url ? (
-            <iframe
-              src={
-                course.promo_video_url.includes("youtube")
-                  ? course.promo_video_url.replace("watch?v=", "embed/").split("&")[0]
-                  : course.promo_video_url
-              }
-              className="h-full w-full"
-              allowFullScreen
-              title={course.title}
-            />
-          ) : course.thumbnail_url ? (
-            <Image src={course.thumbnail_url} alt={course.title} fill className="object-cover" priority />
-          ) : (
-            <div className="flex h-full items-center justify-center">
-              <PlayCircle className="h-16 w-16 text-neutral-300" />
-            </div>
-          )}
-        </div>
+        <CourseHeroMedia
+          title={course.title}
+          thumbnailUrl={course.thumbnail_url}
+          promoVideoUrl={course.promo_video_url}
+          priority
+        />
         <div className="px-4 py-6">
           {course.category_name ? (
             <p className="text-xs font-medium uppercase tracking-wide text-neutral-500">
@@ -158,27 +144,13 @@ export function CourseLandingView({
               </div>
             </div>
 
-            {/* Desktop video */}
-            <div className="relative mt-8 hidden aspect-video overflow-hidden rounded-xl border border-surface-border bg-neutral-100 lg:block">
-              {course.promo_video_url ? (
-                <iframe
-                  src={
-                    course.promo_video_url.includes("youtube")
-                      ? course.promo_video_url.replace("watch?v=", "embed/").split("&")[0]
-                      : course.promo_video_url
-                  }
-                  className="h-full w-full"
-                  allowFullScreen
-                  title={course.title}
-                />
-              ) : course.thumbnail_url ? (
-                <Image src={course.thumbnail_url} alt={course.title} fill className="object-cover" />
-              ) : (
-                <div className="flex h-full items-center justify-center">
-                  <PlayCircle className="h-16 w-16 text-neutral-300" />
-                </div>
-              )}
-            </div>
+            {/* Desktop video / product image */}
+            <CourseHeroMedia
+              title={course.title}
+              thumbnailUrl={course.thumbnail_url}
+              promoVideoUrl={course.promo_video_url}
+              className="mt-8 hidden lg:block rounded-xl border border-surface-border shadow-sm"
+            />
 
             {/* Tabs */}
             <div className="mt-8 border-b border-surface-border">

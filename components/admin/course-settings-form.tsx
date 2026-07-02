@@ -16,6 +16,13 @@ import {
 } from "@/app/(admin)/admin/(panel)/courses/actions";
 import type { CourseCopyField, CourseCopyResult } from "@/lib/ai/course-copy-shared";
 import { CourseThumbnailUpload } from "@/components/admin/course-thumbnail-upload";
+import { CertificatePreview } from "@/components/certificates/certificate-preview";
+import {
+  CERTIFICATE_TEMPLATE_KEYS,
+  CERTIFICATE_TEMPLATE_LABELS,
+  normalizeCertificateTemplateKey,
+  type CertificateTemplateKey,
+} from "@/lib/certificate-templates";
 
 const courseSettingsInitial: CourseSettingsState = {};
 
@@ -55,9 +62,11 @@ function FieldLabelWithAi({
 export function CourseSettingsForm({
   course,
   categories,
+  globalDefaultTemplateKey,
 }: {
   course: Course;
-  categories: Pick<CourseCategory, "id" | "name">[];
+  categories: Pick<CourseCategory, "id" | "name" | "template_key">[];
+  globalDefaultTemplateKey: CertificateTemplateKey;
 }) {
   const [state, action] = useFormState(updateCourseSettings, courseSettingsInitial);
 
@@ -70,6 +79,18 @@ export function CourseSettingsForm({
 
   const [copyLoading, setCopyLoading] = useState<CopyLoading>(null);
   const [copyError, setCopyError] = useState<string | null>(null);
+  const [categoryId, setCategoryId] = useState(course.category_id ?? "");
+  const [certificateTemplateOverride, setCertificateTemplateOverride] = useState(
+    course.certificate_template_override ?? "",
+  );
+
+  const categoryDefaultKey =
+    normalizeCertificateTemplateKey(
+      categories.find((c) => c.id === categoryId)?.template_key,
+    ) ?? globalDefaultTemplateKey;
+
+  const previewTemplateKey: CertificateTemplateKey =
+    normalizeCertificateTemplateKey(certificateTemplateOverride) ?? categoryDefaultKey;
 
   const titleMissing = !title.trim();
   const isGenerating = copyLoading !== null;
@@ -231,7 +252,11 @@ export function CourseSettingsForm({
         </div>
         <div>
           <Label>Category</Label>
-          <Select name="category_id" defaultValue={course.category_id ?? ""}>
+          <Select
+            name="category_id"
+            value={categoryId}
+            onChange={(event) => setCategoryId(event.target.value)}
+          >
             <option value="">— None —</option>
             {categories.map((c) => (
               <option key={c.id} value={c.id}>
@@ -274,6 +299,31 @@ export function CourseSettingsForm({
             <input type="checkbox" name="drip_enabled" defaultChecked={course.drip_enabled} />
             Drip
           </label>
+        </div>
+
+        <div className="sm:col-span-2">
+          <Label htmlFor="certificate_template_override">Certificate template</Label>
+          <Select
+            id="certificate_template_override"
+            name="certificate_template_override"
+            value={certificateTemplateOverride}
+            onChange={(event) => setCertificateTemplateOverride(event.target.value)}
+          >
+            <option value="">Use category default</option>
+            {CERTIFICATE_TEMPLATE_KEYS.map((key) => (
+              <option key={key} value={key}>
+                {CERTIFICATE_TEMPLATE_LABELS[key]}
+              </option>
+            ))}
+          </Select>
+          <p className="mt-1 text-xs text-muted">
+            Category default: {CERTIFICATE_TEMPLATE_LABELS[categoryDefaultKey]}
+            {certificateTemplateOverride ? "" : " (active when saved with no override)"}
+          </p>
+          <div className="mt-4">
+            <p className="mb-2 text-sm font-medium text-neutral-800">Template preview</p>
+            <CertificatePreview templateKey={previewTemplateKey} />
+          </div>
         </div>
 
         <div className="sm:col-span-2">

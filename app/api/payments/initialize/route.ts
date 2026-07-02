@@ -84,9 +84,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ enrolled: true });
     }
 
-    if (!paystackConfigured()) {
+    if (!(await paystackConfigured(supabase))) {
       return jsonError(
-        "Payments are not configured. Set PAYSTACK_SECRET_KEY in Coolify (runtime only) and redeploy.",
+        "Paystack is not configured. Save your secret key under Admin → Settings → Integrations, or set PAYSTACK_SECRET_KEY in Coolify (runtime only) and redeploy.",
         503,
       );
     }
@@ -134,7 +134,7 @@ export async function POST(request: NextRequest) {
         course_id: course.id,
         currency: "NGN",
       },
-    });
+    }, supabase);
 
     return NextResponse.json({
       authorizationUrl: init.authorization_url,

@@ -78,6 +78,12 @@ ALTER TABLE public.platform_secrets
   ADD COLUMN IF NOT EXISTS deepseek_api_key text;
 
 
+-- ── 3b. Paystack secret key (Enroll Now checkout) ─────────────────────────
+
+ALTER TABLE public.platform_secrets
+  ADD COLUMN IF NOT EXISTS paystack_secret_key text;
+
+
 -- ── 4. Student checkout transactions (Enroll Now / Paystack) ────────────────
 
 DROP POLICY IF EXISTS "transactions: insert own pending checkout" ON public.transactions;

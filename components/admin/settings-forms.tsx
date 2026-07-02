@@ -7,7 +7,6 @@ import { Input, Label } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { SubmitButton } from "@/components/auth/submit-button";
 import {
-  saveCertificateSettings,
   saveEmailSettings,
   saveIntegrationSettings,
   savePlatformSettings,
@@ -15,14 +14,19 @@ import {
 } from "@/app/(admin)/admin/(panel)/settings/actions";
 import type { PlatformSettingsValues } from "@/lib/platform-settings-shared";
 import { TIMEZONE_OPTIONS } from "@/lib/platform-settings-shared";
+import { CertificateTemplateSettings } from "@/components/admin/certificate-template-settings";
+import {
+  DEFAULT_CERTIFICATE_TEMPLATE_KEY,
+  normalizeCertificateTemplateKey,
+  type CertificateTemplateKey,
+} from "@/lib/certificate-templates";
 
 const initial: SettingsState = {};
 
-type CertTemplate = {
+type CategoryMapping = {
   id: string;
   name: string;
-  is_default: boolean;
-  base_image_url: string | null;
+  template_key: string | null;
 };
 
 function Feedback({ state }: { state: SettingsState }) {
@@ -175,9 +179,11 @@ function EmailSettingsForm({ settings }: { settings: PlatformSettingsValues }) {
 function IntegrationSettingsForm({
   youtubeConfigured,
   deepseekConfigured,
+  paystackConfigured,
 }: {
   youtubeConfigured: boolean;
   deepseekConfigured: boolean;
+  paystackConfigured: boolean;
 }) {
   const [state, action] = useFormState(saveIntegrationSettings, initial);
 
@@ -218,77 +224,22 @@ function IntegrationSettingsForm({
               : "Required for Generate with AI on the course edit form."}
           </p>
         </div>
-        <SubmitButton pendingText="Saving…">Save integration settings</SubmitButton>
-        <Feedback state={state} />
-      </form>
-    </Card>
-  );
-}
-
-function CertificateSettingsForm({
-  settings,
-  templates,
-}: {
-  settings: PlatformSettingsValues;
-  templates: CertTemplate[];
-}) {
-  const [state, action] = useFormState(saveCertificateSettings, initial);
-  const selected =
-    settings.default_certificate_template_id ??
-    templates.find((t) => t.is_default)?.id ??
-    "";
-
-  return (
-    <Card>
-      <CardHeader
-        title="Certificate settings"
-        description="Default template used when certificates are issued."
-      />
-      <form action={action} className="space-y-4" encType="multipart/form-data">
         <div>
-          <Label htmlFor="certificate_template_id">Default certificate template</Label>
-          <Select
-            id="certificate_template_id"
-            name="certificate_template_id"
-            defaultValue={selected}
-          >
-            <option value="">Select a template…</option>
-            {templates.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.name}
-                {t.is_default ? " (default)" : ""}
-              </option>
-            ))}
-          </Select>
-        </div>
-
-        <div className="rounded-lg border border-dashed border-app bg-surface-muted/40 p-4">
-          <p className="text-sm font-medium text-neutral-800">Or upload a new template</p>
+          <Label htmlFor="paystack_secret_key">Paystack secret key</Label>
+          <Input
+            id="paystack_secret_key"
+            name="paystack_secret_key"
+            type="password"
+            autoComplete="off"
+            placeholder={paystackConfigured ? "Key saved — paste to replace" : "sk_live_… or sk_test_…"}
+          />
           <p className="mt-1 text-xs text-muted">
-            Upload a background image. A new template record will be created and selected.
+            {paystackConfigured
+              ? "Paystack checkout is configured for paid enrollments."
+              : "Required for Enroll Now on paid courses. Coolify env vars often do not reach Next.js — saving here is recommended."}
           </p>
-          <div className="mt-3 grid gap-3 sm:grid-cols-2">
-            <div>
-              <Label htmlFor="certificate_template_name">Template name</Label>
-              <Input
-                id="certificate_template_name"
-                name="certificate_template_name"
-                placeholder="e.g. DigitalSkillX Classic"
-              />
-            </div>
-            <div>
-              <Label htmlFor="certificate_template_file">Template image</Label>
-              <Input
-                id="certificate_template_file"
-                name="certificate_template_file"
-                type="file"
-                accept="image/png,image/jpeg,image/webp"
-              />
-            </div>
-          </div>
         </div>
-
-        <SubmitButton pendingText="Saving…">Save certificate settings</SubmitButton>
+        <SubmitButton pendingText="Saving…">Save integration settings</SubmitButton>
         <Feedback state={state} />
       </form>
     </Card>
@@ -297,14 +248,16 @@ function CertificateSettingsForm({
 
 export function SettingsForms({
   settings,
-  templates,
+  categories,
   youtubeConfigured,
   deepseekConfigured,
+  paystackConfigured,
 }: {
   settings: PlatformSettingsValues;
-  templates: CertTemplate[];
+  categories: CategoryMapping[];
   youtubeConfigured: boolean;
   deepseekConfigured: boolean;
+  paystackConfigured: boolean;
 }) {
   return (
     <div className="space-y-6">
@@ -313,8 +266,15 @@ export function SettingsForms({
       <IntegrationSettingsForm
         youtubeConfigured={youtubeConfigured}
         deepseekConfigured={deepseekConfigured}
+        paystackConfigured={paystackConfigured}
       />
-      <CertificateSettingsForm settings={settings} templates={templates} />
+      <CertificateTemplateSettings
+        categories={categories}
+        globalDefaultTemplateKey={
+          normalizeCertificateTemplateKey(settings.default_certificate_template_key) ??
+          DEFAULT_CERTIFICATE_TEMPLATE_KEY
+        }
+      />
     </div>
   );
 }

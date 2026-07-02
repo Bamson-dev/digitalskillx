@@ -6,6 +6,9 @@ import { requireAdmin } from "@/lib/auth";
 import { logAudit } from "@/lib/audit";
 import { uploadPublicAsset } from "@/lib/upload-public-asset";
 import { DEFAULT_PRIMARY_COLOR, DEFAULT_TIMEZONE } from "@/lib/platform-settings-shared";
+import {
+  isCertificateTemplateKey,
+} from "@/lib/certificate-templates";
 
 export type SettingsState = { error?: string; message?: string };
 
@@ -118,63 +121,56 @@ export async function saveEmailSettings(
   }
 }
 
-export async function saveCertificateSettings(
+export async function saveCertificateTemplateSettings(
   _prev: SettingsState,
   formData: FormData,
 ): Promise<SettingsState> {
   try {
     const profile = await requireAdmin();
     const supabase = createClient();
-    const templateId = String(formData.get("certificate_template_id") ?? "").trim();
-    const templateName = String(formData.get("certificate_template_name") ?? "").trim();
-    const templateFile = fileFrom(formData, "certificate_template_file");
 
-    let selectedId = templateId || null;
+    const globalRaw = String(formData.get("default_certificate_template_key") ?? "").trim();
+    const globalDefault = isCertificateTemplateKey(globalRaw) ? globalRaw : "gold_charcoal";
 
-    if (templateFile) {
-      if (!templateName) {
-        return { error: "Enter a name for the uploaded certificate template." };
+    const { data: categories, error: listError } = await supabase
+      .from("course_categories")
+      .select("id");
+    if (listError) return { error: listError.message };
+
+    for (const category of categories ?? []) {
+      const raw = String(formData.get(`category_${category.id}`) ?? "").trim();
+      const templateKey = isCertificateTemplateKey(raw) ? raw : globalDefault;
+
+      const { error } = await supabase
+        .from("course_categories")
+        .update({ template_key: templateKey })
+        .eq("id", category.id);
+      if (error) {
+        if (error.message.includes("template_key")) {
+          return {
+            error:
+              "The template_key column is missing on course_categories. Run sql/certificate-settings-staging.sql in the Supabase SQL Editor, then try again.",
+          };
+        }
+        return { error: error.message };
       }
-      const imageUrl = await uploadPublicAsset(templateFile, "settings/certificates");
-      const { data: created, error: createError } = await supabase
-        .from("certificate_templates")
-        .insert({
-          name: templateName,
-          base_image_url: imageUrl,
-          html_template:
-            '<div class="certificate">{{student_name}} — {{course_name}}</div>',
-          is_default: false,
-        })
-        .select("id")
-        .single();
-      if (createError || !created) {
-        return { error: friendlyDbError(createError?.message ?? "Could not create certificate template.") };
-      }
-      selectedId = created.id;
     }
 
-    if (!selectedId) {
-      return { error: "Select an existing template or upload a new one." };
-    }
+    await upsertSettings(
+      {
+        default_certificate_template_key: globalDefault,
+        default_certificate_template_id: null,
+      },
+      profile.id,
+    );
 
-    await supabase.from("certificate_templates").update({ is_default: false }).eq("is_default", true);
-
-    const { error: markError } = await supabase
-      .from("certificate_templates")
-      .update({ is_default: true })
-      .eq("id", selectedId);
-    if (markError) return { error: friendlyDbError(markError.message) };
-
-    await upsertSettings({ default_certificate_template_id: selectedId }, profile.id);
-    await logAudit({
-      action: "settings_certificate_saved",
-      targetType: "certificate_template",
-      targetId: selectedId,
-    });
+    await logAudit({ action: "settings_certificate_saved" });
     revalidatePath(SETTINGS_PATH);
     return { message: "Certificate settings saved." };
   } catch (err) {
-    return { error: err instanceof Error ? err.message : "Could not save certificate settings." };
+    return {
+      error: err instanceof Error ? err.message : "Could not save certificate settings.",
+    };
   }
 }
 
@@ -186,9 +182,10 @@ export async function saveIntegrationSettings(
     const profile = await requireAdmin();
     const youtubeApiKey = String(formData.get("youtube_api_key") ?? "").trim();
     const deepseekApiKey = String(formData.get("deepseek_api_key") ?? "").trim();
+    const paystackSecretKey = String(formData.get("paystack_secret_key") ?? "").trim();
 
-    if (!youtubeApiKey && !deepseekApiKey) {
-      return { error: "Paste a YouTube or DeepSeek API key to save." };
+    if (!youtubeApiKey && !deepseekApiKey && !paystackSecretKey) {
+      return { error: "Paste at least one API key to save." };
     }
     if (youtubeApiKey === "your-youtube-data-api-key") {
       return { error: "Replace the YouTube placeholder with your real Google API key." };
@@ -200,6 +197,7 @@ export async function saveIntegrationSettings(
     };
     if (youtubeApiKey) patch.youtube_api_key = youtubeApiKey;
     if (deepseekApiKey) patch.deepseek_api_key = deepseekApiKey;
+    if (paystackSecretKey) patch.paystack_secret_key = paystackSecretKey;
 
     const supabase = createClient();
     const { error } = await supabase.from("platform_secrets").upsert(patch, { onConflict: "id" });

@@ -31,6 +31,9 @@ function mergeSettings(row: SettingsRow | null): PlatformSettingsValues {
       PLATFORM_SETTINGS_DEFAULTS.email_sender_name,
     email_reply_to: row.email_reply_to,
     default_certificate_template_id: row.default_certificate_template_id,
+    default_certificate_template_key:
+      row.default_certificate_template_key ??
+      PLATFORM_SETTINGS_DEFAULTS.default_certificate_template_key,
   };
 }
 

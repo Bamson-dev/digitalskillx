@@ -10,6 +10,7 @@ import {
   uploadLessonAttachmentFile,
 } from "@/lib/upload-lesson-attachment";
 import { uploadPublicAsset } from "@/lib/upload-public-asset";
+import { normalizeCertificateTemplateKey } from "@/lib/certificate-templates";
 import type { CourseVisibility, EnrollmentType, LessonType } from "@/types/database";
 
 export type LessonAttachmentState = { error?: string; message?: string };
@@ -93,6 +94,9 @@ export async function updateCourseSettings(
       thumbnailUrl = null;
     }
 
+    const templateOverrideRaw = String(formData.get("certificate_template_override") ?? "").trim();
+    const certificateTemplateOverride = normalizeCertificateTemplateKey(templateOverrideRaw);
+
     const { error } = await supabase
       .from("courses")
       .update({
@@ -105,6 +109,7 @@ export async function updateCourseSettings(
         visibility: String(formData.get("visibility") ?? "draft") as CourseVisibility,
         enrollment_type: String(formData.get("enrollment_type") ?? "open") as EnrollmentType,
         certificate_enabled: formData.get("certificate_enabled") === "on",
+        certificate_template_override: certificateTemplateOverride,
         drip_enabled: formData.get("drip_enabled") === "on",
         required_completion_pct: Number.isFinite(required) ? required : 100,
         price_ngn: Number.isFinite(priceNgn) && priceNgn >= 0 ? Math.round(priceNgn) : 0,
@@ -115,6 +120,12 @@ export async function updateCourseSettings(
       })
       .eq("id", id);
     if (error) {
+      if (error.message.includes("certificate_template_override")) {
+        return {
+          error:
+            "The certificate_template_override column is missing on courses. Run sql/certificate-template-keys.sql in the Supabase SQL Editor, then try again.",
+        };
+      }
       if (error.message.includes("price_usd") && error.message.includes("does not exist")) {
         return {
           error:

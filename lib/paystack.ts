@@ -1,17 +1,14 @@
 import "server-only";
 import crypto from "crypto";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { getPaystackSecretKey, paystackSecretKeyConfigured } from "@/lib/env-paystack";
 import { runtimeEnv } from "@/lib/runtime-env";
+import type { Database } from "@/types/database";
 
 const BASE = "https://api.paystack.co";
 
-function secretKey() {
-  const key = runtimeEnv("PAYSTACK_SECRET_KEY");
-  if (!key) throw new Error("PAYSTACK_SECRET_KEY is not configured");
-  return key;
-}
-
-export function paystackConfigured() {
-  return Boolean(runtimeEnv("PAYSTACK_SECRET_KEY")?.trim());
+export async function paystackConfigured(supabase?: SupabaseClient<Database>) {
+  return paystackSecretKeyConfigured(supabase);
 }
 
 export function publicKey() {
@@ -27,11 +24,15 @@ export type InitializeParams = {
   metadata: Record<string, string>;
 };
 
-export async function initializeTransaction(params: InitializeParams) {
+export async function initializeTransaction(
+  params: InitializeParams,
+  supabase?: SupabaseClient<Database>,
+) {
+  const secret = await getPaystackSecretKey(supabase);
   const res = await fetch(`${BASE}/transaction/initialize`, {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${secretKey()}`,
+      Authorization: `Bearer ${secret}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
@@ -55,15 +56,24 @@ export async function initializeTransaction(params: InitializeParams) {
 }
 
 /** Verify Paystack webhook HMAC signature. */
-export function verifyWebhookSignature(rawBody: string, signature: string | null) {
+export async function verifyWebhookSignature(
+  rawBody: string,
+  signature: string | null,
+  supabase?: SupabaseClient<Database>,
+) {
   if (!signature) return false;
-  const hash = crypto.createHmac("sha512", secretKey()).update(rawBody).digest("hex");
+  const secret = await getPaystackSecretKey(supabase);
+  const hash = crypto.createHmac("sha512", secret).update(rawBody).digest("hex");
   return hash === signature;
 }
 
-export async function verifyTransaction(reference: string) {
+export async function verifyTransaction(
+  reference: string,
+  supabase?: SupabaseClient<Database>,
+) {
+  const secret = await getPaystackSecretKey(supabase);
   const res = await fetch(`${BASE}/transaction/verify/${encodeURIComponent(reference)}`, {
-    headers: { Authorization: `Bearer ${secretKey()}` },
+    headers: { Authorization: `Bearer ${secret}` },
   });
   const json = await res.json();
   if (!json.status) return null;

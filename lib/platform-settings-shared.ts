@@ -12,6 +12,7 @@ export type PlatformSettingsValues = {
   email_sender_name: string | null;
   email_reply_to: string | null;
   default_certificate_template_id: string | null;
+  default_certificate_template_key: string | null;
 };
 
 export const PLATFORM_SETTINGS_DEFAULTS: PlatformSettingsValues = {
@@ -23,6 +24,7 @@ export const PLATFORM_SETTINGS_DEFAULTS: PlatformSettingsValues = {
   email_sender_name: ORG.platformName,
   email_reply_to: null,
   default_certificate_template_id: null,
+  default_certificate_template_key: "gold_charcoal",
 };
 
 export const TIMEZONE_OPTIONS = [

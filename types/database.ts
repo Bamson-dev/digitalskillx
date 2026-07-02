@@ -109,11 +109,13 @@ export type CourseCategory = Timestamps & {
   id: string;
   name: string;
   slug: string | null;
+  template_key: string | null;
 };
 
 export type CertificateTemplate = Timestamps & {
   id: string;
   name: string;
+  template_key: string | null;
   html_template: string | null;
   base_image_url: string | null;
   is_default: boolean;
@@ -130,6 +132,7 @@ export type Course = Timestamps & {
   enrollment_type: EnrollmentType;
   certificate_enabled: boolean;
   certificate_template_id: string | null;
+  certificate_template_override: string | null;
   required_completion_pct: number;
   drip_enabled: boolean;
   tags: string[];
@@ -219,6 +222,7 @@ export type PlatformSettings = {
   email_sender_name: string | null;
   email_reply_to: string | null;
   default_certificate_template_id: string | null;
+  default_certificate_template_key: string | null;
   updated_at: string;
   updated_by: string | null;
 };
@@ -227,6 +231,7 @@ export type PlatformSecrets = {
   id: string;
   youtube_api_key: string | null;
   deepseek_api_key: string | null;
+  paystack_secret_key: string | null;
   updated_at: string;
   updated_by: string | null;
 };
@@ -294,6 +299,7 @@ export type Certificate = {
   issued_at: string;
   completed_at: string | null;
   pdf_url: string | null;
+  template_key: string | null;
   is_valid: boolean;
 };
 

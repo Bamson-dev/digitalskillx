@@ -9,14 +9,18 @@ insert into public.course_categories (name, slug) values
   ('Digital Marketing', 'digital-marketing')
 on conflict (slug) do nothing;
 
--- Default certificate template
-insert into public.certificate_templates (name, is_default, html_template)
-values (
-  'Pdigital Default',
-  true,
-  '<div class="certificate">{{student_name}} — {{course_name}}</div>'
-)
-on conflict do nothing;
+-- Built-in certificate templates (code-rendered; no uploads)
+insert into public.certificate_templates (name, template_key, is_default, html_template)
+select 'Gold Charcoal', 'gold_charcoal', true, 'component'
+where not exists (select 1 from public.certificate_templates where template_key = 'gold_charcoal');
+
+insert into public.certificate_templates (name, template_key, is_default, html_template)
+select 'Navy Ribbon', 'navy_ribbon', false, 'component'
+where not exists (select 1 from public.certificate_templates where template_key = 'navy_ribbon');
+
+insert into public.certificate_templates (name, template_key, is_default, html_template)
+select 'Green Gold', 'green_gold', false, 'component'
+where not exists (select 1 from public.certificate_templates where template_key = 'green_gold');
 
 -- ----------------------------------------------------------------------------
 -- Promote the first/admin user.

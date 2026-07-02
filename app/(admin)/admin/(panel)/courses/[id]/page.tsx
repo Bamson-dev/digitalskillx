@@ -4,6 +4,11 @@ import Link from "next/link";
 import { ArrowLeft, Eye } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { requireAdmin } from "@/lib/auth";
+import { getPlatformSettings } from "@/lib/platform-settings";
+import {
+  DEFAULT_CERTIFICATE_TEMPLATE_KEY,
+  normalizeCertificateTemplateKey,
+} from "@/lib/certificate-templates";
 import { CourseEditor } from "@/components/admin/course-editor";
 import { YoutubeImport } from "@/components/admin/youtube-import";
 import type { AttachmentDisplay } from "@/lib/lesson-attachments-shared";
@@ -33,10 +38,14 @@ export default async function AdminCourseEditorPage({
 
   if (!course) notFound();
 
-  const { data: categories } = await supabase
-    .from("course_categories")
-    .select("id, name")
-    .order("name");
+  const [categories, settings] = await Promise.all([
+    supabase.from("course_categories").select("id, name, template_key").order("name"),
+    getPlatformSettings(supabase),
+  ]);
+
+  const globalDefaultTemplateKey =
+    normalizeCertificateTemplateKey(settings.default_certificate_template_key) ??
+    DEFAULT_CERTIFICATE_TEMPLATE_KEY;
 
   const { data: resources } = await supabase
     .from("resources")
@@ -88,7 +97,8 @@ export default async function AdminCourseEditorPage({
       <CourseEditor
         course={course}
         modules={modules}
-        categories={categories ?? []}
+        categories={categories.data ?? []}
+        globalDefaultTemplateKey={globalDefaultTemplateKey}
         lessonAttachments={lessonAttachments}
       />
 

@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { requireStudent } from "@/lib/auth";
 import { CertificateView } from "@/components/certificate-view";
 import { PrintButton } from "@/components/print-button";
+import { DEFAULT_CERTIFICATE_TEMPLATE_KEY, normalizeCertificateTemplateKey } from "@/lib/certificate-templates";
 import { qrDataUrl } from "@/lib/qr";
 import { ORG, siteUrl } from "@/lib/org";
 
@@ -17,7 +18,7 @@ export default async function CertificateDetailPage({ params }: { params: { id: 
 
   const { data: cert } = await supabase
     .from("certificates")
-    .select("id, certificate_number, issued_at, completed_at, course:courses(title)")
+    .select("id, certificate_number, issued_at, completed_at, template_key, course:courses(title)")
     .eq("id", params.id)
     .eq("student_id", profile.id)
     .single();
@@ -66,6 +67,9 @@ export default async function CertificateDetailPage({ params }: { params: { id: 
         issuedAt={cert.issued_at}
         certificateNumber={cert.certificate_number}
         qrDataUrl={qr}
+        templateKey={
+          normalizeCertificateTemplateKey(cert.template_key) ?? DEFAULT_CERTIFICATE_TEMPLATE_KEY
+        }
       />
     </div>
   );

@@ -13,6 +13,7 @@ import { SubmitButton } from "@/components/auth/submit-button";
 import { LessonAttachmentsPanel } from "@/components/admin/lesson-attachments-panel";
 import type { AttachmentDisplay } from "@/lib/lesson-attachments-shared";
 import type { Course, CourseCategory, Lesson, Module } from "@/types/database";
+import type { CertificateTemplateKey } from "@/lib/certificate-templates";
 import {
   deleteCourse,
   createModule,
@@ -40,16 +41,22 @@ export function CourseEditor({
   course,
   modules,
   categories,
+  globalDefaultTemplateKey,
   lessonAttachments,
 }: {
   course: Course;
   modules: ModuleWithLessons[];
-  categories: Pick<CourseCategory, "id" | "name">[];
+  categories: Pick<CourseCategory, "id" | "name" | "template_key">[];
+  globalDefaultTemplateKey: CertificateTemplateKey;
   lessonAttachments: Record<string, AttachmentDisplay[]>;
 }) {
   return (
     <div className="space-y-6">
-      <CourseSettingsForm course={course} categories={categories} />
+      <CourseSettingsForm
+        course={course}
+        categories={categories}
+        globalDefaultTemplateKey={globalDefaultTemplateKey}
+      />
       <CurriculumCard courseId={course.id} modules={modules} lessonAttachments={lessonAttachments} />
       <DangerZone courseId={course.id} />
     </div>
