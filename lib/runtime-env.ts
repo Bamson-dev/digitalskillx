@@ -85,3 +85,14 @@ export function runtimeEnvWithSource(name: string): {
 export function runtimeEnv(name: string): string | undefined {
   return runtimeEnvWithSource(name).value;
 }
+
+/** Inject runtime-env.json values into process.env (missing keys only). */
+export function preloadRuntimeEnvIntoProcessEnv() {
+  const loaded = readRuntimeEnvFile();
+  for (const [key, value] of Object.entries(loaded)) {
+    if (typeof value !== "string" || !value.trim()) continue;
+    if (!process.env[key]?.trim()) {
+      process.env[key] = value.trim();
+    }
+  }
+}

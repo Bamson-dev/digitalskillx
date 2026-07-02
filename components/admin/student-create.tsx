@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import { useFormState } from "react-dom";
 import { Search, UserPlus, Upload } from "lucide-react";
 import { Card } from "@/components/ui/card";
@@ -144,7 +145,13 @@ function Feedback({ state }: { state: StudentActionState }) {
   );
 }
 
-export function StudentCreate({ courses }: { courses: PublishedCourse[] }) {
+export function StudentCreate({
+  courses,
+  serviceRoleReady = true,
+}: {
+  courses: PublishedCourse[];
+  serviceRoleReady?: boolean;
+}) {
   const [tab, setTab] = useState<"single" | "csv">("single");
   const [createState, createAction] = useFormState(createStudent, initial);
   const [csvState, csvAction] = useFormState(bulkUploadStudents, initial);
@@ -160,6 +167,27 @@ export function StudentCreate({ courses }: { courses: PublishedCourse[] }) {
           <Upload className="h-4 w-4" /> Bulk CSV
         </Button>
       </div>
+
+      {!serviceRoleReady ? (
+        <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+          <p className="font-semibold">Student creation is not ready yet</p>
+          <ol className="mt-2 list-decimal space-y-1 pl-5">
+            <li>
+              Run{" "}
+              <code className="rounded bg-white px-1 py-0.5 text-xs">sql/platform-secrets-service-role.sql</code>{" "}
+              in Supabase SQL Editor.
+            </li>
+            <li>
+              Open{" "}
+              <Link href="/admin/settings" className="font-medium text-brand hover:underline">
+                Admin → Settings → Integrations
+              </Link>{" "}
+              and save your Supabase <strong>service_role</strong> secret.
+            </li>
+            <li>Redeploy Coolify from latest staging if you only set Coolify env vars.</li>
+          </ol>
+        </div>
+      ) : null}
 
       {tab === "single" ? (
         <form action={createAction} className="space-y-4">

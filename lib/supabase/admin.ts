@@ -3,7 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 import { runtimeEnv } from "@/lib/runtime-env";
 import {
-  bootstrapServiceRoleKey,
+  resolveServiceRoleKey,
   getServiceRoleKeySync,
   serviceRoleKeyMissingMessage,
 } from "@/lib/env-service-role";
@@ -35,12 +35,11 @@ export function createAdminClient() {
 
 /** Resolves service role from env or platform_secrets, then returns the admin client. */
 export async function createAdminClientAsync(supabase?: SupabaseClient<Database>) {
-  const serviceRoleKey =
-    getServiceRoleKeySync() ?? (await bootstrapServiceRoleKey(supabase));
-  if (!serviceRoleKey) {
-    throw new Error(serviceRoleKeyMissingMessage());
+  const resolved = await resolveServiceRoleKey(supabase);
+  if (!resolved.key) {
+    throw new Error(resolved.hint ?? serviceRoleKeyMissingMessage());
   }
-  return buildAdminClient(serviceRoleKey);
+  return buildAdminClient(resolved.key);
 }
 
 export function isServiceRoleConfigured() {

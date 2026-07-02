@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Search } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
+import { serviceRoleKeyConfigured } from "@/lib/env-service-role";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -16,6 +17,8 @@ export default async function AdminStudentsPage({
   searchParams: { q?: string; status?: string; tag?: string };
 }) {
   const supabase = createClient();
+
+  const serviceRoleReady = await serviceRoleKeyConfigured(supabase);
 
   const { data: publishedCourses } = await supabase
     .from("courses")
@@ -45,7 +48,7 @@ export default async function AdminStudentsPage({
         <p className="mt-1 text-sm text-muted">Manage every learner on the platform.</p>
       </div>
 
-      <StudentCreate courses={publishedCourses ?? []} />
+      <StudentCreate courses={publishedCourses ?? []} serviceRoleReady={serviceRoleReady} />
 
       <Card>
         <form className="mb-4 flex flex-wrap items-center gap-2">

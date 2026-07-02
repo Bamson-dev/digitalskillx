@@ -1,8 +1,8 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { createAdminClient } from "@/lib/supabase/admin";
-import { bootstrapServiceRoleKey } from "@/lib/env-service-role";
 import { runtimeEnv } from "@/lib/runtime-env";
+import { resolveServiceRoleKey } from "@/lib/env-service-role";
+import { createAdminClient } from "@/lib/supabase/admin";
 import type { Database } from "@/types/database";
 
 const ENV_NAME = "PAYSTACK_SECRET_KEY";
@@ -22,14 +22,19 @@ async function readFromSupabase(
     .eq("id", "default")
     .maybeSingle();
 
-  if (error) return undefined;
+  if (error) {
+    if (error.message.includes("paystack_secret_key")) {
+      return undefined;
+    }
+    return undefined;
+  }
   return normalizeKey(data?.paystack_secret_key);
 }
 
 async function readFromPlatformSecretsDb(
   supabase?: SupabaseClient<Database>,
 ): Promise<string | undefined> {
-  await bootstrapServiceRoleKey(supabase);
+  await resolveServiceRoleKey(supabase);
   try {
     const admin = createAdminClient();
     const { data, error } = await admin
@@ -45,17 +50,17 @@ async function readFromPlatformSecretsDb(
   }
 }
 
-/** Server checkout + webhooks: runtime env → platform_secrets (via service role). */
+/** Checkout: admin/session DB first, then runtime env, then service-role DB read. */
 async function resolvePaystackSecretKey(
   supabase?: SupabaseClient<Database>,
 ): Promise<string | undefined> {
-  const fromRuntime = normalizeKey(runtimeEnv(ENV_NAME));
-  if (fromRuntime) return fromRuntime;
-
   if (supabase) {
     const fromSession = await readFromSupabase(supabase);
     if (fromSession) return fromSession;
   }
+
+  const fromRuntime = normalizeKey(runtimeEnv(ENV_NAME));
+  if (fromRuntime) return fromRuntime;
 
   return readFromPlatformSecretsDb(supabase);
 }
@@ -71,6 +76,6 @@ export async function getPaystackSecretKey(
   if (key) return key;
 
   throw new Error(
-    "Paystack secret key is not configured. Save it under Admin → Settings → Integrations, or set PAYSTACK_SECRET_KEY in Coolify (runtime only) and redeploy.",
+    "Paystack secret key is not configured. Run sql/platform-secrets-paystack.sql if needed, save the key under Admin → Settings → Integrations, or set PAYSTACK_SECRET_KEY in Coolify (runtime only) and redeploy.",
   );
 }

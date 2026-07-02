@@ -542,6 +542,7 @@ export type Database = {
       is_admin: { Args: Record<string, never>; Returns: boolean };
       is_enrolled: { Args: { p_course_id: string }; Returns: boolean };
       lesson_course_id: { Args: { p_lesson_id: string }; Returns: string };
+      admin_get_service_role_key: { Args: Record<string, never>; Returns: string };
     };
     Enums: {
       user_role: UserRole;

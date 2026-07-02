@@ -1,13 +1,4 @@
--- DigitalSkillX staging — service role key fallback for admin actions (Supabase SQL Editor)
--- Safe to re-run.
-
-alter table public.platform_secrets
-  add column if not exists supabase_service_role_key text;
-
--- Paste your service_role secret from Supabase → Project Settings → API:
--- update public.platform_secrets
--- set supabase_service_role_key = 'YOUR_SERVICE_ROLE_SECRET_HERE'
--- where id = 'default';
+-- Admin-only RPC to read service role key (fallback when PostgREST column cache lags).
 
 create or replace function public.admin_get_service_role_key()
 returns text
@@ -32,4 +23,3 @@ $$;
 
 revoke all on function public.admin_get_service_role_key() from public;
 grant execute on function public.admin_get_service_role_key() to authenticated;
-
