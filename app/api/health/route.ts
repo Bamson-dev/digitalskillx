@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
 import { youtubeApiKeyDiagnostics } from "@/lib/env-youtube";
+import { runtimeEnvDiagnostics } from "@/lib/runtime-env";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 
 export async function GET() {
   const youtube = youtubeApiKeyDiagnostics();
@@ -41,5 +43,12 @@ export async function GET() {
   }
 
   const httpStatus = checks.status === "ok" ? 200 : 503;
-  return NextResponse.json(checks, { status: httpStatus });
+  return NextResponse.json(
+    {
+      ...checks,
+      runtimeEnv: runtimeEnvDiagnostics(),
+      youtube: youtubeApiKeyDiagnostics(),
+    },
+    { status: httpStatus },
+  );
 }

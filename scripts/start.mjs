@@ -1,8 +1,7 @@
 #!/usr/bin/env node
 /**
  * Production start wrapper for Coolify/Docker.
- * Writes runtime secrets to disk so Next.js can read them per-request
- * (Next.js may not see Coolify runtime env inside bundled route handlers).
+ * Writes runtime secrets to disk and preloads them into Next.js via node -r.
  */
 import { spawn } from "node:child_process";
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
@@ -33,13 +32,19 @@ function writeRuntimeEnvFile() {
     if (value) payload[key] = value;
   }
 
-  const nextDir = join(root, ".next");
-  mkdirSync(nextDir, { recursive: true });
-  const target = join(nextDir, "runtime-env.json");
-  writeFileSync(target, JSON.stringify(payload, null, 2));
-  console.log(
-    `[digitalskillx] Wrote runtime secrets to .next/runtime-env.json (${Object.keys(payload).length} keys)`,
-  );
+  const targets = [
+    join(root, "runtime-env.json"),
+    join(root, ".next", "runtime-env.json"),
+    "/tmp/digitalskillx-runtime-env.json",
+  ];
+
+  for (const target of targets) {
+    mkdirSync(dirname(target), { recursive: true });
+    writeFileSync(target, JSON.stringify(payload, null, 2));
+    console.log(`[digitalskillx] Wrote runtime secrets → ${target} (${Object.keys(payload).length} keys)`);
+  }
+
+  process.env.DIGITALSKILLX_RUNTIME_ENV_FILE = join(root, "runtime-env.json");
 }
 
 const rawNodeEnv = process.env.NODE_ENV ?? "";
@@ -54,6 +59,8 @@ writeRuntimeEnvFile();
 
 const status = youtubeStatus();
 console.log("[digitalskillx] Startup env check:");
+console.log(`  cwd=${process.cwd()}`);
+console.log(`  appRoot=${root}`);
 console.log(`  NODE_ENV=${process.env.NODE_ENV}`);
 console.log(`  YOUTUBE_API_KEY=${status}`);
 if (status === "ok") {
@@ -64,8 +71,9 @@ if (status === "ok") {
 const nextBin = join(root, "node_modules", "next", "dist", "bin", "next");
 const fallbackBin = join(root, "node_modules", ".bin", "next");
 const command = existsSync(nextBin) ? nextBin : fallbackBin;
+const preload = join(root, "scripts/runtime-env-preload.cjs");
 
-const child = spawn(process.execPath, [command, "start"], {
+const child = spawn(process.execPath, ["-r", preload, command, "start"], {
   cwd: root,
   env: process.env,
   stdio: "inherit",

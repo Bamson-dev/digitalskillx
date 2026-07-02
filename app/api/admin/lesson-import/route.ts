@@ -14,6 +14,7 @@ import {
 } from "@/lib/lesson-import";
 
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 
 const VALID_SOURCES = new Set<LessonImportSource>([
   "youtube_playlist",
