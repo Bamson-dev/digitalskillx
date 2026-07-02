@@ -1,5 +1,5 @@
 import "server-only";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { createClient } from "@/lib/supabase/server";
 
 const MAX_BYTES = 2 * 1024 * 1024;
 
@@ -36,16 +36,23 @@ export async function uploadPublicAsset(file: File, folder: string) {
     throw new Error("Upload a PNG, JPG, WebP, SVG, or ICO image.");
   }
 
-  const admin = createAdminClient();
+  const supabase = createClient();
   const path = `${folder}/${Date.now()}-${crypto.randomUUID().slice(0, 8)}.${extFromFile(file)}`;
   const body = Buffer.from(await file.arrayBuffer());
 
-  const { error } = await admin.storage.from("public-assets").upload(path, body, {
+  const { error } = await supabase.storage.from("public-assets").upload(path, body, {
     upsert: true,
     contentType: file.type,
   });
-  if (error) throw new Error(error.message);
+  if (error) {
+    if (error.message.toLowerCase().includes("row-level security")) {
+      throw new Error(
+        "Upload blocked by storage permissions. Sign in as admin and ensure the public-assets bucket exists in Supabase.",
+      );
+    }
+    throw new Error(error.message);
+  }
 
-  const { data } = admin.storage.from("public-assets").getPublicUrl(path);
+  const { data } = supabase.storage.from("public-assets").getPublicUrl(path);
   return data.publicUrl;
 }
