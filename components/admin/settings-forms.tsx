@@ -172,7 +172,13 @@ function EmailSettingsForm({ settings }: { settings: PlatformSettingsValues }) {
   );
 }
 
-function IntegrationSettingsForm({ youtubeConfigured }: { youtubeConfigured: boolean }) {
+function IntegrationSettingsForm({
+  youtubeConfigured,
+  deepseekConfigured,
+}: {
+  youtubeConfigured: boolean;
+  deepseekConfigured: boolean;
+}) {
   const [state, action] = useFormState(saveIntegrationSettings, initial);
 
   return (
@@ -190,12 +196,26 @@ function IntegrationSettingsForm({ youtubeConfigured }: { youtubeConfigured: boo
             type="password"
             autoComplete="off"
             placeholder={youtubeConfigured ? "Key saved — paste to replace" : "AIzaSy…"}
-            required={!youtubeConfigured}
           />
           <p className="mt-1 text-xs text-muted">
             {youtubeConfigured
               ? "A key is configured. Paste a new value only if you need to replace it."
               : "Required for Admin → Courses → Import lessons (YouTube playlist/video)."}
+          </p>
+        </div>
+        <div>
+          <Label htmlFor="deepseek_api_key">DeepSeek API key</Label>
+          <Input
+            id="deepseek_api_key"
+            name="deepseek_api_key"
+            type="password"
+            autoComplete="off"
+            placeholder={deepseekConfigured ? "Key saved — paste to replace" : "sk-…"}
+          />
+          <p className="mt-1 text-xs text-muted">
+            {deepseekConfigured
+              ? "A key is configured for AI course copy generation."
+              : "Required for Generate with AI on the course edit form."}
           </p>
         </div>
         <SubmitButton pendingText="Saving…">Save integration settings</SubmitButton>
@@ -279,16 +299,21 @@ export function SettingsForms({
   settings,
   templates,
   youtubeConfigured,
+  deepseekConfigured,
 }: {
   settings: PlatformSettingsValues;
   templates: CertTemplate[];
   youtubeConfigured: boolean;
+  deepseekConfigured: boolean;
 }) {
   return (
     <div className="space-y-6">
       <PlatformSettingsForm settings={settings} />
       <EmailSettingsForm settings={settings} />
-      <IntegrationSettingsForm youtubeConfigured={youtubeConfigured} />
+      <IntegrationSettingsForm
+        youtubeConfigured={youtubeConfigured}
+        deepseekConfigured={deepseekConfigured}
+      />
       <CertificateSettingsForm settings={settings} templates={templates} />
     </div>
   );

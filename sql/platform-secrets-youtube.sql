@@ -29,7 +29,5 @@ drop policy if exists "platform_secrets: admin all" on public.platform_secrets;
 create policy "platform_secrets: admin all" on public.platform_secrets
   for all using (public.is_admin()) with check (public.is_admin());
 
--- Optional: paste your YouTube key here (fastest fix — no Admin Settings UI needed)
--- insert into public.platform_secrets (id, youtube_api_key)
--- values ('default', 'AIzaSyYOUR_KEY_HERE')
--- on conflict (id) do update set youtube_api_key = excluded.youtube_api_key;
+alter table public.platform_secrets
+  add column if not exists deepseek_api_key text;

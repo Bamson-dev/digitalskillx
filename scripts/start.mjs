@@ -14,6 +14,8 @@ const allowedNodeEnv = new Set(["production", "development", "test"]);
 const RUNTIME_KEYS = [
   "SUPABASE_SERVICE_ROLE_KEY",
   "YOUTUBE_API_KEY",
+  "DEEPSEEK_API_KEY",
+  "DEEPSEEK_MODEL",
 ];
 
 function readEnv(name) {
@@ -68,6 +70,7 @@ if (status === "ok") {
   const key = readEnv("YOUTUBE_API_KEY");
   console.log(`  YOUTUBE_API_KEY prefix=${key.slice(0, 8)}…`);
 }
+console.log(`  DEEPSEEK_API_KEY=${secretStatus("DEEPSEEK_API_KEY")}`);
 
 const nextBin = join(root, "node_modules", "next", "dist", "bin", "next");
 const fallbackBin = join(root, "node_modules", ".bin", "next");

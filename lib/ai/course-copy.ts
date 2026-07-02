@@ -1,5 +1,7 @@
 import "server-only";
-import { runtimeEnv } from "@/lib/runtime-env";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { getDeepseekApiKey, getDeepseekModel } from "@/lib/env-deepseek";
+import type { Database } from "@/types/database";
 import {
   COURSE_COPY_SYSTEM_PROMPT,
   type CourseCopyField,
@@ -119,12 +121,14 @@ function validateResult(result: CourseCopyResult, field: CourseCopyField): strin
 export async function generateCourseCopy(
   input: CourseCopyInput,
   field: CourseCopyField,
+  supabase?: SupabaseClient<Database>,
 ): Promise<{ data: CourseCopyResult } | { error: string }> {
-  const apiKey = runtimeEnv("DEEPSEEK_API_KEY");
-  if (!apiKey?.trim()) {
+  let apiKey: string;
+  try {
+    apiKey = await getDeepseekApiKey(supabase);
+  } catch (err) {
     return {
-      error:
-        "DEEPSEEK_API_KEY is not configured. Add it to your server environment variables and redeploy.",
+      error: err instanceof Error ? err.message : "DeepSeek API key is not configured.",
     };
   }
 
@@ -141,7 +145,7 @@ export async function generateCourseCopy(
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: runtimeEnv("DEEPSEEK_MODEL") ?? "deepseek-chat",
+        model: await getDeepseekModel(),
         max_tokens: 2048,
         temperature: 0.7,
         messages: [

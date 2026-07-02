@@ -32,7 +32,7 @@ async function requireAdminApi() {
     return { error: NextResponse.json({ error: "Forbidden" }, { status: 403 }) };
   }
 
-  return { user };
+  return { user, supabase };
 }
 
 export async function POST(request: NextRequest) {
@@ -41,6 +41,8 @@ export async function POST(request: NextRequest) {
 
   const auth = await requireAdminApi();
   if ("error" in auth && auth.error) return auth.error;
+
+  const { supabase } = auth;
 
   let body: {
     title?: string;
@@ -69,6 +71,7 @@ export async function POST(request: NextRequest) {
       learningOutcomes: body.learningOutcomes,
     },
     field,
+    supabase,
   );
 
   if ("error" in result) {

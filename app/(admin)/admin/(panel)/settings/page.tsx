@@ -3,6 +3,7 @@ import { requireAdmin } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { getPlatformSettings } from "@/lib/platform-settings";
 import { getYoutubeApiKeyConfiguredFlag } from "@/lib/env-youtube";
+import { deepseekApiKeyConfigured } from "@/lib/env-deepseek";
 import { SettingsForms } from "@/components/admin/settings-forms";
 
 export const metadata: Metadata = { title: "Settings" };
@@ -13,13 +14,14 @@ export default async function AdminSettingsPage() {
   await requireAdmin();
   const supabase = createClient();
 
-  const [settings, { data: templates }, youtubeConfigured] = await Promise.all([
+  const [settings, { data: templates }, youtubeConfigured, deepseekConfigured] = await Promise.all([
     getPlatformSettings(supabase),
     supabase
       .from("certificate_templates")
       .select("id, name, is_default, base_image_url")
       .order("name"),
     getYoutubeApiKeyConfiguredFlag(supabase),
+    deepseekApiKeyConfigured(supabase),
   ]);
 
   return (
@@ -34,6 +36,7 @@ export default async function AdminSettingsPage() {
         settings={settings}
         templates={templates ?? []}
         youtubeConfigured={youtubeConfigured}
+        deepseekConfigured={deepseekConfigured}
       />
     </div>
   );

@@ -1,7 +1,6 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { requireAdmin } from "@/lib/auth";
 import { logAudit } from "@/lib/audit";
@@ -24,12 +23,25 @@ function normalizeHexColor(raw: string) {
   return DEFAULT_PRIMARY_COLOR;
 }
 
+function friendlyDbError(message: string) {
+  if (message.includes("platform_settings") && message.includes("does not exist")) {
+    return "The platform_settings table is missing. Run sql/platform-settings-only.sql (or RUN_IN_SUPABASE.sql) in the Supabase SQL Editor, then try again.";
+  }
+  if (message.includes("platform_secrets") && message.includes("does not exist")) {
+    return "The platform_secrets table is missing. Run sql/platform-secrets-youtube.sql in the Supabase SQL Editor, then try again.";
+  }
+  if (message.includes("certificate_templates") && message.includes("does not exist")) {
+    return "The certificate_templates table is missing. Apply the main Supabase migrations, then try again.";
+  }
+  return message;
+}
+
 async function upsertSettings(
   patch: Record<string, unknown>,
   adminId: string,
 ) {
-  const admin = createAdminClient();
-  const { error } = await admin.from("platform_settings").upsert(
+  const supabase = createClient();
+  const { error } = await supabase.from("platform_settings").upsert(
     {
       id: "default",
       ...patch,
@@ -37,21 +49,21 @@ async function upsertSettings(
     },
     { onConflict: "id" },
   );
-  if (error) throw new Error(error.message);
+  if (error) throw new Error(friendlyDbError(error.message));
 }
 
 export async function savePlatformSettings(
   _prev: SettingsState,
   formData: FormData,
 ): Promise<SettingsState> {
-  const profile = await requireAdmin();
-  const platformName = String(formData.get("platform_name") ?? "").trim();
-  const primaryColor = normalizeHexColor(String(formData.get("primary_color") ?? ""));
-  const defaultTimezone = String(formData.get("default_timezone") ?? DEFAULT_TIMEZONE).trim();
-
-  if (!platformName) return { error: "Platform name is required." };
-
   try {
+    const profile = await requireAdmin();
+    const platformName = String(formData.get("platform_name") ?? "").trim();
+    const primaryColor = normalizeHexColor(String(formData.get("primary_color") ?? ""));
+    const defaultTimezone = String(formData.get("default_timezone") ?? DEFAULT_TIMEZONE).trim();
+
+    if (!platformName) return { error: "Platform name is required." };
+
     const patch: Record<string, unknown> = {
       platform_name: platformName,
       primary_color: primaryColor,
@@ -81,16 +93,16 @@ export async function saveEmailSettings(
   _prev: SettingsState,
   formData: FormData,
 ): Promise<SettingsState> {
-  const profile = await requireAdmin();
-  const senderName = String(formData.get("email_sender_name") ?? "").trim();
-  const replyTo = String(formData.get("email_reply_to") ?? "").trim();
-
-  if (!senderName) return { error: "Sender name is required." };
-  if (replyTo && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(replyTo)) {
-    return { error: "Enter a valid reply-to email address." };
-  }
-
   try {
+    const profile = await requireAdmin();
+    const senderName = String(formData.get("email_sender_name") ?? "").trim();
+    const replyTo = String(formData.get("email_reply_to") ?? "").trim();
+
+    if (!senderName) return { error: "Sender name is required." };
+    if (replyTo && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(replyTo)) {
+      return { error: "Enter a valid reply-to email address." };
+    }
+
     await upsertSettings(
       {
         email_sender_name: senderName,
@@ -110,13 +122,13 @@ export async function saveCertificateSettings(
   _prev: SettingsState,
   formData: FormData,
 ): Promise<SettingsState> {
-  const profile = await requireAdmin();
-  const templateId = String(formData.get("certificate_template_id") ?? "").trim();
-  const templateName = String(formData.get("certificate_template_name") ?? "").trim();
-  const templateFile = fileFrom(formData, "certificate_template_file");
-
   try {
-    const admin = createAdminClient();
+    const profile = await requireAdmin();
+    const supabase = createClient();
+    const templateId = String(formData.get("certificate_template_id") ?? "").trim();
+    const templateName = String(formData.get("certificate_template_name") ?? "").trim();
+    const templateFile = fileFrom(formData, "certificate_template_file");
+
     let selectedId = templateId || null;
 
     if (templateFile) {
@@ -124,7 +136,7 @@ export async function saveCertificateSettings(
         return { error: "Enter a name for the uploaded certificate template." };
       }
       const imageUrl = await uploadPublicAsset(templateFile, "settings/certificates");
-      const { data: created, error: createError } = await admin
+      const { data: created, error: createError } = await supabase
         .from("certificate_templates")
         .insert({
           name: templateName,
@@ -136,7 +148,7 @@ export async function saveCertificateSettings(
         .select("id")
         .single();
       if (createError || !created) {
-        return { error: createError?.message ?? "Could not create certificate template." };
+        return { error: friendlyDbError(createError?.message ?? "Could not create certificate template.") };
       }
       selectedId = created.id;
     }
@@ -145,13 +157,13 @@ export async function saveCertificateSettings(
       return { error: "Select an existing template or upload a new one." };
     }
 
-    await admin.from("certificate_templates").update({ is_default: false }).eq("is_default", true);
+    await supabase.from("certificate_templates").update({ is_default: false }).eq("is_default", true);
 
-    const { error: markError } = await admin
+    const { error: markError } = await supabase
       .from("certificate_templates")
       .update({ is_default: true })
       .eq("id", selectedId);
-    if (markError) return { error: markError.message };
+    if (markError) return { error: friendlyDbError(markError.message) };
 
     await upsertSettings({ default_certificate_template_id: selectedId }, profile.id);
     await logAudit({
@@ -170,31 +182,32 @@ export async function saveIntegrationSettings(
   _prev: SettingsState,
   formData: FormData,
 ): Promise<SettingsState> {
-  const profile = await requireAdmin();
-  const youtubeApiKey = String(formData.get("youtube_api_key") ?? "").trim();
-
-  if (!youtubeApiKey) {
-    return { error: "Paste your YouTube Data API key to save." };
-  }
-  if (youtubeApiKey === "your-youtube-data-api-key") {
-    return { error: "Replace the placeholder with your real Google API key." };
-  }
-
   try {
+    const profile = await requireAdmin();
+    const youtubeApiKey = String(formData.get("youtube_api_key") ?? "").trim();
+    const deepseekApiKey = String(formData.get("deepseek_api_key") ?? "").trim();
+
+    if (!youtubeApiKey && !deepseekApiKey) {
+      return { error: "Paste a YouTube or DeepSeek API key to save." };
+    }
+    if (youtubeApiKey === "your-youtube-data-api-key") {
+      return { error: "Replace the YouTube placeholder with your real Google API key." };
+    }
+
+    const patch: Record<string, unknown> = {
+      id: "default",
+      updated_by: profile.id,
+    };
+    if (youtubeApiKey) patch.youtube_api_key = youtubeApiKey;
+    if (deepseekApiKey) patch.deepseek_api_key = deepseekApiKey;
+
     const supabase = createClient();
-    const { error } = await supabase.from("platform_secrets").upsert(
-      {
-        id: "default",
-        youtube_api_key: youtubeApiKey,
-        updated_by: profile.id,
-      },
-      { onConflict: "id" },
-    );
-    if (error) throw new Error(error.message);
+    const { error } = await supabase.from("platform_secrets").upsert(patch, { onConflict: "id" });
+    if (error) throw new Error(friendlyDbError(error.message));
 
     await logAudit({ action: "settings_integrations_saved" });
     revalidatePath(SETTINGS_PATH);
-    return { message: "Integration settings saved. YouTube import is ready to use." };
+    return { message: "Integration settings saved." };
   } catch (err) {
     return {
       error: err instanceof Error ? err.message : "Could not save integration settings.",

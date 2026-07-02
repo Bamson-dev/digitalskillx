@@ -226,6 +226,7 @@ export type PlatformSettings = {
 export type PlatformSecrets = {
   id: string;
   youtube_api_key: string | null;
+  deepseek_api_key: string | null;
   updated_at: string;
   updated_by: string | null;
 };
