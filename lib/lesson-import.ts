@@ -146,23 +146,29 @@ function fromYoutubeVideo(v: YoutubeVideo, contentUrl: string): ImportedLessonDr
   };
 }
 
-async function importYoutubePlaylist(url: string): Promise<ImportedLessonDraft[]> {
+async function importYoutubePlaylist(
+  url: string,
+  options?: { youtubeApiKey?: string },
+): Promise<ImportedLessonDraft[]> {
   const input = detectYoutubeInput(url);
   if (!input || input.type !== "playlist") {
     throw new Error("Invalid YouTube playlist URL.");
   }
-  const videos = await fetchPlaylist(input.id);
+  const videos = await fetchPlaylist(input.id, { apiKey: options?.youtubeApiKey });
   return videos.map((v) =>
     fromYoutubeVideo(v, `https://www.youtube.com/watch?v=${v.videoId}`),
   );
 }
 
-async function importYoutubeVideo(url: string): Promise<ImportedLessonDraft[]> {
+async function importYoutubeVideo(
+  url: string,
+  options?: { youtubeApiKey?: string },
+): Promise<ImportedLessonDraft[]> {
   const input = detectYoutubeInput(url);
   if (!input || input.type !== "video") {
     throw new Error("Invalid YouTube video URL.");
   }
-  const videos = await fetchSingleVideo(input.id);
+  const videos = await fetchSingleVideo(input.id, { apiKey: options?.youtubeApiKey });
   if (videos.length === 0) throw new Error("YouTube video not found.");
   return [fromYoutubeVideo(videos[0], `https://www.youtube.com/watch?v=${input.id}`)];
 }
@@ -218,17 +224,19 @@ async function importLoom(url: string): Promise<ImportedLessonDraft[]> {
 export async function fetchLessonsForImport(
   source: LessonImportSource,
   rawUrl: string,
+  options?: { youtubeApiKey?: string },
 ): Promise<ImportedLessonDraft[]> {
   const validationError = validateImportUrl(source, rawUrl);
   if (validationError) throw new Error(validationError);
 
   const url = normalizeUrl(rawUrl);
+  const youtubeOpts = { youtubeApiKey: options?.youtubeApiKey };
 
   switch (source) {
     case "youtube_playlist":
-      return importYoutubePlaylist(url);
+      return importYoutubePlaylist(url, youtubeOpts);
     case "youtube_video":
-      return importYoutubeVideo(url);
+      return importYoutubeVideo(url, youtubeOpts);
     case "vimeo":
       return importVimeo(url);
     case "wistia":

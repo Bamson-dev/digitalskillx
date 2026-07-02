@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { createClient } from "@/lib/supabase/server";
 import { requireAdmin } from "@/lib/auth";
 import { logAudit } from "@/lib/audit";
 import { uploadPublicAsset } from "@/lib/upload-public-asset";
@@ -180,8 +181,8 @@ export async function saveIntegrationSettings(
   }
 
   try {
-    const admin = createAdminClient();
-    const { error } = await admin.from("platform_secrets").upsert(
+    const supabase = createClient();
+    const { error } = await supabase.from("platform_secrets").upsert(
       {
         id: "default",
         youtube_api_key: youtubeApiKey,

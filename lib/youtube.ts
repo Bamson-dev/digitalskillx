@@ -17,6 +17,10 @@ export type YoutubeInput =
   | { type: "channel"; id: string }
   | { type: "handle"; handle: string };
 
+export type YoutubeFetchOptions = {
+  apiKey?: string;
+};
+
 /** Classify a pasted YouTube URL (PRD §7.1). */
 export function detectYoutubeInput(url: string): YoutubeInput | null {
   try {
@@ -41,7 +45,8 @@ export function detectYoutubeInput(url: string): YoutubeInput | null {
 
 import { getYoutubeApiKey } from "@/lib/env-youtube";
 
-async function key() {
+async function resolveKey(options?: YoutubeFetchOptions): Promise<string> {
+  if (options?.apiKey?.trim()) return options.apiKey.trim();
   return getYoutubeApiKey();
 }
 
@@ -53,12 +58,15 @@ function parseDuration(iso: string): number {
   return (Number(h) || 0) * 3600 + (Number(min) || 0) * 60 + (Number(s) || 0);
 }
 
-async function fetchVideoDetails(ids: string[]): Promise<Map<string, { duration: number }>> {
+async function fetchVideoDetails(
+  ids: string[],
+  apiKey: string,
+): Promise<Map<string, { duration: number }>> {
   const map = new Map<string, { duration: number }>();
   for (let i = 0; i < ids.length; i += 50) {
     const batch = ids.slice(i, i + 50);
     const res = await fetch(
-      `${API}/videos?part=contentDetails&id=${batch.join(",")}&key=${key()}`,
+      `${API}/videos?part=contentDetails&id=${batch.join(",")}&key=${apiKey}`,
     );
     const json = await res.json();
     for (const item of json.items ?? []) {
@@ -68,8 +76,12 @@ async function fetchVideoDetails(ids: string[]): Promise<Map<string, { duration:
   return map;
 }
 
-export async function fetchSingleVideo(id: string): Promise<YoutubeVideo[]> {
-  const res = await fetch(`${API}/videos?part=snippet,contentDetails&id=${id}&key=${key()}`);
+export async function fetchSingleVideo(
+  id: string,
+  options?: YoutubeFetchOptions,
+): Promise<YoutubeVideo[]> {
+  const apiKey = await resolveKey(options);
+  const res = await fetch(`${API}/videos?part=snippet,contentDetails&id=${id}&key=${apiKey}`);
   const json = await res.json();
   const item = json.items?.[0];
   if (!item) return [];
@@ -85,13 +97,17 @@ export async function fetchSingleVideo(id: string): Promise<YoutubeVideo[]> {
   ];
 }
 
-export async function fetchPlaylist(playlistId: string): Promise<YoutubeVideo[]> {
+export async function fetchPlaylist(
+  playlistId: string,
+  options?: YoutubeFetchOptions,
+): Promise<YoutubeVideo[]> {
+  const apiKey = await resolveKey(options);
   const videos: YoutubeVideo[] = [];
   let pageToken = "";
   let position = 0;
   do {
     const res = await fetch(
-      `${API}/playlistItems?part=snippet&maxResults=50&playlistId=${playlistId}&pageToken=${pageToken}&key=${key()}`,
+      `${API}/playlistItems?part=snippet&maxResults=50&playlistId=${playlistId}&pageToken=${pageToken}&key=${apiKey}`,
     );
     const json = await res.json();
     for (const item of json.items ?? []) {
@@ -109,38 +125,51 @@ export async function fetchPlaylist(playlistId: string): Promise<YoutubeVideo[]>
     pageToken = json.nextPageToken ?? "";
   } while (pageToken);
 
-  // Enrich with durations.
-  const details = await fetchVideoDetails(videos.map((v) => v.videoId));
+  const details = await fetchVideoDetails(
+    videos.map((v) => v.videoId),
+    apiKey,
+  );
   for (const v of videos) v.durationSeconds = details.get(v.videoId)?.duration ?? null;
   return videos;
 }
 
-export async function fetchChannelUploads(channelId: string): Promise<YoutubeVideo[]> {
-  const res = await fetch(`${API}/channels?part=contentDetails&id=${channelId}&key=${key()}`);
+export async function fetchChannelUploads(
+  channelId: string,
+  options?: YoutubeFetchOptions,
+): Promise<YoutubeVideo[]> {
+  const apiKey = await resolveKey(options);
+  const res = await fetch(`${API}/channels?part=contentDetails&id=${channelId}&key=${apiKey}`);
   const json = await res.json();
   const uploads = json.items?.[0]?.contentDetails?.relatedPlaylists?.uploads;
   if (!uploads) return [];
-  return fetchPlaylist(uploads);
+  return fetchPlaylist(uploads, options);
 }
 
-export async function resolveHandle(handle: string): Promise<string | null> {
-  const res = await fetch(`${API}/channels?part=id&forHandle=${handle}&key=${key()}`);
+export async function resolveHandle(
+  handle: string,
+  options?: YoutubeFetchOptions,
+): Promise<string | null> {
+  const apiKey = await resolveKey(options);
+  const res = await fetch(`${API}/channels?part=id&forHandle=${handle}&key=${apiKey}`);
   const json = await res.json();
   return json.items?.[0]?.id ?? null;
 }
 
 /** Resolve any supported input to its list of videos. */
-export async function fetchVideosForInput(input: YoutubeInput): Promise<YoutubeVideo[]> {
+export async function fetchVideosForInput(
+  input: YoutubeInput,
+  options?: YoutubeFetchOptions,
+): Promise<YoutubeVideo[]> {
   switch (input.type) {
     case "video":
-      return fetchSingleVideo(input.id);
+      return fetchSingleVideo(input.id, options);
     case "playlist":
-      return fetchPlaylist(input.id);
+      return fetchPlaylist(input.id, options);
     case "channel":
-      return fetchChannelUploads(input.id);
+      return fetchChannelUploads(input.id, options);
     case "handle": {
-      const channelId = await resolveHandle(input.handle);
-      return channelId ? fetchChannelUploads(channelId) : [];
+      const channelId = await resolveHandle(input.handle, options);
+      return channelId ? fetchChannelUploads(channelId, options) : [];
     }
   }
 }

@@ -19,7 +19,7 @@ export default async function AdminSettingsPage() {
       .from("certificate_templates")
       .select("id, name, is_default, base_image_url")
       .order("name"),
-    getYoutubeApiKeyConfiguredFlag(),
+    getYoutubeApiKeyConfiguredFlag(supabase),
   ]);
 
   return (

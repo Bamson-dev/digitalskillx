@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { logAudit } from "@/lib/audit";
 import { rateLimitedResponse } from "@/lib/api-rate-limit";
 import {
+  getYoutubeApiKey,
   youtubeApiKeyConfigured,
   youtubeApiKeyDiagnostics,
   youtubeApiKeyError,
@@ -42,7 +43,7 @@ async function requireAdminApi() {
     return { error: NextResponse.json({ error: "Forbidden" }, { status: 403 }) };
   }
 
-  return { user };
+  return { user, supabase };
 }
 
 /** Admin diagnostic: is YouTube API key configured? */
@@ -50,7 +51,7 @@ export async function GET() {
   const auth = await requireAdminApi();
   if ("error" in auth && auth.error) return auth.error;
 
-  const youtube = await youtubeApiKeyDiagnostics();
+  const youtube = await youtubeApiKeyDiagnostics(auth.supabase);
   return NextResponse.json({
     youtubeApiKeyConfigured: youtube.status === "ok",
     youtubeApiKeyStatus: youtube.status,
@@ -68,7 +69,7 @@ export async function POST(request: NextRequest) {
   const auth = await requireAdminApi();
   if ("error" in auth && auth.error) return auth.error;
 
-  const supabase = createClient();
+  const supabase = auth.supabase;
   const body = (await request.json()) as {
     courseId?: string;
     url?: string;
@@ -85,13 +86,18 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid import source." }, { status: 400 });
   }
 
-  if (source.startsWith("youtube_") && !(await youtubeApiKeyConfigured())) {
-    return NextResponse.json({ error: await youtubeApiKeyError() }, { status: 503 });
+  if (source.startsWith("youtube_") && !(await youtubeApiKeyConfigured(supabase))) {
+    return NextResponse.json({ error: await youtubeApiKeyError(supabase) }, { status: 503 });
+  }
+
+  let youtubeApiKey: string | undefined;
+  if (source.startsWith("youtube_")) {
+    youtubeApiKey = await getYoutubeApiKey(supabase);
   }
 
   let lessons;
   try {
-    lessons = await fetchLessonsForImport(source, body.url);
+    lessons = await fetchLessonsForImport(source, body.url, { youtubeApiKey });
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "Import failed" },
