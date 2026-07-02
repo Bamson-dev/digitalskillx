@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState, useTransition } from "react";
 import Link from "next/link";
-import { Plus, Trash2, ChevronDown, GripVertical, Save, HelpCircle } from "lucide-react";
+import { Plus, Trash2, ChevronDown, ChevronUp, GripVertical, Save, HelpCircle } from "lucide-react";
 import { Card, CardHeader } from "@/components/ui/card";
 import { Input, Label } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -19,6 +19,7 @@ import {
   createLesson,
   updateLesson,
   deleteLesson,
+  reorderLessons,
 } from "@/app/(admin)/admin/(panel)/courses/actions";
 
 type ModuleWithLessons = Module & { lessons: Lesson[] };
@@ -173,7 +174,7 @@ function CurriculumCard({
 }) {
   return (
     <Card>
-      <CardHeader title="Curriculum" description="Organise modules and lessons." />
+      <CardHeader title="Curriculum" description="Drag lessons by the grip handle, or use the arrows to reorder." />
       <div className="space-y-4">
         {modules.map((m) => (
           <ModuleBlock key={m.id} courseId={courseId} module={m} />
@@ -198,12 +199,61 @@ function ModuleBlock({
   courseId: string;
   module: ModuleWithLessons;
 }) {
-  const lessons = [...(module.lessons ?? [])].sort((a, b) => a.position - b.position);
+  const initialLessons = [...(module.lessons ?? [])].sort((a, b) => a.position - b.position);
+  const [lessons, setLessons] = useState(initialLessons);
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
+
+  useEffect(() => {
+    setLessons([...(module.lessons ?? [])].sort((a, b) => a.position - b.position));
+  }, [module.id, module.lessons]);
+
+  function persistOrder(nextLessons: Lesson[]) {
+    setLessons(nextLessons);
+    startTransition(async () => {
+      await reorderLessons(
+        courseId,
+        module.id,
+        nextLessons.map((lesson) => lesson.id),
+      );
+    });
+  }
+
+  function moveLesson(fromIndex: number, toIndex: number) {
+    if (toIndex < 0 || toIndex >= lessons.length || fromIndex === toIndex) return;
+    const next = [...lessons];
+    const [moved] = next.splice(fromIndex, 1);
+    next.splice(toIndex, 0, moved);
+    persistOrder(next);
+  }
+
+  function handleDragStart(event: React.DragEvent, lessonId: string) {
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("text/plain", lessonId);
+    setDraggingId(lessonId);
+  }
+
+  function handleDragOver(event: React.DragEvent) {
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "move";
+  }
+
+  function handleDrop(event: React.DragEvent, targetId: string) {
+    event.preventDefault();
+    const sourceId = event.dataTransfer.getData("text/plain");
+    setDraggingId(null);
+    if (!sourceId || sourceId === targetId) return;
+
+    const fromIndex = lessons.findIndex((lesson) => lesson.id === sourceId);
+    const toIndex = lessons.findIndex((lesson) => lesson.id === targetId);
+    if (fromIndex < 0 || toIndex < 0) return;
+    moveLesson(fromIndex, toIndex);
+  }
 
   return (
     <div className="rounded-lg border border-app">
       <div className="flex items-center gap-2 border-b border-app bg-brand-50/50 p-3">
-        <GripVertical className="h-4 w-4 text-muted" />
+        <GripVertical className="h-4 w-4 text-muted" aria-hidden />
         <form action={renameModule} className="flex flex-1 items-center gap-2">
           <input type="hidden" name="id" value={module.id} />
           <input type="hidden" name="course_id" value={courseId} />
@@ -222,8 +272,23 @@ function ModuleBlock({
       </div>
 
       <div className="divide-y divide-[rgb(var(--border))]">
-        {lessons.map((l) => (
-          <LessonRow key={l.id} courseId={courseId} lesson={l} />
+        {lessons.map((lesson, index) => (
+          <LessonRow
+            key={lesson.id}
+            courseId={courseId}
+            lesson={lesson}
+            index={index}
+            isFirst={index === 0}
+            isLast={index === lessons.length - 1}
+            isDragging={draggingId === lesson.id}
+            isPending={isPending}
+            onMoveUp={() => moveLesson(index, index - 1)}
+            onMoveDown={() => moveLesson(index, index + 1)}
+            onDragStart={(event) => handleDragStart(event, lesson.id)}
+            onDragOver={handleDragOver}
+            onDrop={(event) => handleDrop(event, lesson.id)}
+            onDragEnd={() => setDraggingId(null)}
+          />
         ))}
       </div>
 
@@ -246,24 +311,89 @@ function ModuleBlock({
   );
 }
 
-function LessonRow({ courseId, lesson }: { courseId: string; lesson: Lesson }) {
+function LessonRow({
+  courseId,
+  lesson,
+  index,
+  isFirst,
+  isLast,
+  isDragging,
+  isPending,
+  onMoveUp,
+  onMoveDown,
+  onDragStart,
+  onDragOver,
+  onDrop,
+  onDragEnd,
+}: {
+  courseId: string;
+  lesson: Lesson;
+  index: number;
+  isFirst: boolean;
+  isLast: boolean;
+  isDragging: boolean;
+  isPending: boolean;
+  onMoveUp: () => void;
+  onMoveDown: () => void;
+  onDragStart: (event: React.DragEvent) => void;
+  onDragOver: (event: React.DragEvent) => void;
+  onDrop: (event: React.DragEvent) => void;
+  onDragEnd: () => void;
+}) {
   const [open, setOpen] = useState(false);
 
   return (
-    <div>
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        className="flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-brand-50/40"
-      >
-        <span className="flex items-center gap-2">
-          <span className="rounded bg-slate-100 px-1.5 py-0.5 text-xs text-slate-600">
-            {lesson.lesson_type}
+    <div
+      onDragOver={onDragOver}
+      onDrop={onDrop}
+      className={`${isDragging ? "bg-brand-50/80" : ""} ${isPending ? "opacity-80" : ""}`}
+    >
+      <div className="flex items-center gap-1 px-2 py-2">
+        <div
+          draggable
+          onDragStart={onDragStart}
+          onDragEnd={onDragEnd}
+          className="cursor-grab rounded p-1 text-muted hover:bg-brand-50 active:cursor-grabbing"
+          aria-label={`Drag to reorder lesson ${index + 1}`}
+        >
+          <GripVertical className="h-4 w-4" />
+        </div>
+
+        <div className="flex flex-col">
+          <button
+            type="button"
+            onClick={onMoveUp}
+            disabled={isFirst || isPending}
+            className="rounded p-0.5 text-muted hover:bg-brand-50 disabled:opacity-30"
+            aria-label="Move lesson up"
+          >
+            <ChevronUp className="h-4 w-4" />
+          </button>
+          <button
+            type="button"
+            onClick={onMoveDown}
+            disabled={isLast || isPending}
+            className="rounded p-0.5 text-muted hover:bg-brand-50 disabled:opacity-30"
+            aria-label="Move lesson down"
+          >
+            <ChevronDown className="h-4 w-4" />
+          </button>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => setOpen((o) => !o)}
+          className="flex min-w-0 flex-1 items-center justify-between text-left text-sm hover:text-brand"
+        >
+          <span className="flex min-w-0 items-center gap-2">
+            <span className="shrink-0 rounded bg-slate-100 px-1.5 py-0.5 text-xs text-slate-600">
+              {lesson.lesson_type}
+            </span>
+            <span className="truncate">{lesson.title}</span>
           </span>
-          {lesson.title}
-        </span>
-        <ChevronDown className={`h-4 w-4 transition-transform ${open ? "rotate-180" : ""}`} />
-      </button>
+          <ChevronDown className={`h-4 w-4 shrink-0 transition-transform ${open ? "rotate-180" : ""}`} />
+        </button>
+      </div>
 
       {open ? (
         <form action={updateLesson} className="grid gap-3 border-t border-app bg-card p-3 sm:grid-cols-2">

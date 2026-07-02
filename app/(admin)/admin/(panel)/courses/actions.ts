@@ -190,6 +190,24 @@ export async function deleteLesson(formData: FormData) {
   revalidatePath(`/admin/courses/${courseId}`);
 }
 
+export async function reorderLessons(
+  courseId: string,
+  moduleId: string,
+  lessonIds: string[],
+) {
+  await requireAdmin();
+  const supabase = createClient();
+
+  const updates = lessonIds.map((id, position) =>
+    supabase.from("lessons").update({ position }).eq("id", id).eq("module_id", moduleId),
+  );
+  const results = await Promise.all(updates);
+  const failed = results.find((r) => r.error);
+  if (failed?.error) throw new Error(failed.error.message);
+
+  revalidatePath(`/admin/courses/${courseId}`);
+}
+
 export async function addResource(formData: FormData) {
   await requireAdmin();
   const supabase = createClient();
