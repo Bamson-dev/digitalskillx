@@ -1,6 +1,7 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { bootstrapServiceRoleKey } from "@/lib/env-service-role";
 import { runtimeEnv } from "@/lib/runtime-env";
 import type { Database } from "@/types/database";
 
@@ -25,7 +26,10 @@ async function readFromSupabase(
   return normalizeKey(data?.paystack_secret_key);
 }
 
-async function readFromServiceRole(): Promise<string | undefined> {
+async function readFromPlatformSecretsDb(
+  supabase?: SupabaseClient<Database>,
+): Promise<string | undefined> {
+  await bootstrapServiceRoleKey(supabase);
   try {
     const admin = createAdminClient();
     const { data, error } = await admin
@@ -41,22 +45,19 @@ async function readFromServiceRole(): Promise<string | undefined> {
   }
 }
 
-/** Server checkout + webhooks: DB (service role) → runtime env → admin session. */
+/** Server checkout + webhooks: runtime env → platform_secrets (via service role). */
 async function resolvePaystackSecretKey(
   supabase?: SupabaseClient<Database>,
 ): Promise<string | undefined> {
   const fromRuntime = normalizeKey(runtimeEnv(ENV_NAME));
   if (fromRuntime) return fromRuntime;
 
-  const fromDb = await readFromServiceRole();
-  if (fromDb) return fromDb;
-
   if (supabase) {
     const fromSession = await readFromSupabase(supabase);
     if (fromSession) return fromSession;
   }
 
-  return undefined;
+  return readFromPlatformSecretsDb(supabase);
 }
 
 export async function paystackSecretKeyConfigured(supabase?: SupabaseClient<Database>) {

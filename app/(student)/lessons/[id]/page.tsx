@@ -7,6 +7,7 @@ import { requireStudent } from "@/lib/auth";
 import { LessonOutline } from "@/components/student/lesson-outline";
 import { LessonPlayer } from "@/components/student/lesson-player";
 import { LessonAttachments } from "@/components/student/lesson-attachments";
+import { CourseResources } from "@/components/student/course-resources";
 import { Card } from "@/components/ui/card";
 import type { Lesson, Module } from "@/types/database";
 
@@ -30,7 +31,7 @@ export default async function LessonPage({ params }: { params: { id: string } })
   const courseId = moduleRow?.course_id;
   if (!courseId) notFound();
 
-  const [{ data: course }, { data: modules }, { data: progress }, { data: note }, { data: bookmarks }, { data: enrollment }, { data: attachments }] =
+  const [{ data: course }, { data: modules }, { data: progress }, { data: note }, { data: bookmarks }, { data: enrollment }, { data: attachments }, { data: courseResources }] =
     await Promise.all([
       supabase.from("courses").select("id, title").eq("id", courseId).single(),
       supabase.from("modules").select("*, lessons(*)").eq("course_id", courseId),
@@ -43,6 +44,14 @@ export default async function LessonPage({ params }: { params: { id: string } })
         .select("id, title, file_url, file_type")
         .eq("lesson_id", params.id)
         .eq("is_archived", false)
+        .order("created_at", { ascending: true }),
+      supabase
+        .from("resources")
+        .select("id, title, file_url, file_type")
+        .eq("course_id", courseId)
+        .is("lesson_id", null)
+        .eq("is_archived", false)
+        .order("position", { ascending: true })
         .order("created_at", { ascending: true }),
     ]);
 
@@ -111,6 +120,10 @@ export default async function LessonPage({ params }: { params: { id: string } })
             ) : null}
           </div>
         )}
+
+        <div className="mt-5">
+          <CourseResources resources={courseResources ?? []} />
+        </div>
       </div>
     </div>
   );

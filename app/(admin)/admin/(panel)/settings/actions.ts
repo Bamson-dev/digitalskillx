@@ -183,9 +183,10 @@ export async function saveIntegrationSettings(
     const youtubeApiKey = String(formData.get("youtube_api_key") ?? "").trim();
     const deepseekApiKey = String(formData.get("deepseek_api_key") ?? "").trim();
     const paystackSecretKey = String(formData.get("paystack_secret_key") ?? "").trim();
+    const serviceRoleKey = String(formData.get("supabase_service_role_key") ?? "").trim();
 
-    if (!youtubeApiKey && !deepseekApiKey && !paystackSecretKey) {
-      return { error: "Paste at least one API key to save." };
+    if (!youtubeApiKey && !deepseekApiKey && !paystackSecretKey && !serviceRoleKey) {
+      return { error: "Paste at least one key to save." };
     }
     if (youtubeApiKey === "your-youtube-data-api-key") {
       return { error: "Replace the YouTube placeholder with your real Google API key." };
@@ -198,6 +199,7 @@ export async function saveIntegrationSettings(
     if (youtubeApiKey) patch.youtube_api_key = youtubeApiKey;
     if (deepseekApiKey) patch.deepseek_api_key = deepseekApiKey;
     if (paystackSecretKey) patch.paystack_secret_key = paystackSecretKey;
+    if (serviceRoleKey) patch.supabase_service_role_key = serviceRoleKey;
 
     const supabase = createClient();
     const { error } = await supabase.from("platform_secrets").upsert(patch, { onConflict: "id" });

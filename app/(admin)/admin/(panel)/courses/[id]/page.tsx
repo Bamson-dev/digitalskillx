@@ -12,11 +12,6 @@ import {
 import { CourseEditor } from "@/components/admin/course-editor";
 import { YoutubeImport } from "@/components/admin/youtube-import";
 import type { AttachmentDisplay } from "@/lib/lesson-attachments-shared";
-import { Card, CardHeader } from "@/components/ui/card";
-import { Input, Label } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import { Trash2, Plus } from "lucide-react";
-import { addResource, deleteResource } from "../actions";
 
 export const metadata: Metadata = { title: "Edit course" };
 
@@ -47,13 +42,14 @@ export default async function AdminCourseEditorPage({
     normalizeCertificateTemplateKey(settings.default_certificate_template_key) ??
     DEFAULT_CERTIFICATE_TEMPLATE_KEY;
 
-  const { data: resources } = await supabase
+  const { data: courseResources } = await supabase
     .from("resources")
-    .select("id, title, file_url, file_type, lesson_id")
+    .select("id, title, file_url, file_type, position")
     .eq("course_id", params.id)
     .is("lesson_id", null)
     .eq("is_archived", false)
-    .order("created_at", { ascending: false });
+    .order("position", { ascending: true })
+    .order("created_at", { ascending: true });
 
   const { data: lessonResources } = await supabase
     .from("resources")
@@ -100,43 +96,13 @@ export default async function AdminCourseEditorPage({
         categories={categories.data ?? []}
         globalDefaultTemplateKey={globalDefaultTemplateKey}
         lessonAttachments={lessonAttachments}
+        courseResources={(courseResources ?? []) as AttachmentDisplay[]}
       />
 
       <YoutubeImport
         courseId={course.id}
         modules={modules.map((m) => ({ id: m.id, title: m.title }))}
       />
-
-      <Card>
-        <CardHeader title="Resources" description="Downloadable files for this course (private bucket, signed URLs)." />
-        <form action={addResource} className="grid gap-2 sm:grid-cols-[1fr_1fr_120px_auto]">
-          <input type="hidden" name="course_id" value={course.id} />
-          <Input name="title" placeholder="Title" required />
-          <Input name="file_url" placeholder="Storage path or https URL" required />
-          <Input name="file_type" placeholder="pdf, zip…" />
-          <Button type="submit" variant="outline">
-            <Plus className="h-4 w-4" /> Add
-          </Button>
-        </form>
-        <ul className="mt-3 divide-y divide-[rgb(var(--border))]">
-          {(resources ?? []).map((r) => (
-            <li key={r.id} className="flex items-center justify-between py-2 text-sm">
-              <span>
-                <span className="font-medium">{r.title}</span>{" "}
-                {r.file_type ? <span className="text-muted">· {r.file_type}</span> : null}
-              </span>
-              <form action={deleteResource}>
-                <input type="hidden" name="id" value={r.id} />
-                <input type="hidden" name="course_id" value={course.id} />
-                <button type="submit" className="text-red-600 hover:text-red-700">
-                  <Trash2 className="h-4 w-4" />
-                </button>
-              </form>
-            </li>
-          ))}
-          {(resources ?? []).length === 0 ? <li className="py-2 text-sm text-muted">No resources yet.</li> : null}
-        </ul>
-      </Card>
     </div>
   );
 }

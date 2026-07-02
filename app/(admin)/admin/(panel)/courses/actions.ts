@@ -9,11 +9,13 @@ import {
   inferAttachmentType,
   uploadLessonAttachmentFile,
 } from "@/lib/upload-lesson-attachment";
+import { uploadCourseResourceFile } from "@/lib/upload-course-resource";
 import { uploadPublicAsset } from "@/lib/upload-public-asset";
 import { normalizeCertificateTemplateKey } from "@/lib/certificate-templates";
 import type { CourseVisibility, EnrollmentType, LessonType } from "@/types/database";
 
 export type LessonAttachmentState = { error?: string; message?: string };
+export type CourseResourceState = { error?: string; message?: string };
 export type CourseSettingsState = {
   error?: string;
   message?: string;
@@ -359,28 +361,110 @@ export async function deleteLessonResource(formData: FormData) {
   revalidatePath(`/admin/courses/${courseId}`);
 }
 
-export async function addResource(formData: FormData) {
+export async function addCourseResource(
+  _prev: CourseResourceState,
+  formData: FormData,
+): Promise<CourseResourceState> {
   await requireAdmin();
   const supabase = createClient();
-  const courseId = String(formData.get("course_id"));
-  const lessonId = String(formData.get("lesson_id") ?? "") || null;
-  await supabase.from("resources").insert({
-    course_id: courseId,
-    lesson_id: lessonId,
-    title: String(formData.get("title") ?? "Resource"),
-    file_url: String(formData.get("file_url") ?? ""),
-    file_type: String(formData.get("file_type") ?? "") || null,
-    download_allowed: formData.get("download_allowed") !== "off",
-  });
-  await logAudit({ action: "resource_added", targetType: "course", targetId: courseId });
-  revalidatePath(`/admin/courses/${courseId}`);
+
+  const courseId = String(formData.get("course_id") ?? "");
+  const title = String(formData.get("title") ?? "").trim();
+  const mode = String(formData.get("mode") ?? "file");
+
+  if (!courseId) return { error: "Missing course." };
+  if (!title) return { error: "Enter a title for this resource." };
+
+  try {
+    let fileUrl = "";
+    let fileType: string | null = null;
+
+    if (mode === "link") {
+      fileUrl = String(formData.get("link_url") ?? "").trim();
+      if (!/^https?:\/\//i.test(fileUrl)) {
+        return { error: "Enter a valid URL starting with http:// or https://." };
+      }
+      fileType = "link";
+    } else {
+      const file = formData.get("file");
+      if (!(file instanceof File) || file.size <= 0) {
+        return { error: "Choose a file to upload." };
+      }
+      fileUrl = await uploadCourseResourceFile(file, courseId);
+      fileType = inferAttachmentType(file);
+    }
+
+    const { count } = await supabase
+      .from("resources")
+      .select("*", { count: "exact", head: true })
+      .eq("course_id", courseId)
+      .is("lesson_id", null);
+
+    const { error } = await supabase.from("resources").insert({
+      course_id: courseId,
+      lesson_id: null,
+      title,
+      file_url: fileUrl,
+      file_type: fileType,
+      position: count ?? 0,
+    });
+    if (error) return { error: error.message };
+
+    await logAudit({
+      action: "course_resource_added",
+      targetType: "course",
+      targetId: courseId,
+      metadata: { title, file_type: fileType },
+    });
+    revalidatePath(`/admin/courses/${courseId}`);
+    return { message: "Resource added." };
+  } catch (err) {
+    return {
+      error: err instanceof Error ? err.message : "Could not add resource.",
+    };
+  }
 }
 
-export async function deleteResource(formData: FormData) {
+export async function deleteCourseResource(formData: FormData) {
   await requireAdmin();
   const supabase = createClient();
   const id = String(formData.get("id"));
   const courseId = String(formData.get("course_id"));
-  await supabase.from("resources").delete().eq("id", id);
+
+  const { error } = await supabase
+    .from("resources")
+    .delete()
+    .eq("id", id)
+    .is("lesson_id", null);
+  if (error) throw new Error(error.message);
+
+  await logAudit({
+    action: "course_resource_removed",
+    targetType: "course",
+    targetId: courseId,
+  });
+  revalidatePath(`/admin/courses/${courseId}`);
+}
+
+export async function reorderCourseResources(
+  courseId: string,
+  resourceIds: string[],
+) {
+  await requireAdmin();
+  const supabase = createClient();
+
+  const updates = resourceIds.map((id, position) =>
+    supabase
+      .from("resources")
+      .update({ position })
+      .eq("id", id)
+      .eq("course_id", courseId)
+      .is("lesson_id", null),
+  );
+
+  const results = await Promise.all(updates);
+  const failed = results.find((r) => r.error);
+  if (failed?.error) throw new Error(failed.error.message);
+
   revalidatePath(`/admin/courses/${courseId}`);
 }

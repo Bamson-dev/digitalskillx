@@ -1,10 +1,11 @@
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, PlayCircle, Download, Lock } from "lucide-react";
+import { ArrowLeft, PlayCircle, Lock } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { requireStudent } from "@/lib/auth";
 import { Card } from "@/components/ui/card";
+import { CourseResources } from "@/components/student/course-resources";
 
 export const metadata: Metadata = { title: "Course" };
 
@@ -38,9 +39,12 @@ export default async function CourseDetailPage({
 
   const { data: resources } = await supabase
     .from("resources")
-    .select("id, title, file_type")
+    .select("id, title, file_url, file_type")
     .eq("course_id", params.id)
-    .eq("is_archived", false);
+    .is("lesson_id", null)
+    .eq("is_archived", false)
+    .order("position", { ascending: true })
+    .order("created_at", { ascending: true });
 
   const modules = (course.modules ?? []).sort(
     (a, b) => a.position - b.position,
@@ -97,21 +101,7 @@ export default async function CourseDetailPage({
         </div>
       )}
 
-      {resources && resources.length > 0 ? (
-        <Card>
-          <h3 className="mb-2 font-semibold">Resources</h3>
-          <ul className="space-y-1 text-sm">
-            {resources.map((r) => (
-              <li key={r.id}>
-                <a href={`/api/resources/${r.id}/download`} className="inline-flex items-center gap-2 text-brand hover:underline">
-                  <Download className="h-4 w-4" /> {r.title}
-                  {r.file_type ? <span className="text-muted">· {r.file_type}</span> : null}
-                </a>
-              </li>
-            ))}
-          </ul>
-        </Card>
-      ) : null}
+      <CourseResources resources={resources ?? []} />
     </div>
   );
 }

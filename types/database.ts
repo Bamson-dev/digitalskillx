@@ -246,6 +246,7 @@ export type PlatformSecrets = {
   youtube_api_key: string | null;
   deepseek_api_key: string | null;
   paystack_secret_key: string | null;
+  supabase_service_role_key: string | null;
   updated_at: string;
   updated_by: string | null;
 };
@@ -372,6 +373,7 @@ export type Resource = Timestamps & {
   version: number;
   is_archived: boolean;
   download_allowed: boolean;
+  position: number;
 };
 
 export type StudentNote = Timestamps & {

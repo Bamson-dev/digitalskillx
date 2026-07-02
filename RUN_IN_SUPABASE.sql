@@ -84,6 +84,12 @@ ALTER TABLE public.platform_secrets
   ADD COLUMN IF NOT EXISTS paystack_secret_key text;
 
 
+-- ── 3c. Supabase service role key (Admin → Students create account) ───────
+
+ALTER TABLE public.platform_secrets
+  ADD COLUMN IF NOT EXISTS supabase_service_role_key text;
+
+
 -- ── 4. Student checkout transactions (Enroll Now / Paystack) ────────────────
 
 DROP POLICY IF EXISTS "transactions: insert own pending checkout" ON public.transactions;

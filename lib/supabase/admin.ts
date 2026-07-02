@@ -1,23 +1,15 @@
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 import { runtimeEnv } from "@/lib/runtime-env";
+import {
+  bootstrapServiceRoleKey,
+  getServiceRoleKeySync,
+  serviceRoleKeyMissingMessage,
+} from "@/lib/env-service-role";
 
-/**
- * Privileged Supabase client using the service-role key. BYPASSES RLS.
- *
- * SERVER-ONLY. Never import this into a Client Component or expose the key.
- * Use only inside Route Handlers / Server Actions for admin operations that
- * legitimately need to act across users (e.g. bulk student creation).
- */
-export function createAdminClient() {
-  const serviceRoleKey = runtimeEnv("SUPABASE_SERVICE_ROLE_KEY");
+function buildAdminClient(serviceRoleKey: string) {
   const supabaseUrl = runtimeEnv("NEXT_PUBLIC_SUPABASE_URL");
-
-  if (!serviceRoleKey) {
-    throw new Error(
-      "SUPABASE_SERVICE_ROLE_KEY is not configured. In Coolify → Environment Variables, add SUPABASE_SERVICE_ROLE_KEY (from Supabase → Project Settings → API → service_role secret), Runtime only, Save, Redeploy. Or paste your YouTube key via sql/platform-secrets-youtube.sql in Supabase SQL Editor.",
-    );
-  }
   if (!supabaseUrl) {
     throw new Error("NEXT_PUBLIC_SUPABASE_URL is not configured");
   }
@@ -27,6 +19,30 @@ export function createAdminClient() {
   });
 }
 
+/**
+ * Privileged Supabase client using the service-role key. BYPASSES RLS.
+ *
+ * SERVER-ONLY. Never import this into a Client Component or expose the key.
+ * Prefer createAdminClientAsync when the key may live in platform_secrets.
+ */
+export function createAdminClient() {
+  const serviceRoleKey = getServiceRoleKeySync();
+  if (!serviceRoleKey) {
+    throw new Error(serviceRoleKeyMissingMessage());
+  }
+  return buildAdminClient(serviceRoleKey);
+}
+
+/** Resolves service role from env or platform_secrets, then returns the admin client. */
+export async function createAdminClientAsync(supabase?: SupabaseClient<Database>) {
+  const serviceRoleKey =
+    getServiceRoleKeySync() ?? (await bootstrapServiceRoleKey(supabase));
+  if (!serviceRoleKey) {
+    throw new Error(serviceRoleKeyMissingMessage());
+  }
+  return buildAdminClient(serviceRoleKey);
+}
+
 export function isServiceRoleConfigured() {
-  return Boolean(runtimeEnv("SUPABASE_SERVICE_ROLE_KEY")?.trim());
+  return Boolean(getServiceRoleKeySync());
 }

@@ -180,10 +180,12 @@ function IntegrationSettingsForm({
   youtubeConfigured,
   deepseekConfigured,
   paystackConfigured,
+  serviceRoleConfigured,
 }: {
   youtubeConfigured: boolean;
   deepseekConfigured: boolean;
   paystackConfigured: boolean;
+  serviceRoleConfigured: boolean;
 }) {
   const [state, action] = useFormState(saveIntegrationSettings, initial);
 
@@ -239,6 +241,21 @@ function IntegrationSettingsForm({
               : "Required for Enroll Now on paid courses. Coolify env vars often do not reach Next.js — saving here is recommended."}
           </p>
         </div>
+        <div>
+          <Label htmlFor="supabase_service_role_key">Supabase service role key</Label>
+          <Input
+            id="supabase_service_role_key"
+            name="supabase_service_role_key"
+            type="password"
+            autoComplete="off"
+            placeholder={serviceRoleConfigured ? "Key saved — paste to replace" : "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9…"}
+          />
+          <p className="mt-1 text-xs text-muted">
+            {serviceRoleConfigured
+              ? "Admin actions such as creating students can use the service role key."
+              : "Required for Admin → Students (create account). If Coolify env vars fail, save the service_role secret from Supabase → Project Settings → API here."}
+          </p>
+        </div>
         <SubmitButton pendingText="Saving…">Save integration settings</SubmitButton>
         <Feedback state={state} />
       </form>
@@ -252,12 +269,14 @@ export function SettingsForms({
   youtubeConfigured,
   deepseekConfigured,
   paystackConfigured,
+  serviceRoleConfigured,
 }: {
   settings: PlatformSettingsValues;
   categories: CategoryMapping[];
   youtubeConfigured: boolean;
   deepseekConfigured: boolean;
   paystackConfigured: boolean;
+  serviceRoleConfigured: boolean;
 }) {
   return (
     <div className="space-y-6">
@@ -267,6 +286,7 @@ export function SettingsForms({
         youtubeConfigured={youtubeConfigured}
         deepseekConfigured={deepseekConfigured}
         paystackConfigured={paystackConfigured}
+        serviceRoleConfigured={serviceRoleConfigured}
       />
       <CertificateTemplateSettings
         categories={categories}

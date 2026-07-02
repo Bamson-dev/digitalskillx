@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { createAdminClientAsync } from "@/lib/supabase/admin";
 import { requireAdmin } from "@/lib/auth";
 import { logAudit } from "@/lib/audit";
 import { notify } from "@/lib/notifications";
@@ -45,7 +45,12 @@ export type StudentActionState = {
   };
 };
 
-async function loadPublishedCourses(admin: ReturnType<typeof createAdminClient>) {
+async function getAdminSupabase() {
+  const session = createClient();
+  return createAdminClientAsync(session);
+}
+
+async function loadPublishedCourses(admin: Awaited<ReturnType<typeof createAdminClientAsync>>) {
   const { data, error } = await admin
     .from("courses")
     .select("id, title")
@@ -78,7 +83,7 @@ export async function createStudent(
     if (!fullName || !email) return { error: "Name and email are required." };
     if (!isValidStudentEmail(email)) return { error: "Enter a valid email address." };
 
-    const admin = createAdminClient();
+    const admin = await getAdminSupabase();
     const publishedCourses = await loadPublishedCourses(admin);
     const validCourseIds = courseIds.filter((id) => publishedCourses.some((c) => c.id === id));
 
@@ -159,7 +164,7 @@ export async function bulkUploadStudents(
     }
     if (!csvText.trim()) return { error: "Upload a CSV file or paste CSV rows." };
 
-    const admin = createAdminClient();
+    const admin = await getAdminSupabase();
     const publishedCourses = await loadPublishedCourses(admin);
     const resolveCourse = buildCourseResolver(publishedCourses);
     const settings = await getPlatformSettingsAdmin();
@@ -291,7 +296,7 @@ export async function suspendStudent(formData: FormData) {
 
 export async function deleteStudent(formData: FormData) {
   await requireAdmin();
-  const admin = createAdminClient();
+  const admin = await getAdminSupabase();
   const id = String(formData.get("id"));
   await admin.auth.admin.deleteUser(id);
   await logAudit({ action: "student_deleted", targetType: "profile", targetId: id });
@@ -300,7 +305,7 @@ export async function deleteStudent(formData: FormData) {
 
 export async function resetStudentPassword(formData: FormData) {
   await requireAdmin();
-  const admin = createAdminClient();
+  const admin = await getAdminSupabase();
   const id = String(formData.get("id"));
   const email = String(formData.get("email"));
   const newPassword = generateStrongPassword();

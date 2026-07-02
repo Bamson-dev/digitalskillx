@@ -11,6 +11,7 @@ import { Select } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { SubmitButton } from "@/components/auth/submit-button";
 import { LessonAttachmentsPanel } from "@/components/admin/lesson-attachments-panel";
+import { CourseResourcesPanel } from "@/components/admin/course-resources-panel";
 import type { AttachmentDisplay } from "@/lib/lesson-attachments-shared";
 import type { Course, CourseCategory, Lesson, Module } from "@/types/database";
 import type { CertificateTemplateKey } from "@/lib/certificate-templates";
@@ -43,12 +44,14 @@ export function CourseEditor({
   categories,
   globalDefaultTemplateKey,
   lessonAttachments,
+  courseResources,
 }: {
   course: Course;
   modules: ModuleWithLessons[];
   categories: Pick<CourseCategory, "id" | "name" | "template_key">[];
   globalDefaultTemplateKey: CertificateTemplateKey;
   lessonAttachments: Record<string, AttachmentDisplay[]>;
+  courseResources: AttachmentDisplay[];
 }) {
   return (
     <div className="space-y-6">
@@ -57,6 +60,7 @@ export function CourseEditor({
         categories={categories}
         globalDefaultTemplateKey={globalDefaultTemplateKey}
       />
+      <CourseResourcesPanel courseId={course.id} resources={courseResources} />
       <CurriculumCard courseId={course.id} modules={modules} lessonAttachments={lessonAttachments} />
       <DangerZone courseId={course.id} />
     </div>
