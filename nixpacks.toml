@@ -2,4 +2,11 @@
 [variables]
 NODE_OPTIONS = "--max-old-space-size=4096"
 NIXPACKS_NODE_VERSION = "22"
-NODE_ENV = "production"
+# NODE_ENV must NOT be set here or at Coolify build-time — npm skips devDependencies
+# (tailwind, postcss) and `next build` fails. Runtime NODE_ENV is set in scripts/start.mjs.
+
+[phases.install]
+cmds = ["npm ci --include=dev"]
+
+[phases.build]
+cmds = ["npm run build"]
