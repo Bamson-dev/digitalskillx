@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { youtubeApiKeyDiagnostics } from "@/lib/env-youtube";
 import { runtimeEnvDiagnostics } from "@/lib/runtime-env";
+import { isServiceRoleConfigured } from "@/lib/supabase/admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
@@ -15,6 +16,7 @@ export async function GET() {
     paystack: "unknown",
     youtubeApiKey: youtube.status,
     youtubeApiKeySource: youtube.source,
+    supabaseServiceRole: isServiceRoleConfigured() ? "configured" : "missing",
   };
 
   try {

@@ -11,18 +11,18 @@ import { fileURLToPath } from "node:url";
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const allowedNodeEnv = new Set(["production", "development", "test"]);
 
-const RUNTIME_KEYS = ["YOUTUBE_API_KEY"];
+const RUNTIME_KEYS = [
+  "SUPABASE_SERVICE_ROLE_KEY",
+  "YOUTUBE_API_KEY",
+];
 
 function readEnv(name) {
   const value = process.env[name];
   return typeof value === "string" ? value.trim() : "";
 }
 
-function youtubeStatus() {
-  const key = readEnv("YOUTUBE_API_KEY");
-  if (!key) return "missing";
-  if (key === "your-youtube-data-api-key") return "placeholder";
-  return "ok";
+function secretStatus(name) {
+  return readEnv(name) ? "ok" : "missing";
 }
 
 function writeRuntimeEnvFile() {
@@ -57,11 +57,12 @@ if (!allowedNodeEnv.has(rawNodeEnv)) {
 
 writeRuntimeEnvFile();
 
-const status = youtubeStatus();
+const status = secretStatus("YOUTUBE_API_KEY");
 console.log("[digitalskillx] Startup env check:");
 console.log(`  cwd=${process.cwd()}`);
 console.log(`  appRoot=${root}`);
 console.log(`  NODE_ENV=${process.env.NODE_ENV}`);
+console.log(`  SUPABASE_SERVICE_ROLE_KEY=${secretStatus("SUPABASE_SERVICE_ROLE_KEY")}`);
 console.log(`  YOUTUBE_API_KEY=${status}`);
 if (status === "ok") {
   const key = readEnv("YOUTUBE_API_KEY");
