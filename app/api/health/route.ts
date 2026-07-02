@@ -1,16 +1,18 @@
 import { NextResponse } from "next/server";
-import { youtubeApiKeyStatus } from "@/lib/env-youtube";
+import { youtubeApiKeyDiagnostics } from "@/lib/env-youtube";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
+  const youtube = youtubeApiKeyDiagnostics();
   const checks: Record<string, string> = {
     status: "ok",
     timestamp: new Date().toISOString(),
     database: "unknown",
     paystack: "unknown",
-    youtubeApiKey: youtubeApiKeyStatus(),
+    youtubeApiKey: youtube.status,
+    youtubeApiKeySource: youtube.source,
   };
 
   try {

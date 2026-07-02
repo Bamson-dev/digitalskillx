@@ -4,8 +4,8 @@ import { logAudit } from "@/lib/audit";
 import { rateLimitedResponse } from "@/lib/api-rate-limit";
 import {
   youtubeApiKeyConfigured,
+  youtubeApiKeyDiagnostics,
   youtubeApiKeyError,
-  youtubeApiKeyStatus,
 } from "@/lib/env-youtube";
 import {
   defaultModuleTitle,
@@ -49,9 +49,11 @@ export async function GET() {
   const auth = await requireAdminApi();
   if ("error" in auth && auth.error) return auth.error;
 
+  const youtube = youtubeApiKeyDiagnostics();
   return NextResponse.json({
-    youtubeApiKeyConfigured: youtubeApiKeyConfigured(),
-    youtubeApiKeyStatus: youtubeApiKeyStatus(),
+    youtubeApiKeyConfigured: youtube.status === "ok",
+    youtubeApiKeyStatus: youtube.status,
+    youtubeApiKeySource: youtube.source,
   });
 }
 

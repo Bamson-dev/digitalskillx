@@ -1,15 +1,18 @@
 #!/usr/bin/env node
 /**
  * Production start wrapper for Coolify/Docker.
- * Logs whether runtime env vars are visible before Next.js boots.
+ * Writes runtime secrets to disk so Next.js can read them per-request
+ * (Next.js may not see Coolify runtime env inside bundled route handlers).
  */
 import { spawn } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const allowedNodeEnv = new Set(["production", "development", "test"]);
+
+const RUNTIME_KEYS = ["YOUTUBE_API_KEY"];
 
 function readEnv(name) {
   const value = process.env[name];
@@ -23,6 +26,22 @@ function youtubeStatus() {
   return "ok";
 }
 
+function writeRuntimeEnvFile() {
+  const payload = {};
+  for (const key of RUNTIME_KEYS) {
+    const value = readEnv(key);
+    if (value) payload[key] = value;
+  }
+
+  const nextDir = join(root, ".next");
+  mkdirSync(nextDir, { recursive: true });
+  const target = join(nextDir, "runtime-env.json");
+  writeFileSync(target, JSON.stringify(payload, null, 2));
+  console.log(
+    `[digitalskillx] Wrote runtime secrets to .next/runtime-env.json (${Object.keys(payload).length} keys)`,
+  );
+}
+
 const rawNodeEnv = process.env.NODE_ENV ?? "";
 if (!allowedNodeEnv.has(rawNodeEnv)) {
   console.warn(
@@ -30,6 +49,8 @@ if (!allowedNodeEnv.has(rawNodeEnv)) {
   );
   process.env.NODE_ENV = "production";
 }
+
+writeRuntimeEnvFile();
 
 const status = youtubeStatus();
 console.log("[digitalskillx] Startup env check:");

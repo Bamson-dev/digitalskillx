@@ -1,18 +1,30 @@
 import "server-only";
-import { runtimeEnv } from "@/lib/runtime-env";
+import { runtimeEnv, runtimeEnvWithSource } from "@/lib/runtime-env";
 
 const PLACEHOLDER = "your-youtube-data-api-key";
+const ENV_NAME = "YOUTUBE_API_KEY";
 
 export type YoutubeApiKeyStatus = "ok" | "missing" | "placeholder";
 
+export type YoutubeApiKeyDiagnostics = {
+  status: YoutubeApiKeyStatus;
+  source: "file" | "process" | "missing";
+};
+
+function readYoutubeKey() {
+  return runtimeEnvWithSource(ENV_NAME);
+}
+
 /** Whether the running server can call the YouTube Data API. */
+export function youtubeApiKeyDiagnostics(): YoutubeApiKeyDiagnostics {
+  const { value, source } = readYoutubeKey();
+  if (!value) return { status: "missing", source };
+  if (value === PLACEHOLDER) return { status: "placeholder", source };
+  return { status: "ok", source };
+}
+
 export function youtubeApiKeyStatus(): YoutubeApiKeyStatus {
-  const raw = runtimeEnv("YOUTUBE_API_KEY");
-  if (raw == null) return "missing";
-  const key = raw.trim();
-  if (!key) return "missing";
-  if (key === PLACEHOLDER) return "placeholder";
-  return "ok";
+  return youtubeApiKeyDiagnostics().status;
 }
 
 export function youtubeApiKeyConfigured() {
@@ -20,11 +32,12 @@ export function youtubeApiKeyConfigured() {
 }
 
 export function youtubeApiKeyError(): string {
-  switch (youtubeApiKeyStatus()) {
+  const { status, source } = youtubeApiKeyDiagnostics();
+  switch (status) {
     case "placeholder":
       return "YOUTUBE_API_KEY is still the placeholder value (your-youtube-data-api-key). In Coolify, replace it with your real Google API key, Save, then Redeploy.";
     case "missing":
-      return "YOUTUBE_API_KEY is not visible to the running container. In Coolify → Environment Variables: set YOUTUBE_API_KEY, enable Runtime, set NODE_ENV=production, Save, then Redeploy. Check deploy logs for [digitalskillx] YOUTUBE_API_KEY.";
+      return `YOUTUBE_API_KEY is missing inside Next.js (startup wrapper saw it, but route reads ${source}). Redeploy latest staging — the app now loads secrets from .next/runtime-env.json at boot.`;
     default:
       return "";
   }
@@ -33,5 +46,5 @@ export function youtubeApiKeyError(): string {
 export function getYoutubeApiKey(): string {
   const err = youtubeApiKeyError();
   if (err) throw new Error(err);
-  return runtimeEnv("YOUTUBE_API_KEY")!.trim();
+  return runtimeEnv(ENV_NAME)!;
 }
