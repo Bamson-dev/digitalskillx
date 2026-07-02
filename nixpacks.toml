@@ -2,3 +2,4 @@
 [variables]
 NODE_OPTIONS = "--max-old-space-size=4096"
 NIXPACKS_NODE_VERSION = "22"
+NODE_ENV = "production"
