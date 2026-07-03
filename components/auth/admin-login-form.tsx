@@ -32,7 +32,12 @@ export function AdminLoginForm({ mfaRequired = true }: { mfaRequired?: boolean }
     }
 
     try {
-      const result: AdminLoginState = await signInAdmin({}, formData);
+      const result: AdminLoginState | undefined = await signInAdmin({}, formData);
+      if (!result) {
+        setError("Login failed. Hard refresh the page (Cmd+Shift+R) and try again.");
+        setPending(false);
+        return;
+      }
       if (result.error) {
         setError(result.error);
         setPending(false);

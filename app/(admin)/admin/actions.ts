@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClientAsync } from "@/lib/supabase/admin";
 import { ensureAdminProfile } from "@/lib/ensure-admin-profile";
 import { isPlatformAdminEmail } from "@/lib/admin-email";
+import { verifyAccessToken } from "@/lib/verify-access-token";
 import type { AuthState } from "@/app/(auth)/actions";
 import { isAdminLoginBlocked, recordAdminLoginFailure } from "@/lib/rate-limit";
 import { clientIpFromHeaders } from "@/lib/request-ip";
@@ -201,4 +202,34 @@ export async function signOutAdmin() {
   await logAudit({ action: "admin_logout" });
   await supabase.auth.signOut();
   redirect("/admin/login");
+}
+
+/** @deprecated Legacy shim — cached clients may still call this after browser sign-in. */
+export async function healAdminProfileByLogin(
+  email: string,
+  userId: string,
+  accessToken: string,
+): Promise<{ healed: boolean; error?: string }> {
+  const normalized = email.trim().toLowerCase();
+  if (!isPlatformAdminEmail(normalized)) {
+    return { healed: false, error: "This account is not authorized for admin access." };
+  }
+
+  const user = await verifyAccessToken(accessToken);
+  if (!user || user.id !== userId || user.email?.trim().toLowerCase() !== normalized) {
+    return { healed: false, error: "Session verification failed. Refresh and try again." };
+  }
+
+  try {
+    const admin = await createAdminClientAsync();
+    await ensureAdminProfile(admin, {
+      userId,
+      email: normalized,
+      fullName: (user.user_metadata?.full_name as string | undefined) ?? "Platform Admin",
+    });
+    return { healed: true };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Could not create admin profile.";
+    return { healed: false, error: message };
+  }
 }

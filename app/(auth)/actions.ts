@@ -7,6 +7,7 @@ import { sendWelcomeEmailIfNeeded } from "@/lib/system-email-triggers";
 import { sendMagicLinkEmail, sendPasswordResetEmail } from "@/lib/auth-email";
 import { serviceRoleKeyMissingMessage, serviceRoleKeyMissingMessageAsync } from "@/lib/env-service-role";
 import { formatErrorMessage } from "@/lib/format-error-message";
+import { verifyAccessToken } from "@/lib/verify-access-token";
 
 export type AuthState = { error?: string; message?: string; redirectTo?: string };
 
@@ -218,4 +219,40 @@ export async function signOut() {
   const supabase = createClient();
   await supabase.auth.signOut();
   redirect("/login");
+}
+
+/** @deprecated Legacy shim — cached clients may still call this after browser sign-in. */
+export async function healStudentProfileByLogin(
+  email: string,
+  userId: string,
+  accessToken: string,
+  fullName?: string,
+): Promise<{ healed: boolean; error?: string }> {
+  const normalized = email.trim().toLowerCase();
+  const user = await verifyAccessToken(accessToken);
+  if (!user || user.id !== userId || user.email?.trim().toLowerCase() !== normalized) {
+    return { healed: false, error: "Session verification failed. Refresh and try again." };
+  }
+
+  try {
+    const admin = await createAdminClientAsync();
+    const { error } = await admin.from("profiles").upsert(
+      {
+        id: userId,
+        email: normalized,
+        full_name:
+          fullName ??
+          (user.user_metadata?.full_name as string | undefined) ??
+          normalized.split("@")[0],
+        role: "student",
+        is_suspended: false,
+      },
+      { onConflict: "id" },
+    );
+    if (error) throw new Error(error.message);
+    return { healed: true };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Could not create profile.";
+    return { healed: false, error: message };
+  }
 }

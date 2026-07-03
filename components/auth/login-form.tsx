@@ -39,6 +39,11 @@ export function LoginForm({ next, authError }: { next: string; authError?: strin
 
     try {
       const result = await completeStudentLogin({ email, password, next });
+      if (!result) {
+        setPwError("Login failed. Hard refresh the page (Cmd+Shift+R) and try again.");
+        setPwPending(false);
+        return;
+      }
       if (result.error) {
         setPwError(result.error);
         setPwPending(false);
