@@ -2,6 +2,8 @@
 
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClientAsync } from "@/lib/supabase/admin";
+import { ensureAdminProfile } from "@/lib/ensure-admin-profile";
 import type { AuthState } from "@/app/(auth)/actions";
 import { isAdminLoginBlocked, recordAdminLoginFailure } from "@/lib/rate-limit";
 import { clientIpFromHeaders } from "@/lib/request-ip";
@@ -47,21 +49,48 @@ export async function signInAdmin(
     return { error: `${error.message}${hint}` };
   }
 
-  const { data: profile, error: profileError } = await supabase
+  let profileRecord: { role: string; is_suspended: boolean } | null = null;
+  const { data: profileRow, error: profileError } = await supabase
     .from("profiles")
     .select("role, is_suspended")
     .eq("id", data.user.id)
     .maybeSingle();
+  profileRecord = profileRow;
 
-  if (profileError || !profile) {
+  const configuredAdminEmail = process.env.ADMIN_EMAIL?.trim().toLowerCase();
+  if ((!profileRecord || profileError) && email === configuredAdminEmail) {
+    try {
+      const admin = await createAdminClientAsync();
+      await ensureAdminProfile(admin, {
+        userId: data.user.id,
+        email,
+        fullName:
+          (data.user.user_metadata?.full_name as string | undefined) ?? "Platform Admin",
+      });
+      const { data: healed } = await supabase
+        .from("profiles")
+        .select("role, is_suspended")
+        .eq("id", data.user.id)
+        .maybeSingle();
+      profileRecord = healed;
+    } catch (err) {
+      await supabase.auth.signOut();
+      const message = err instanceof Error ? err.message : "Could not create admin profile.";
+      return {
+        error: `${message} Confirm Vercel NEXT_PUBLIC_SUPABASE_URL matches the Supabase project where you ran the SQL.`,
+      };
+    }
+  }
+
+  if (!profileRecord) {
     await supabase.auth.signOut();
     return {
       error:
-        "No profile found for this account. Run setup-production again or execute sql/fix-admin-profile.sql in Supabase.",
+        "No profile found for this account. In Supabase SQL Editor run: select id, email from auth.users where lower(email) = 'admin@digitalskillx.com'; then run sql/fix-admin-profile.sql in the SAME project as Vercel NEXT_PUBLIC_SUPABASE_URL.",
     };
   }
 
-  if (profile.role !== "admin" || profile.is_suspended) {
+  if (profileRecord.role !== "admin" || profileRecord.is_suspended) {
     await supabase.auth.signOut();
     await logAudit({ action: "admin_login_forbidden", metadata: { email, ip } });
     return { error: "This account does not have admin access." };
