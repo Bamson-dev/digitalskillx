@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { signInAdmin, verifyAdminMfa, type AdminLoginState } from "@/app/(admin)/admin/actions";
+import { verifyAdminMfa } from "@/app/(admin)/admin/actions";
 import { isNextRedirect } from "@/lib/is-next-redirect";
 import { SubmitButton } from "@/components/auth/submit-button";
 import { PasswordInput } from "@/components/ui/password-input";
@@ -11,44 +11,11 @@ type MfaStep = {
   challengeId: string;
 };
 
-export function AdminLoginForm() {
-  const [error, setError] = useState<string | null>(null);
+export function AdminLoginForm({ authError }: { authError?: string }) {
+  const [error, setError] = useState<string | null>(authError ?? null);
   const [pending, setPending] = useState(false);
   const [mfaStep, setMfaStep] = useState<MfaStep | null>(null);
   const [mfaMessage, setMfaMessage] = useState<string | null>(null);
-
-  async function handlePasswordLogin(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    setError(null);
-    setPending(true);
-
-    const formData = new FormData(e.currentTarget);
-
-    try {
-      const result: AdminLoginState | undefined = await signInAdmin({}, formData);
-      if (!result) {
-        setError("Login failed. Hard refresh the page (Cmd+Shift+R) and try again.");
-        setPending(false);
-        return;
-      }
-      if (result.error) {
-        setError(result.error);
-        setPending(false);
-        return;
-      }
-      if (result.needsMfa && result.factorId && result.challengeId) {
-        setMfaStep({ factorId: result.factorId, challengeId: result.challengeId });
-        setMfaMessage(result.message ?? "Enter the 6-digit code from your authenticator app.");
-        setPending(false);
-        return;
-      }
-      setPending(false);
-    } catch (err) {
-      if (isNextRedirect(err)) return;
-      setError(err instanceof Error ? err.message : "Could not sign in.");
-      setPending(false);
-    }
-  }
 
   async function handleMfaVerify(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -107,7 +74,7 @@ export function AdminLoginForm() {
   }
 
   return (
-    <form onSubmit={handlePasswordLogin} className="space-y-4">
+    <form action="/api/auth/admin-login" method="POST" className="space-y-4">
       <div>
         <label htmlFor="email" className="mb-1.5 block text-sm font-medium">
           Email
@@ -135,7 +102,7 @@ export function AdminLoginForm() {
         />
       </div>
 
-      <SubmitButton className="w-full" pendingText="Verifying…" isPending={pending}>
+      <SubmitButton className="w-full" pendingText="Verifying…">
         Sign in
       </SubmitButton>
 

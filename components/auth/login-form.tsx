@@ -3,8 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { useFormState } from "react-dom";
-import { completeStudentLogin, signInWithMagicLink, type AuthState } from "@/app/(auth)/actions";
-import { isNextRedirect } from "@/lib/is-next-redirect";
+import { signInWithMagicLink, type AuthState } from "@/app/(auth)/actions";
 import { Input, Label } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
 import { SubmitButton } from "@/components/auth/submit-button";
@@ -14,40 +13,8 @@ const initial: AuthState = {};
 export function LoginForm({ next, authError }: { next: string; authError?: string }) {
   const [mode, setMode] = useState<"password" | "magic">("password");
   const [magicState, magicAction] = useFormState(signInWithMagicLink, initial);
-  const [pwError, setPwError] = useState<string | null>(null);
-  const [pwPending, setPwPending] = useState(false);
 
-  async function handlePasswordLogin(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    setPwError(null);
-    setPwPending(true);
-
-    const form = e.currentTarget;
-    const email = String(new FormData(form).get("email") ?? "")
-      .trim()
-      .toLowerCase();
-    const password = String(new FormData(form).get("password") ?? "");
-
-    if (!email || !password) {
-      setPwError("Email and password are required.");
-      setPwPending(false);
-      return;
-    }
-
-    try {
-      const result = await completeStudentLogin({ email, password, next });
-      if (result?.error) {
-        setPwError(result.error);
-      }
-      setPwPending(false);
-    } catch (err) {
-      if (isNextRedirect(err)) return;
-      setPwError(err instanceof Error ? err.message : "Could not sign in.");
-      setPwPending(false);
-    }
-  }
-
-  const state = mode === "password" ? { error: pwError ?? undefined } : magicState;
+  const state = mode === "password" ? { error: authError } : magicState;
 
   return (
     <div className="space-y-5">
@@ -59,7 +26,8 @@ export function LoginForm({ next, authError }: { next: string; authError?: strin
       </div>
 
       {mode === "password" ? (
-        <form onSubmit={handlePasswordLogin} className="space-y-4">
+        <form action="/api/auth/login" method="POST" className="space-y-4">
+          <input type="hidden" name="next" value={next} />
           <div>
             <Label htmlFor="email">Email</Label>
             <Input id="email" name="email" type="email" required autoComplete="email" />
@@ -85,7 +53,7 @@ export function LoginForm({ next, authError }: { next: string; authError?: strin
             <input type="checkbox" name="remember" defaultChecked className="rounded" />
             Remember me for 30 days
           </label>
-          <SubmitButton className="w-full" pendingText="Signing in…" isPending={pwPending}>
+          <SubmitButton className="w-full" pendingText="Signing in…">
             Log in
           </SubmitButton>
         </form>
@@ -110,10 +78,6 @@ export function LoginForm({ next, authError }: { next: string; authError?: strin
           ? "Use a magic link instead"
           : "Use email and password instead"}
       </button>
-
-      {authError ? (
-        <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{authError}</p>
-      ) : null}
 
       {state.error ? (
         <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">

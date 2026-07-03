@@ -9,7 +9,7 @@ export const metadata: Metadata = { title: "Log in" };
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams?: { next?: string; error?: string };
+  searchParams?: { next?: string; error?: string; auth_error?: string };
 }) {
   const next =
     typeof searchParams?.next === "string" && searchParams.next.startsWith("/")
@@ -35,6 +35,8 @@ export default async function LoginPage({
     await supabase.auth.signOut();
   }
 
-  const authError = authQueryErrorMessage(searchParams?.error);
+  const authError =
+    (typeof searchParams?.auth_error === "string" && searchParams.auth_error) ||
+    authQueryErrorMessage(searchParams?.error);
   return <LoginForm next={next} authError={authError} />;
 }

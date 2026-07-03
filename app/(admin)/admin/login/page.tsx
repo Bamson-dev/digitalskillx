@@ -6,7 +6,11 @@ import { createClient } from "@/lib/supabase/server";
 
 export const metadata: Metadata = { title: "Admin login" };
 
-export default async function AdminLoginPage() {
+export default async function AdminLoginPage({
+  searchParams,
+}: {
+  searchParams?: { auth_error?: string };
+}) {
   const supabase = createClient();
   const {
     data: { user },
@@ -24,6 +28,9 @@ export default async function AdminLoginPage() {
     await supabase.auth.signOut();
   }
 
+  const authError =
+    typeof searchParams?.auth_error === "string" ? searchParams.auth_error : undefined;
+
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-slate-950 px-4 py-10 text-slate-100">
       <Link href="/" className="mb-8 text-xl font-bold tracking-tight text-white">
@@ -39,7 +46,7 @@ export default async function AdminLoginPage() {
             Restricted access. Admin credentials only.
           </p>
         </div>
-        <AdminLoginForm />
+        <AdminLoginForm authError={authError} />
       </div>
       <p className="mt-6 text-xs text-slate-500">
         Protected area · activity is audited

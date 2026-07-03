@@ -8,6 +8,7 @@ import { sendMagicLinkEmail, sendPasswordResetEmail } from "@/lib/auth-email";
 import { serviceRoleKeyMissingMessage, serviceRoleKeyMissingMessageAsync } from "@/lib/env-service-role";
 import { formatErrorMessage } from "@/lib/format-error-message";
 import { verifyAccessToken } from "@/lib/verify-access-token";
+import { runStudentLogin } from "@/lib/auth/run-student-login";
 
 export type AuthState = { error?: string; message?: string; redirectTo?: string };
 
@@ -17,47 +18,9 @@ export async function completeStudentLogin(input: {
   password: string;
   next: string;
 }): Promise<AuthState> {
-  const email = input.email.trim().toLowerCase();
-  const password = input.password;
   const next = input.next.startsWith("/") ? input.next : "/dashboard";
-  if (!email || !password) return { error: "Email and password are required." };
-
-  const supabase = createClient();
-  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-  if (error) return { error: error.message };
-
-  try {
-    const admin = await createAdminClientAsync();
-    const fullName =
-      (data.user.user_metadata?.full_name as string | undefined) ??
-      (data.user.user_metadata?.name as string | undefined) ??
-      email.split("@")[0];
-
-    const { error: upsertError } = await admin.from("profiles").upsert(
-      {
-        id: data.user.id,
-        email,
-        full_name: fullName,
-        role: "student",
-        is_suspended: false,
-      },
-      { onConflict: "id" },
-    );
-    if (upsertError) throw new Error(upsertError.message);
-
-    const { data: verified, error: verifyError } = await admin
-      .from("profiles")
-      .select("id")
-      .eq("id", data.user.id)
-      .maybeSingle();
-    if (verifyError) throw new Error(verifyError.message);
-    if (!verified) throw new Error("Profile was not created.");
-  } catch (err) {
-    await supabase.auth.signOut();
-    const message = err instanceof Error ? err.message : "Could not load your profile.";
-    return { error: message };
-  }
-
+  const result = await runStudentLogin({ email: input.email, password: input.password });
+  if (!result.ok) return { error: result.error };
   redirect(next);
 }
 
@@ -240,20 +203,20 @@ export async function signOut() {
   redirect("/login");
 }
 
-/** @deprecated Legacy shim — cached clients may still call this after browser sign-in. */
+/** Legacy shim — always returns an object (never undefined) for stale cached clients. */
 export async function healStudentProfileByLogin(
   email: string,
   userId: string,
   accessToken: string,
   fullName?: string,
 ): Promise<{ healed: boolean; error?: string }> {
-  const normalized = email.trim().toLowerCase();
-  const user = await verifyAccessToken(accessToken);
-  if (!user || user.id !== userId || user.email?.trim().toLowerCase() !== normalized) {
-    return { healed: false, error: "Session verification failed. Refresh and try again." };
-  }
-
   try {
+    const normalized = email.trim().toLowerCase();
+    const user = await verifyAccessToken(accessToken);
+    if (!user || user.id !== userId || user.email?.trim().toLowerCase() !== normalized) {
+      return { healed: false, error: "Session verification failed. Refresh and try again." };
+    }
+
     const admin = await createAdminClientAsync();
     const { error } = await admin.from("profiles").upsert(
       {
