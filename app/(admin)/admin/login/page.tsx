@@ -1,10 +1,29 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { AdminLoginForm } from "@/components/auth/admin-login-form";
+import { createClient } from "@/lib/supabase/server";
 
 export const metadata: Metadata = { title: "Admin login" };
 
-export default function AdminLoginPage() {
+export default async function AdminLoginPage() {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (user) {
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("role, is_suspended")
+      .eq("id", user.id)
+      .maybeSingle();
+    if (profile?.role === "admin" && !profile.is_suspended) {
+      redirect("/admin/dashboard");
+    }
+    await supabase.auth.signOut();
+  }
+
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-slate-950 px-4 py-10 text-slate-100">
       <Link href="/" className="mb-8 text-xl font-bold tracking-tight text-white">
@@ -20,7 +39,7 @@ export default function AdminLoginPage() {
             Restricted access. Admin credentials only.
           </p>
         </div>
-        <AdminLoginForm mfaRequired={process.env.ADMIN_MFA_REQUIRED !== "false"} />
+        <AdminLoginForm />
       </div>
       <p className="mt-6 text-xs text-slate-500">
         Protected area · activity is audited

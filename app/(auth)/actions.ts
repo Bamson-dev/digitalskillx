@@ -58,7 +58,18 @@ export async function completeStudentLogin(input: {
     return { error: message };
   }
 
-  return { redirectTo: next };
+  redirect(next);
+}
+
+/** @deprecated Use completeStudentLogin — kept for form actions. */
+export async function signInWithPassword(
+  _prev: AuthState,
+  formData: FormData,
+): Promise<AuthState> {
+  const email = String(formData.get("email") ?? "").trim().toLowerCase();
+  const password = String(formData.get("password") ?? "");
+  const next = String(formData.get("next") ?? "/dashboard");
+  return completeStudentLogin({ email, password, next });
 }
 
 /** Self-registration for students — creates account via service role and sends DigitalSkillX welcome email (no Supabase-branded confirm email). */
@@ -220,7 +231,7 @@ export async function updatePassword(
     }
   }
 
-  return { redirectTo: "/dashboard" };
+  redirect("/dashboard");
 }
 
 export async function signOut() {

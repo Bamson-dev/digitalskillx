@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { signInAdmin, verifyAdminMfa, type AdminLoginState } from "@/app/(admin)/admin/actions";
+import { isNextRedirect } from "@/lib/is-next-redirect";
 import { SubmitButton } from "@/components/auth/submit-button";
 import { PasswordInput } from "@/components/ui/password-input";
 
@@ -10,7 +11,7 @@ type MfaStep = {
   challengeId: string;
 };
 
-export function AdminLoginForm({ mfaRequired = true }: { mfaRequired?: boolean }) {
+export function AdminLoginForm() {
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [mfaStep, setMfaStep] = useState<MfaStep | null>(null);
@@ -22,14 +23,6 @@ export function AdminLoginForm({ mfaRequired = true }: { mfaRequired?: boolean }
     setPending(true);
 
     const formData = new FormData(e.currentTarget);
-    const email = String(formData.get("email") ?? "").trim().toLowerCase();
-    const password = String(formData.get("password") ?? "");
-
-    if (!email || !password) {
-      setError("Email and password are required.");
-      setPending(false);
-      return;
-    }
 
     try {
       const result: AdminLoginState | undefined = await signInAdmin({}, formData);
@@ -49,16 +42,9 @@ export function AdminLoginForm({ mfaRequired = true }: { mfaRequired?: boolean }
         setPending(false);
         return;
       }
-      if (result.redirectTo) {
-        window.location.replace(`${window.location.origin}${result.redirectTo}`);
-        return;
-      }
-      if (mfaRequired) {
-        window.location.replace(`${window.location.origin}/admin/mfa/enroll`);
-        return;
-      }
-      window.location.replace(`${window.location.origin}/admin/dashboard`);
+      setPending(false);
     } catch (err) {
+      if (isNextRedirect(err)) return;
       setError(err instanceof Error ? err.message : "Could not sign in.");
       setPending(false);
     }
@@ -76,17 +62,14 @@ export function AdminLoginForm({ mfaRequired = true }: { mfaRequired?: boolean }
 
     try {
       const result = await verifyAdminMfa({}, formData);
-      if (result.error) {
+      if (result?.error) {
         setError(result.error);
         setPending(false);
         return;
       }
-      if (result.redirectTo) {
-        window.location.replace(`${window.location.origin}${result.redirectTo}`);
-        return;
-      }
       setPending(false);
     } catch (err) {
+      if (isNextRedirect(err)) return;
       setError(err instanceof Error ? err.message : "Verification failed.");
       setPending(false);
     }

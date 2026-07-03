@@ -104,9 +104,9 @@ export async function signInAdmin(
   if (!totp) {
     await logAudit({ action: "admin_login_password_ok", metadata: { email } });
     if (!isAdminMfaRequired()) {
-      return { redirectTo: "/admin/dashboard" };
+      redirect("/admin/dashboard");
     }
-    return { redirectTo: "/admin/mfa/enroll" };
+    redirect("/admin/mfa/enroll");
   }
 
   const { data: challenge, error: challengeError } = await supabase.auth.mfa.challenge({
@@ -144,7 +144,7 @@ export async function verifyAdminMfa(
   }
 
   await logAudit({ action: "admin_login_success" });
-  return { redirectTo: "/admin/dashboard" };
+  redirect("/admin/dashboard");
 }
 
 export async function enrollAdminMfa(): Promise<
@@ -195,7 +195,7 @@ export async function confirmAdminMfaEnrollment(
   if (error) return { error: error.message };
 
   await logAudit({ action: "admin_mfa_enrolled" });
-  return { redirectTo: "/admin/dashboard" };
+  redirect("/admin/dashboard");
 }
 
 export async function signOutAdmin() {

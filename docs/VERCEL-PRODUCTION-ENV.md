@@ -25,6 +25,7 @@ If you see `"cronBootstrapDetail": "... PASTE_…_HERE placeholder"` — product
    - `CRON_SECRET` = your cron secret
    - `ADMIN_EMAIL` = `admin@digitalskillx.com`
    - `ADMIN_PASSWORD` = your admin password
+   - `ADMIN_MFA_REQUIRED` = `true` (optional — only when you want authenticator enforced; default is off)
 4. **Redeploy** (required after env changes).
 
 ### 2. One-shot setup (after redeploy)

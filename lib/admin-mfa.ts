@@ -7,9 +7,9 @@ export type MfaStatus = {
   factorId: string | null;
 };
 
-/** Set ADMIN_MFA_REQUIRED=false on staging to skip authenticator setup. Default: required. */
+/** MFA is opt-in — set ADMIN_MFA_REQUIRED=true when you want authenticator enforced. */
 export function isAdminMfaRequired() {
-  return process.env.ADMIN_MFA_REQUIRED !== "false";
+  return process.env.ADMIN_MFA_REQUIRED === "true";
 }
 
 export async function getAdminMfaStatus(): Promise<MfaStatus> {

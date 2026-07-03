@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { updatePassword, type AuthState } from "@/app/(auth)/actions";
+import { isNextRedirect } from "@/lib/is-next-redirect";
 import { Label } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
 import { SubmitButton } from "@/components/auth/submit-button";
@@ -17,17 +18,14 @@ export function ResetPasswordForm() {
 
     try {
       const result: AuthState = await updatePassword({}, new FormData(e.currentTarget));
-      if (result.error) {
+      if (result?.error) {
         setError(result.error);
         setPending(false);
         return;
       }
-      if (result.redirectTo) {
-        window.location.replace(`${window.location.origin}${result.redirectTo}`);
-        return;
-      }
       setPending(false);
     } catch (err) {
+      if (isNextRedirect(err)) return;
       setError(err instanceof Error ? err.message : "Could not update password.");
       setPending(false);
     }

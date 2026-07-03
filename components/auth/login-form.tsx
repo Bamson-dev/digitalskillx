@@ -3,11 +3,8 @@
 import Link from "next/link";
 import { useState } from "react";
 import { useFormState } from "react-dom";
-import {
-  completeStudentLogin,
-  signInWithMagicLink,
-  type AuthState,
-} from "@/app/(auth)/actions";
+import { completeStudentLogin, signInWithMagicLink, type AuthState } from "@/app/(auth)/actions";
+import { isNextRedirect } from "@/lib/is-next-redirect";
 import { Input, Label } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
 import { SubmitButton } from "@/components/auth/submit-button";
@@ -39,22 +36,12 @@ export function LoginForm({ next, authError }: { next: string; authError?: strin
 
     try {
       const result = await completeStudentLogin({ email, password, next });
-      if (!result) {
-        setPwError("Login failed. Hard refresh the page (Cmd+Shift+R) and try again.");
-        setPwPending(false);
-        return;
-      }
-      if (result.error) {
+      if (result?.error) {
         setPwError(result.error);
-        setPwPending(false);
-        return;
-      }
-      if (result.redirectTo) {
-        window.location.replace(`${window.location.origin}${result.redirectTo}`);
-        return;
       }
       setPwPending(false);
     } catch (err) {
+      if (isNextRedirect(err)) return;
       setPwError(err instanceof Error ? err.message : "Could not sign in.");
       setPwPending(false);
     }
