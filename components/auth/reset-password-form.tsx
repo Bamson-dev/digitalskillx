@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { healStudentProfileByLogin } from "@/app/(auth)/actions";
+import { syncSessionAndRedirect } from "@/lib/auth/sync-session-client";
 import { createClient } from "@/lib/supabase/client";
 import { Label } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
@@ -37,7 +38,8 @@ export function ResetPasswordForm() {
       if (user?.email) {
         const { data: sessionData } = await supabase.auth.getSession();
         const accessToken = sessionData.session?.access_token;
-        if (accessToken) {
+        const refreshToken = sessionData.session?.refresh_token;
+        if (accessToken && refreshToken) {
           const heal = await healStudentProfileByLogin(
             user.email,
             user.id,
@@ -50,6 +52,11 @@ export function ResetPasswordForm() {
             setPending(false);
             return;
           }
+          await syncSessionAndRedirect(
+            { access_token: accessToken, refresh_token: refreshToken },
+            "/dashboard",
+          );
+          return;
         }
       }
       window.location.replace("/dashboard");

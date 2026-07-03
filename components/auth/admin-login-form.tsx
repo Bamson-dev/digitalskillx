@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { healAdminProfileByLogin } from "@/app/(admin)/admin/actions";
+import { syncSessionAndRedirect, syncSessionToServer } from "@/lib/auth/sync-session-client";
 import { createClient } from "@/lib/supabase/client";
 import { SubmitButton } from "@/components/auth/submit-button";
 import { PasswordInput } from "@/components/ui/password-input";
@@ -70,18 +71,24 @@ export function AdminLoginForm({ mfaRequired = true }: { mfaRequired?: boolean }
           setPending(false);
           return;
         }
+        await syncSessionToServer({
+          access_token: data.session.access_token,
+          refresh_token: data.session.refresh_token,
+        });
         setMfaStep({ factorId: totp.id, challengeId: challenge.id });
         setMfaMessage("Enter the 6-digit code from your authenticator app.");
         setPending(false);
         return;
       }
 
-      if (mfaRequired) {
-        window.location.replace("/admin/mfa/enroll");
-        return;
-      }
-
-      window.location.replace("/admin/dashboard");
+      const destination = mfaRequired ? "/admin/mfa/enroll" : "/admin/dashboard";
+      await syncSessionAndRedirect(
+        {
+          access_token: data.session.access_token,
+          refresh_token: data.session.refresh_token,
+        },
+        destination,
+      );
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not sign in.");
       setPending(false);
@@ -111,6 +118,17 @@ export function AdminLoginForm({ mfaRequired = true }: { mfaRequired?: boolean }
       if (verifyError) {
         setError(verifyError.message);
         setPending(false);
+        return;
+      }
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (sessionData.session) {
+        await syncSessionAndRedirect(
+          {
+            access_token: sessionData.session.access_token,
+            refresh_token: sessionData.session.refresh_token,
+          },
+          "/admin/dashboard",
+        );
         return;
       }
       window.location.replace("/admin/dashboard");

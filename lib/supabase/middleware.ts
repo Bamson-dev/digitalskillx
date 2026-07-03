@@ -5,6 +5,7 @@ import type { Database } from "@/types/database";
 const PUBLIC_PREFIXES = [
   "/verify",
   "/auth",
+  "/api/auth",
   "/course",
   "/checkout",
   "/api/webhooks",

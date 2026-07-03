@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { useFormState } from "react-dom";
 import { signInWithMagicLink, healStudentProfileByLogin, type AuthState } from "@/app/(auth)/actions";
+import { syncSessionAndRedirect } from "@/lib/auth/sync-session-client";
 import { createClient } from "@/lib/supabase/client";
 import { Input, Label } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
@@ -62,7 +63,13 @@ export function LoginForm({ next, authError }: { next: string; authError?: strin
       }
 
       const destination = next.startsWith("/") ? next : "/dashboard";
-      window.location.replace(destination);
+      await syncSessionAndRedirect(
+        {
+          access_token: data.session.access_token,
+          refresh_token: data.session.refresh_token,
+        },
+        destination,
+      );
     } catch (err) {
       setPwError(err instanceof Error ? err.message : "Could not sign in.");
       setPwPending(false);
