@@ -1,32 +1,18 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { verifyCronSecret } from "@/lib/cron-auth";
 import { createAdminClientAsync } from "@/lib/supabase/admin";
-import { bootstrapRuntimeSecrets } from "@/lib/bootstrap-runtime-secrets";
+import { serviceRoleKeyMissingMessageAsync } from "@/lib/env-service-role";
 
 export const dynamic = "force-dynamic";
 
 /**
- * One-time ops helper: sync Supabase Auth password from ADMIN_PASSWORD env.
- * Protect with CRON_SECRET. Call after setting ADMIN_EMAIL / ADMIN_PASSWORD on Coolify.
- *
- * curl -X POST -H "Authorization: Bearer YOUR_CRON_SECRET" https://your-staging-url/api/admin/sync-password
+ * Sync Supabase Auth password from ADMIN_PASSWORD env.
+ * curl -X POST -H "Authorization: Bearer CRON_SECRET" https://www.digitalskillx.com/api/admin/sync-password
  */
 export async function POST(request: NextRequest) {
-  const secret = process.env.CRON_SECRET?.trim();
-  const auth = request.headers.get("authorization")?.trim() ?? "";
-  const expected = secret ? `Bearer ${secret}` : "";
-
-  if (!secret) {
-    return NextResponse.json(
-      { error: "CRON_SECRET is not set on the server (Vercel → Settings → Environment Variables)." },
-      { status: 503 },
-    );
-  }
-
-  if (auth !== expected) {
-    return NextResponse.json(
-      { error: "Unauthorized — Bearer token does not match CRON_SECRET on the server." },
-      { status: 401 },
-    );
+  const auth = verifyCronSecret(request);
+  if (!auth.ok) {
+    return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
 
   const email = process.env.ADMIN_EMAIL?.trim().toLowerCase();
@@ -40,7 +26,6 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    await bootstrapRuntimeSecrets();
     const admin = await createAdminClientAsync();
 
     const { data: profile } = await admin
@@ -105,9 +90,10 @@ export async function POST(request: NextRequest) {
       message: "Password updated in Supabase Auth. Sign in with your ADMIN_PASSWORD value.",
     });
   } catch (err) {
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Sync failed" },
-      { status: 500 },
-    );
+    const message = err instanceof Error ? err.message : "Sync failed";
+    if (message.toLowerCase().includes("service role")) {
+      return NextResponse.json({ error: await serviceRoleKeyMissingMessageAsync() }, { status: 503 });
+    }
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

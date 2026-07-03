@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClientAsync } from "@/lib/supabase/admin";
 import { sendWelcomeEmailIfNeeded } from "@/lib/system-email-triggers";
 import { sendMagicLinkEmail, sendPasswordResetEmail } from "@/lib/auth-email";
-import { serviceRoleKeyMissingMessage } from "@/lib/env-service-role";
+import { serviceRoleKeyMissingMessage, serviceRoleKeyMissingMessageAsync } from "@/lib/env-service-role";
 import { formatErrorMessage } from "@/lib/format-error-message";
 
 export type AuthState = { error?: string; message?: string };
@@ -99,7 +99,7 @@ export async function signUpWithPassword(
   } catch (err) {
     const message = err instanceof Error ? err.message : "Could not create account.";
     if (message.includes("service role")) {
-      return { error: serviceRoleKeyMissingMessage() };
+      return { error: await serviceRoleKeyMissingMessageAsync() };
     }
     return { error: message };
   }
@@ -118,7 +118,7 @@ export async function signInWithMagicLink(
     if (!result.sent && !result.skipped) {
       const message = formatErrorMessage(result.error, "Could not send sign-in link.");
       if (message.includes("service role")) {
-        return { error: serviceRoleKeyMissingMessage() };
+        return { error: await serviceRoleKeyMissingMessageAsync() };
       }
       return { error: message };
     }
@@ -126,7 +126,7 @@ export async function signInWithMagicLink(
   } catch (err) {
     const message = err instanceof Error ? err.message : "Could not send sign-in link.";
     if (message.includes("service role")) {
-      return { error: serviceRoleKeyMissingMessage() };
+      return { error: await serviceRoleKeyMissingMessageAsync() };
     }
     return { error: message };
   }
@@ -145,7 +145,7 @@ export async function sendPasswordReset(
     if (!result.sent && !result.skipped) {
       const message = formatErrorMessage(result.error, "Could not send reset link.");
       if (message.includes("service role")) {
-        return { error: serviceRoleKeyMissingMessage() };
+        return { error: await serviceRoleKeyMissingMessageAsync() };
       }
       return { error: message };
     }
@@ -153,7 +153,7 @@ export async function sendPasswordReset(
   } catch (err) {
     const message = err instanceof Error ? err.message : "Could not send reset link.";
     if (message.includes("service role")) {
-      return { error: serviceRoleKeyMissingMessage() };
+      return { error: await serviceRoleKeyMissingMessageAsync() };
     }
     return { error: message };
   }

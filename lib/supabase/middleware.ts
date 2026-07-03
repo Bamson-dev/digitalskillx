@@ -11,6 +11,7 @@ const PUBLIC_PREFIXES = [
   "/api/health",
   "/api/cron",
   "/api/admin/sync-password",
+  "/api/admin/setup-production",
   "/api/payments/confirm",
 ];
 

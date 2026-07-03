@@ -146,6 +146,40 @@ export function serviceRoleKeyMissingMessage() {
   return (
     `Server could not load the Supabase service role key. Production runs on ${host}. ` +
     `Add SUPABASE_SERVICE_ROLE_KEY under ${host} → Environment Variables (Production), then redeploy. ` +
-    "Or run sql/server-bootstrap-platform-secrets.sql and set platform_settings.cron_auth_secret to match CRON_SECRET."
+    "Or paste real keys into platform_secrets in your PRODUCTION Supabase project (not staging)."
   );
+}
+
+export async function serviceRoleKeyMissingMessageAsync(): Promise<string> {
+  const { integrationSecretsDiagnostics } = await import("@/lib/secrets-diagnostics");
+  const d = await integrationSecretsDiagnostics();
+
+  if (
+    d.cronBootstrapDetail.includes("PASTE_") ||
+    d.cronBootstrapDetail.includes("placeholder")
+  ) {
+    return (
+      "Your PRODUCTION Supabase database still has placeholder keys (PASTE_…_HERE). " +
+      "Staging works because it uses a different database or Coolify env. " +
+      "Fix: Vercel → Settings → Environment Variables → Production → add SUPABASE_SERVICE_ROLE_KEY " +
+      "(Supabase Dashboard → Project Settings → API → service_role for the project linked to digitalskillx.com). " +
+      "Redeploy, then run: curl -X POST -H \"Authorization: Bearer YOUR_CRON_SECRET\" https://www.digitalskillx.com/api/admin/setup-production"
+    );
+  }
+
+  if (d.cronBootstrapDetail.includes("cron_auth_secret")) {
+    return (
+      "CRON_SECRET on Vercel does not match platform_settings.cron_auth_secret in Supabase. " +
+      "Run sql/server-bootstrap-platform-secrets.sql, then set cron_auth_secret to the same value as Vercel CRON_SECRET."
+    );
+  }
+
+  if (d.deployment === "vercel" && !d.serviceRoleFromEnv) {
+    return (
+      "Add SUPABASE_SERVICE_ROLE_KEY in Vercel → Environment Variables → Production and redeploy. " +
+      "Coolify/staging env vars do not apply to www.digitalskillx.com."
+    );
+  }
+
+  return serviceRoleKeyMissingMessage();
 }

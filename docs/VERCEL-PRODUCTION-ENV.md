@@ -1,47 +1,58 @@
-# Production on Vercel (digitalskillx.com)
+# Production (Vercel) — why staging works but digitalskillx.com does not
 
-**Staging** may run on Coolify — env vars there do **not** apply to production.
+| | Staging | Production |
+|---|---------|--------------|
+| Host | Coolify | **Vercel** |
+| Env vars | Coolify | **Vercel → Settings → Environment Variables** |
+| Database | May be staging Supabase | **Production Supabase** (`platform_secrets` row) |
 
-Production (`www.digitalskillx.com`) runs on **Vercel** (`cwd: /var/task`). Check: https://www.digitalskillx.com/api/health → `"deployment": "vercel"`.
+Coolify env vars **do not** apply to production. Keys saved in **staging** Supabase **do not** apply to production Supabase.
 
-## Required Vercel env vars (Production)
+Check: `https://www.digitalskillx.com/api/health`
 
-Vercel → your project → **Settings** → **Environment Variables** → scope **Production** → **Redeploy**.
+If you see `"cronBootstrapDetail": "... PASTE_…_HERE placeholder"` — production Supabase still has placeholder keys from `PRODUCTION.sql`.
 
-| Variable | Where to get it |
-|----------|-----------------|
-| `NEXT_PUBLIC_SUPABASE_URL` | Supabase → Project Settings → API |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase → API → anon |
-| `SUPABASE_SERVICE_ROLE_KEY` | Supabase → API → **service_role** (secret) |
-| `CRON_SECRET` | `openssl rand -hex 32` |
-| `ADMIN_EMAIL` | e.g. `admin@digitalskillx.com` |
-| `ADMIN_PASSWORD` | your admin login password |
-| `ZEPTOMAIL_SMTP_PASSWORD` | ZeptoMail |
-| `PAYSTACK_SECRET_KEY` | Paystack |
-| `NEXT_PUBLIC_SITE_URL` | `https://www.digitalskillx.com` |
+## Fix (5 minutes)
 
-## After redeploy
+### 1. Add service role to Vercel
 
-1. Health: `https://www.digitalskillx.com/api/health` → `supabaseServiceRole: "configured"`
-2. Sync admin password:
-   ```bash
-   curl -X POST \
-     -H "Authorization: Bearer YOUR_CRON_SECRET" \
-     https://www.digitalskillx.com/api/admin/sync-password
-   ```
-3. Admin login: https://www.digitalskillx.com/admin/login
+1. Open **Supabase Dashboard** for the project used by **www.digitalskillx.com** (check `NEXT_PUBLIC_SUPABASE_URL` in Vercel).
+2. **Project Settings → API** → copy **service_role** key (secret).
+3. **Vercel** → digitalskillx → **Settings → Environment Variables → Production**:
+   - `SUPABASE_SERVICE_ROLE_KEY` = paste service_role key
+   - `ZEPTOMAIL_SMTP_PASSWORD` = your ZeptoMail password
+   - `PAYSTACK_SECRET_KEY` = your Paystack secret
+   - `CRON_SECRET` = your cron secret
+   - `ADMIN_EMAIL` = `admin@digitalskillx.com`
+   - `ADMIN_PASSWORD` = your admin password
+4. **Redeploy** (required after env changes).
 
-## Optional: load secrets from Supabase DB (like staging)
+### 2. One-shot setup (after redeploy)
 
-If keys live in `platform_secrets` only:
+```bash
+curl -X POST \
+  -H "Authorization: Bearer YOUR_CRON_SECRET" \
+  https://www.digitalskillx.com/api/admin/setup-production
+```
 
-1. Run `sql/server-bootstrap-platform-secrets.sql` in Supabase SQL Editor
-2. Set bootstrap token (same as Vercel `CRON_SECRET`):
-   ```sql
-   update public.platform_settings
-   set cron_auth_secret = 'your-cron-secret'
-   where id = 'default';
-   ```
-3. Ensure real keys in `platform_secrets` (not `PASTE_…_HERE` placeholders)
+This saves secrets to `platform_secrets` and syncs the admin password.
 
-Still add `CRON_SECRET` to Vercel — required for bootstrap without service role in env.
+### 3. Verify
+
+- `https://www.digitalskillx.com/api/health` → `"supabaseServiceRole": "configured"`
+- Admin login at `https://www.digitalskillx.com/admin/login`
+- Forgot password sends DigitalSkillX email
+
+## Alternative: SQL only (no Vercel service role env)
+
+Run in **production** Supabase SQL Editor:
+
+```sql
+update public.platform_secrets set
+  supabase_service_role_key = 'eyJ...your-service-role...',
+  zeptomail_smtp_password   = 'your-zeptomail-smtp-password',
+  paystack_secret_key       = 'sk_live_...'
+where id = 'default';
+```
+
+Then ensure Vercel has `CRON_SECRET` matching `platform_settings.cron_auth_secret` and redeploy.
