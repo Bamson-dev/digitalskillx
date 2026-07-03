@@ -179,3 +179,44 @@ export async function signOut() {
   await supabase.auth.signOut();
   redirect("/login");
 }
+
+/** Ensure a profiles row exists for the signed-in student (client login calls this). */
+export async function healStudentProfileSession(): Promise<{ healed: boolean; error?: string }> {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user?.email) return { healed: false, error: "Not signed in." };
+
+  const { data: existing } = await supabase
+    .from("profiles")
+    .select("id")
+    .eq("id", user.id)
+    .maybeSingle();
+  if (existing) return { healed: true };
+
+  try {
+    const admin = await createAdminClientAsync();
+    const email = user.email.trim().toLowerCase();
+    const fullName =
+      (user.user_metadata?.full_name as string | undefined) ??
+      (user.user_metadata?.name as string | undefined) ??
+      email.split("@")[0];
+
+    const { error } = await admin.from("profiles").upsert(
+      {
+        id: user.id,
+        email,
+        full_name: fullName,
+        role: "student",
+        is_suspended: false,
+      },
+      { onConflict: "id" },
+    );
+    if (error) throw new Error(error.message);
+    return { healed: true };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Could not create profile.";
+    return { healed: false, error: message };
+  }
+}

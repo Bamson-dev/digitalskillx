@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { healStudentProfileSession } from "@/app/(auth)/actions";
 import { createClient } from "@/lib/supabase/client";
 import { Label } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
@@ -27,6 +28,12 @@ export function ResetPasswordForm() {
       const { error: updateError } = await supabase.auth.updateUser({ password });
       if (updateError) {
         setError(updateError.message);
+        setPending(false);
+        return;
+      }
+      const heal = await healStudentProfileSession();
+      if (!heal.healed && heal.error) {
+        setError(heal.error);
         setPending(false);
         return;
       }

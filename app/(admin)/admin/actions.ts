@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClientAsync } from "@/lib/supabase/admin";
 import { ensureAdminProfile } from "@/lib/ensure-admin-profile";
+import { configuredAdminEmail as getConfiguredAdminEmail } from "@/lib/admin-email";
 import type { AuthState } from "@/app/(auth)/actions";
 import { isAdminLoginBlocked, recordAdminLoginFailure } from "@/lib/rate-limit";
 import { clientIpFromHeaders } from "@/lib/request-ip";
@@ -57,8 +58,8 @@ export async function signInAdmin(
     .maybeSingle();
   profileRecord = profileRow;
 
-  const configuredAdminEmail = process.env.ADMIN_EMAIL?.trim().toLowerCase();
-  if ((!profileRecord || profileError) && email === configuredAdminEmail) {
+  const adminEmail = getConfiguredAdminEmail();
+  if ((!profileRecord || profileError) && email === adminEmail) {
     try {
       const admin = await createAdminClientAsync();
       await ensureAdminProfile(admin, {
@@ -201,4 +202,34 @@ export async function signOutAdmin() {
   await logAudit({ action: "admin_logout" });
   await supabase.auth.signOut();
   redirect("/admin/login");
+}
+
+/** Create/promote admin profile for the current session (client login calls this). */
+export async function healAdminProfileSession(): Promise<{ healed: boolean; error?: string }> {
+  const supabase = createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user?.email) return { healed: false, error: "Not signed in." };
+
+  const email = user.email.trim().toLowerCase();
+  if (email !== getConfiguredAdminEmail()) {
+    return { healed: false };
+  }
+
+  try {
+    const admin = await createAdminClientAsync();
+    await ensureAdminProfile(admin, {
+      userId: user.id,
+      email,
+      fullName: (user.user_metadata?.full_name as string | undefined) ?? "Platform Admin",
+    });
+    return { healed: true };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Could not create admin profile.";
+    return {
+      healed: false,
+      error: `${message} Run: curl -X POST -H "Authorization: Bearer CRON_SECRET" https://www.digitalskillx.com/api/admin/setup-production`,
+    };
+  }
 }

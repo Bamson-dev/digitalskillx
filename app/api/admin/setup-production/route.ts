@@ -4,6 +4,7 @@ import { createAdminClientAsync } from "@/lib/supabase/admin";
 import { runtimeEnv } from "@/lib/runtime-env";
 import { readServiceRoleFromEnv } from "@/lib/platform-secrets-bootstrap";
 import { ensureAdminProfile } from "@/lib/ensure-admin-profile";
+import { configuredAdminEmail } from "@/lib/admin-email";
 
 export const dynamic = "force-dynamic";
 
@@ -38,7 +39,7 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const email = process.env.ADMIN_EMAIL?.trim().toLowerCase();
+  const email = configuredAdminEmail();
   const password = process.env.ADMIN_PASSWORD;
   if (!email || !password) {
     return NextResponse.json(

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { useFormState } from "react-dom";
-import { signInWithMagicLink, type AuthState } from "@/app/(auth)/actions";
+import { signInWithMagicLink, healStudentProfileSession, type AuthState } from "@/app/(auth)/actions";
 import { createClient } from "@/lib/supabase/client";
 import { Input, Label } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
@@ -39,6 +39,13 @@ export function LoginForm({ next, authError }: { next: string; authError?: strin
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) {
         setPwError(error.message);
+        setPwPending(false);
+        return;
+      }
+
+      const heal = await healStudentProfileSession();
+      if (!heal.healed && heal.error) {
+        setPwError(heal.error);
         setPwPending(false);
         return;
       }
