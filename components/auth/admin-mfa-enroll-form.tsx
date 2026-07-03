@@ -5,11 +5,13 @@ import { useFormState } from "react-dom";
 import { confirmAdminMfaEnrollment, enrollAdminMfa } from "@/app/(admin)/admin/actions";
 import type { AuthState } from "@/app/(auth)/actions";
 import { SubmitButton } from "@/components/auth/submit-button";
+import { useAuthRedirect } from "@/components/auth/use-auth-redirect";
 
 const initial: AuthState = {};
 
 export function AdminMfaEnrollForm() {
   const [state, action] = useFormState(confirmAdminMfaEnrollment, initial);
+  useAuthRedirect(state);
   const [enroll, setEnroll] = useState<{
     factorId: string;
     qrCode: string;

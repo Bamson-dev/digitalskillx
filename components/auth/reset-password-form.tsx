@@ -5,11 +5,13 @@ import { updatePassword, type AuthState } from "@/app/(auth)/actions";
 import { Label } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
 import { SubmitButton } from "@/components/auth/submit-button";
+import { useAuthRedirect } from "@/components/auth/use-auth-redirect";
 
 const initial: AuthState = {};
 
 export function ResetPasswordForm() {
   const [state, action] = useFormState(updatePassword, initial);
+  useAuthRedirect(state);
 
   return (
     <div className="space-y-5">

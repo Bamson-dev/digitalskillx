@@ -8,14 +8,14 @@ import { sendMagicLinkEmail, sendPasswordResetEmail } from "@/lib/auth-email";
 import { serviceRoleKeyMissingMessage, serviceRoleKeyMissingMessageAsync } from "@/lib/env-service-role";
 import { formatErrorMessage } from "@/lib/format-error-message";
 
-export type AuthState = { error?: string; message?: string };
+export type AuthState = { error?: string; message?: string; redirectTo?: string };
 
 /** Email + password sign-in (PRD §4.1). */
 export async function signInWithPassword(
   _prev: AuthState,
   formData: FormData,
 ): Promise<AuthState> {
-  const email = String(formData.get("email") ?? "").trim();
+  const email = String(formData.get("email") ?? "").trim().toLowerCase();
   const password = String(formData.get("password") ?? "");
   const next = String(formData.get("next") ?? "/dashboard");
   if (!email || !password) return { error: "Email and password are required." };
@@ -31,10 +31,10 @@ export async function signInWithPassword(
     .maybeSingle();
 
   if (profile?.role === "admin") {
-    redirect("/admin/dashboard");
+    return { redirectTo: "/admin/dashboard" };
   }
 
-  redirect(next);
+  return { redirectTo: next.startsWith("/") ? next : "/dashboard" };
 }
 
 /** Self-registration for students — creates account via service role and sends DigitalSkillX welcome email (no Supabase-branded confirm email). */
@@ -171,7 +171,7 @@ export async function updatePassword(
   const supabase = createClient();
   const { error } = await supabase.auth.updateUser({ password });
   if (error) return { error: error.message };
-  redirect("/dashboard");
+  return { redirectTo: "/dashboard" };
 }
 
 export async function signOut() {

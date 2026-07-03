@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useFormState } from "react-dom";
 import { signInAdmin, verifyAdminMfa, type AdminLoginState } from "@/app/(admin)/admin/actions";
 import { SubmitButton } from "@/components/auth/submit-button";
+import { useAuthRedirect } from "@/components/auth/use-auth-redirect";
 import { PasswordInput } from "@/components/ui/password-input";
 
 const initial: AdminLoginState = {};
@@ -23,6 +24,8 @@ export function AdminLoginForm() {
   }, [pwState.needsMfa, pwState.factorId, pwState.challengeId]);
 
   const state = mfaStep ? mfaState : pwState;
+  useAuthRedirect(pwState);
+  useAuthRedirect(mfaState);
 
   if (mfaStep) {
     return (

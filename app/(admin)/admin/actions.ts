@@ -40,7 +40,7 @@ export async function signInAdmin(
     await logAudit({ action: "admin_login_failed", metadata: { email, ip } });
     const hint =
       error.message === "Invalid login credentials"
-        ? " Password in Supabase Auth may not match ADMIN_PASSWORD on the server. Set ADMIN_PASSWORD_SYNC=true in Vercel/Coolify and redeploy, or run: curl -X POST -H \"Authorization: Bearer YOUR_CRON_SECRET\" https://www.digitalskillx.com/api/admin/sync-password"
+        ? " Set ADMIN_PASSWORD in Vercel to match this password, redeploy, then run: curl -X POST -H \"Authorization: Bearer YOUR_CRON_SECRET\" https://www.digitalskillx.com/api/admin/setup-production"
         : error.message === "Email not confirmed"
           ? " In Supabase → Authentication → Users → open this user → turn on Auto Confirm, or run: update auth.users set email_confirmed_at = now() where email = 'admin@digitalskillx.com';"
           : "";
@@ -65,9 +65,9 @@ export async function signInAdmin(
   if (!totp) {
     await logAudit({ action: "admin_login_password_ok", metadata: { email } });
     if (!isAdminMfaRequired()) {
-      redirect("/admin/dashboard");
+      return { redirectTo: "/admin/dashboard" };
     }
-    redirect("/admin/mfa/enroll");
+    return { redirectTo: "/admin/mfa/enroll" };
   }
 
   const { data: challenge, error: challengeError } = await supabase.auth.mfa.challenge({
@@ -105,7 +105,7 @@ export async function verifyAdminMfa(
   }
 
   await logAudit({ action: "admin_login_success" });
-  redirect("/admin/dashboard");
+  return { redirectTo: "/admin/dashboard" };
 }
 
 export async function enrollAdminMfa(): Promise<
@@ -156,7 +156,7 @@ export async function confirmAdminMfaEnrollment(
   if (error) return { error: error.message };
 
   await logAudit({ action: "admin_mfa_enrolled" });
-  redirect("/admin/dashboard");
+  return { redirectTo: "/admin/dashboard" };
 }
 
 export async function signOutAdmin() {

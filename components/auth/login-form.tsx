@@ -11,6 +11,7 @@ import {
 import { Input, Label } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
 import { SubmitButton } from "@/components/auth/submit-button";
+import { useAuthRedirect } from "@/components/auth/use-auth-redirect";
 
 const initial: AuthState = {};
 
@@ -19,6 +20,8 @@ export function LoginForm({ next, authError }: { next: string; authError?: strin
   const [pwState, pwAction] = useFormState(signInWithPassword, initial);
   const [magicState, magicAction] = useFormState(signInWithMagicLink, initial);
   const state = mode === "password" ? pwState : magicState;
+  useAuthRedirect(pwState);
+  useAuthRedirect(magicState);
 
   return (
     <div className="space-y-5">
