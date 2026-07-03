@@ -47,13 +47,21 @@ export async function signInAdmin(
     return { error: `${error.message}${hint}` };
   }
 
-  const { data: profile } = await supabase
+  const { data: profile, error: profileError } = await supabase
     .from("profiles")
     .select("role, is_suspended")
     .eq("id", data.user.id)
-    .single();
+    .maybeSingle();
 
-  if (profile?.role !== "admin" || profile?.is_suspended) {
+  if (profileError || !profile) {
+    await supabase.auth.signOut();
+    return {
+      error:
+        "No profile found for this account. Run setup-production again or execute sql/fix-admin-profile.sql in Supabase.",
+    };
+  }
+
+  if (profile.role !== "admin" || profile.is_suspended) {
     await supabase.auth.signOut();
     await logAudit({ action: "admin_login_forbidden", metadata: { email, ip } });
     return { error: "This account does not have admin access." };

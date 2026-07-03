@@ -3,6 +3,7 @@ import { verifyCronSecret } from "@/lib/cron-auth";
 import { createAdminClientAsync } from "@/lib/supabase/admin";
 import { runtimeEnv } from "@/lib/runtime-env";
 import { readServiceRoleFromEnv } from "@/lib/platform-secrets-bootstrap";
+import { ensureAdminProfile } from "@/lib/ensure-admin-profile";
 
 export const dynamic = "force-dynamic";
 
@@ -105,12 +106,23 @@ export async function POST(request: NextRequest) {
       if (pwError) return NextResponse.json({ error: pwError.message }, { status: 500 });
     }
 
-    await admin.from("profiles").update({ role: "admin" }).eq("id", userId);
+    await ensureAdminProfile(admin, {
+      userId,
+      email,
+      fullName: "Platform Admin",
+    });
+
+    const { data: verify } = await admin
+      .from("profiles")
+      .select("role")
+      .eq("id", userId)
+      .single();
 
     return NextResponse.json({
       ok: true,
       message: "Production secrets saved to platform_secrets and admin password synced.",
       email,
+      profileRole: verify?.role ?? "unknown",
       savedToDb: Object.keys(patch).filter((k) => k !== "id" && patch[k as keyof typeof patch]),
       next: "Sign in at https://www.digitalskillx.com/admin/login",
     });

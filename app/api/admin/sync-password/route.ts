@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { verifyCronSecret } from "@/lib/cron-auth";
 import { createAdminClientAsync } from "@/lib/supabase/admin";
 import { serviceRoleKeyMissingMessageAsync } from "@/lib/env-service-role";
+import { ensureAdminProfile } from "@/lib/ensure-admin-profile";
 
 export const dynamic = "force-dynamic";
 
@@ -64,7 +65,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: error.message }, { status: 500 });
       }
       userId = created.user.id;
-      await admin.from("profiles").update({ role: "admin" }).eq("id", userId);
+      await ensureAdminProfile(admin, { userId, email });
       return NextResponse.json({
         ok: true,
         action: "created",
@@ -81,7 +82,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: pwError.message }, { status: 500 });
     }
 
-    await admin.from("profiles").update({ role: "admin" }).eq("id", userId);
+    await ensureAdminProfile(admin, { userId, email });
 
     return NextResponse.json({
       ok: true,

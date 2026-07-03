@@ -1,5 +1,6 @@
 import "server-only";
 import { createAdminClientAsync } from "@/lib/supabase/admin";
+import { ensureAdminProfile } from "@/lib/ensure-admin-profile";
 
 let bootstrapped = false;
 
@@ -67,7 +68,10 @@ export async function ensureAdminAccount() {
 
     if (profile) {
       if (profile.role !== "admin") {
-        await admin.from("profiles").update({ role: "admin" }).eq("id", profile.id);
+        await ensureAdminProfile(admin, {
+          userId: profile.id,
+          email: profile.email ?? email,
+        });
         console.log(`[admin-bootstrap] Promoted existing account to admin: ${email}`);
       } else {
         console.log(`[admin-bootstrap] Admin account already exists: ${email}`);
@@ -92,7 +96,10 @@ export async function ensureAdminAccount() {
       if (duplicate) {
         const existing = await findAuthUserByEmail(admin, email);
         if (existing) {
-          await admin.from("profiles").update({ role: "admin" }).eq("id", existing.id);
+          await ensureAdminProfile(admin, {
+            userId: existing.id,
+            email: existing.email ?? email,
+          });
           console.log(`[admin-bootstrap] Linked existing auth user as admin: ${email}`);
           if (shouldSyncPassword()) {
             await syncAdminPassword(admin, existing.id, email, password);
@@ -104,7 +111,7 @@ export async function ensureAdminAccount() {
       return;
     }
 
-    await admin.from("profiles").update({ role: "admin" }).eq("id", created.user.id);
+    await ensureAdminProfile(admin, { userId: created.user.id, email });
     console.log(`[admin-bootstrap] Admin account created: ${email}`);
   } catch (err) {
     console.error(
