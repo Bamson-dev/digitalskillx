@@ -2,9 +2,9 @@
 
 import { useState } from "react";
 import { verifyAdminMfa } from "@/app/(admin)/admin/actions";
+import { AdminPasswordLoginForm } from "@/components/auth/admin-password-login-form";
 import { isNextRedirect } from "@/lib/is-next-redirect";
 import { SubmitButton } from "@/components/auth/submit-button";
-import { PasswordInput } from "@/components/ui/password-input";
 
 type MfaStep = {
   factorId: string;
@@ -12,7 +12,7 @@ type MfaStep = {
 };
 
 export function AdminLoginForm({ authError }: { authError?: string }) {
-  const [error, setError] = useState<string | null>(authError ?? null);
+  const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [mfaStep, setMfaStep] = useState<MfaStep | null>(null);
   const [mfaMessage, setMfaMessage] = useState<string | null>(null);
@@ -73,42 +73,5 @@ export function AdminLoginForm({ authError }: { authError?: string }) {
     );
   }
 
-  return (
-    <form action="/api/auth/admin-login" method="POST" className="space-y-4">
-      <div>
-        <label htmlFor="email" className="mb-1.5 block text-sm font-medium">
-          Email
-        </label>
-        <input
-          id="email"
-          name="email"
-          type="email"
-          required
-          autoComplete="email"
-          className="h-10 w-full rounded-lg border border-slate-700 bg-slate-800 px-3 text-sm outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-400/30"
-        />
-      </div>
-      <div>
-        <label htmlFor="password" className="mb-1.5 block text-sm font-medium">
-          Password
-        </label>
-        <PasswordInput
-          id="password"
-          name="password"
-          required
-          autoComplete="current-password"
-          inputClassName="border-slate-700 bg-slate-800 focus:border-brand-400 focus:ring-brand-400/30"
-          toggleClassName="text-slate-400 hover:text-slate-200"
-        />
-      </div>
-
-      <SubmitButton className="w-full" pendingText="Verifying…">
-        Sign in
-      </SubmitButton>
-
-      {error ? (
-        <p className="rounded-lg bg-red-950/60 px-3 py-2 text-sm text-red-300">{error}</p>
-      ) : null}
-    </form>
-  );
+  return <AdminPasswordLoginForm authError={authError ?? error ?? undefined} />;
 }

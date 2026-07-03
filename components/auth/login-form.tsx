@@ -4,8 +4,8 @@ import Link from "next/link";
 import { useState } from "react";
 import { useFormState } from "react-dom";
 import { signInWithMagicLink, type AuthState } from "@/app/(auth)/actions";
+import { StudentPasswordLoginForm } from "@/components/auth/student-password-login-form";
 import { Input, Label } from "@/components/ui/input";
-import { PasswordInput } from "@/components/ui/password-input";
 import { SubmitButton } from "@/components/auth/submit-button";
 
 const initial: AuthState = {};
@@ -13,8 +13,6 @@ const initial: AuthState = {};
 export function LoginForm({ next, authError }: { next: string; authError?: string }) {
   const [mode, setMode] = useState<"password" | "magic">("password");
   const [magicState, magicAction] = useFormState(signInWithMagicLink, initial);
-
-  const state = mode === "password" ? { error: authError } : magicState;
 
   return (
     <div className="space-y-5">
@@ -26,37 +24,7 @@ export function LoginForm({ next, authError }: { next: string; authError?: strin
       </div>
 
       {mode === "password" ? (
-        <form action="/api/auth/login" method="POST" className="space-y-4">
-          <input type="hidden" name="next" value={next} />
-          <div>
-            <Label htmlFor="email">Email</Label>
-            <Input id="email" name="email" type="email" required autoComplete="email" />
-          </div>
-          <div>
-            <div className="flex items-center justify-between">
-              <Label htmlFor="password">Password</Label>
-              <Link
-                href="/forgot-password"
-                className="mb-1.5 text-xs font-medium text-brand hover:underline"
-              >
-                Forgot?
-              </Link>
-            </div>
-            <PasswordInput
-              id="password"
-              name="password"
-              required
-              autoComplete="current-password"
-            />
-          </div>
-          <label className="flex items-center gap-2 text-sm text-muted">
-            <input type="checkbox" name="remember" defaultChecked className="rounded" />
-            Remember me for 30 days
-          </label>
-          <SubmitButton className="w-full" pendingText="Signing in…">
-            Log in
-          </SubmitButton>
-        </form>
+        <StudentPasswordLoginForm next={next} authError={authError} />
       ) : (
         <form action={magicAction} className="space-y-4">
           <div>
@@ -66,6 +34,16 @@ export function LoginForm({ next, authError }: { next: string; authError?: strin
           <SubmitButton className="w-full" pendingText="Sending link…">
             Send magic link
           </SubmitButton>
+          {magicState.error ? (
+            <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
+              {magicState.error}
+            </p>
+          ) : null}
+          {magicState.message ? (
+            <p className="rounded-lg bg-green-50 px-3 py-2 text-sm text-green-700">
+              {magicState.message}
+            </p>
+          ) : null}
         </form>
       )}
 
@@ -78,17 +56,6 @@ export function LoginForm({ next, authError }: { next: string; authError?: strin
           ? "Use a magic link instead"
           : "Use email and password instead"}
       </button>
-
-      {state.error ? (
-        <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
-          {state.error}
-        </p>
-      ) : null}
-      {"message" in state && state.message ? (
-        <p className="rounded-lg bg-green-50 px-3 py-2 text-sm text-green-700">
-          {state.message}
-        </p>
-      ) : null}
 
       <p className="text-center text-sm text-muted">
         New here?{" "}
