@@ -1,6 +1,6 @@
 import "server-only";
 import type { Json } from "@/types/database";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { createAdminClientAsync } from "@/lib/supabase/admin";
 import { sendEmail } from "@/lib/email";
 
 export type SystemEmailType =
@@ -27,13 +27,32 @@ export async function sendSystemEmail(params: SendSystemEmailParams) {
     replyTo: params.replyTo,
   });
 
+  if ("skipped" in result && result.skipped) {
+    const message =
+      result.error instanceof Error ? result.error.message : "Email delivery is not configured.";
+    console.error(`[system-email] ${params.type} skipped for ${params.to}:`, message);
+    try {
+      const admin = await createAdminClientAsync();
+      await admin.from("system_email_failures").insert({
+        email_type: params.type,
+        recipient: params.to,
+        subject: params.subject,
+        payload: (params.payload ?? {}) as Json,
+        error_message: message,
+      });
+    } catch (logError) {
+      console.error("[system-email] could not log failure:", logError);
+    }
+    return { sent: false as const, skipped: true as const, error: message };
+  }
+
   if ("error" in result && result.error) {
     const message =
       result.error instanceof Error ? result.error.message : String(result.error);
     console.error(`[system-email] ${params.type} failed for ${params.to}:`, message);
 
     try {
-      const admin = createAdminClient();
+      const admin = await createAdminClientAsync();
       await admin.from("system_email_failures").insert({
         email_type: params.type,
         recipient: params.to,
@@ -48,9 +67,5 @@ export async function sendSystemEmail(params: SendSystemEmailParams) {
     return { sent: false as const, error: message };
   }
 
-  if ("skipped" in result && result.skipped) {
-    return { sent: false as const, skipped: true as const };
-  }
-
-  return { sent: true as const, messageId: result.messageId };
+  return { sent: true as const, messageId: "messageId" in result ? result.messageId : undefined };
 }

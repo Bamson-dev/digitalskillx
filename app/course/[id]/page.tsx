@@ -1,9 +1,11 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { ORG, siteUrl } from "@/lib/org";
 import { MarketplaceNav, MarketplaceFooter } from "@/components/marketplace/marketplace-chrome";
 import { CourseLandingView } from "@/components/marketplace/course-landing-view";
+import { PaymentReturnHandler } from "@/components/marketplace/payment-return-handler";
 
 export async function generateMetadata({
   params,
@@ -48,7 +50,7 @@ export default async function CourseLandingPage({
   searchParams,
 }: {
   params: { id: string };
-  searchParams: { enroll?: string; payment?: string };
+  searchParams: { enroll?: string; payment?: string; enrolled?: string };
 }) {
   const supabase = createClient();
   const {
@@ -109,6 +111,13 @@ export default async function CourseLandingPage({
       <MarketplaceNav user={profile} />
 
       <main className="flex-1">
+        <Suspense fallback={null}>
+          <PaymentReturnHandler
+            courseId={course.id}
+            courseTitle={course.title}
+            userEmail={profile?.email}
+          />
+        </Suspense>
         <CourseLandingView
           course={{
             ...course,
@@ -117,7 +126,6 @@ export default async function CourseLandingPage({
           }}
           isEnrolled={isEnrolled}
           isLoggedIn={Boolean(user)}
-          showPaymentSuccess={searchParams.payment === "success"}
           related={relatedRaw ?? []}
           lessonCount={lessonCount}
         />

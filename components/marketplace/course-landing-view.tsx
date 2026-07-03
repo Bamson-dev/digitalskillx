@@ -36,14 +36,12 @@ export function CourseLandingView({
   course,
   isEnrolled,
   isLoggedIn,
-  showPaymentSuccess,
   related,
   lessonCount,
 }: {
   course: CourseData;
   isEnrolled: boolean;
   isLoggedIn: boolean;
-  showPaymentSuccess: boolean;
   related: MarketplaceCourse[];
   lessonCount: number;
 }) {
@@ -85,12 +83,6 @@ export function CourseLandingView({
 
   return (
     <>
-      {showPaymentSuccess ? (
-        <div className="border-b border-brand/20 bg-brand/5 px-4 py-3 text-center text-sm text-brand-700">
-          Payment received — your course unlocks within a minute once confirmed.
-        </div>
-      ) : null}
-
       {/* Mobile hero: video/image first */}
       <section className="border-b border-surface-border lg:hidden">
         <CourseHeroMedia

@@ -1,5 +1,5 @@
 import "server-only";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { createAdminClientAsync } from "@/lib/supabase/admin";
 import { notify } from "@/lib/notifications";
 import { sendPaymentReceiptEmail, sendWelcomeEmailIfNeeded } from "@/lib/system-email-triggers";
 
@@ -10,7 +10,7 @@ export async function fulfillPurchase(params: {
   reference: string;
   skipTransaction?: boolean;
 }) {
-  const admin = createAdminClient();
+  const admin = await createAdminClientAsync();
 
   if (!params.skipTransaction) {
     const { data: tx } = await admin
@@ -58,14 +58,14 @@ export async function fulfillPurchase(params: {
   }
 
   if (profile?.email) {
-    void sendWelcomeEmailIfNeeded({
+    await sendWelcomeEmailIfNeeded({
       studentId: params.studentId,
       fullName: profile.full_name ?? "there",
       email: profile.email,
       checkoutCourseId: params.courseId,
     });
 
-    void sendPaymentReceiptEmail({
+    await sendPaymentReceiptEmail({
       studentId: params.studentId,
       courseId: params.courseId,
       reference: params.reference,

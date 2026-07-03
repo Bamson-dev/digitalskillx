@@ -6,6 +6,7 @@ import { getYoutubeApiKeyConfiguredFlag } from "@/lib/env-youtube";
 import { deepseekApiKeyConfigured } from "@/lib/env-deepseek";
 import { paystackSecretKeyConfigured } from "@/lib/env-paystack";
 import { serviceRoleKeyConfigured } from "@/lib/env-service-role";
+import { emailSmtpConfigured } from "@/lib/env-email";
 import { SettingsForms } from "@/components/admin/settings-forms";
 
 export const metadata: Metadata = { title: "Settings" };
@@ -16,7 +17,7 @@ export default async function AdminSettingsPage() {
   await requireAdmin();
   const supabase = createClient();
 
-  const [settings, { data: categories }, youtubeConfigured, deepseekConfigured, paystackConfigured, serviceRoleConfigured] =
+  const [settings, { data: categories }, youtubeConfigured, deepseekConfigured, paystackConfigured, serviceRoleConfigured, emailConfigured] =
     await Promise.all([
     getPlatformSettings(supabase),
     supabase
@@ -27,6 +28,7 @@ export default async function AdminSettingsPage() {
     deepseekApiKeyConfigured(supabase),
     paystackSecretKeyConfigured(supabase),
     serviceRoleKeyConfigured(supabase),
+    emailSmtpConfigured(),
   ]);
 
   return (
@@ -44,6 +46,7 @@ export default async function AdminSettingsPage() {
         deepseekConfigured={deepseekConfigured}
         paystackConfigured={paystackConfigured}
         serviceRoleConfigured={serviceRoleConfigured}
+        emailConfigured={emailConfigured}
       />
     </div>
   );

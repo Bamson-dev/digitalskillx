@@ -81,6 +81,46 @@ export function courseCompletionCertificateEmail(p: CourseCompletionCertificateE
   };
 }
 
+export type CourseEnrollmentEmailParams = {
+  firstName: string;
+  courseTitle: string;
+  courseUrl: string;
+  loginUrl: string;
+  supportEmail: string;
+  brandColor?: string;
+};
+
+export function courseEnrollmentEmail(p: CourseEnrollmentEmailParams) {
+  const bodyHtml = `
+    <h1 style="margin:0 0 12px;font-size:24px;line-height:1.3;color:#111827;">You're enrolled, ${escapeHtml(p.firstName)}!</h1>
+    <p style="margin:0 0 16px;font-size:15px;line-height:1.7;color:#475569;">
+      You now have access to <strong>${escapeHtml(p.courseTitle)}</strong> on DigitalSkillX.
+    </p>
+    <div style="margin:0 0 20px;padding:16px 18px;background:#fef2f2;border-left:4px solid ${p.brandColor?.trim() || "#dc2626"};border-radius:8px;">
+      <p style="margin:0 0 8px;font-size:14px;font-weight:700;color:#111827;">What you get</p>
+      <ul style="margin:0;padding-left:18px;font-size:14px;line-height:1.8;color:#475569;">
+        <li>Lifetime access to all lessons</li>
+        <li>Self-paced learning on any device</li>
+        <li>Quizzes, assignments, and progress tracking</li>
+        <li>Certificate when you complete the course</li>
+      </ul>
+    </div>
+    <p style="margin:0;font-size:14px;line-height:1.7;color:#475569;">
+      Log in with your DigitalSkillX account to start learning. Your login email is the address this message was sent to.
+    </p>`;
+
+  return {
+    subject: `You're enrolled — ${p.courseTitle}`,
+    html: emailLayout({
+      brandColor: p.brandColor,
+      title: `You're enrolled — ${p.courseTitle}`,
+      bodyHtml,
+      cta: { label: "Start learning", url: p.courseUrl },
+      supportEmail: p.supportEmail,
+    }),
+  };
+}
+
 export type IdleReminderEmailParams = {
   firstName: string;
   courseTitle: string;

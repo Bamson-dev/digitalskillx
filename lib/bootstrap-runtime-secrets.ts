@@ -1,12 +1,13 @@
 import "server-only";
 import { preloadRuntimeEnvIntoProcessEnv } from "@/lib/runtime-env";
-import { setServiceRoleKeyCache } from "@/lib/env-service-role";
+import { setCachedIntegrationSecret } from "@/lib/integration-secrets-cache";
 
 const SECRET_COLUMNS = [
   "youtube_api_key",
   "deepseek_api_key",
   "paystack_secret_key",
   "supabase_service_role_key",
+  "zeptomail_smtp_password",
 ] as const;
 
 const ENV_BY_COLUMN: Record<(typeof SECRET_COLUMNS)[number], string> = {
@@ -14,6 +15,7 @@ const ENV_BY_COLUMN: Record<(typeof SECRET_COLUMNS)[number], string> = {
   deepseek_api_key: "DEEPSEEK_API_KEY",
   paystack_secret_key: "PAYSTACK_SECRET_KEY",
   supabase_service_role_key: "SUPABASE_SERVICE_ROLE_KEY",
+  zeptomail_smtp_password: "ZEPTOMAIL_SMTP_PASSWORD",
 };
 
 /** Load runtime-env.json into process.env and integration secrets from platform_secrets at boot. */
@@ -21,7 +23,7 @@ export async function bootstrapRuntimeSecrets() {
   preloadRuntimeEnvIntoProcessEnv();
 
   const serviceRole = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
-  if (serviceRole) setServiceRoleKeyCache(serviceRole);
+  if (serviceRole) setCachedIntegrationSecret("SUPABASE_SERVICE_ROLE_KEY", serviceRole);
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
   if (!supabaseUrl || !serviceRole) return;
@@ -49,10 +51,7 @@ export async function bootstrapRuntimeSecrets() {
       const envKey = ENV_BY_COLUMN[column];
       const dbValue = row[column];
       if (!process.env[envKey]?.trim() && typeof dbValue === "string" && dbValue.trim()) {
-        process.env[envKey] = dbValue.trim();
-        if (envKey === "SUPABASE_SERVICE_ROLE_KEY") {
-          setServiceRoleKeyCache(dbValue.trim());
-        }
+        setCachedIntegrationSecret(envKey, dbValue.trim());
         console.log(`[digitalskillx] Loaded ${envKey} from platform_secrets at boot`);
       }
     }

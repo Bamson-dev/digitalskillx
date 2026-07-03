@@ -247,6 +247,7 @@ export type PlatformSecrets = {
   deepseek_api_key: string | null;
   paystack_secret_key: string | null;
   supabase_service_role_key: string | null;
+  zeptomail_smtp_password: string | null;
   updated_at: string;
   updated_by: string | null;
 };

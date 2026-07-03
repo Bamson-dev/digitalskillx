@@ -24,7 +24,13 @@ import {
 
 export const metadata: Metadata = { title: "Student" };
 
-export default async function StudentDetailPage({ params }: { params: { id: string } }) {
+export default async function StudentDetailPage({
+  params,
+  searchParams,
+}: {
+  params: { id: string };
+  searchParams: { enrolled?: string };
+}) {
   await requireAdmin();
   const supabase = createClient();
 
@@ -69,6 +75,11 @@ export default async function StudentDetailPage({ params }: { params: { id: stri
         <div>
           <h1 className="text-2xl font-bold">{student.full_name ?? student.email}</h1>
           <p className="text-sm text-muted">{student.email}</p>
+          {searchParams.enrolled === "1" ? (
+            <p className="mt-2 rounded-lg bg-green-50 px-3 py-2 text-sm text-green-800">
+              Course enrolled and notification email sent.
+            </p>
+          ) : null}
         </div>
         <div className="flex flex-wrap gap-2">
           <form action={suspendStudent}>

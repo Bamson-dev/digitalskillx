@@ -1,9 +1,10 @@
 import "server-only";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { createAdminClientAsync } from "@/lib/supabase/admin";
 import { getEmailSenderConfig, getPlatformSettingsAdmin } from "@/lib/platform-settings";
 import { studentWelcomeEmail } from "@/lib/email/student-welcome";
 import {
   courseCompletionCertificateEmail,
+  courseEnrollmentEmail,
   idleReminderEmail,
   paymentReceiptEmail,
 } from "@/lib/email/system-templates";
@@ -19,7 +20,7 @@ function parseCourseIdFromNext(next: string | null | undefined) {
 }
 
 async function loadStudentCourseNames(studentId: string, extraCourseId?: string | null) {
-  const admin = createAdminClient();
+  const admin = await createAdminClientAsync();
   const { data: enrollments } = await admin
     .from("enrollments")
     .select("course:courses(title)")
@@ -53,7 +54,7 @@ export async function sendWelcomeEmailIfNeeded(params: {
   password?: string;
   checkoutCourseId?: string | null;
 }) {
-  const admin = createAdminClient();
+  const admin = await createAdminClientAsync();
 
   const { data: profile } = await admin
     .from("profiles")
@@ -100,13 +101,55 @@ export async function sendWelcomeEmailIfNeeded(params: {
   return result;
 }
 
+/** Admin enrollment email — sent each time a student is enrolled in a course. */
+export async function sendCourseEnrollmentEmail(params: {
+  studentId: string;
+  courseId: string;
+  fullName: string;
+  email: string;
+}) {
+  const admin = await createAdminClientAsync();
+
+  const { data: course } = await admin
+    .from("courses")
+    .select("title")
+    .eq("id", params.courseId)
+    .maybeSingle();
+
+  if (!course?.title) {
+    return { sent: false as const, reason: "missing_course" as const };
+  }
+
+  const settings = await getPlatformSettingsAdmin();
+  const sender = await getEmailSenderConfig();
+  const baseUrl = siteUrl();
+
+  const tpl = courseEnrollmentEmail({
+    firstName: studentFirstName(params.fullName),
+    courseTitle: course.title,
+    courseUrl: `${baseUrl}/courses/${params.courseId}`,
+    loginUrl: `${baseUrl}/login`,
+    supportEmail: sender.replyTo ?? sender.fromAddress,
+    brandColor: settings.primary_color,
+  });
+
+  return sendSystemEmail({
+    type: "welcome",
+    to: params.email,
+    subject: tpl.subject,
+    html: tpl.html,
+    replyTo: sender.replyTo,
+    payload: { studentId: params.studentId, courseId: params.courseId },
+  });
+}
+
 /** Payment receipt — once per successful transaction reference. */
 export async function sendPaymentReceiptEmail(params: {
   studentId: string;
   courseId: string;
   reference: string;
 }) {
-  const admin = createAdminClient();
+  const admin = await createAdminClientAsync();
 
   const { data: tx } = await admin
     .from("transactions")
@@ -167,7 +210,7 @@ export async function sendCourseCompletionCertificateEmail(params: {
   certificateId: string;
   certificateNumber: string;
 }) {
-  const admin = createAdminClient();
+  const admin = await createAdminClientAsync();
 
   const { data: enrollment } = await admin
     .from("enrollments")
@@ -226,7 +269,7 @@ export async function sendCourseCompletionCertificateEmail(params: {
 
 /** Resolve the lesson URL where the student should resume a course. */
 export async function resumeLessonUrl(studentId: string, courseId: string) {
-  const admin = createAdminClient();
+  const admin = await createAdminClientAsync();
   const baseUrl = siteUrl();
 
   const { data: modules } = await admin
@@ -277,7 +320,7 @@ export async function resumeLessonUrl(studentId: string, courseId: string) {
 
 /** Daily cron: send idle reminders once per enrollment idle period. */
 export async function processIdleReminderEmails(inactivityDays = 5) {
-  const admin = createAdminClient();
+  const admin = await createAdminClientAsync();
   const cutoff = new Date(Date.now() - inactivityDays * 86400000).toISOString();
   const settings = await getPlatformSettingsAdmin();
   const sender = await getEmailSenderConfig();

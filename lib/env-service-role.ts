@@ -1,10 +1,12 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
+import {
+  getCachedIntegrationSecret,
+  setCachedIntegrationSecret,
+} from "@/lib/integration-secrets-cache";
 import { runtimeEnv } from "@/lib/runtime-env";
 import type { Database } from "@/types/database";
-
-let memoryCache: string | undefined;
 
 const ENV_NAMES = [
   "SUPABASE_SERVICE_ROLE_KEY",
@@ -19,15 +21,21 @@ function normalizeKey(raw: string | null | undefined): string | undefined {
 }
 
 export function setServiceRoleKeyCache(key: string) {
-  memoryCache = normalizeKey(key);
+  const normalized = normalizeKey(key);
+  if (normalized) setCachedIntegrationSecret("SUPABASE_SERVICE_ROLE_KEY", normalized);
 }
 
 /** Sync lookup: in-memory cache then runtime env file / process.env. */
 export function getServiceRoleKeySync(): string | undefined {
-  if (memoryCache) return memoryCache;
+  const cached = getCachedIntegrationSecret("SUPABASE_SERVICE_ROLE_KEY");
+  if (cached) return cached;
+
   for (const name of ENV_NAMES) {
     const value = normalizeKey(runtimeEnv(name));
-    if (value) return value;
+    if (value) {
+      setCachedIntegrationSecret("SUPABASE_SERVICE_ROLE_KEY", value);
+      return value;
+    }
   }
   return undefined;
 }
@@ -78,36 +86,32 @@ export type ServiceRoleKeyResolution = {
 };
 
 /**
- * Resolve service role: admin session DB → runtime env → RPC fallback.
- * Admin session works when the key is saved in Settings (no Coolify env needed).
+ * Resolve service role: memory/runtime env → admin session DB → RPC → env fallback.
  */
 export async function resolveServiceRoleKey(
   supabase?: SupabaseClient<Database>,
 ): Promise<ServiceRoleKeyResolution> {
   const cached = getServiceRoleKeySync();
-  if (cached) {
-    memoryCache = cached;
-    return { key: cached };
-  }
+  if (cached) return { key: cached };
 
   const client = supabase ?? createClient();
 
   const fromDb = await readFromPlatformSecrets(client);
   if (fromDb.error) return { hint: fromDb.error };
   if (fromDb.key) {
-    memoryCache = fromDb.key;
+    setCachedIntegrationSecret("SUPABASE_SERVICE_ROLE_KEY", fromDb.key);
     return { key: fromDb.key };
   }
 
   const fromRpc = await readFromPlatformSecretsRpc(client);
   if (fromRpc) {
-    memoryCache = fromRpc;
+    setCachedIntegrationSecret("SUPABASE_SERVICE_ROLE_KEY", fromRpc);
     return { key: fromRpc };
   }
 
   const fromEnv = readFromEnv();
   if (fromEnv) {
-    memoryCache = fromEnv;
+    setCachedIntegrationSecret("SUPABASE_SERVICE_ROLE_KEY", fromEnv);
     return { key: fromEnv };
   }
 

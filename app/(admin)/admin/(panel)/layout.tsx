@@ -1,4 +1,6 @@
 import { requireAdmin } from "@/lib/auth";
+import { createClient } from "@/lib/supabase/server";
+import { warmIntegrationSecretsFromAdminSession } from "@/lib/integration-secrets-cache";
 import { AdminSidebar } from "@/components/admin/admin-sidebar";
 
 export default async function AdminPanelLayout({
@@ -7,6 +9,8 @@ export default async function AdminPanelLayout({
   children: React.ReactNode;
 }) {
   const admin = await requireAdmin();
+  const supabase = createClient();
+  await warmIntegrationSecretsFromAdminSession(supabase);
 
   return (
     <div className="flex min-h-screen bg-brand-50/40">

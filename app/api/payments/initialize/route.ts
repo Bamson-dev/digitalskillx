@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { bootstrapRuntimeSecrets } from "@/lib/bootstrap-runtime-secrets";
 import { initializeTransaction, generateReference, paystackConfigured } from "@/lib/paystack";
 import { isCourseFree, nairaToKobo, type CurrencyCode } from "@/lib/currency";
 import { siteUrl } from "@/lib/org";
@@ -92,9 +93,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ enrolled: true });
     }
 
-    if (!(await paystackConfigured(supabase))) {
+    await bootstrapRuntimeSecrets();
+
+    if (!(await paystackConfigured())) {
       return jsonError(
-        "Paystack is not configured. Save your secret key under Admin → Settings → Integrations, or set PAYSTACK_SECRET_KEY in Coolify (runtime only) and redeploy.",
+        "Paystack is not configured. Save your Paystack secret key under Admin → Settings → Integrations, then open any admin page once (or redeploy with PAYSTACK_SECRET_KEY in Coolify Runtime).",
         503,
       );
     }
@@ -142,7 +145,7 @@ export async function POST(request: NextRequest) {
         course_id: course.id,
         currency: "NGN",
       },
-    }, supabase);
+    });
 
     return NextResponse.json({
       authorizationUrl: init.authorization_url,

@@ -181,11 +181,13 @@ function IntegrationSettingsForm({
   deepseekConfigured,
   paystackConfigured,
   serviceRoleConfigured,
+  emailConfigured,
 }: {
   youtubeConfigured: boolean;
   deepseekConfigured: boolean;
   paystackConfigured: boolean;
   serviceRoleConfigured: boolean;
+  emailConfigured: boolean;
 }) {
   const [state, action] = useFormState(saveIntegrationSettings, initial);
 
@@ -256,6 +258,21 @@ function IntegrationSettingsForm({
               : "Required for Admin → Students (create account). If Coolify env vars fail, save the service_role secret from Supabase → Project Settings → API here."}
           </p>
         </div>
+        <div>
+          <Label htmlFor="zeptomail_smtp_password">ZeptoMail SMTP password</Label>
+          <Input
+            id="zeptomail_smtp_password"
+            name="zeptomail_smtp_password"
+            type="password"
+            autoComplete="off"
+            placeholder={emailConfigured ? "Password saved — paste to replace" : "Your ZeptoMail SMTP password"}
+          />
+          <p className="mt-1 text-xs text-muted">
+            {emailConfigured
+              ? "Transactional email (welcome, enrollment, receipts) is configured."
+              : "Required for student welcome and enrollment emails. Coolify env vars often do not reach Next.js — saving here is recommended."}
+          </p>
+        </div>
         <SubmitButton pendingText="Saving…">Save integration settings</SubmitButton>
         <Feedback state={state} />
       </form>
@@ -270,6 +287,7 @@ export function SettingsForms({
   deepseekConfigured,
   paystackConfigured,
   serviceRoleConfigured,
+  emailConfigured,
 }: {
   settings: PlatformSettingsValues;
   categories: CategoryMapping[];
@@ -277,6 +295,7 @@ export function SettingsForms({
   deepseekConfigured: boolean;
   paystackConfigured: boolean;
   serviceRoleConfigured: boolean;
+  emailConfigured: boolean;
 }) {
   return (
     <div className="space-y-6">
@@ -287,6 +306,7 @@ export function SettingsForms({
         deepseekConfigured={deepseekConfigured}
         paystackConfigured={paystackConfigured}
         serviceRoleConfigured={serviceRoleConfigured}
+        emailConfigured={emailConfigured}
       />
       <CertificateTemplateSettings
         categories={categories}

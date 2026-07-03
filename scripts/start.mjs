@@ -18,6 +18,12 @@ const RUNTIME_KEYS = [
   "DEEPSEEK_MODEL",
   "PAYSTACK_SECRET_KEY",
   "PAYSTACK_USD_ENABLED",
+  "ZEPTOMAIL_SMTP_HOST",
+  "ZEPTOMAIL_SMTP_PORT",
+  "ZEPTOMAIL_SMTP_USER",
+  "ZEPTOMAIL_SMTP_PASSWORD",
+  "ZEPTOMAIL_FROM_EMAIL",
+  "ZEPTOMAIL_FROM_NAME",
 ];
 
 function readEnv(name) {
@@ -65,7 +71,7 @@ async function enrichSecretsFromDatabase() {
   }
 
   try {
-    const url = `${supabaseUrl.replace(/\/$/, "")}/rest/v1/platform_secrets?id=eq.default&select=youtube_api_key,deepseek_api_key,paystack_secret_key,supabase_service_role_key`;
+    const url = `${supabaseUrl.replace(/\/$/, "")}/rest/v1/platform_secrets?id=eq.default&select=youtube_api_key,deepseek_api_key,paystack_secret_key,supabase_service_role_key,zeptomail_smtp_password`;
     const res = await fetch(url, {
       headers: {
         apikey: serviceRole,
@@ -90,6 +96,7 @@ async function enrichSecretsFromDatabase() {
       DEEPSEEK_API_KEY: row.deepseek_api_key,
       PAYSTACK_SECRET_KEY: row.paystack_secret_key,
       SUPABASE_SERVICE_ROLE_KEY: row.supabase_service_role_key,
+      ZEPTOMAIL_SMTP_PASSWORD: row.zeptomail_smtp_password,
     };
 
     for (const [envKey, dbValue] of Object.entries(dbFallbacks)) {
@@ -129,6 +136,7 @@ async function main() {
   }
   console.log(`  DEEPSEEK_API_KEY=${secretStatus("DEEPSEEK_API_KEY")}`);
   console.log(`  PAYSTACK_SECRET_KEY=${secretStatus("PAYSTACK_SECRET_KEY")}`);
+  console.log(`  ZEPTOMAIL_SMTP_PASSWORD=${secretStatus("ZEPTOMAIL_SMTP_PASSWORD")}`);
 
   const nextBin = join(root, "node_modules", "next", "dist", "bin", "next");
   const fallbackBin = join(root, "node_modules", ".bin", "next");

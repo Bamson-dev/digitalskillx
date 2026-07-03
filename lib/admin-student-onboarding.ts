@@ -162,7 +162,7 @@ export async function sendStudentWelcomeEmail(params: {
   void params.siteUrl;
   void params.brandColor;
   void params.courseNames;
-  await sendWelcomeEmailIfNeeded({
+  return sendWelcomeEmailIfNeeded({
     studentId: params.studentId,
     fullName: params.fullName,
     email: params.email,

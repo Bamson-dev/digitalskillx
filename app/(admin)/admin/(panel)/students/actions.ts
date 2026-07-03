@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClientAsync } from "@/lib/supabase/admin";
 import { requireAdmin } from "@/lib/auth";
@@ -11,6 +12,8 @@ import { emailTemplates } from "@/lib/email/templates";
 import { runAutomations } from "@/lib/automation";
 import { issueCertificate } from "@/lib/certificates";
 import { getPlatformSettingsAdmin } from "@/lib/platform-settings";
+import { deleteStudentAccount } from "@/lib/student-data";
+import { sendCourseEnrollmentEmail } from "@/lib/system-email-triggers";
 import {
   buildCourseResolver,
   enrollStudentInCourses,
@@ -118,7 +121,7 @@ export async function createStudent(
     }
 
     const settings = await getPlatformSettingsAdmin();
-    await sendStudentWelcomeEmail({
+    const emailResult = await sendStudentWelcomeEmail({
       studentId: created.user.id,
       fullName,
       email,
@@ -141,6 +144,17 @@ export async function createStudent(
       validCourseIds.length > 0
         ? ` Enrolled in ${validCourseIds.length} course(s).`
         : "";
+    if (!emailResult.sent) {
+      const reason =
+        "error" in emailResult
+          ? emailResult.error
+          : "reason" in emailResult
+            ? emailResult.reason
+            : "Email not configured";
+      return {
+        message: `Student ${fullName} created.${courseNote} Welcome email failed: ${reason}. Save ZeptoMail SMTP password under Admin → Settings → Integrations.`,
+      };
+    }
     return { message: `Student ${fullName} created.${courseNote} Welcome email sent.` };
   } catch (err) {
     return { error: err instanceof Error ? err.message : "Could not create student." };
@@ -296,11 +310,11 @@ export async function suspendStudent(formData: FormData) {
 
 export async function deleteStudent(formData: FormData) {
   await requireAdmin();
-  const admin = await getAdminSupabase();
   const id = String(formData.get("id"));
-  await admin.auth.admin.deleteUser(id);
+  await deleteStudentAccount(id);
   await logAudit({ action: "student_deleted", targetType: "profile", targetId: id });
   revalidatePath("/admin/students");
+  redirect("/admin/students");
 }
 
 export async function resetStudentPassword(formData: FormData) {
@@ -322,28 +336,24 @@ export async function resetStudentPassword(formData: FormData) {
 }
 
 export async function enrollStudent(formData: FormData) {
-  const admin = await requireAdmin();
-  const supabase = createClient();
+  const adminUser = await requireAdmin();
+  const admin = await getAdminSupabase();
   const studentId = String(formData.get("student_id"));
   const courseId = String(formData.get("course_id"));
   if (!courseId) return;
 
-  const { error } = await supabase.from("enrollments").insert({
-    student_id: studentId,
-    course_id: courseId,
-    enrolled_by: admin.id,
-    source: "admin",
+  await enrollStudentInCourses(admin, {
+    studentId,
+    courseIds: [courseId],
+    enrolledBy: adminUser.id,
   });
-  if (error && !error.message.includes("duplicate")) throw new Error(error.message);
 
-  await runAutomations("course_enrolled", { studentId, courseId });
-
-  const { data: profile } = await supabase
+  const { data: profile } = await admin
     .from("profiles")
     .select("full_name, email")
     .eq("id", studentId)
     .single();
-  const { data: course } = await supabase.from("courses").select("title").eq("id", courseId).single();
+  const { data: course } = await admin.from("courses").select("title").eq("id", courseId).single();
 
   await notify({
     studentId,
@@ -352,17 +362,30 @@ export async function enrollStudent(formData: FormData) {
     message: `You've been enrolled in "${course?.title ?? "a course"}".`,
     linkUrl: `/courses/${courseId}`,
   });
+
   if (profile?.email && course) {
-    const tpl = emailTemplates.enrollment({
-      name: profile.full_name ?? "there",
-      courseTitle: course.title,
-      url: `${siteUrl()}/courses/${courseId}`,
+    const emailResult = await sendCourseEnrollmentEmail({
+      studentId,
+      courseId,
+      fullName: profile.full_name ?? "there",
+      email: profile.email,
     });
-    await sendEmail({ to: profile.email, subject: tpl.subject, html: tpl.html });
+    if (!emailResult.sent) {
+      const reason =
+        "error" in emailResult
+          ? emailResult.error
+          : "reason" in emailResult
+            ? emailResult.reason
+            : "Email not configured";
+      throw new Error(
+        `Student enrolled in "${course.title}" but email failed: ${reason}. Save ZeptoMail SMTP password under Admin → Settings → Integrations.`,
+      );
+    }
   }
 
   await logAudit({ action: "student_enrolled", targetType: "enrollment", metadata: { studentId, courseId } });
   revalidatePath(`/admin/students/${studentId}`);
+  redirect(`/admin/students/${studentId}?enrolled=1`);
 }
 
 export async function unenrollStudent(formData: FormData) {

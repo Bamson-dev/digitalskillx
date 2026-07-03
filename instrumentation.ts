@@ -11,6 +11,10 @@ export async function register() {
     console.log(
       `[digitalskillx] Service role key: ${(await serviceRoleKeyConfigured()) ? "configured" : "missing"}`,
     );
+    const { paystackSecretKeyConfigured } = await import("@/lib/env-paystack");
+    console.log(
+      `[digitalskillx] Paystack secret key: ${(await paystackSecretKeyConfigured()) ? "configured" : "missing"}`,
+    );
     const { ensureAdminAccount } = await import("@/lib/admin-bootstrap");
     await ensureAdminAccount();
   }

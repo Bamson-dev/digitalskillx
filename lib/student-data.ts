@@ -1,9 +1,9 @@
 import "server-only";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { createAdminClientAsync } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
 export async function exportStudentData(studentId: string) {
-  const admin = createAdminClient();
+  const admin = await createAdminClientAsync();
 
   const [
     { data: profile },
@@ -37,7 +37,7 @@ export async function exportStudentData(studentId: string) {
 
 /** Delete personal data; retain anonymized transaction rows for accounting. */
 export async function deleteStudentAccount(studentId: string) {
-  const admin = createAdminClient();
+  const admin = await createAdminClientAsync();
 
   await admin
     .from("transactions")
@@ -53,6 +53,7 @@ export async function deleteStudentAccount(studentId: string) {
   await admin.from("enrollments").delete().eq("student_id", studentId);
   await admin.from("certificates").delete().eq("student_id", studentId);
   await admin.from("ai_conversations").delete().eq("student_id", studentId);
+  await admin.from("admin_notes").delete().eq("student_id", studentId);
 
   await admin.from("support_requests").update({ student_id: null }).eq("student_id", studentId);
 

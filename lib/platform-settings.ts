@@ -1,5 +1,5 @@
 import "server-only";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { createAdminClientAsync } from "@/lib/supabase/admin";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 import {
@@ -50,7 +50,7 @@ export async function getPlatformSettings(
 
 export async function getPlatformSettingsAdmin(): Promise<PlatformSettingsValues> {
   try {
-    const admin = createAdminClient();
+    const admin = await createAdminClientAsync();
     const { data } = await admin
       .from("platform_settings")
       .select("*")

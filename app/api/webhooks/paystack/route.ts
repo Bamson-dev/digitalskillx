@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import * as Sentry from "@sentry/nextjs";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { bootstrapRuntimeSecrets } from "@/lib/bootstrap-runtime-secrets";
+import { createAdminClientAsync } from "@/lib/supabase/admin";
 import { verifyWebhookSignature, verifyTransaction } from "@/lib/paystack";
 import { fulfillPurchase } from "@/lib/purchase";
 import { rateLimitedResponse } from "@/lib/api-rate-limit";
@@ -9,6 +10,8 @@ import type { Json } from "@/types/database";
 export const dynamic = "force-dynamic";
 
 export async function POST(request: NextRequest) {
+  await bootstrapRuntimeSecrets();
+
   const limited = await rateLimitedResponse(request, "webhooks-paystack", 200);
   if (limited) return limited;
 
@@ -44,7 +47,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Verification failed" }, { status: 400 });
   }
 
-  const admin = createAdminClient();
+  const admin = await createAdminClientAsync();
   const { data: tx } = await admin
     .from("transactions")
     .select("student_id, course_id, status")

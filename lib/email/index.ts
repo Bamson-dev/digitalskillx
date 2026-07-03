@@ -1,27 +1,19 @@
 import "server-only";
 import nodemailer from "nodemailer";
 import type SMTPTransport from "nodemailer/lib/smtp-transport";
+import { resolveSmtpConfig } from "@/lib/env-email";
 import { getEmailSenderConfig } from "@/lib/platform-settings";
 
-const smtpHost = process.env.ZEPTOMAIL_SMTP_HOST;
-const smtpPort = Number(process.env.ZEPTOMAIL_SMTP_PORT ?? 587);
-const smtpUser = process.env.ZEPTOMAIL_SMTP_USER;
-const smtpPassword = process.env.ZEPTOMAIL_SMTP_PASSWORD;
-
-function isEmailConfigured(fromAddress: string) {
-  return Boolean(smtpHost && smtpUser && smtpPassword && fromAddress);
-}
-
-function createTransporter() {
+function createTransporter(config: NonNullable<Awaited<ReturnType<typeof resolveSmtpConfig>>>) {
   const options: SMTPTransport.Options = {
-    host: smtpHost,
-    port: smtpPort,
+    host: config.host,
+    port: config.port,
     secure: false,
     auth: {
-      user: smtpUser,
-      pass: smtpPassword,
+      user: config.user,
+      pass: config.password,
     },
-    requireTLS: smtpPort === 587,
+    requireTLS: config.port === 587,
   };
   return nodemailer.createTransport(options);
 }
@@ -34,22 +26,29 @@ export type SendEmailParams = {
 };
 
 /**
- * Send a transactional email via ZeptoMail SMTP (Nodemailer). No-ops with a warning
- * when SMTP env vars are not configured, so local/dev flows don't crash.
+ * Send a transactional email via ZeptoMail SMTP (Nodemailer).
+ * SMTP credentials resolve from platform_secrets, runtime env, or Coolify.
  */
 export async function sendEmail(params: SendEmailParams) {
+  const smtp = await resolveSmtpConfig();
   const sender = await getEmailSenderConfig();
 
-  if (!isEmailConfigured(sender.fromAddress)) {
+  if (!smtp) {
     console.warn("[email] ZeptoMail SMTP not configured — skipping:", params.subject);
-    return { skipped: true as const };
+    return {
+      skipped: true as const,
+      error: new Error(
+        "ZeptoMail SMTP is not configured. Save the SMTP password under Admin → Settings → Integrations, or set ZEPTOMAIL_SMTP_PASSWORD in Coolify (Runtime only) and redeploy.",
+      ),
+    };
   }
 
-  const transporter = createTransporter();
+  const fromAddress = sender.fromAddress || smtp.fromAddress;
+  const transporter = createTransporter(smtp);
 
   try {
     const info = await transporter.sendMail({
-      from: `${sender.fromName} <${sender.fromAddress}>`,
+      from: `${sender.fromName} <${fromAddress}>`,
       to: params.to,
       subject: params.subject,
       html: params.html,
