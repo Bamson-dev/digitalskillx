@@ -1,39 +1,133 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useFormState } from "react-dom";
-import { signInAdmin, verifyAdminMfa, type AdminLoginState } from "@/app/(admin)/admin/actions";
+import { useState } from "react";
+import { createClient } from "@/lib/supabase/client";
 import { SubmitButton } from "@/components/auth/submit-button";
-import { useAuthRedirect } from "@/components/auth/use-auth-redirect";
 import { PasswordInput } from "@/components/ui/password-input";
 
-const initial: AdminLoginState = {};
+type MfaStep = {
+  factorId: string;
+  challengeId: string;
+};
 
-export function AdminLoginForm() {
-  const [pwState, pwAction] = useFormState(signInAdmin, initial);
-  const [mfaState, mfaAction] = useFormState(verifyAdminMfa, initial);
-  const [mfaStep, setMfaStep] = useState<{
-    factorId: string;
-    challengeId: string;
-  } | null>(null);
+export function AdminLoginForm({ mfaRequired = true }: { mfaRequired?: boolean }) {
+  const [error, setError] = useState<string | null>(null);
+  const [pending, setPending] = useState(false);
+  const [mfaStep, setMfaStep] = useState<MfaStep | null>(null);
+  const [mfaMessage, setMfaMessage] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (pwState.needsMfa && pwState.factorId && pwState.challengeId) {
-      setMfaStep({ factorId: pwState.factorId, challengeId: pwState.challengeId });
+  async function handlePasswordLogin(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setError(null);
+    setPending(true);
+
+    const formData = new FormData(e.currentTarget);
+    const email = String(formData.get("email") ?? "").trim().toLowerCase();
+    const password = String(formData.get("password") ?? "");
+
+    if (!email || !password) {
+      setError("Email and password are required.");
+      setPending(false);
+      return;
     }
-  }, [pwState.needsMfa, pwState.factorId, pwState.challengeId]);
 
-  const state = mfaStep ? mfaState : pwState;
-  useAuthRedirect(pwState);
-  useAuthRedirect(mfaState);
+    try {
+      const supabase = createClient();
+      const { data, error: signInError } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (signInError) {
+        setError(signInError.message);
+        setPending(false);
+        return;
+      }
+
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("role, is_suspended")
+        .eq("id", data.user.id)
+        .maybeSingle();
+
+      if (!profile || profile.role !== "admin" || profile.is_suspended) {
+        await supabase.auth.signOut();
+        setError(
+          !profile
+            ? "No admin profile found. Run sql/fix-admin-profile.sql in your Supabase project."
+            : "This account does not have admin access.",
+        );
+        setPending(false);
+        return;
+      }
+
+      const { data: factors } = await supabase.auth.mfa.listFactors();
+      const totp = factors?.totp?.find((f) => f.status === "verified");
+
+      if (totp) {
+        const { data: challenge, error: challengeError } = await supabase.auth.mfa.challenge({
+          factorId: totp.id,
+        });
+        if (challengeError || !challenge) {
+          setError(challengeError?.message ?? "Could not start authenticator challenge.");
+          setPending(false);
+          return;
+        }
+        setMfaStep({ factorId: totp.id, challengeId: challenge.id });
+        setMfaMessage("Enter the 6-digit code from your authenticator app.");
+        setPending(false);
+        return;
+      }
+
+      if (mfaRequired) {
+        window.location.replace("/admin/mfa/enroll");
+        return;
+      }
+
+      window.location.replace("/admin/dashboard");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not sign in.");
+      setPending(false);
+    }
+  }
+
+  async function handleMfaVerify(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (!mfaStep) return;
+    setError(null);
+    setPending(true);
+
+    const code = String(new FormData(e.currentTarget).get("code") ?? "").trim();
+    if (!code) {
+      setError("Authenticator code is required.");
+      setPending(false);
+      return;
+    }
+
+    try {
+      const supabase = createClient();
+      const { error: verifyError } = await supabase.auth.mfa.verify({
+        factorId: mfaStep.factorId,
+        challengeId: mfaStep.challengeId,
+        code,
+      });
+      if (verifyError) {
+        setError(verifyError.message);
+        setPending(false);
+        return;
+      }
+      window.location.replace("/admin/dashboard");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Verification failed.");
+      setPending(false);
+    }
+  }
 
   if (mfaStep) {
     return (
-      <form action={mfaAction} className="space-y-4">
-        <input type="hidden" name="factor_id" value={mfaStep.factorId} />
-        <input type="hidden" name="challenge_id" value={mfaStep.challengeId} />
+      <form onSubmit={handleMfaVerify} className="space-y-4">
         <p className="text-sm text-slate-300">
-          {pwState.message ?? "Enter the 6-digit code from your authenticator app."}
+          {mfaMessage ?? "Enter the 6-digit code from your authenticator app."}
         </p>
         <div>
           <label htmlFor="code" className="mb-1.5 block text-sm font-medium">
@@ -50,18 +144,18 @@ export function AdminLoginForm() {
             className="h-12 w-full rounded-lg border border-slate-700 bg-slate-800 px-3 text-center text-lg tracking-[0.3em] outline-none focus:border-brand-400 focus:ring-2 focus:ring-brand-400/30"
           />
         </div>
-        <SubmitButton className="w-full" pendingText="Verifying…">
+        <SubmitButton className="w-full" pendingText="Verifying…" isPending={pending}>
           Verify &amp; sign in
         </SubmitButton>
-        {state.error ? (
-          <p className="rounded-lg bg-red-950/60 px-3 py-2 text-sm text-red-300">{state.error}</p>
+        {error ? (
+          <p className="rounded-lg bg-red-950/60 px-3 py-2 text-sm text-red-300">{error}</p>
         ) : null}
       </form>
     );
   }
 
   return (
-    <form action={pwAction} className="space-y-4">
+    <form onSubmit={handlePasswordLogin} className="space-y-4">
       <div>
         <label htmlFor="email" className="mb-1.5 block text-sm font-medium">
           Email
@@ -89,12 +183,12 @@ export function AdminLoginForm() {
         />
       </div>
 
-      <SubmitButton className="w-full" pendingText="Verifying…">
+      <SubmitButton className="w-full" pendingText="Verifying…" isPending={pending}>
         Sign in
       </SubmitButton>
 
-      {state.error ? (
-        <p className="rounded-lg bg-red-950/60 px-3 py-2 text-sm text-red-300">{state.error}</p>
+      {error ? (
+        <p className="rounded-lg bg-red-950/60 px-3 py-2 text-sm text-red-300">{error}</p>
       ) : null}
     </form>
   );

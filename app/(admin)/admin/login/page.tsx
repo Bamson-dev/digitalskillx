@@ -20,7 +20,7 @@ export default function AdminLoginPage() {
             Restricted access. Admin credentials only.
           </p>
         </div>
-        <AdminLoginForm />
+        <AdminLoginForm mfaRequired={process.env.ADMIN_MFA_REQUIRED !== "false"} />
       </div>
       <p className="mt-6 text-xs text-slate-500">
         Protected area · activity is audited

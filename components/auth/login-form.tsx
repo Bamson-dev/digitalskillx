@@ -3,25 +3,55 @@
 import Link from "next/link";
 import { useState } from "react";
 import { useFormState } from "react-dom";
-import {
-  signInWithPassword,
-  signInWithMagicLink,
-  type AuthState,
-} from "@/app/(auth)/actions";
+import { signInWithMagicLink, type AuthState } from "@/app/(auth)/actions";
+import { createClient } from "@/lib/supabase/client";
 import { Input, Label } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
 import { SubmitButton } from "@/components/auth/submit-button";
-import { useAuthRedirect } from "@/components/auth/use-auth-redirect";
 
 const initial: AuthState = {};
 
 export function LoginForm({ next, authError }: { next: string; authError?: string }) {
   const [mode, setMode] = useState<"password" | "magic">("password");
-  const [pwState, pwAction] = useFormState(signInWithPassword, initial);
   const [magicState, magicAction] = useFormState(signInWithMagicLink, initial);
-  const state = mode === "password" ? pwState : magicState;
-  useAuthRedirect(pwState);
-  useAuthRedirect(magicState);
+  const [pwError, setPwError] = useState<string | null>(null);
+  const [pwPending, setPwPending] = useState(false);
+
+  async function handlePasswordLogin(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setPwError(null);
+    setPwPending(true);
+
+    const form = e.currentTarget;
+    const email = String(new FormData(form).get("email") ?? "")
+      .trim()
+      .toLowerCase();
+    const password = String(new FormData(form).get("password") ?? "");
+
+    if (!email || !password) {
+      setPwError("Email and password are required.");
+      setPwPending(false);
+      return;
+    }
+
+    try {
+      const supabase = createClient();
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) {
+        setPwError(error.message);
+        setPwPending(false);
+        return;
+      }
+
+      const destination = next.startsWith("/") ? next : "/dashboard";
+      window.location.replace(destination);
+    } catch (err) {
+      setPwError(err instanceof Error ? err.message : "Could not sign in.");
+      setPwPending(false);
+    }
+  }
+
+  const state = mode === "password" ? { error: pwError ?? undefined } : magicState;
 
   return (
     <div className="space-y-5">
@@ -33,8 +63,7 @@ export function LoginForm({ next, authError }: { next: string; authError?: strin
       </div>
 
       {mode === "password" ? (
-        <form action={pwAction} className="space-y-4">
-          <input type="hidden" name="next" value={next} />
+        <form onSubmit={handlePasswordLogin} className="space-y-4">
           <div>
             <Label htmlFor="email">Email</Label>
             <Input id="email" name="email" type="email" required autoComplete="email" />
@@ -60,7 +89,7 @@ export function LoginForm({ next, authError }: { next: string; authError?: strin
             <input type="checkbox" name="remember" defaultChecked className="rounded" />
             Remember me for 30 days
           </label>
-          <SubmitButton className="w-full" pendingText="Signing in…">
+          <SubmitButton className="w-full" pendingText="Signing in…" isPending={pwPending}>
             Log in
           </SubmitButton>
         </form>
@@ -95,7 +124,7 @@ export function LoginForm({ next, authError }: { next: string; authError?: strin
           {state.error}
         </p>
       ) : null}
-      {state.message ? (
+      {"message" in state && state.message ? (
         <p className="rounded-lg bg-green-50 px-3 py-2 text-sm text-green-700">
           {state.message}
         </p>

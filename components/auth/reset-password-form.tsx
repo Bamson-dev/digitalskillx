@@ -1,17 +1,41 @@
 "use client";
 
-import { useFormState } from "react-dom";
-import { updatePassword, type AuthState } from "@/app/(auth)/actions";
+import { useState } from "react";
+import { createClient } from "@/lib/supabase/client";
 import { Label } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
 import { SubmitButton } from "@/components/auth/submit-button";
-import { useAuthRedirect } from "@/components/auth/use-auth-redirect";
-
-const initial: AuthState = {};
 
 export function ResetPasswordForm() {
-  const [state, action] = useFormState(updatePassword, initial);
-  useAuthRedirect(state);
+  const [error, setError] = useState<string | null>(null);
+  const [pending, setPending] = useState(false);
+
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setError(null);
+    setPending(true);
+
+    const password = String(new FormData(e.currentTarget).get("password") ?? "");
+    if (password.length < 8) {
+      setError("Password must be at least 8 characters.");
+      setPending(false);
+      return;
+    }
+
+    try {
+      const supabase = createClient();
+      const { error: updateError } = await supabase.auth.updateUser({ password });
+      if (updateError) {
+        setError(updateError.message);
+        setPending(false);
+        return;
+      }
+      window.location.replace("/dashboard");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not update password.");
+      setPending(false);
+    }
+  }
 
   return (
     <div className="space-y-5">
@@ -22,7 +46,7 @@ export function ResetPasswordForm() {
         </p>
       </div>
 
-      <form action={action} className="space-y-4">
+      <form onSubmit={handleSubmit} className="space-y-4">
         <div>
           <Label htmlFor="password">New password</Label>
           <PasswordInput
@@ -33,15 +57,13 @@ export function ResetPasswordForm() {
             autoComplete="new-password"
           />
         </div>
-        <SubmitButton className="w-full" pendingText="Updating…">
+        <SubmitButton className="w-full" pendingText="Updating…" isPending={pending}>
           Update password
         </SubmitButton>
       </form>
 
-      {state.error ? (
-        <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
-          {state.error}
-        </p>
+      {error ? (
+        <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>
       ) : null}
     </div>
   );
