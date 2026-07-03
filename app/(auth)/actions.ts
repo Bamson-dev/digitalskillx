@@ -7,6 +7,7 @@ import { sendWelcomeEmailIfNeeded } from "@/lib/system-email-triggers";
 import { sendMagicLinkEmail, sendPasswordResetEmail } from "@/lib/auth-email";
 import { serviceRoleKeyMissingMessage, serviceRoleKeyMissingMessageAsync } from "@/lib/env-service-role";
 import { formatErrorMessage } from "@/lib/format-error-message";
+import { verifyAccessToken } from "@/lib/verify-access-token";
 
 export type AuthState = { error?: string; message?: string; redirectTo?: string };
 
@@ -180,13 +181,18 @@ export async function signOut() {
   redirect("/login");
 }
 
-/** Ensure profiles row exists after client sign-in (uses service role, not session cookies). */
+/** Ensure profiles row exists after client sign-in (verified via access token). */
 export async function healStudentProfileByLogin(
   email: string,
   userId: string,
+  accessToken: string,
   fullName?: string,
 ): Promise<{ healed: boolean; error?: string }> {
   const normalized = email.trim().toLowerCase();
+  const user = await verifyAccessToken(accessToken);
+  if (!user || user.id !== userId || user.email?.trim().toLowerCase() !== normalized) {
+    return { healed: false, error: "Session verification failed. Refresh and try again." };
+  }
 
   try {
     const admin = await createAdminClientAsync();
@@ -201,7 +207,11 @@ export async function healStudentProfileByLogin(
       {
         id: userId,
         email: normalized,
-        full_name: fullName ?? normalized.split("@")[0],
+        full_name:
+          fullName ??
+          (user.user_metadata?.full_name as string | undefined) ??
+          (user.user_metadata?.name as string | undefined) ??
+          normalized.split("@")[0],
         role: "student",
         is_suspended: false,
       },

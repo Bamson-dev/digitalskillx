@@ -42,10 +42,16 @@ export function LoginForm({ next, authError }: { next: string; authError?: strin
         setPwPending(false);
         return;
       }
+      if (!data.session?.access_token) {
+        setPwError("Sign-in succeeded but no session was returned. Check Supabase configuration.");
+        setPwPending(false);
+        return;
+      }
 
       const heal = await healStudentProfileByLogin(
         email,
         data.user.id,
+        data.session.access_token,
         (data.user.user_metadata?.full_name as string | undefined) ??
           (data.user.user_metadata?.name as string | undefined),
       );

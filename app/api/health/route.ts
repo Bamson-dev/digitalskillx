@@ -7,6 +7,7 @@ import { createAdminClientAsync } from "@/lib/supabase/admin";
 import { serviceRoleKeyConfigured } from "@/lib/env-service-role";
 import { integrationSecretsDiagnostics } from "@/lib/secrets-diagnostics";
 import { supabaseProjectRef } from "@/lib/supabase-project-ref";
+import { configuredAdminEmail } from "@/lib/admin-email";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -29,6 +30,8 @@ export async function GET() {
     youtubeApiKeySource: youtube.source,
     supabaseServiceRole: serviceRoleReady ? "configured" : "missing",
     supabaseProjectRef: supabaseProjectRef() ?? "unknown",
+    supabaseUrlConfigured: process.env.NEXT_PUBLIC_SUPABASE_URL ? "yes" : "no",
+    adminEmail: configuredAdminEmail(),
     cronBootstrap: secrets.cronBootstrap,
   };
 

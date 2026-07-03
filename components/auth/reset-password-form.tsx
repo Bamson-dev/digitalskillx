@@ -35,16 +35,21 @@ export function ResetPasswordForm() {
         return;
       }
       if (user?.email) {
-        const heal = await healStudentProfileByLogin(
-          user.email,
-          user.id,
-          (user.user_metadata?.full_name as string | undefined) ??
-            (user.user_metadata?.name as string | undefined),
-        );
-        if (!heal.healed) {
-          setError(heal.error ?? "Could not load your profile.");
-          setPending(false);
-          return;
+        const { data: sessionData } = await supabase.auth.getSession();
+        const accessToken = sessionData.session?.access_token;
+        if (accessToken) {
+          const heal = await healStudentProfileByLogin(
+            user.email,
+            user.id,
+            accessToken,
+            (user.user_metadata?.full_name as string | undefined) ??
+              (user.user_metadata?.name as string | undefined),
+          );
+          if (!heal.healed) {
+            setError(heal.error ?? "Could not load your profile.");
+            setPending(false);
+            return;
+          }
         }
       }
       window.location.replace("/dashboard");

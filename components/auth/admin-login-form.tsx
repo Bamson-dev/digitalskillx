@@ -44,8 +44,13 @@ export function AdminLoginForm({ mfaRequired = true }: { mfaRequired?: boolean }
         setPending(false);
         return;
       }
+      if (!data.session?.access_token) {
+        setError("Sign-in succeeded but no session was returned. Check Supabase configuration.");
+        setPending(false);
+        return;
+      }
 
-      const heal = await healAdminProfileByLogin(email, data.user.id);
+      const heal = await healAdminProfileByLogin(email, data.user.id, data.session.access_token);
       if (!heal.healed) {
         await supabase.auth.signOut();
         setError(heal.error ?? "Could not verify admin profile.");
