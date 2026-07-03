@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { submitStudentPasswordLogin } from "@/app/(auth)/login-actions";
 import { Input, Label } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
 import { SubmitButton } from "@/components/auth/submit-button";
@@ -12,7 +11,7 @@ export function StudentPasswordLoginForm({
   authError?: string;
 }) {
   return (
-    <form action={submitStudentPasswordLogin} className="space-y-4">
+    <form action="/api/auth/login" method="POST" className="space-y-4">
       <input type="hidden" name="next" value={next} />
       <div>
         <Label htmlFor="email">Email</Label>

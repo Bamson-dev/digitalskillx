@@ -1,10 +1,11 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { runStudentLogin } from "@/lib/auth/run-student-login";
 import { createRouteHandlerClient } from "@/lib/supabase/route-handler";
+import { redirectWithCookies } from "@/lib/supabase/redirect-with-cookies";
 
 export const dynamic = "force-dynamic";
 
-/** Password login without client JS — immune to stale cached bundles. */
+/** Password login — session cookies are attached to the redirect response. */
 export async function POST(request: NextRequest) {
   const formData = await request.formData();
   const email = String(formData.get("email") ?? "");
@@ -12,9 +13,8 @@ export async function POST(request: NextRequest) {
   const nextRaw = String(formData.get("next") ?? "/dashboard");
   const next = nextRaw.startsWith("/") ? nextRaw : "/dashboard";
 
-  const successUrl = new URL(next, request.url);
-  let response = NextResponse.redirect(successUrl, 303);
-  const supabase = createRouteHandlerClient(request, response);
+  const cookieHolder = NextResponse.next();
+  const supabase = createRouteHandlerClient(request, cookieHolder);
 
   const result = await runStudentLogin({ email, password }, supabase);
   if (!result.ok) {
@@ -23,5 +23,5 @@ export async function POST(request: NextRequest) {
     return NextResponse.redirect(errorUrl, 303);
   }
 
-  return response;
+  return redirectWithCookies(request, cookieHolder, next);
 }

@@ -1,19 +1,18 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { runAdminLogin } from "@/lib/auth/run-admin-login";
-import { isAdminMfaRequired } from "@/lib/admin-mfa";
 import { createRouteHandlerClient } from "@/lib/supabase/route-handler";
+import { redirectWithCookies } from "@/lib/supabase/redirect-with-cookies";
 
 export const dynamic = "force-dynamic";
 
-/** Admin password login without client JS — immune to stale cached bundles. */
+/** Admin password login — session cookies are attached to the redirect response. */
 export async function POST(request: NextRequest) {
   const formData = await request.formData();
   const email = String(formData.get("email") ?? "");
   const password = String(formData.get("password") ?? "");
 
-  const target = isAdminMfaRequired() ? "/admin/mfa/enroll" : "/admin/dashboard";
-  const response = NextResponse.redirect(new URL(target, request.url), 303);
-  const supabase = createRouteHandlerClient(request, response);
+  const cookieHolder = NextResponse.next();
+  const supabase = createRouteHandlerClient(request, cookieHolder);
 
   const result = await runAdminLogin({ email, password }, supabase);
   if (!result.ok) {
@@ -22,5 +21,5 @@ export async function POST(request: NextRequest) {
     return NextResponse.redirect(errorUrl, 303);
   }
 
-  return response;
+  return redirectWithCookies(request, cookieHolder, result.redirectTo);
 }

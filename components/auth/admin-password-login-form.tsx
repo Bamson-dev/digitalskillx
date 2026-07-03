@@ -1,10 +1,9 @@
-import { submitAdminPasswordLogin } from "@/app/(admin)/admin/login-actions";
 import { SubmitButton } from "@/components/auth/submit-button";
 import { PasswordInput } from "@/components/ui/password-input";
 
 export function AdminPasswordLoginForm({ authError }: { authError?: string }) {
   return (
-    <form action={submitAdminPasswordLogin} className="space-y-4">
+    <form action="/api/auth/admin-login" method="POST" className="space-y-4">
       <div>
         <label htmlFor="email" className="mb-1.5 block text-sm font-medium">
           Email
