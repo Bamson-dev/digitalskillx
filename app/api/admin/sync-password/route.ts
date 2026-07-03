@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createAdminClientAsync } from "@/lib/supabase/admin";
+import { bootstrapRuntimeSecrets } from "@/lib/bootstrap-runtime-secrets";
 
 export const dynamic = "force-dynamic";
 
@@ -10,9 +11,22 @@ export const dynamic = "force-dynamic";
  * curl -X POST -H "Authorization: Bearer YOUR_CRON_SECRET" https://your-staging-url/api/admin/sync-password
  */
 export async function POST(request: NextRequest) {
-  const secret = process.env.CRON_SECRET;
-  if (!secret || request.headers.get("authorization") !== `Bearer ${secret}`) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const secret = process.env.CRON_SECRET?.trim();
+  const auth = request.headers.get("authorization")?.trim() ?? "";
+  const expected = secret ? `Bearer ${secret}` : "";
+
+  if (!secret) {
+    return NextResponse.json(
+      { error: "CRON_SECRET is not set on the server (Vercel → Settings → Environment Variables)." },
+      { status: 503 },
+    );
+  }
+
+  if (auth !== expected) {
+    return NextResponse.json(
+      { error: "Unauthorized — Bearer token does not match CRON_SECRET on the server." },
+      { status: 401 },
+    );
   }
 
   const email = process.env.ADMIN_EMAIL?.trim().toLowerCase();
@@ -26,6 +40,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
+    await bootstrapRuntimeSecrets();
     const admin = await createAdminClientAsync();
 
     const { data: profile } = await admin

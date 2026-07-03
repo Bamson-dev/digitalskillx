@@ -40,7 +40,7 @@ export async function signInAdmin(
     await logAudit({ action: "admin_login_failed", metadata: { email, ip } });
     const hint =
       error.message === "Invalid login credentials"
-        ? " Password in Supabase Auth may not match ADMIN_PASSWORD on the server. Set ADMIN_PASSWORD_SYNC=true in Coolify and redeploy, or run: curl -X POST -H \"Authorization: Bearer YOUR_CRON_SECRET\" https://digitalskillx.com/api/admin/sync-password"
+        ? " Password in Supabase Auth may not match ADMIN_PASSWORD on the server. Set ADMIN_PASSWORD_SYNC=true in Vercel/Coolify and redeploy, or run: curl -X POST -H \"Authorization: Bearer YOUR_CRON_SECRET\" https://www.digitalskillx.com/api/admin/sync-password"
         : error.message === "Email not confirmed"
           ? " In Supabase → Authentication → Users → open this user → turn on Auto Confirm, or run: update auth.users set email_confirmed_at = now() where email = 'admin@digitalskillx.com';"
           : "";

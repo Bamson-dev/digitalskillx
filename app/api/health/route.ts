@@ -3,7 +3,9 @@ import { bootstrapRuntimeSecrets } from "@/lib/bootstrap-runtime-secrets";
 import { paystackSecretKeyConfigured } from "@/lib/env-paystack";
 import { youtubeApiKeyDiagnostics } from "@/lib/env-youtube";
 import { runtimeEnvDiagnostics } from "@/lib/runtime-env";
-import { isServiceRoleConfigured, createAdminClientAsync } from "@/lib/supabase/admin";
+import { createAdminClientAsync } from "@/lib/supabase/admin";
+import { serviceRoleKeyConfigured } from "@/lib/env-service-role";
+import { integrationSecretsDiagnostics } from "@/lib/secrets-diagnostics";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -13,15 +15,19 @@ export async function GET() {
 
   const youtube = await youtubeApiKeyDiagnostics();
   const paystackReady = await paystackSecretKeyConfigured();
+  const secrets = await integrationSecretsDiagnostics();
+  const serviceRoleReady = await serviceRoleKeyConfigured();
 
   const checks: Record<string, string> = {
     status: "ok",
     timestamp: new Date().toISOString(),
+    deployment: secrets.deployment,
     database: "unknown",
     paystack: paystackReady ? "configured" : "unconfigured",
     youtubeApiKey: youtube.status,
     youtubeApiKeySource: youtube.source,
-    supabaseServiceRole: isServiceRoleConfigured() ? "configured" : "missing",
+    supabaseServiceRole: serviceRoleReady ? "configured" : "missing",
+    cronBootstrap: secrets.cronBootstrap,
   };
 
   try {
@@ -55,6 +61,7 @@ export async function GET() {
       ...checks,
       runtimeEnv: runtimeEnvDiagnostics(),
       youtube: await youtubeApiKeyDiagnostics(),
+      secrets,
     },
     { status: httpStatus },
   );

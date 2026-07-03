@@ -123,7 +123,9 @@ export async function resolveServiceRoleKey(
 
   return {
     hint:
-      "Supabase service role key is not saved yet. Run sql/platform-secrets-service-role.sql in Supabase, then paste the service_role secret under Admin → Settings → Integrations and click Save. (Coolify env alone is not enough unless Runtime-only + redeploy.)",
+      process.env.VERCEL === "1"
+        ? "Add SUPABASE_SERVICE_ROLE_KEY in Vercel → Settings → Environment Variables (Production) and redeploy. Staging/Coolify env vars do not apply to digitalskillx.com."
+        : "Save the service role key under Admin → Settings → Integrations, or set SUPABASE_SERVICE_ROLE_KEY (Runtime only) and redeploy.",
   };
 }
 
@@ -140,9 +142,10 @@ export async function serviceRoleKeyConfigured(supabase?: SupabaseClient<Databas
 }
 
 export function serviceRoleKeyMissingMessage() {
+  const host = process.env.VERCEL === "1" ? "Vercel" : "Coolify";
   return (
-    "Server could not load the Supabase service role key. On Coolify: set SUPABASE_SERVICE_ROLE_KEY " +
-    "(Runtime only) and use npm start, OR save the key in platform_secrets and set the same CRON_SECRET " +
-    "in Coolify plus platform_settings.cron_auth_secret (run supabase/migrations/0020_server_bootstrap_platform_secrets.sql)."
+    `Server could not load the Supabase service role key. Production runs on ${host}. ` +
+    `Add SUPABASE_SERVICE_ROLE_KEY under ${host} → Environment Variables (Production), then redeploy. ` +
+    "Or run sql/server-bootstrap-platform-secrets.sql and set platform_settings.cron_auth_secret to match CRON_SECRET."
   );
 }

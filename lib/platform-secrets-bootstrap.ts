@@ -1,5 +1,5 @@
 import "server-only";
-import { setCachedIntegrationSecret } from "@/lib/integration-secrets-cache";
+import { setCachedIntegrationSecret, getCachedIntegrationSecret } from "@/lib/integration-secrets-cache";
 import { preloadRuntimeEnvIntoProcessEnv, runtimeEnv } from "@/lib/runtime-env";
 
 export type PlatformSecretsRow = {
@@ -26,9 +26,21 @@ const SERVICE_ROLE_ENV_NAMES = [
 
 export function readServiceRoleFromEnv(): string | undefined {
   preloadRuntimeEnvIntoProcessEnv();
+
+  const cached = getCachedIntegrationSecret("SUPABASE_SERVICE_ROLE_KEY");
+  if (cached) return cached;
+
   for (const name of SERVICE_ROLE_ENV_NAMES) {
+    const fromProcess = process.env[name]?.trim();
+    if (fromProcess) {
+      setCachedIntegrationSecret("SUPABASE_SERVICE_ROLE_KEY", fromProcess);
+      return fromProcess;
+    }
     const value = runtimeEnv(name);
-    if (value) return value;
+    if (value) {
+      setCachedIntegrationSecret("SUPABASE_SERVICE_ROLE_KEY", value);
+      return value;
+    }
   }
   return undefined;
 }
@@ -72,27 +84,51 @@ export async function fetchPlatformSecretsWithServiceRole(
 
 /** Load platform_secrets using CRON_SECRET + server_bootstrap_platform_secrets RPC. */
 export async function fetchPlatformSecretsViaCronAuth(): Promise<PlatformSecretsRow | null> {
-  const cronSecret = runtimeEnv("CRON_SECRET");
+  const cronSecret = runtimeEnv("CRON_SECRET")?.trim();
   const supabaseUrl = runtimeEnv("NEXT_PUBLIC_SUPABASE_URL");
   const anonKey = runtimeEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY");
   if (!cronSecret || !supabaseUrl || !anonKey) return null;
 
   try {
-    const res = await fetch(`${supabaseUrl.replace(/\/$/, "")}/rest/v1/rpc/server_bootstrap_platform_secrets`, {
-      method: "POST",
-      headers: {
-        apikey: anonKey,
-        Authorization: `Bearer ${anonKey}`,
-        "Content-Type": "application/json",
+    const res = await fetch(
+      `${supabaseUrl.replace(/\/$/, "")}/rest/v1/rpc/server_bootstrap_platform_secrets`,
+      {
+        method: "POST",
+        headers: {
+          apikey: anonKey,
+          Authorization: `Bearer ${anonKey}`,
+          "Content-Type": "application/json",
+          Prefer: "return=representation",
+        },
+        body: JSON.stringify({ p_cron_secret: cronSecret }),
+        cache: "no-store",
       },
-      body: JSON.stringify({ p_cron_secret: cronSecret }),
-      cache: "no-store",
-    });
-    if (!res.ok) return null;
+    );
+
+    if (!res.ok) {
+      console.warn(
+        `[digitalskillx] CRON bootstrap RPC HTTP ${res.status} — run sql/server-bootstrap-platform-secrets.sql in Supabase`,
+      );
+      return null;
+    }
+
     const data = (await res.json()) as PlatformSecretsRow | null;
-    if (!data || typeof data !== "object") return null;
+    if (!data || typeof data !== "object") {
+      console.warn(
+        "[digitalskillx] CRON bootstrap returned empty — check platform_settings.cron_auth_secret matches CRON_SECRET",
+      );
+      return null;
+    }
+
+    const role = data.supabase_service_role_key?.trim();
+    if (!role || (role.includes("PASTE_") && role.includes("_HERE"))) {
+      console.warn("[digitalskillx] CRON bootstrap: service role missing or still a placeholder in platform_secrets");
+      return null;
+    }
+
     return data;
-  } catch {
+  } catch (err) {
+    console.warn("[digitalskillx] CRON bootstrap fetch failed:", err);
     return null;
   }
 }
