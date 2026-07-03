@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getAdminMfaStatus, isAdminMfaRequired } from "@/lib/admin-mfa";
+import { ensureStudentProfile } from "@/lib/ensure-student-profile";
 import type { Profile } from "@/types/database";
 
 /** Returns the current user's profile, or null if signed out. */
@@ -15,14 +16,14 @@ export async function getProfile(): Promise<Profile | null> {
     .from("profiles")
     .select("*")
     .eq("id", user.id)
-    .single();
+    .maybeSingle();
   return data ?? null;
 }
 
 /** Guards a student route. Redirects to /login when not authenticated. */
 export async function requireStudent(): Promise<Profile> {
-  const profile = await getProfile();
-  if (!profile) redirect("/login");
+  const profile = (await getProfile()) ?? (await ensureStudentProfile());
+  if (!profile) redirect("/login?error=no_profile");
   if (profile.is_suspended) redirect("/login?error=account_suspended");
   // Admins can also browse student views, so no role rejection here.
   void touchLastActive(profile);

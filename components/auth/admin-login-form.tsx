@@ -87,7 +87,7 @@ export function AdminLoginForm({ mfaRequired = true }: { mfaRequired?: boolean }
           access_token: data.session.access_token,
           refresh_token: data.session.refresh_token,
         },
-        destination,
+        `${window.location.origin}${destination}`,
       );
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not sign in.");
@@ -127,7 +127,7 @@ export function AdminLoginForm({ mfaRequired = true }: { mfaRequired?: boolean }
             access_token: sessionData.session.access_token,
             refresh_token: sessionData.session.refresh_token,
           },
-          "/admin/dashboard",
+          `${window.location.origin}/admin/dashboard`,
         );
         return;
       }

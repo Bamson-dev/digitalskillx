@@ -63,12 +63,13 @@ export function LoginForm({ next, authError }: { next: string; authError?: strin
       }
 
       const destination = next.startsWith("/") ? next : "/dashboard";
+      const absoluteDestination = `${window.location.origin}${destination}`;
       await syncSessionAndRedirect(
         {
           access_token: data.session.access_token,
           refresh_token: data.session.refresh_token,
         },
-        destination,
+        absoluteDestination,
       );
     } catch (err) {
       setPwError(err instanceof Error ? err.message : "Could not sign in.");

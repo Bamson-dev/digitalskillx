@@ -20,7 +20,19 @@ export default async function LoginPage({
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (user) redirect(next);
+
+  if (user) {
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("role, is_suspended")
+      .eq("id", user.id)
+      .maybeSingle();
+    if (profile && !profile.is_suspended) {
+      const destination =
+        profile.role === "admin" ? "/admin/dashboard" : next;
+      redirect(destination);
+    }
+  }
 
   const authError = authQueryErrorMessage(searchParams?.error);
   return <LoginForm next={next} authError={authError} />;

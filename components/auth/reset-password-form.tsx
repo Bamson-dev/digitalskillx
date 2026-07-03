@@ -54,7 +54,7 @@ export function ResetPasswordForm() {
           }
           await syncSessionAndRedirect(
             { access_token: accessToken, refresh_token: refreshToken },
-            "/dashboard",
+            `${window.location.origin}/dashboard`,
           );
           return;
         }

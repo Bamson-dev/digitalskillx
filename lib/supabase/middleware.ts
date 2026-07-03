@@ -40,6 +40,13 @@ function isPublic(pathname: string) {
  * the admin layout; RLS is the ultimate source of truth.
  */
 export async function updateSession(request: NextRequest) {
+  const host = request.headers.get("host") ?? "";
+  if (host === "digitalskillx.com") {
+    const url = request.nextUrl.clone();
+    url.host = "www.digitalskillx.com";
+    return NextResponse.redirect(url, 308);
+  }
+
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
