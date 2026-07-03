@@ -44,6 +44,14 @@ export async function completeStudentLogin(input: {
       { onConflict: "id" },
     );
     if (upsertError) throw new Error(upsertError.message);
+
+    const { data: verified, error: verifyError } = await admin
+      .from("profiles")
+      .select("id")
+      .eq("id", data.user.id)
+      .maybeSingle();
+    if (verifyError) throw new Error(verifyError.message);
+    if (!verified) throw new Error("Profile was not created.");
   } catch (err) {
     await supabase.auth.signOut();
     const message = err instanceof Error ? err.message : "Could not load your profile.";

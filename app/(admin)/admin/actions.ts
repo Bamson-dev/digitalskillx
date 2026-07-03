@@ -52,42 +52,43 @@ export async function signInAdmin(
   }
 
   let profileRecord: { role: string; is_suspended: boolean } | null = null;
-  const { data: profileRow, error: profileError } = await supabase
-    .from("profiles")
-    .select("role, is_suspended")
-    .eq("id", data.user.id)
-    .maybeSingle();
-  profileRecord = profileRow;
 
-  if ((!profileRecord || profileError) && isPlatformAdminEmail(email)) {
+  if (isPlatformAdminEmail(email)) {
     try {
-      const admin = await createAdminClientAsync();
-      await ensureAdminProfile(admin, {
+      const adminClient = await createAdminClientAsync();
+      await ensureAdminProfile(adminClient, {
         userId: data.user.id,
         email,
         fullName:
           (data.user.user_metadata?.full_name as string | undefined) ?? "Platform Admin",
       });
-      const { data: healed } = await supabase
+      const { data: verified, error: verifyError } = await adminClient
         .from("profiles")
         .select("role, is_suspended")
         .eq("id", data.user.id)
         .maybeSingle();
-      profileRecord = healed;
+      if (verifyError) throw new Error(verifyError.message);
+      profileRecord = verified;
     } catch (err) {
       await supabase.auth.signOut();
       const message = err instanceof Error ? err.message : "Could not create admin profile.";
       return {
-        error: `${message} Confirm Vercel NEXT_PUBLIC_SUPABASE_URL matches the Supabase project where you ran the SQL.`,
+        error: `${message} (auth user ${data.user.id}). Confirm Vercel NEXT_PUBLIC_SUPABASE_URL matches the Supabase project where you ran the SQL — see /api/health → supabaseProjectRef.`,
       };
     }
+  } else {
+    const { data: profileRow } = await supabase
+      .from("profiles")
+      .select("role, is_suspended")
+      .eq("id", data.user.id)
+      .maybeSingle();
+    profileRecord = profileRow;
   }
 
   if (!profileRecord) {
     await supabase.auth.signOut();
     return {
-      error:
-        "No profile found for this account. In Supabase SQL Editor run: select id, email from auth.users where lower(email) = 'admin@digitalskillx.com'; then run sql/fix-admin-profile.sql in the SAME project as Vercel NEXT_PUBLIC_SUPABASE_URL.",
+      error: `No profile found for auth user ${data.user.id}. Run sql/fix-admin-profile.sql in the Supabase project matching /api/health → supabaseProjectRef.`,
     };
   }
 
