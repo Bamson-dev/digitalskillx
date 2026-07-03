@@ -1,42 +1,32 @@
-# Production: DigitalSkillX-branded auth emails (Supabase)
+# Production: DigitalSkillX auth emails (ZeptoMail)
 
-Signup now uses **DigitalSkillX welcome email** (ZeptoMail) — no Supabase confirm email.
+All student auth emails are sent by **your app** through ZeptoMail — not Supabase Auth.
 
-Password reset and magic-link emails still go through **Supabase Auth** until you configure custom SMTP in the Supabase dashboard (one-time, ~5 minutes).
+| Flow | How it works |
+|------|----------------|
+| Sign up | Service role creates account + welcome email |
+| Forgot password | `generateLink` + ZeptoMail reset template |
+| Magic link | `generateLink` + ZeptoMail sign-in template |
+| Admin reset | ZeptoMail welcome-style email with new password |
 
-## Remove "powered by Supabase" on reset / magic-link emails
+You do **not** need Supabase Dashboard → Custom SMTP.
 
-In your **production** Supabase project:
+## Requirements
 
-1. **Project Settings → Authentication → SMTP Settings**
-2. Enable **Custom SMTP**
-3. Use your ZeptoMail credentials:
+1. **`platform_secrets`** (or Coolify runtime env):
+   - `supabase_service_role_key` — required for `generateLink` and account creation
+   - `zeptomail_smtp_password` — required for sending
 
-| Field | Value |
-|-------|--------|
-| Host | `smtp.zeptomail.com` |
-| Port | `587` |
-| Username | `emailapikey` (or ZeptoMail SMTP user) |
-| Password | Your ZeptoMail SMTP password (same as Integrations) |
-| Sender email | `courses@digitalskillx.com` (or your verified ZeptoMail sender) |
-| Sender name | `DigitalSkillX` |
+2. **`NEXT_PUBLIC_SITE_URL`** = `https://digitalskillx.com` on production (reset/magic links use this origin).
 
-4. Save
-
-## Customize email templates (optional)
-
-**Authentication → Email Templates** — edit each template:
-
-- **Confirm signup** — not used for self-register anymore (welcome email replaces it)
-- **Reset password** — set subject to `Reset your DigitalSkillX password`
-- **Magic link** — set subject to `Sign in to DigitalSkillX`
-
-Replace body copy with your branding; remove any Supabase references.
+3. **Supabase → Authentication → URL Configuration** — add:
+   - `https://digitalskillx.com/auth/callback`
+   - `https://digitalskillx.com/reset-password`
 
 ## Checklist
 
-- [ ] `platform_secrets.zeptomail_smtp_password` saved (SQL or Admin → Integrations)
-- [ ] Supabase **Custom SMTP** enabled (reset / magic-link branding)
-- [ ] `NEXT_PUBLIC_SITE_URL=https://digitalskillx.com` on production deploy
-- [ ] Test: Register → welcome from **DigitalSkillX**, not Supabase Auth
-- [ ] Test: Forgot password → email from **DigitalSkillX** sender
+- [ ] ZeptoMail + service role keys saved (SQL or Admin → Integrations)
+- [ ] Production redeployed from `main`
+- [ ] Register → welcome from **DigitalSkillX**
+- [ ] Forgot password → reset from **DigitalSkillX** (no Supabase footer)
+- [ ] Magic link → sign-in from **DigitalSkillX**

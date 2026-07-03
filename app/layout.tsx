@@ -19,6 +19,7 @@ export const metadata: Metadata = {
   metadataBase: new URL(siteUrl()),
   manifest: "/manifest.webmanifest",
   appleWebApp: { capable: true, title: "DigitalSkillX", statusBarStyle: "black-translucent" },
+  other: { "mobile-web-app-capable": "yes" },
   icons: { icon: "/icon.svg", apple: "/icon.svg" },
   openGraph: {
     type: "website",

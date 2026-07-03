@@ -1,34 +1,14 @@
 "use server";
 
-import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClientAsync } from "@/lib/supabase/admin";
 import { sendWelcomeEmailIfNeeded } from "@/lib/system-email-triggers";
+import { sendMagicLinkEmail, sendPasswordResetEmail } from "@/lib/auth-email";
 import { serviceRoleKeyMissingMessage } from "@/lib/env-service-role";
+import { formatErrorMessage } from "@/lib/format-error-message";
 
 export type AuthState = { error?: string; message?: string };
-
-function siteOrigin() {
-  const fromEnv = process.env.NEXT_PUBLIC_SITE_URL?.trim();
-  if (fromEnv) {
-    try {
-      return new URL(fromEnv.replace(/\/$/, "")).origin;
-    } catch {
-      // fall through to headers / default
-    }
-  }
-  try {
-    const h = headers();
-    const host = h.get("host");
-    if (host) {
-      return `${h.get("x-forwarded-proto") ?? "https"}://${host}`;
-    }
-  } catch {
-    // headers unavailable outside a request
-  }
-  return "https://digitalskillx.com";
-}
 
 /** Email + password sign-in (PRD §4.1). */
 export async function signInWithPassword(
@@ -125,7 +105,7 @@ export async function signUpWithPassword(
   }
 }
 
-/** Passwordless magic-link login (PRD §4.1). */
+/** Passwordless magic-link login — link sent via ZeptoMail (not Supabase Auth). */
 export async function signInWithMagicLink(
   _prev: AuthState,
   formData: FormData,
@@ -133,16 +113,26 @@ export async function signInWithMagicLink(
   const email = String(formData.get("email") ?? "").trim();
   if (!email) return { error: "Enter your email address." };
 
-  const supabase = createClient();
-  const { error } = await supabase.auth.signInWithOtp({
-    email,
-    options: { emailRedirectTo: `${siteOrigin()}/auth/callback` },
-  });
-  if (error) return { error: error.message };
-  return { message: "Magic link sent. Check your email to sign in." };
+  try {
+    const result = await sendMagicLinkEmail(email);
+    if (!result.sent && !result.skipped) {
+      const message = formatErrorMessage(result.error, "Could not send sign-in link.");
+      if (message.includes("service role")) {
+        return { error: serviceRoleKeyMissingMessage() };
+      }
+      return { error: message };
+    }
+    return { message: "If that email is registered, a sign-in link is on its way." };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Could not send sign-in link.";
+    if (message.includes("service role")) {
+      return { error: serviceRoleKeyMissingMessage() };
+    }
+    return { error: message };
+  }
 }
 
-/** Forgot password — sends reset email (PRD §4.1). */
+/** Forgot password — reset link sent via ZeptoMail (not Supabase Auth). */
 export async function sendPasswordReset(
   _prev: AuthState,
   formData: FormData,
@@ -150,12 +140,23 @@ export async function sendPasswordReset(
   const email = String(formData.get("email") ?? "").trim();
   if (!email) return { error: "Enter your email address." };
 
-  const supabase = createClient();
-  const { error } = await supabase.auth.resetPasswordForEmail(email, {
-    redirectTo: `${siteOrigin()}/auth/callback?next=/reset-password`,
-  });
-  if (error) return { error: error.message };
-  return { message: "If that email exists, a reset link is on its way." };
+  try {
+    const result = await sendPasswordResetEmail(email);
+    if (!result.sent && !result.skipped) {
+      const message = formatErrorMessage(result.error, "Could not send reset link.");
+      if (message.includes("service role")) {
+        return { error: serviceRoleKeyMissingMessage() };
+      }
+      return { error: message };
+    }
+    return { message: "If that email exists, a reset link is on its way." };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Could not send reset link.";
+    if (message.includes("service role")) {
+      return { error: serviceRoleKeyMissingMessage() };
+    }
+    return { error: message };
+  }
 }
 
 /** Set a new password after following the reset link. */

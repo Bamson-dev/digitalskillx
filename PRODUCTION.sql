@@ -10,7 +10,6 @@
 --   1. Run PRODUCTION-RUN-FIRST.sql  (creates is_admin)
 --   2. Run THIS FILE from line 1      (schema + tables)
 --   3. Scroll to BOTTOM → replace PASTE_…_HERE keys → Run again
---   4. Supabase Dashboard → Custom SMTP (see docs/PRODUCTION-SUPABASE-AUTH-SMTP.md)
 --
 -- ============================================================================
 

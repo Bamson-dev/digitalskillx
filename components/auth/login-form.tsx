@@ -14,7 +14,7 @@ import { SubmitButton } from "@/components/auth/submit-button";
 
 const initial: AuthState = {};
 
-export function LoginForm({ next }: { next: string }) {
+export function LoginForm({ next, authError }: { next: string; authError?: string }) {
   const [mode, setMode] = useState<"password" | "magic">("password");
   const [pwState, pwAction] = useFormState(signInWithPassword, initial);
   const [magicState, magicAction] = useFormState(signInWithMagicLink, initial);
@@ -82,6 +82,10 @@ export function LoginForm({ next }: { next: string }) {
           ? "Use a magic link instead"
           : "Use email and password instead"}
       </button>
+
+      {authError ? (
+        <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{authError}</p>
+      ) : null}
 
       {state.error ? (
         <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
