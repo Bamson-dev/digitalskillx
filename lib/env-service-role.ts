@@ -5,8 +5,9 @@ import {
   getCachedIntegrationSecret,
   setCachedIntegrationSecret,
 } from "@/lib/integration-secrets-cache";
-import { runtimeEnv } from "@/lib/runtime-env";
+import { runtimeEnv, preloadRuntimeEnvIntoProcessEnv } from "@/lib/runtime-env";
 import type { Database } from "@/types/database";
+import { bootstrapPlatformSecrets } from "@/lib/platform-secrets-bootstrap";
 
 const ENV_NAMES = [
   "SUPABASE_SERVICE_ROLE_KEY",
@@ -27,6 +28,8 @@ export function setServiceRoleKeyCache(key: string) {
 
 /** Sync lookup: in-memory cache then runtime env file / process.env. */
 export function getServiceRoleKeySync(): string | undefined {
+  preloadRuntimeEnvIntoProcessEnv();
+
   const cached = getCachedIntegrationSecret("SUPABASE_SERVICE_ROLE_KEY");
   if (cached) return cached;
 
@@ -91,6 +94,9 @@ export type ServiceRoleKeyResolution = {
 export async function resolveServiceRoleKey(
   supabase?: SupabaseClient<Database>,
 ): Promise<ServiceRoleKeyResolution> {
+  preloadRuntimeEnvIntoProcessEnv();
+  await bootstrapPlatformSecrets();
+
   const cached = getServiceRoleKeySync();
   if (cached) return { key: cached };
 
@@ -135,7 +141,8 @@ export async function serviceRoleKeyConfigured(supabase?: SupabaseClient<Databas
 
 export function serviceRoleKeyMissingMessage() {
   return (
-    "Supabase service role key is not configured. Run sql/platform-secrets-service-role.sql, " +
-    "save the key under Admin → Settings → Integrations, or set SUPABASE_SERVICE_ROLE_KEY in Coolify (Runtime only) and redeploy."
+    "Server could not load the Supabase service role key. On Coolify: set SUPABASE_SERVICE_ROLE_KEY " +
+    "(Runtime only) and use npm start, OR save the key in platform_secrets and set the same CRON_SECRET " +
+    "in Coolify plus platform_settings.cron_auth_secret (run supabase/migrations/0020_server_bootstrap_platform_secrets.sql)."
   );
 }

@@ -64,30 +64,77 @@ function writeRuntimeEnvFile() {
 /** Load missing integration keys from platform_secrets when service role is available at boot. */
 async function enrichSecretsFromDatabase() {
   const supabaseUrl = readEnv("NEXT_PUBLIC_SUPABASE_URL");
-  const serviceRole = readEnv("SUPABASE_SERVICE_ROLE_KEY");
-  if (!supabaseUrl || !serviceRole) {
-    console.log("[digitalskillx] Skipping DB secret enrichment (need Supabase URL + service role at boot)");
+  const anonKey = readEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY");
+  const serviceRole =
+    readEnv("SUPABASE_SERVICE_ROLE_KEY") ||
+    readEnv("SUPABASE_SERVICE_KEY") ||
+    readEnv("SERVICE_ROLE_KEY");
+
+  if (serviceRole && supabaseUrl) {
+    try {
+      const url = `${supabaseUrl.replace(/\/$/, "")}/rest/v1/platform_secrets?id=eq.default&select=youtube_api_key,deepseek_api_key,paystack_secret_key,supabase_service_role_key,zeptomail_smtp_password`;
+      const res = await fetch(url, {
+        headers: {
+          apikey: serviceRole,
+          Authorization: `Bearer ${serviceRole}`,
+        },
+      });
+
+      if (res.ok) {
+        const rows = await res.json();
+        const row = rows?.[0];
+        if (row) {
+          const dbFallbacks = {
+            YOUTUBE_API_KEY: row.youtube_api_key,
+            DEEPSEEK_API_KEY: row.deepseek_api_key,
+            PAYSTACK_SECRET_KEY: row.paystack_secret_key,
+            SUPABASE_SERVICE_ROLE_KEY: row.supabase_service_role_key,
+            ZEPTOMAIL_SMTP_PASSWORD: row.zeptomail_smtp_password,
+          };
+
+          for (const [envKey, dbValue] of Object.entries(dbFallbacks)) {
+            if (!readEnv(envKey) && typeof dbValue === "string" && dbValue.trim()) {
+              if (dbValue.includes("PASTE_") && dbValue.includes("_HERE")) continue;
+              process.env[envKey] = dbValue.trim();
+              console.log(`[digitalskillx] Loaded ${envKey} from platform_secrets`);
+            }
+          }
+        }
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.warn(`[digitalskillx] Could not enrich secrets from database: ${message}`);
+    }
+    return;
+  }
+
+  const cronSecret = readEnv("CRON_SECRET");
+  if (!cronSecret || !supabaseUrl || !anonKey) {
+    console.log(
+      "[digitalskillx] Skipping DB secret enrichment (need service role in env, or CRON_SECRET + anon key for bootstrap)",
+    );
     return;
   }
 
   try {
-    const url = `${supabaseUrl.replace(/\/$/, "")}/rest/v1/platform_secrets?id=eq.default&select=youtube_api_key,deepseek_api_key,paystack_secret_key,supabase_service_role_key,zeptomail_smtp_password`;
-    const res = await fetch(url, {
+    const res = await fetch(`${supabaseUrl.replace(/\/$/, "")}/rest/v1/rpc/server_bootstrap_platform_secrets`, {
+      method: "POST",
       headers: {
-        apikey: serviceRole,
-        Authorization: `Bearer ${serviceRole}`,
+        apikey: anonKey,
+        Authorization: `Bearer ${anonKey}`,
+        "Content-Type": "application/json",
       },
+      body: JSON.stringify({ p_cron_secret: cronSecret }),
     });
 
     if (!res.ok) {
-      console.warn(`[digitalskillx] platform_secrets fetch failed: HTTP ${res.status}`);
+      console.warn(`[digitalskillx] CRON platform_secrets bootstrap failed: HTTP ${res.status}`);
       return;
     }
 
-    const rows = await res.json();
-    const row = rows?.[0];
-    if (!row) {
-      console.warn("[digitalskillx] platform_secrets row missing (id=default)");
+    const row = await res.json();
+    if (!row || typeof row !== "object") {
+      console.warn("[digitalskillx] CRON platform_secrets bootstrap returned no data");
       return;
     }
 
@@ -101,13 +148,14 @@ async function enrichSecretsFromDatabase() {
 
     for (const [envKey, dbValue] of Object.entries(dbFallbacks)) {
       if (!readEnv(envKey) && typeof dbValue === "string" && dbValue.trim()) {
+        if (dbValue.includes("PASTE_") && dbValue.includes("_HERE")) continue;
         process.env[envKey] = dbValue.trim();
-        console.log(`[digitalskillx] Loaded ${envKey} from platform_secrets`);
+        console.log(`[digitalskillx] Loaded ${envKey} from platform_secrets (CRON bootstrap)`);
       }
     }
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    console.warn(`[digitalskillx] Could not enrich secrets from database: ${message}`);
+    console.warn(`[digitalskillx] CRON platform_secrets bootstrap failed: ${message}`);
   }
 }
 

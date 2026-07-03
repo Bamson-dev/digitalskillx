@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { createAdminClientAsync } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
 
@@ -26,7 +26,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const admin = createAdminClient();
+    const admin = await createAdminClientAsync();
 
     const { data: profile } = await admin
       .from("profiles")

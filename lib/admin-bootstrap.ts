@@ -1,5 +1,5 @@
 import "server-only";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { createAdminClientAsync } from "@/lib/supabase/admin";
 
 let bootstrapped = false;
 
@@ -8,7 +8,7 @@ function shouldSyncPassword() {
 }
 
 async function syncAdminPassword(
-  admin: ReturnType<typeof createAdminClient>,
+  admin: Awaited<ReturnType<typeof createAdminClientAsync>>,
   userId: string,
   email: string,
   password: string,
@@ -25,7 +25,7 @@ async function syncAdminPassword(
 }
 
 async function findAuthUserByEmail(
-  admin: ReturnType<typeof createAdminClient>,
+  admin: Awaited<ReturnType<typeof createAdminClientAsync>>,
   email: string,
 ) {
   let page = 1;
@@ -57,7 +57,7 @@ export async function ensureAdminAccount() {
   }
 
   try {
-    const admin = createAdminClient();
+    const admin = await createAdminClientAsync();
 
     const { data: profile } = await admin
       .from("profiles")

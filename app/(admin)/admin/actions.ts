@@ -40,7 +40,7 @@ export async function signInAdmin(
     await logAudit({ action: "admin_login_failed", metadata: { email, ip } });
     const hint =
       error.message === "Invalid login credentials"
-        ? " Check that this email exists in Supabase Auth and matches ADMIN_EMAIL on the server. If you set ADMIN_PASSWORD in Coolify, run POST /api/admin/sync-password once (with CRON_SECRET) or reset the password in Supabase Dashboard → Authentication → Users."
+        ? " Password in Supabase Auth may not match ADMIN_PASSWORD on the server. Set ADMIN_PASSWORD_SYNC=true in Coolify and redeploy, or run: curl -X POST -H \"Authorization: Bearer YOUR_CRON_SECRET\" https://digitalskillx.com/api/admin/sync-password"
         : error.message === "Email not confirmed"
           ? " In Supabase → Authentication → Users → open this user → turn on Auto Confirm, or run: update auth.users set email_confirmed_at = now() where email = 'admin@digitalskillx.com';"
           : "";

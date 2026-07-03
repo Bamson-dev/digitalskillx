@@ -35,6 +35,9 @@ export function createAdminClient() {
 
 /** Resolves service role from env or platform_secrets, then returns the admin client. */
 export async function createAdminClientAsync(supabase?: SupabaseClient<Database>) {
+  const { bootstrapRuntimeSecrets } = await import("@/lib/bootstrap-runtime-secrets");
+  await bootstrapRuntimeSecrets();
+
   const resolved = await resolveServiceRoleKey(supabase);
   if (!resolved.key) {
     throw new Error(resolved.hint ?? serviceRoleKeyMissingMessage());
