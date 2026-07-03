@@ -1,9 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { healStudentProfileByLogin } from "@/app/(auth)/actions";
-import { syncSessionAndRedirect } from "@/lib/auth/sync-session-client";
-import { createClient } from "@/lib/supabase/client";
+import { updatePassword, type AuthState } from "@/app/(auth)/actions";
 import { Label } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
 import { SubmitButton } from "@/components/auth/submit-button";
@@ -17,49 +15,18 @@ export function ResetPasswordForm() {
     setError(null);
     setPending(true);
 
-    const password = String(new FormData(e.currentTarget).get("password") ?? "");
-    if (password.length < 8) {
-      setError("Password must be at least 8 characters.");
-      setPending(false);
-      return;
-    }
-
     try {
-      const supabase = createClient();
-      const {
-        data: { user },
-        error: updateError,
-      } = await supabase.auth.updateUser({ password });
-      if (updateError) {
-        setError(updateError.message);
+      const result: AuthState = await updatePassword({}, new FormData(e.currentTarget));
+      if (result.error) {
+        setError(result.error);
         setPending(false);
         return;
       }
-      if (user?.email) {
-        const { data: sessionData } = await supabase.auth.getSession();
-        const accessToken = sessionData.session?.access_token;
-        const refreshToken = sessionData.session?.refresh_token;
-        if (accessToken && refreshToken) {
-          const heal = await healStudentProfileByLogin(
-            user.email,
-            user.id,
-            accessToken,
-            (user.user_metadata?.full_name as string | undefined) ??
-              (user.user_metadata?.name as string | undefined),
-          );
-          if (!heal.healed) {
-            setError(heal.error ?? "Could not load your profile.");
-            setPending(false);
-            return;
-          }
-          await syncSessionAndRedirect(
-            { access_token: accessToken, refresh_token: refreshToken },
-            `${window.location.origin}/dashboard`,
-          );
-          return;
-        }
+      if (result.redirectTo) {
+        window.location.replace(`${window.location.origin}${result.redirectTo}`);
+        return;
       }
-      window.location.replace("/dashboard");
+      setPending(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not update password.");
       setPending(false);

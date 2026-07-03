@@ -32,6 +32,7 @@ export default async function LoginPage({
         profile.role === "admin" ? "/admin/dashboard" : next;
       redirect(destination);
     }
+    await supabase.auth.signOut();
   }
 
   const authError = authQueryErrorMessage(searchParams?.error);

@@ -1,9 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { healAdminProfileByLogin } from "@/app/(admin)/admin/actions";
-import { syncSessionAndRedirect, syncSessionToServer } from "@/lib/auth/sync-session-client";
-import { createClient } from "@/lib/supabase/client";
+import { signInAdmin, verifyAdminMfa, type AdminLoginState } from "@/app/(admin)/admin/actions";
 import { SubmitButton } from "@/components/auth/submit-button";
 import { PasswordInput } from "@/components/ui/password-input";
 
@@ -34,61 +32,27 @@ export function AdminLoginForm({ mfaRequired = true }: { mfaRequired?: boolean }
     }
 
     try {
-      const supabase = createClient();
-      const { data, error: signInError } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-
-      if (signInError) {
-        setError(signInError.message);
+      const result: AdminLoginState = await signInAdmin({}, formData);
+      if (result.error) {
+        setError(result.error);
         setPending(false);
         return;
       }
-      if (!data.session?.access_token) {
-        setError("Sign-in succeeded but no session was returned. Check Supabase configuration.");
+      if (result.needsMfa && result.factorId && result.challengeId) {
+        setMfaStep({ factorId: result.factorId, challengeId: result.challengeId });
+        setMfaMessage(result.message ?? "Enter the 6-digit code from your authenticator app.");
         setPending(false);
         return;
       }
-
-      const heal = await healAdminProfileByLogin(email, data.user.id, data.session.access_token);
-      if (!heal.healed) {
-        await supabase.auth.signOut();
-        setError(heal.error ?? "Could not verify admin profile.");
-        setPending(false);
+      if (result.redirectTo) {
+        window.location.replace(`${window.location.origin}${result.redirectTo}`);
         return;
       }
-
-      const { data: factors } = await supabase.auth.mfa.listFactors();
-      const totp = factors?.totp?.find((f) => f.status === "verified");
-
-      if (totp) {
-        const { data: challenge, error: challengeError } = await supabase.auth.mfa.challenge({
-          factorId: totp.id,
-        });
-        if (challengeError || !challenge) {
-          setError(challengeError?.message ?? "Could not start authenticator challenge.");
-          setPending(false);
-          return;
-        }
-        await syncSessionToServer({
-          access_token: data.session.access_token,
-          refresh_token: data.session.refresh_token,
-        });
-        setMfaStep({ factorId: totp.id, challengeId: challenge.id });
-        setMfaMessage("Enter the 6-digit code from your authenticator app.");
-        setPending(false);
+      if (mfaRequired) {
+        window.location.replace(`${window.location.origin}/admin/mfa/enroll`);
         return;
       }
-
-      const destination = mfaRequired ? "/admin/mfa/enroll" : "/admin/dashboard";
-      await syncSessionAndRedirect(
-        {
-          access_token: data.session.access_token,
-          refresh_token: data.session.refresh_token,
-        },
-        `${window.location.origin}${destination}`,
-      );
+      window.location.replace(`${window.location.origin}/admin/dashboard`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not sign in.");
       setPending(false);
@@ -101,37 +65,22 @@ export function AdminLoginForm({ mfaRequired = true }: { mfaRequired?: boolean }
     setError(null);
     setPending(true);
 
-    const code = String(new FormData(e.currentTarget).get("code") ?? "").trim();
-    if (!code) {
-      setError("Authenticator code is required.");
-      setPending(false);
-      return;
-    }
+    const formData = new FormData(e.currentTarget);
+    formData.set("factor_id", mfaStep.factorId);
+    formData.set("challenge_id", mfaStep.challengeId);
 
     try {
-      const supabase = createClient();
-      const { error: verifyError } = await supabase.auth.mfa.verify({
-        factorId: mfaStep.factorId,
-        challengeId: mfaStep.challengeId,
-        code,
-      });
-      if (verifyError) {
-        setError(verifyError.message);
+      const result = await verifyAdminMfa({}, formData);
+      if (result.error) {
+        setError(result.error);
         setPending(false);
         return;
       }
-      const { data: sessionData } = await supabase.auth.getSession();
-      if (sessionData.session) {
-        await syncSessionAndRedirect(
-          {
-            access_token: sessionData.session.access_token,
-            refresh_token: sessionData.session.refresh_token,
-          },
-          `${window.location.origin}/admin/dashboard`,
-        );
+      if (result.redirectTo) {
+        window.location.replace(`${window.location.origin}${result.redirectTo}`);
         return;
       }
-      window.location.replace("/admin/dashboard");
+      setPending(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Verification failed.");
       setPending(false);

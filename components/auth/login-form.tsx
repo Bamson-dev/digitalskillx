@@ -3,9 +3,11 @@
 import Link from "next/link";
 import { useState } from "react";
 import { useFormState } from "react-dom";
-import { signInWithMagicLink, healStudentProfileByLogin, type AuthState } from "@/app/(auth)/actions";
-import { syncSessionAndRedirect } from "@/lib/auth/sync-session-client";
-import { createClient } from "@/lib/supabase/client";
+import {
+  completeStudentLogin,
+  signInWithMagicLink,
+  type AuthState,
+} from "@/app/(auth)/actions";
 import { Input, Label } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
 import { SubmitButton } from "@/components/auth/submit-button";
@@ -36,41 +38,17 @@ export function LoginForm({ next, authError }: { next: string; authError?: strin
     }
 
     try {
-      const supabase = createClient();
-      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) {
-        setPwError(error.message);
+      const result = await completeStudentLogin({ email, password, next });
+      if (result.error) {
+        setPwError(result.error);
         setPwPending(false);
         return;
       }
-      if (!data.session?.access_token) {
-        setPwError("Sign-in succeeded but no session was returned. Check Supabase configuration.");
-        setPwPending(false);
+      if (result.redirectTo) {
+        window.location.replace(`${window.location.origin}${result.redirectTo}`);
         return;
       }
-
-      const heal = await healStudentProfileByLogin(
-        email,
-        data.user.id,
-        data.session.access_token,
-        (data.user.user_metadata?.full_name as string | undefined) ??
-          (data.user.user_metadata?.name as string | undefined),
-      );
-      if (!heal.healed) {
-        setPwError(heal.error ?? "Could not load your profile.");
-        setPwPending(false);
-        return;
-      }
-
-      const destination = next.startsWith("/") ? next : "/dashboard";
-      const absoluteDestination = `${window.location.origin}${destination}`;
-      await syncSessionAndRedirect(
-        {
-          access_token: data.session.access_token,
-          refresh_token: data.session.refresh_token,
-        },
-        absoluteDestination,
-      );
+      setPwPending(false);
     } catch (err) {
       setPwError(err instanceof Error ? err.message : "Could not sign in.");
       setPwPending(false);
