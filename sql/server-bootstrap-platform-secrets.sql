@@ -44,7 +44,16 @@ $$;
 revoke all on function public.server_bootstrap_platform_secrets(text) from public;
 grant execute on function public.server_bootstrap_platform_secrets(text) to anon, authenticated, service_role;
 
--- Set to the SAME value as CRON_SECRET in Coolify:
+-- Set to the SAME value as CRON_SECRET in Vercel (or Coolify):
 -- update public.platform_settings
 -- set cron_auth_secret = 'your-cron-secret-here'
 -- where id = 'default';
+
+-- Verify (run after updates above):
+-- select
+--   (select proname from pg_proc where proname = 'server_bootstrap_platform_secrets') as rpc_ready,
+--   (select cron_auth_secret is not null and length(cron_auth_secret) > 0
+--      from public.platform_settings where id = 'default') as cron_token_set,
+--   (select supabase_service_role_key is not null
+--      and supabase_service_role_key not like 'PASTE_%'
+--    from public.platform_secrets where id = 'default') as service_role_saved;

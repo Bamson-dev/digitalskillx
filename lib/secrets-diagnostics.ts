@@ -2,6 +2,7 @@ import "server-only";
 import {
   bootstrapPlatformSecrets,
   fetchPlatformSecretsViaCronAuth,
+  probeCronBootstrapRpc,
   readServiceRoleFromEnv,
 } from "@/lib/platform-secrets-bootstrap";
 import { getCachedIntegrationSecret } from "@/lib/integration-secrets-cache";
@@ -30,15 +31,18 @@ export async function integrationSecretsDiagnostics() {
   const cronSecret = runtimeEnv("CRON_SECRET");
   let cronBootstrap: "ok" | "failed" | "skipped" = "skipped";
   let cronBootstrapDetail = "";
+  let cronBootstrapHttpStatus: number | null = null;
 
   if (!readServiceRoleFromEnv() && cronSecret) {
-    const row = await fetchPlatformSecretsViaCronAuth();
+    const probe = await probeCronBootstrapRpc();
+    cronBootstrapHttpStatus = probe.httpStatus;
+    const row = probe.reason === "ok" ? await fetchPlatformSecretsViaCronAuth() : null;
     if (row?.supabase_service_role_key?.trim()) {
       cronBootstrap = "ok";
+      cronBootstrapDetail = "ok";
     } else {
       cronBootstrap = "failed";
-      cronBootstrapDetail =
-        "CRON_SECRET is set but platform_secrets could not be loaded. Run sql/server-bootstrap-platform-secrets.sql in Supabase and set platform_settings.cron_auth_secret to the same value as CRON_SECRET.";
+      cronBootstrapDetail = probe.reason;
     }
   }
 
@@ -54,6 +58,7 @@ export async function integrationSecretsDiagnostics() {
     cronSecretConfigured: Boolean(cronSecret),
     cronBootstrap,
     cronBootstrapDetail,
+    cronBootstrapHttpStatus,
     envPresent,
     fix:
       deploymentHint() === "vercel"

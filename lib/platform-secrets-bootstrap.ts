@@ -82,6 +82,68 @@ export async function fetchPlatformSecretsWithServiceRole(
   }
 }
 
+/** Probe CRON bootstrap RPC without loading secrets (for health diagnostics). */
+export async function probeCronBootstrapRpc(): Promise<{
+  httpStatus: number | null;
+  reason: string;
+}> {
+  const cronSecret = runtimeEnv("CRON_SECRET")?.trim();
+  const supabaseUrl = runtimeEnv("NEXT_PUBLIC_SUPABASE_URL");
+  const anonKey = runtimeEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY");
+  if (!cronSecret) return { httpStatus: null, reason: "CRON_SECRET not set" };
+  if (!supabaseUrl || !anonKey) return { httpStatus: null, reason: "Supabase URL/anon key missing" };
+
+  try {
+    const res = await fetch(
+      `${supabaseUrl.replace(/\/$/, "")}/rest/v1/rpc/server_bootstrap_platform_secrets`,
+      {
+        method: "POST",
+        headers: {
+          apikey: anonKey,
+          Authorization: `Bearer ${anonKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ p_cron_secret: cronSecret }),
+        cache: "no-store",
+      },
+    );
+
+    if (res.status === 404) {
+      return {
+        httpStatus: 404,
+        reason: "RPC not found — run sql/server-bootstrap-platform-secrets.sql in THIS Supabase project",
+      };
+    }
+    if (!res.ok) {
+      return { httpStatus: res.status, reason: `RPC HTTP ${res.status}` };
+    }
+
+    const data = (await res.json()) as { supabase_service_role_key?: string | null } | null;
+    if (!data) {
+      return {
+        httpStatus: res.status,
+        reason:
+          "RPC returned null — cron_auth_secret in platform_settings does not match Vercel CRON_SECRET, or platform_secrets row is empty",
+      };
+    }
+
+    const role = data.supabase_service_role_key?.trim() ?? "";
+    if (!role || (role.includes("PASTE_") && role.includes("_HERE"))) {
+      return {
+        httpStatus: res.status,
+        reason: "RPC ok but supabase_service_role_key is missing or still a PASTE_…_HERE placeholder in platform_secrets",
+      };
+    }
+
+    return { httpStatus: res.status, reason: "ok" };
+  } catch (err) {
+    return {
+      httpStatus: null,
+      reason: err instanceof Error ? err.message : "RPC request failed",
+    };
+  }
+}
+
 /** Load platform_secrets using CRON_SECRET + server_bootstrap_platform_secrets RPC. */
 export async function fetchPlatformSecretsViaCronAuth(): Promise<PlatformSecretsRow | null> {
   const cronSecret = runtimeEnv("CRON_SECRET")?.trim();
