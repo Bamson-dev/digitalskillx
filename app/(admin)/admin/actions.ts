@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClientAsync } from "@/lib/supabase/admin";
 import { ensureAdminProfile } from "@/lib/ensure-admin-profile";
-import { configuredAdminEmail as getConfiguredAdminEmail, isPlatformAdminEmail } from "@/lib/admin-email";
+import { isPlatformAdminEmail } from "@/lib/admin-email";
 import type { AuthState } from "@/app/(auth)/actions";
 import { isAdminLoginBlocked, recordAdminLoginFailure } from "@/lib/rate-limit";
 import { clientIpFromHeaders } from "@/lib/request-ip";
