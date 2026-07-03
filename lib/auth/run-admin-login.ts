@@ -78,20 +78,21 @@ export async function runAdminLogin(
     return { ok: false, error: "This account does not have admin access." };
   }
 
-  const { data: factors } = await client.auth.mfa.listFactors();
-  const totp = factors?.totp?.find((f) => f.status === "verified");
-  if (totp) {
-    await client.auth.signOut();
-    return {
-      ok: false,
-      error:
-        "This account has authenticator MFA enabled. Remove the TOTP factor in Supabase Auth or complete MFA on a fresh browser session.",
-    };
+  if (isAdminMfaRequired()) {
+    const { data: factors } = await client.auth.mfa.listFactors();
+    const totp = factors?.totp?.find((f) => f.status === "verified");
+    if (totp) {
+      await client.auth.signOut();
+      return {
+        ok: false,
+        error:
+          "This account has authenticator MFA enabled. Enter your code on the login page or remove the TOTP factor in Supabase Auth.",
+      };
+    }
+    await logAudit({ action: "admin_login_password_ok", metadata: { email } });
+    return { ok: true, redirectTo: "/admin/mfa/enroll" };
   }
 
   await logAudit({ action: "admin_login_password_ok", metadata: { email } });
-  if (!isAdminMfaRequired()) {
-    return { ok: true, redirectTo: "/admin/dashboard" };
-  }
-  return { ok: true, redirectTo: "/admin/mfa/enroll" };
+  return { ok: true, redirectTo: "/admin/dashboard" };
 }

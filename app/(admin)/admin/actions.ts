@@ -109,6 +109,11 @@ export async function signInAdmin(
     redirect("/admin/mfa/enroll");
   }
 
+  if (!isAdminMfaRequired()) {
+    await logAudit({ action: "admin_login_password_ok", metadata: { email } });
+    redirect("/admin/dashboard");
+  }
+
   const { data: challenge, error: challengeError } = await supabase.auth.mfa.challenge({
     factorId: totp.id,
   });
