@@ -180,34 +180,28 @@ export async function signOut() {
   redirect("/login");
 }
 
-/** Ensure a profiles row exists for the signed-in student (client login calls this). */
-export async function healStudentProfileSession(): Promise<{ healed: boolean; error?: string }> {
-  const supabase = createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user?.email) return { healed: false, error: "Not signed in." };
-
-  const { data: existing } = await supabase
-    .from("profiles")
-    .select("id")
-    .eq("id", user.id)
-    .maybeSingle();
-  if (existing) return { healed: true };
+/** Ensure profiles row exists after client sign-in (uses service role, not session cookies). */
+export async function healStudentProfileByLogin(
+  email: string,
+  userId: string,
+  fullName?: string,
+): Promise<{ healed: boolean; error?: string }> {
+  const normalized = email.trim().toLowerCase();
 
   try {
     const admin = await createAdminClientAsync();
-    const email = user.email.trim().toLowerCase();
-    const fullName =
-      (user.user_metadata?.full_name as string | undefined) ??
-      (user.user_metadata?.name as string | undefined) ??
-      email.split("@")[0];
+    const { data: existing } = await admin
+      .from("profiles")
+      .select("id")
+      .eq("id", userId)
+      .maybeSingle();
+    if (existing) return { healed: true };
 
     const { error } = await admin.from("profiles").upsert(
       {
-        id: user.id,
-        email,
-        full_name: fullName,
+        id: userId,
+        email: normalized,
+        full_name: fullName ?? normalized.split("@")[0],
         role: "student",
         is_suspended: false,
       },

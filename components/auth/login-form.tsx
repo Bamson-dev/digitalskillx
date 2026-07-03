@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { useFormState } from "react-dom";
-import { signInWithMagicLink, healStudentProfileSession, type AuthState } from "@/app/(auth)/actions";
+import { signInWithMagicLink, healStudentProfileByLogin, type AuthState } from "@/app/(auth)/actions";
 import { createClient } from "@/lib/supabase/client";
 import { Input, Label } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
@@ -36,16 +36,21 @@ export function LoginForm({ next, authError }: { next: string; authError?: strin
 
     try {
       const supabase = createClient();
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) {
         setPwError(error.message);
         setPwPending(false);
         return;
       }
 
-      const heal = await healStudentProfileSession();
-      if (!heal.healed && heal.error) {
-        setPwError(heal.error);
+      const heal = await healStudentProfileByLogin(
+        email,
+        data.user.id,
+        (data.user.user_metadata?.full_name as string | undefined) ??
+          (data.user.user_metadata?.name as string | undefined),
+      );
+      if (!heal.healed) {
+        setPwError(heal.error ?? "Could not load your profile.");
         setPwPending(false);
         return;
       }

@@ -204,32 +204,29 @@ export async function signOutAdmin() {
   redirect("/admin/login");
 }
 
-/** Create/promote admin profile for the current session (client login calls this). */
-export async function healAdminProfileSession(): Promise<{ healed: boolean; error?: string }> {
-  const supabase = createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user?.email) return { healed: false, error: "Not signed in." };
-
-  const email = user.email.trim().toLowerCase();
-  if (email !== getConfiguredAdminEmail()) {
-    return { healed: false };
+/** Create/promote admin profile after client sign-in (uses service role, not session cookies). */
+export async function healAdminProfileByLogin(
+  email: string,
+  userId: string,
+): Promise<{ healed: boolean; error?: string }> {
+  const normalized = email.trim().toLowerCase();
+  if (normalized !== getConfiguredAdminEmail()) {
+    return { healed: false, error: "This account is not the configured admin email." };
   }
 
   try {
     const admin = await createAdminClientAsync();
     await ensureAdminProfile(admin, {
-      userId: user.id,
-      email,
-      fullName: (user.user_metadata?.full_name as string | undefined) ?? "Platform Admin",
+      userId,
+      email: normalized,
+      fullName: "Platform Admin",
     });
     return { healed: true };
   } catch (err) {
     const message = err instanceof Error ? err.message : "Could not create admin profile.";
     return {
       healed: false,
-      error: `${message} Run: curl -X POST -H "Authorization: Bearer CRON_SECRET" https://www.digitalskillx.com/api/admin/setup-production`,
+      error: `${message} Confirm Vercel NEXT_PUBLIC_SUPABASE_URL matches your Supabase project, then run setup-production.`,
     };
   }
 }

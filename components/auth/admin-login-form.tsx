@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { healAdminProfileSession } from "@/app/(admin)/admin/actions";
+import { healAdminProfileByLogin } from "@/app/(admin)/admin/actions";
 import { createClient } from "@/lib/supabase/client";
 import { SubmitButton } from "@/components/auth/submit-button";
 import { PasswordInput } from "@/components/ui/password-input";
@@ -45,27 +45,10 @@ export function AdminLoginForm({ mfaRequired = true }: { mfaRequired?: boolean }
         return;
       }
 
-      const heal = await healAdminProfileSession();
-      if (!heal.healed && heal.error) {
+      const heal = await healAdminProfileByLogin(email, data.user.id);
+      if (!heal.healed) {
         await supabase.auth.signOut();
-        setError(heal.error);
-        setPending(false);
-        return;
-      }
-
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("role, is_suspended")
-        .eq("id", data.user.id)
-        .maybeSingle();
-
-      if (!profile || profile.role !== "admin" || profile.is_suspended) {
-        await supabase.auth.signOut();
-        setError(
-          !profile
-            ? "No admin profile found. Run setup-production or sql/fix-admin-profile.sql in your Supabase project."
-            : "This account does not have admin access.",
-        );
+        setError(heal.error ?? "Could not verify admin profile.");
         setPending(false);
         return;
       }

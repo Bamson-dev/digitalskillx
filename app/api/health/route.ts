@@ -6,6 +6,7 @@ import { runtimeEnvDiagnostics } from "@/lib/runtime-env";
 import { createAdminClientAsync } from "@/lib/supabase/admin";
 import { serviceRoleKeyConfigured } from "@/lib/env-service-role";
 import { integrationSecretsDiagnostics } from "@/lib/secrets-diagnostics";
+import { supabaseProjectRef } from "@/lib/supabase-project-ref";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -27,6 +28,7 @@ export async function GET() {
     youtubeApiKey: youtube.status,
     youtubeApiKeySource: youtube.source,
     supabaseServiceRole: serviceRoleReady ? "configured" : "missing",
+    supabaseProjectRef: supabaseProjectRef() ?? "unknown",
     cronBootstrap: secrets.cronBootstrap,
   };
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { healStudentProfileSession } from "@/app/(auth)/actions";
+import { healStudentProfileByLogin } from "@/app/(auth)/actions";
 import { createClient } from "@/lib/supabase/client";
 import { Label } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
@@ -25,17 +25,27 @@ export function ResetPasswordForm() {
 
     try {
       const supabase = createClient();
-      const { error: updateError } = await supabase.auth.updateUser({ password });
+      const {
+        data: { user },
+        error: updateError,
+      } = await supabase.auth.updateUser({ password });
       if (updateError) {
         setError(updateError.message);
         setPending(false);
         return;
       }
-      const heal = await healStudentProfileSession();
-      if (!heal.healed && heal.error) {
-        setError(heal.error);
-        setPending(false);
-        return;
+      if (user?.email) {
+        const heal = await healStudentProfileByLogin(
+          user.email,
+          user.id,
+          (user.user_metadata?.full_name as string | undefined) ??
+            (user.user_metadata?.name as string | undefined),
+        );
+        if (!heal.healed) {
+          setError(heal.error ?? "Could not load your profile.");
+          setPending(false);
+          return;
+        }
       }
       window.location.replace("/dashboard");
     } catch (err) {
