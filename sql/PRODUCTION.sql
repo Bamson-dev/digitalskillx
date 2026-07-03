@@ -1,15 +1,104 @@
 -- ============================================================================
--- DigitalSkillX — PRODUCTION (one-time paste in Supabase → SQL Editor → Run)
--- Project: digitalskillx production
--- Safe to re-run (idempotent). Run ONCE before using the merged production app.
+-- DigitalSkillX — PRODUCTION (paste in Supabase → SQL Editor → Run)
+-- Safe to re-run (idempotent).
 -- ============================================================================
 --
--- AFTER this script:
---   1. Deploy main branch to production (Coolify/Vercel).
---   2. Admin → Settings → Integrations: save service role, Paystack, ZeptoMail SMTP.
---   3. Log in as admin and open any admin page once (warms secret cache).
+-- HOW TO USE:
+--   1. Run this ENTIRE file once (schema + tables + policies).
+--   2. Scroll to the BOTTOM → section "PASTE YOUR SECRET KEYS HERE".
+--   3. Replace each PASTE_…_HERE placeholder with your real key.
+--   4. Run ONLY that bottom section again (or run the whole file again).
+--
+-- WHERE TO GET EACH KEY:
+--   • Supabase service role → Supabase → Project Settings → API → service_role
+--   • Paystack secret       → Paystack Dashboard → Settings → API Keys → Secret key
+--   • ZeptoMail SMTP        → ZeptoMail → Mail Agents → SMTP → password
+--   • YouTube API key       → Google Cloud Console → APIs & Services → Credentials
+--   • DeepSeek API key      → platform.deepseek.com → API keys
+--
+-- You can ALSO save keys later in the app: Admin → Settings → Integrations
+-- (no SQL needed after the first schema run).
 --
 -- ============================================================================
+
+
+-- ── 0. Auth helpers (REQUIRED — fixes "function is_admin() does not exist") ─
+
+create or replace function public.set_updated_at()
+returns trigger
+language plpgsql
+as $$
+begin
+  new.updated_at = now();
+  return new;
+end;
+$$;
+
+create or replace function public.handle_new_user()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  insert into public.profiles (id, email, full_name, avatar_url)
+  values (
+    new.id,
+    new.email,
+    coalesce(
+      new.raw_user_meta_data ->> 'full_name',
+      new.raw_user_meta_data ->> 'name'
+    ),
+    new.raw_user_meta_data ->> 'avatar_url'
+  )
+  on conflict (id) do nothing;
+  return new;
+end;
+$$;
+
+drop trigger if exists on_auth_user_created on auth.users;
+create trigger on_auth_user_created
+  after insert on auth.users
+  for each row execute function public.handle_new_user();
+
+create or replace function public.is_admin()
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1 from public.profiles
+    where id = auth.uid() and role = 'admin'
+  );
+$$;
+
+create or replace function public.is_enrolled(p_course_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1 from public.enrollments
+    where course_id = p_course_id and student_id = auth.uid()
+  );
+$$;
+
+create or replace function public.lesson_course_id(p_lesson_id uuid)
+returns uuid
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select m.course_id
+  from public.lessons l
+  join public.modules m on m.id = l.module_id
+  where l.id = p_lesson_id;
+$$;
 
 
 -- ── 1. Marketplace + transactions (0005) ───────────────────────────────────
@@ -363,10 +452,43 @@ set
 where lower(email) = 'admin@digitalskillx.com';
 
 
--- ── 11. Verification ────────────────────────────────────────────────────────
+-- ============================================================================
+-- ▼▼▼  PASTE YOUR SECRET KEYS HERE  ▼▼▼
+-- ============================================================================
+-- Replace every PASTE_…_HERE value below with your real key, then Run.
+-- Leave a line commented out (with --) if you do not have that key yet.
+-- ============================================================================
+
+update public.platform_secrets
+set
+  -- Required: Admin → Students (create/delete), emails, Paystack webhook
+  supabase_service_role_key = 'PASTE_SUPABASE_SERVICE_ROLE_KEY_HERE',
+
+  -- Required: Enroll Now / Paystack checkout
+  paystack_secret_key = 'PASTE_PAYSTACK_SECRET_KEY_HERE',
+
+  -- Required: Welcome, enrollment, and receipt emails
+  zeptomail_smtp_password = 'PASTE_ZEPTOMAIL_SMTP_PASSWORD_HERE',
+
+  -- Optional: Admin → Courses → Import lessons (YouTube)
+  youtube_api_key = 'PASTE_YOUTUBE_API_KEY_HERE',
+
+  -- Optional: Generate with AI on course edit form
+  deepseek_api_key = 'PASTE_DEEPSEEK_API_KEY_HERE'
+
+where id = 'default';
+
+
+-- ── 12. Verification (read results after Run) ───────────────────────────────
 
 select
   (select count(*) from public.platform_settings where id = 'default') as platform_settings,
   (select count(*) from public.platform_secrets where id = 'default') as platform_secrets,
   (select count(*) from information_schema.columns where table_name = 'transactions') as transactions_columns,
-  (select count(*) from public.certificate_templates where template_key is not null) as cert_templates;
+  (select count(*) from public.certificate_templates where template_key is not null) as cert_templates,
+  (select supabase_service_role_key is not null and supabase_service_role_key <> 'PASTE_SUPABASE_SERVICE_ROLE_KEY_HERE'
+     from public.platform_secrets where id = 'default') as service_role_saved,
+  (select paystack_secret_key is not null and paystack_secret_key <> 'PASTE_PAYSTACK_SECRET_KEY_HERE'
+     from public.platform_secrets where id = 'default') as paystack_saved,
+  (select zeptomail_smtp_password is not null and zeptomail_smtp_password <> 'PASTE_ZEPTOMAIL_SMTP_PASSWORD_HERE'
+     from public.platform_secrets where id = 'default') as zeptomail_saved;
