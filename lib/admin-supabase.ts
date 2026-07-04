@@ -7,8 +7,7 @@ import { createAdminClientAsync } from "@/lib/supabase/admin";
 
 /**
  * Service-role Supabase client for admin panel writes.
- * requireAdmin() alone can pass with an in-memory profile fallback while RLS
- * still blocks inserts — this client bypasses RLS after auth is verified.
+ * Ensures admin auth before bypassing RLS.
  */
 export async function getAdminSupabase() {
   await requireAdmin();

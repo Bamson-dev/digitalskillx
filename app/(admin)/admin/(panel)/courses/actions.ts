@@ -37,8 +37,17 @@ export async function createCourse(
   const admin = await requireAdmin();
   const title = String(formData.get("title") ?? "").trim() || "Untitled course";
 
+  let supabase;
   try {
-    const supabase = await getAdminSupabase();
+    supabase = await getAdminSupabase();
+  } catch (err) {
+    if (isRedirectError(err)) throw err;
+    return {
+      error: err instanceof Error ? err.message : "Could not create course.",
+    };
+  }
+
+  try {
 
     const { data, error } = await supabase
       .from("courses")

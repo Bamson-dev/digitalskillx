@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { BookOpen } from "lucide-react";
 import { getAdminSupabase } from "@/lib/admin-supabase";
+import { requireAdmin } from "@/lib/auth";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { CreateCourseForm } from "@/components/admin/create-course-form";
@@ -10,6 +11,7 @@ import { formatDate } from "@/lib/utils";
 export const metadata: Metadata = { title: "Courses" };
 
 export default async function AdminCoursesPage() {
+  await requireAdmin();
   const supabase = await getAdminSupabase();
   const { data: courses, error } = await supabase
     .from("courses")
