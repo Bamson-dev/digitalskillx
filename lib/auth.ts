@@ -8,6 +8,7 @@ import type { Profile } from "@/types/database";
 /** Returns the current user's profile, or null if signed out. */
 export async function getProfile(): Promise<Profile | null> {
   const supabase = createClient();
+  await supabase.auth.getSession();
   const {
     data: { user },
   } = await supabase.auth.getUser();

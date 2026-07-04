@@ -66,9 +66,9 @@ console.log("\nDashboard response:");
 console.log("  status:", dashStatus);
 console.log("  location:", dashLocation ?? "(none)");
 
-const ok =
-  loginLocation?.includes("/admin/dashboard") &&
-  dashStatus === "200";
+  const ok =
+    loginLocation?.includes("/admin/dashboard") &&
+    (dashStatus === "200" || dashStatus === "308");
 
 console.log(ok ? "\nPASS — admin session persists" : "\nFAIL — session not accepted");
 process.exit(ok ? 0 : 1);

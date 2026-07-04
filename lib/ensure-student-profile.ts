@@ -6,17 +6,23 @@ import type { Profile } from "@/types/database";
 /** Load or create the signed-in user's profile row (service role upsert when missing). */
 export async function ensureStudentProfile(): Promise<Profile | null> {
   const supabase = createClient();
+  await supabase.auth.getSession();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user?.email) return null;
 
-  const { data: existing } = await supabase
-    .from("profiles")
-    .select("*")
-    .eq("id", user.id)
-    .maybeSingle();
-  if (existing) return existing;
+  try {
+    const admin = await createAdminClientAsync();
+    const { data: existing } = await admin
+      .from("profiles")
+      .select("*")
+      .eq("id", user.id)
+      .maybeSingle();
+    if (existing) return existing;
+  } catch {
+    // fall through to upsert attempt
+  }
 
   try {
     const admin = await createAdminClientAsync();
