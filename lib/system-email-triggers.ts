@@ -53,6 +53,8 @@ export async function sendWelcomeEmailIfNeeded(params: {
   email: string;
   password?: string;
   checkoutCourseId?: string | null;
+  /** Admin onboarding: use known course titles when DB join is not ready yet. */
+  courseNamesOverride?: string[];
 }) {
   const admin = await createAdminClientAsync();
 
@@ -69,7 +71,10 @@ export async function sendWelcomeEmailIfNeeded(params: {
   const settings = await getPlatformSettingsAdmin();
   const sender = await getEmailSenderConfig();
   const baseUrl = siteUrl();
-  const courseNames = await loadStudentCourseNames(params.studentId, params.checkoutCourseId);
+  const courseNames =
+    params.courseNamesOverride?.filter(Boolean).length
+      ? [...new Set(params.courseNamesOverride.filter(Boolean))]
+      : await loadStudentCourseNames(params.studentId, params.checkoutCourseId);
 
   const tpl = studentWelcomeEmail({
     firstName: studentFirstName(params.fullName),

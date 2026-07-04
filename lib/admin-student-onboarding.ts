@@ -114,14 +114,6 @@ export function parseStudentCsv(text: string): {
   };
 }
 
-export async function profileEmailExists(
-  admin: SupabaseClient<Database>,
-  email: string,
-) {
-  const profile = await findProfileByEmail(admin, email);
-  return Boolean(profile);
-}
-
 export async function findProfileByEmail(
   admin: SupabaseClient<Database>,
   email: string,
@@ -134,6 +126,34 @@ export async function findProfileByEmail(
     .maybeSingle();
   if (error) throw new Error(error.message);
   return data;
+}
+
+export async function waitForStudentProfile(
+  admin: SupabaseClient<Database>,
+  studentId: string,
+  attempts = 8,
+) {
+  for (let i = 0; i < attempts; i++) {
+    const { data } = await admin.from("profiles").select("id").eq("id", studentId).maybeSingle();
+    if (data) return;
+    await new Promise((resolve) => setTimeout(resolve, 75 * (i + 1)));
+  }
+  throw new Error("Student profile was not ready after account creation. Try again.");
+}
+
+export async function verifyStudentCourseAccess(
+  admin: SupabaseClient<Database>,
+  studentId: string,
+  courseIds: string[],
+) {
+  if (courseIds.length === 0) return { enrolledCourseIds: [] as string[] };
+  const { data, error } = await admin
+    .from("enrollments")
+    .select("course_id")
+    .eq("student_id", studentId)
+    .in("course_id", courseIds);
+  if (error) throw new Error(error.message);
+  return { enrolledCourseIds: (data ?? []).map((row) => row.course_id) };
 }
 
 export async function grantCourseAccessToStudent(
@@ -237,11 +257,11 @@ export async function sendStudentWelcomeEmail(params: {
 }) {
   void params.siteUrl;
   void params.brandColor;
-  void params.courseNames;
   return sendWelcomeEmailIfNeeded({
     studentId: params.studentId,
     fullName: params.fullName,
     email: params.email,
     password: params.password,
+    courseNamesOverride: params.courseNames,
   });
 }

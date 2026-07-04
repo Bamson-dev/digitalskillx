@@ -23,6 +23,8 @@ import {
   isValidStudentEmail,
   parseStudentCsv,
   sendStudentWelcomeEmail,
+  verifyStudentCourseAccess,
+  waitForStudentProfile,
   type CourseLookup,
 } from "@/lib/admin-student-onboarding";
 
@@ -170,14 +172,33 @@ export async function createStudent(
     }
 
     await admin.from("profiles").update({ full_name: fullName }).eq("id", created.user.id);
+    await waitForStudentProfile(admin, created.user.id);
     await runAutomations("account_created", { studentId: created.user.id });
 
+    let enrolledCount = 0;
     if (validCourseIds.length > 0) {
-      await enrollStudentInCourses(admin, {
+      const { newlyEnrolled } = await grantCourseAccessToStudent(admin, {
         studentId: created.user.id,
         courseIds: validCourseIds,
         enrolledBy: adminUser.id,
+        fullName,
+        email,
+        sendEnrollmentEmail: false,
       });
+      enrolledCount = newlyEnrolled.length;
+
+      const { enrolledCourseIds } = await verifyStudentCourseAccess(
+        admin,
+        created.user.id,
+        validCourseIds,
+      );
+      if (enrolledCourseIds.length === 0) {
+        return {
+          error:
+            "Account was created but course access could not be saved. Open the student profile and enroll them again.",
+        };
+      }
+      enrolledCount = enrolledCourseIds.length;
     }
 
     const settings = await getPlatformSettingsAdmin();
@@ -198,12 +219,11 @@ export async function createStudent(
       metadata: { courseIds: validCourseIds },
     });
     revalidatePath("/admin/students");
+    revalidatePath(`/admin/students/${created.user.id}`);
     revalidatePath("/admin/analytics");
 
     const courseNote =
-      validCourseIds.length > 0
-        ? ` Enrolled in ${validCourseIds.length} course(s).`
-        : "";
+      enrolledCount > 0 ? ` Enrolled in ${enrolledCount} course(s).` : "";
     if (!emailResult.sent) {
       const reason =
         "error" in emailResult
@@ -336,12 +356,23 @@ export async function bulkUploadStudents(
           .from("profiles")
           .update({ full_name: fullName })
           .eq("id", createdUser.user.id);
+        await waitForStudentProfile(admin, createdUser.user.id);
         await runAutomations("account_created", { studentId: createdUser.user.id });
-        await enrollStudentInCourses(admin, {
+        const { newlyEnrolled } = await grantCourseAccessToStudent(admin, {
           studentId: createdUser.user.id,
           courseIds: [resolved.courseId],
           enrolledBy: adminUser.id,
+          fullName,
+          email,
+          sendEnrollmentEmail: false,
         });
+        const { enrolledCourseIds } = await verifyStudentCourseAccess(admin, createdUser.user.id, [
+          resolved.courseId,
+        ]);
+        if (enrolledCourseIds.length === 0) {
+          throw new Error("Course enrollment did not save");
+        }
+        void newlyEnrolled;
         await sendStudentWelcomeEmail({
           studentId: createdUser.user.id,
           fullName,

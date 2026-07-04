@@ -2,22 +2,14 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import Image from "next/image";
 import { BookOpen } from "lucide-react";
-import { createClient } from "@/lib/supabase/server";
 import { requireStudent } from "@/lib/auth";
+import { getStudentEnrolledCourses } from "@/lib/student-enrollments";
 
 export const metadata: Metadata = { title: "My Courses" };
 
 export default async function StudentCoursesPage() {
   const profile = await requireStudent();
-  const supabase = createClient();
-
-  const { data: enrollments } = await supabase
-    .from("enrollments")
-    .select("id, course:courses(id, title, description, thumbnail_url)")
-    .eq("student_id", profile.id)
-    .order("enrolled_at", { ascending: false });
-
-  const courses = enrollments ?? [];
+  const enrolled = await getStudentEnrolledCourses(profile.id);
 
   return (
     <div className="space-y-6">
@@ -26,7 +18,7 @@ export default async function StudentCoursesPage() {
         <p className="mt-1 text-sm text-neutral-500">Everything you&apos;re enrolled in.</p>
       </div>
 
-      {courses.length === 0 ? (
+      {enrolled.length === 0 ? (
         <div className="rounded-xl border border-dashed border-surface-border bg-white py-14 text-center text-sm text-neutral-500">
           <p>No courses yet.</p>
           <Link href="/" className="mt-4 inline-block font-semibold text-brand hover:text-brand-700">
@@ -35,11 +27,20 @@ export default async function StudentCoursesPage() {
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {courses.map((e) => {
-            const course = Array.isArray(e.course) ? e.course[0] : e.course;
-            if (!course) return null;
+          {enrolled.map((row) => {
+            const course = row.course;
+            if (!course) {
+              return (
+                <Link key={row.enrollmentId} href={`/courses/${row.courseId}`}>
+                  <article className="overflow-hidden rounded-xl border border-surface-border bg-white p-4 transition hover:shadow-card">
+                    <h3 className="font-semibold text-neutral-900">Your enrolled course</h3>
+                    <p className="mt-1 text-sm text-neutral-500">Tap to open.</p>
+                  </article>
+                </Link>
+              );
+            }
             return (
-              <Link key={e.id} href={`/courses/${course.id}`}>
+              <Link key={row.enrollmentId} href={`/courses/${course.id}`}>
                 <article className="overflow-hidden rounded-xl border border-surface-border bg-white transition hover:shadow-card">
                   <div className="relative aspect-[16/10] bg-neutral-100">
                     {course.thumbnail_url ? (

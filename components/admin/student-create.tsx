@@ -54,6 +54,10 @@ function CourseCheckboxList({ courses }: { courses: PublishedCourse[] }) {
 
   return (
     <div className="space-y-2">
+      {Array.from(selected).map((courseId) => (
+        <input key={courseId} type="hidden" name="course_ids" value={courseId} />
+      ))}
+
       <div className="relative">
         <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
         <Input
@@ -80,11 +84,11 @@ function CourseCheckboxList({ courses }: { courses: PublishedCourse[] }) {
                   <label className="flex min-h-[44px] cursor-pointer items-center gap-3 px-3 py-3 active:bg-surface-muted/40">
                     <input
                       type="checkbox"
-                      name="course_ids"
                       value={course.id}
                       checked={checked}
                       onChange={(event) => toggleCourse(course.id, event.target.checked)}
                       className="h-5 w-5 shrink-0 rounded border-neutral-300 text-brand focus:ring-brand"
+                      aria-label={course.title}
                     />
                     <span className="text-sm font-medium leading-snug text-neutral-900">
                       {course.title}

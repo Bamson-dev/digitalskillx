@@ -2,10 +2,9 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import Image from "next/image";
 import { ArrowRight, BookOpen } from "lucide-react";
-import { createClient } from "@/lib/supabase/server";
 import { requireStudent } from "@/lib/auth";
 import { fetchPublishedCourses, type CatalogCourse } from "@/lib/published-courses";
-import { courseCompletionPct } from "@/lib/progress";
+import { getStudentEnrolledCoursesWithProgress } from "@/lib/student-enrollments";
 import { toPercent } from "@/lib/utils";
 import { PriceDisplay } from "@/components/marketplace/price-display";
 import { EnrollLink } from "@/components/marketplace/enroll-button";
@@ -14,17 +13,9 @@ export const metadata: Metadata = { title: "Dashboard" };
 
 export default async function StudentDashboardPage() {
   const profile = await requireStudent();
-  const supabase = createClient();
 
-  const { data: enrollments } = await supabase
-    .from("enrollments")
-    .select(
-      "id, course_id, course:courses(id, title, description, short_description, thumbnail_url, price_ngn, price_usd)",
-    )
-    .eq("student_id", profile.id)
-    .order("enrolled_at", { ascending: false });
-
-  const enrolledIds = new Set((enrollments ?? []).map((e) => e.course_id));
+  const myCourses = await getStudentEnrolledCoursesWithProgress(profile.id);
+  const enrolledIds = new Set(myCourses.map((row) => row.courseId));
 
   const catalog = await fetchPublishedCourses<CatalogCourse>(
     "id, title, description, short_description, thumbnail_url, price_ngn, price_usd, instructor_name",
@@ -32,18 +23,10 @@ export default async function StudentDashboardPage() {
 
   const upsell = catalog.filter((c) => !enrolledIds.has(c.id));
 
-  const myCourses = await Promise.all(
-    (enrollments ?? []).map(async (e) => {
-      const course = Array.isArray(e.course) ? e.course[0] : e.course;
-      const pct = course ? await courseCompletionPct(profile.id, course.id) : 0;
-      return { enrollment: e, course, pct };
-    }),
-  );
-
   const continueCourse =
     myCourses
-      .filter(({ pct }) => pct < 100)
-      .sort((a, b) => b.pct - a.pct)[0] ?? myCourses[0];
+      .filter(({ pct, course }) => course && pct < 100)
+      .sort((a, b) => b.pct - a.pct)[0] ?? myCourses.find((row) => row.course);
 
   const firstName = (profile.full_name ?? "there").split(" ")[0];
 
@@ -133,8 +116,19 @@ export default async function StudentDashboardPage() {
           </div>
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-            {myCourses.map(({ course, pct }) => {
-              if (!course) return null;
+            {myCourses.map(({ courseId, course, pct }) => {
+              if (!course) {
+                return (
+                  <Link
+                    key={courseId}
+                    href={`/courses/${courseId}`}
+                    className="overflow-hidden rounded-xl border border-surface-border bg-white p-4 transition hover:border-neutral-300 hover:shadow-card"
+                  >
+                    <p className="font-semibold text-neutral-900">Your course</p>
+                    <p className="mt-1 text-sm text-neutral-500">Tap to open your enrolled course.</p>
+                  </Link>
+                );
+              }
               return (
                 <Link
                   key={course.id}
