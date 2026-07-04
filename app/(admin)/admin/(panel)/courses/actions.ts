@@ -21,7 +21,7 @@ export type CourseSettingsState = {
   message?: string;
   thumbnail_url?: string | null;
 };
-export type CreateCourseState = { error?: string };
+export type CreateCourseState = { error?: string; redirectTo?: string };
 
 function fileFrom(formData: FormData, key: string): File | null {
   const value = formData.get(key);
@@ -57,7 +57,7 @@ export async function createCourse(
 
   await logAudit({ action: "course_created", targetType: "course", targetId: courseId });
   revalidatePath("/admin/courses");
-  redirect(`/admin/courses/${courseId}`);
+  return { redirectTo: `/admin/courses/${courseId}` };
 }
 
 export async function updateCourseSettings(

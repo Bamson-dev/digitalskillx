@@ -5,6 +5,7 @@ import { Plus } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { SubmitButton } from "@/components/auth/submit-button";
+import { useAuthRedirect } from "@/components/auth/use-auth-redirect";
 import {
   createCourse,
   type CreateCourseState,
@@ -14,6 +15,7 @@ const initialState: CreateCourseState = {};
 
 export function CreateCourseForm() {
   const [state, formAction] = useFormState(createCourse, initialState);
+  useAuthRedirect(state);
 
   return (
     <Card>
