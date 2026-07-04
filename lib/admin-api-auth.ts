@@ -2,6 +2,7 @@ import "server-only";
 import { NextResponse } from "next/server";
 import { ensureAdminProfileSession, platformAdminProfileFromUser } from "@/lib/ensure-admin-profile-session";
 import { bootstrapRuntimeSecrets } from "@/lib/bootstrap-runtime-secrets";
+import { ensureStorageBuckets } from "@/lib/ensure-storage-buckets";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClientAsync } from "@/lib/supabase/admin";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -44,6 +45,7 @@ export async function requireAdminApiAuth(): Promise<AdminApiAuth> {
   }
 
   await bootstrapRuntimeSecrets();
+  await ensureStorageBuckets();
   const admin = await createAdminClientAsync(session);
 
   return { user, profile, admin, session };

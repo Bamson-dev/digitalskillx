@@ -2,6 +2,7 @@ import "server-only";
 import { requireAdmin } from "@/lib/auth";
 import { ensureAdminProfileSession } from "@/lib/ensure-admin-profile-session";
 import { bootstrapRuntimeSecrets } from "@/lib/bootstrap-runtime-secrets";
+import { ensureStorageBuckets } from "@/lib/ensure-storage-buckets";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClientAsync } from "@/lib/supabase/admin";
 
@@ -13,5 +14,6 @@ export async function getAdminSupabase() {
   await requireAdmin();
   await ensureAdminProfileSession();
   await bootstrapRuntimeSecrets();
+  await ensureStorageBuckets();
   return createAdminClientAsync(createClient());
 }

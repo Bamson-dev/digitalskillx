@@ -1,5 +1,5 @@
 import "server-only";
-import { createClient } from "@/lib/supabase/server";
+import { getAdminStorageClient } from "@/lib/admin-storage";
 
 const MAX_BYTES = 2 * 1024 * 1024;
 
@@ -36,7 +36,7 @@ export async function uploadPublicAsset(file: File, folder: string) {
     throw new Error("Upload a PNG, JPG, WebP, SVG, or ICO image.");
   }
 
-  const supabase = createClient();
+  const supabase = await getAdminStorageClient();
   const path = `${folder}/${Date.now()}-${crypto.randomUUID().slice(0, 8)}.${extFromFile(file)}`;
   const body = Buffer.from(await file.arrayBuffer());
 
@@ -47,7 +47,12 @@ export async function uploadPublicAsset(file: File, folder: string) {
   if (error) {
     if (error.message.toLowerCase().includes("row-level security")) {
       throw new Error(
-        "Upload blocked by storage permissions. Sign in as admin and ensure the public-assets bucket exists in Supabase.",
+        "Upload blocked by storage permissions. Ensure the public-assets bucket exists in Supabase.",
+      );
+    }
+    if (error.message.toLowerCase().includes("bucket not found")) {
+      throw new Error(
+        "Storage bucket public-assets is missing. Save again — the app will create it automatically, or run supabase/migrations/0004_storage.sql in Supabase.",
       );
     }
     throw new Error(error.message);

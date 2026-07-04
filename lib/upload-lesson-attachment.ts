@@ -1,5 +1,5 @@
 import "server-only";
-import { createClient } from "@/lib/supabase/server";
+import { getAdminStorageClient } from "@/lib/admin-storage";
 
 const MAX_BYTES = 10 * 1024 * 1024;
 
@@ -44,7 +44,7 @@ export async function uploadLessonAttachmentFile(
     throw new Error("Upload a PDF, Word, Excel, PowerPoint, text, or ZIP file.");
   }
 
-  const supabase = createClient();
+  const supabase = await getAdminStorageClient();
   const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
   const path = `courses/${courseId}/lessons/${lessonId}/${Date.now()}-${safeName}`;
   const body = Buffer.from(await file.arrayBuffer());
