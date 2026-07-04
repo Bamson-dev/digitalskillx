@@ -50,15 +50,6 @@ function curl(args) {
   return execFileSync("curl", ["-sL", ...args], { encoding: "utf8", maxBuffer: 20 * 1024 * 1024 });
 }
 
-function curlJson(args) {
-  const out = curl(args);
-  try {
-    return JSON.parse(out);
-  } catch {
-    return { _raw: out };
-  }
-}
-
 console.log("Testing admin student enrollment on", base);
 
 const adminJar = join(mkdtempSync(join(tmpdir(), "admin-enroll-")), "admin.txt");
@@ -129,7 +120,7 @@ if (!createOk) {
 console.log("PASS: admin created student with course enrollment");
 
 const studentJar = join(mkdtempSync(join(tmpdir(), "student-enroll-")), "student.txt");
-const loginRes = curlJson([
+curl([
   "-c",
   studentJar,
   "-b",
@@ -137,19 +128,18 @@ const loginRes = curlJson([
   "-X",
   "POST",
   `${base}/api/auth/login`,
-  "-H",
-  "Content-Type: application/json",
   "-d",
-  JSON.stringify({ email: testEmail, password: testPassword }),
+  new URLSearchParams({ email: testEmail, password: testPassword, next: "/dashboard" }).toString(),
+  "-o",
+  "/dev/null",
 ]);
 
-if (loginRes.error) {
-  console.error("FAIL: student login failed:", loginRes.error);
+const dashboard = curl(["-b", studentJar, `${base}/dashboard`]);
+if (/auth_error|Could not load your profile/i.test(dashboard)) {
+  console.error("FAIL: student login failed");
   process.exit(1);
 }
 console.log("PASS: student logged in");
-
-const dashboard = curl(["-b", studentJar, `${base}/dashboard`]);
 const coursesPage = curl(["-b", studentJar, `${base}/courses`]);
 
 const hasCourseLink =
