@@ -47,6 +47,11 @@ export async function runStudentLogin(params: {
     );
     if (upsertError) throw new Error(upsertError.message);
 
+    await admin
+      .from("profiles")
+      .update({ last_active_at: new Date().toISOString() })
+      .eq("id", data.user.id);
+
     const { data: verified, error: verifyError } = await admin
       .from("profiles")
       .select("id")

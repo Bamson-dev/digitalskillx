@@ -11,6 +11,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { formatDate } from "@/lib/utils";
+import { courseCompletionPct } from "@/lib/progress";
+import { loadAuthEmailIndex } from "@/lib/admin-student-overview";
 import { StudentProfileForm } from "@/components/admin/student-profile-form";
 import { StudentAdminToolbar, StudentEnrollmentList } from "@/components/admin/student-manage-panel";
 import {
@@ -44,6 +46,12 @@ export default async function StudentDetailPage({
     .single();
   if (!student) notFound();
 
+  const authIndex = await loadAuthEmailIndex(supabase);
+  const authMeta = authIndex.get(student.email.trim().toLowerCase());
+  const lastSignInAt = authMeta?.lastSignInAt ?? null;
+  const lastAccessAt = student.last_active_at ?? lastSignInAt;
+  const hasLoggedIn = Boolean(lastSignInAt || student.last_active_at);
+
   const [{ data: enrollments }, { data: allCourses }, { data: notes }, { data: certs }] =
     await Promise.all([
       supabase
@@ -63,21 +71,25 @@ export default async function StudentDetailPage({
         .eq("student_id", params.id),
     ]);
 
-  const enrollmentRows = (enrollments ?? [])
-    .map((e) => {
+  const enrollmentRows = await Promise.all(
+    (enrollments ?? []).map(async (e) => {
       const c = Array.isArray(e.course) ? e.course[0] : e.course;
+      const courseId = e.course_id;
+      const progressPct = courseId ? await courseCompletionPct(params.id, courseId) : 0;
       return {
         enrollmentId: e.id,
-        courseId: e.course_id,
+        courseId,
         courseTitle: c?.title ?? "Unknown course",
         completedAt: e.completed_at,
         enrolledAt: e.enrolled_at,
         visibility: c?.visibility ?? null,
+        progressPct,
       };
-    })
-    .filter((row) => Boolean(row.courseId));
+    }),
+  );
+  const enrollmentRowsFiltered = enrollmentRows.filter((row) => Boolean(row.courseId));
 
-  const enrolledCourseIds = new Set(enrollmentRows.map((row) => row.courseId));
+  const enrolledCourseIds = new Set(enrollmentRowsFiltered.map((row) => row.courseId));
   const availableCourses = (allCourses ?? []).filter((c) => !enrolledCourseIds.has(c.id));
 
   return (
@@ -105,11 +117,18 @@ export default async function StudentDetailPage({
               <Clock className="h-3.5 w-3.5" />
               Joined {formatDate(student.created_at)}
             </span>
-            {student.last_active_at ? (
-              <span>Last active {formatDate(student.last_active_at, { dateStyle: "medium", timeStyle: "short" })}</span>
+            {hasLoggedIn && lastAccessAt ? (
+              <span>
+                Last access {formatDate(lastAccessAt, { dateStyle: "medium", timeStyle: "short" })}
+              </span>
             ) : (
-              <span>Never logged in</span>
+              <span className="font-medium text-amber-700">Never logged in — invite email sent, awaiting first login</span>
             )}
+            {lastSignInAt && student.last_active_at ? (
+              <span>
+                Last sign-in {formatDate(lastSignInAt, { dateStyle: "medium", timeStyle: "short" })}
+              </span>
+            ) : null}
           </div>
           {searchParams.enrolled === "1" ? (
             <p className="rounded-lg bg-green-50 px-3 py-2 text-sm text-green-800">
@@ -140,7 +159,7 @@ export default async function StudentDetailPage({
               <BookOpen className="h-5 w-5" />
             </div>
             <div>
-              <p className="text-2xl font-bold">{enrollmentRows.length}</p>
+              <p className="text-2xl font-bold">{enrollmentRowsFiltered.length}</p>
               <p className="text-xs text-muted">Enrolled courses</p>
             </div>
           </div>
@@ -183,11 +202,12 @@ export default async function StudentDetailPage({
           <CardHeader title="Course access" description="Grant or revoke course enrollments." />
           <StudentEnrollmentList
             studentId={student.id}
-            enrollments={enrollmentRows.map((row) => ({
+            enrollments={enrollmentRowsFiltered.map((row) => ({
               enrollmentId: row.enrollmentId,
               courseId: row.courseId,
               courseTitle: row.courseTitle,
               completedAt: row.completedAt,
+              progressPct: row.progressPct,
             }))}
             unenrollAction={unenrollStudent}
           />
@@ -230,7 +250,7 @@ export default async function StudentDetailPage({
               <input type="hidden" name="student_id" value={student.id} />
               <Select name="course_id" className="flex-1" defaultValue="">
                 <option value="">Issue certificate for…</option>
-                {enrollmentRows.map((row) => (
+                {enrollmentRowsFiltered.map((row) => (
                   <option key={row.courseId} value={row.courseId}>
                     {row.courseTitle}
                   </option>

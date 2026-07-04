@@ -11,6 +11,9 @@ export type StudentRow = {
   tags: string[] | null;
   created_at: string;
   course_count: number;
+  last_access_label: string;
+  avg_progress_pct: number | null;
+  has_logged_in: boolean;
 };
 
 export function StudentsTable({ students }: { students: StudentRow[] }) {
@@ -25,7 +28,8 @@ export function StudentsTable({ students }: { students: StudentRow[] }) {
           <tr className="border-b border-app text-left text-xs uppercase text-muted">
             <th className="px-3 py-2.5">Student</th>
             <th className="px-3 py-2.5">Courses</th>
-            <th className="px-3 py-2.5">Tags</th>
+            <th className="px-3 py-2.5">Progress</th>
+            <th className="px-3 py-2.5">Last access</th>
             <th className="px-3 py-2.5">Status</th>
             <th className="px-3 py-2.5">Joined</th>
             <th className="px-3 py-2.5 text-right">Actions</th>
@@ -48,16 +52,26 @@ export function StudentsTable({ students }: { students: StudentRow[] }) {
                 </span>
               </td>
               <td className="px-3 py-3">
-                <div className="flex max-w-[160px] flex-wrap gap-1">
-                  {(s.tags ?? []).slice(0, 2).map((t) => (
-                    <Badge key={t} tone="brand">
-                      {t}
-                    </Badge>
-                  ))}
-                  {(s.tags ?? []).length > 2 ? (
-                    <span className="text-xs text-muted">+{(s.tags ?? []).length - 2}</span>
-                  ) : null}
-                </div>
+                {s.avg_progress_pct != null ? (
+                  <div className="min-w-[88px]">
+                    <div className="mb-1 text-xs font-medium text-neutral-700">{s.avg_progress_pct}%</div>
+                    <div className="h-1.5 overflow-hidden rounded-full bg-neutral-100">
+                      <div
+                        className="h-full rounded-full bg-brand"
+                        style={{ width: `${s.avg_progress_pct}%` }}
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  <span className="text-xs text-muted">—</span>
+                )}
+              </td>
+              <td className="px-3 py-3">
+                <span
+                  className={`text-xs ${s.has_logged_in ? "text-neutral-600" : "font-medium text-amber-700"}`}
+                >
+                  {s.last_access_label}
+                </span>
               </td>
               <td className="px-3 py-3">
                 {s.is_suspended ? (

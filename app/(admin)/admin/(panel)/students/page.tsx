@@ -4,6 +4,8 @@ import { requireAdmin } from "@/lib/auth";
 import { getAdminSupabase } from "@/lib/admin-supabase";
 import { createClient } from "@/lib/supabase/server";
 import { serviceRoleKeyConfigured } from "@/lib/env-service-role";
+import { formatDate } from "@/lib/utils";
+import { loadStudentOverviewStats } from "@/lib/admin-student-overview";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { StudentCreate } from "@/components/admin/student-create";
@@ -42,37 +44,44 @@ export default async function AdminStudentsPage({
 
   const { data: students } = await query;
 
-  const studentIds = (students ?? []).map((s) => s.id);
-  const courseCountByStudent = new Map<string, number>();
+  const overview = await loadStudentOverviewStats(
+    supabase,
+    (students ?? []).map((s) => ({
+      id: s.id,
+      email: s.email,
+      last_active_at: s.last_active_at,
+    })),
+  );
 
-  if (studentIds.length > 0) {
-    const { data: enrollmentRows } = await supabase
-      .from("enrollments")
-      .select("student_id")
-      .in("student_id", studentIds);
+  const tableRows: StudentRow[] = (students ?? []).map((s) => {
+    const stats = overview.get(s.id);
+    const lastAccessLabel = !stats?.hasLoggedIn
+      ? "Never logged in"
+      : stats.lastActiveAt
+        ? formatDate(stats.lastActiveAt, { dateStyle: "medium", timeStyle: "short" })
+        : "Never logged in";
 
-    for (const row of enrollmentRows ?? []) {
-      courseCountByStudent.set(row.student_id, (courseCountByStudent.get(row.student_id) ?? 0) + 1);
-    }
-  }
-
-  const tableRows: StudentRow[] = (students ?? []).map((s) => ({
-    id: s.id,
-    full_name: s.full_name,
-    email: s.email,
-    is_suspended: s.is_suspended,
-    tags: s.tags,
-    created_at: s.created_at,
-    course_count: courseCountByStudent.get(s.id) ?? 0,
-  }));
+    return {
+      id: s.id,
+      full_name: s.full_name,
+      email: s.email,
+      is_suspended: s.is_suspended,
+      tags: s.tags,
+      created_at: s.created_at,
+      course_count: stats?.courseCount ?? 0,
+      last_access_label: lastAccessLabel,
+      avg_progress_pct: stats?.avgProgressPct ?? null,
+      has_logged_in: stats?.hasLoggedIn ?? false,
+    };
+  });
 
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold">Students</h1>
         <p className="mt-1 text-sm text-muted">
-          Create accounts, assign courses, and manage every learner. Click <strong>Manage</strong> to
-          edit profiles, suspend access, or remove courses.
+          Create accounts, import CSV cohorts, assign courses, and monitor login activity and
+          progress. Click <strong>Manage</strong> to edit a student.
         </p>
       </div>
 

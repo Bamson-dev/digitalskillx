@@ -235,9 +235,11 @@ export function StudentCreate({
               <Input id="csv_file" name="csv_file" type="file" accept=".csv,text/csv" />
             </div>
             <div>
-              <Label htmlFor="default_course_id">Course for this upload</Label>
-              <Select id="default_course_id" name="default_course_id" defaultValue="">
-                <option value="">— None —</option>
+              <Label htmlFor="default_course_id">Default course for this upload</Label>
+              <Select id="default_course_id" name="default_course_id" defaultValue="" required>
+                <option value="" disabled>
+                  Select a course…
+                </option>
                 {courses.map((course) => (
                   <option key={course.id} value={course.id}>
                     {course.title}
@@ -245,7 +247,8 @@ export function StudentCreate({
                 ))}
               </Select>
               <p className="mt-1 text-xs text-muted">
-                Used when a CSV row has no course column. Row course values override this default.
+                Applied to every row without a course column. New students receive a welcome email
+                with login password and course access.
               </p>
             </div>
           </div>
@@ -262,8 +265,9 @@ export function StudentCreate({
               className="font-mono text-xs"
             />
             <p className="mt-1 text-xs text-muted">
-              Columns: <code>full_name</code>, <code>email</code>, optional <code>course</code> (course title or
-              id). Duplicates are skipped. Failed rows do not stop the batch.
+              Required columns: <code>full_name</code> (or <code>name</code>) and <code>email</code>.
+              Optional <code>course</code> column overrides the default course. Supports Excel-exported
+              CSVs (UTF-8). Each new student gets an account, course access, and welcome email.
             </p>
           </div>
 

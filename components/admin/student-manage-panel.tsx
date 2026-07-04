@@ -111,6 +111,7 @@ type EnrollmentRow = {
   courseId: string;
   courseTitle: string;
   completedAt: string | null;
+  progressPct: number;
 };
 
 export function StudentEnrollmentList({
@@ -153,11 +154,20 @@ function EnrollmentRowItem({
 
   return (
     <div className="flex items-center justify-between gap-3 rounded-lg border border-app px-3 py-2.5 text-sm">
-      <div className="min-w-0">
+      <div className="min-w-0 flex-1">
         <p className="font-medium text-neutral-900">{row.courseTitle}</p>
-        <p className="text-xs text-muted">
-          {row.completedAt ? "Completed" : "In progress"}
-        </p>
+        <div className="mt-2 max-w-xs">
+          <div className="mb-1 flex justify-between text-xs text-muted">
+            <span>{row.completedAt ? "Completed" : "In progress"}</span>
+            <span>{row.progressPct}%</span>
+          </div>
+          <div className="h-1.5 overflow-hidden rounded-full bg-neutral-100">
+            <div
+              className="h-full rounded-full bg-brand"
+              style={{ width: `${row.progressPct}%` }}
+            />
+          </div>
+        </div>
       </div>
       <form ref={formRef} action={unenrollAction}>
         <input type="hidden" name="student_id" value={studentId} />

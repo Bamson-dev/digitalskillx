@@ -39,6 +39,24 @@ export function buildCourseResolver(courses: CourseLookup[]) {
   const byId = new Map(courses.map((c) => [c.id, c]));
   const byTitle = new Map(courses.map((c) => [c.title.trim().toLowerCase(), c]));
 
+  function fuzzyMatchTitle(ref: string) {
+    const lower = ref.trim().toLowerCase();
+    const exact = byTitle.get(lower);
+    if (exact) return exact;
+
+    const partial = courses.filter(
+      (course) =>
+        course.title.toLowerCase().includes(lower) || lower.includes(course.title.toLowerCase()),
+    );
+    if (partial.length === 1) return partial[0];
+    if (partial.length > 1) {
+      const startsWith = partial.filter((course) => course.title.toLowerCase().startsWith(lower));
+      if (startsWith.length === 1) return startsWith[0];
+      return partial.sort((a, b) => a.title.length - b.title.length)[0];
+    }
+    return null;
+  }
+
   return function resolveCourseRef(
     ref: string | null | undefined,
     fallbackCourseId: string | null,
@@ -59,7 +77,7 @@ export function buildCourseResolver(courses: CourseLookup[]) {
         : { courseId: null, courseTitle: null, error: `Unknown course id: ${trimmed}` };
     }
 
-    const course = byTitle.get(trimmed.toLowerCase());
+    const course = fuzzyMatchTitle(trimmed);
     return course
       ? { courseId: course.id, courseTitle: course.title }
       : { courseId: null, courseTitle: null, error: `Unknown course: ${trimmed}` };
@@ -96,22 +114,62 @@ export function parseCsvRow(line: string): string[] {
 
 export function parseStudentCsv(text: string): {
   header: boolean;
-  rows: { rowNumber: number; cells: string[] }[];
+  rows: { rowNumber: number; cells: string[]; fullName: string; email: string; courseRef: string }[];
 } {
-  const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  const normalized = text.replace(/^\uFEFF/, "").trim();
+  const lines = normalized.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
   if (lines.length === 0) return { header: false, rows: [] };
 
   const first = parseCsvRow(lines[0]);
-  const header = first[0]?.toLowerCase() === "full_name";
-  const startIndex = header ? 1 : 0;
+  const headerCells = first.map((cell) => cell.toLowerCase().trim());
+  const hasHeader =
+    headerCells.some((cell) => cell === "full_name" || cell === "name" || cell === "full name") &&
+    headerCells.some((cell) => cell === "email" || cell === "email address");
 
-  return {
-    header,
-    rows: lines.slice(startIndex).map((line, offset) => ({
+  const nameIdx = headerCells.findIndex(
+    (cell) => cell === "full_name" || cell === "name" || cell === "full name",
+  );
+  const emailIdx = headerCells.findIndex((cell) => cell === "email" || cell === "email address");
+  const courseIdx = headerCells.findIndex(
+    (cell) => cell === "course" || cell === "course_name" || cell === "courses",
+  );
+
+  const startIndex = hasHeader ? 1 : 0;
+
+  const rows = lines.slice(startIndex).map((line, offset) => {
+    const cells = parseCsvRow(line);
+    let fullName = "";
+    let email = "";
+    let courseRef = "";
+
+    if (hasHeader) {
+      fullName = cells[nameIdx]?.trim() ?? "";
+      email = cells[emailIdx]?.trim().toLowerCase() ?? "";
+      courseRef = courseIdx >= 0 ? (cells[courseIdx]?.trim() ?? "") : "";
+    } else if (cells.length >= 2 && cells[1]?.includes("@")) {
+      fullName = cells[0]?.trim() ?? "";
+      email = cells[1]?.trim().toLowerCase() ?? "";
+      courseRef = cells[2]?.trim() ?? "";
+    } else if (cells.length >= 2 && cells[0]?.includes("@")) {
+      email = cells[0]?.trim().toLowerCase() ?? "";
+      fullName = cells[1]?.trim() ?? "";
+      courseRef = cells[2]?.trim() ?? "";
+    } else {
+      fullName = cells[0]?.trim() ?? "";
+      email = cells[1]?.trim().toLowerCase() ?? "";
+      courseRef = cells[2]?.trim() ?? "";
+    }
+
+    return {
       rowNumber: startIndex + offset + 1,
-      cells: parseCsvRow(line),
-    })),
-  };
+      cells,
+      fullName,
+      email,
+      courseRef,
+    };
+  });
+
+  return { header: hasHeader, rows };
 }
 
 export async function findProfileByEmail(
@@ -154,6 +212,40 @@ export async function verifyStudentCourseAccess(
     .in("course_id", courseIds);
   if (error) throw new Error(error.message);
   return { enrolledCourseIds: (data ?? []).map((row) => row.course_id) };
+}
+
+/** Resolve a student id from profile or auth users (CSV / import flows). */
+export async function resolveStudentIdByEmail(
+  admin: SupabaseClient<Database>,
+  email: string,
+  authIndex?: Map<string, { id: string; lastSignInAt: string | null }>,
+) {
+  const normalized = email.trim().toLowerCase();
+  const profile = await findProfileByEmail(admin, normalized);
+  if (profile) return profile.id;
+  const authMeta = authIndex?.get(normalized);
+  return authMeta?.id ?? null;
+}
+
+export async function ensureImportedStudentProfile(
+  admin: SupabaseClient<Database>,
+  params: {
+    studentId: string;
+    email: string;
+    fullName: string;
+  },
+) {
+  const { error } = await admin.from("profiles").upsert(
+    {
+      id: params.studentId,
+      email: params.email.trim().toLowerCase(),
+      full_name: params.fullName.trim(),
+      role: "student",
+      is_suspended: false,
+    },
+    { onConflict: "id" },
+  );
+  if (error) throw new Error(error.message);
 }
 
 export async function grantCourseAccessToStudent(
