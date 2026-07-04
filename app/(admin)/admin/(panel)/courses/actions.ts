@@ -2,7 +2,6 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { isRedirectError } from "next/dist/client/components/redirect";
 import { requireAdmin } from "@/lib/auth";
 import { getAdminSupabase } from "@/lib/admin-supabase";
 import { logAudit } from "@/lib/audit";
@@ -34,11 +33,12 @@ export async function createCourse(
   _prev: CreateCourseState,
   formData: FormData,
 ): Promise<CreateCourseState> {
-  try {
-    const admin = await requireAdmin();
-    const supabase = await getAdminSupabase();
-    const title = String(formData.get("title") ?? "").trim() || "Untitled course";
+  const admin = await requireAdmin();
+  const title = String(formData.get("title") ?? "").trim() || "Untitled course";
 
+  let courseId: string;
+  try {
+    const supabase = await getAdminSupabase();
     const { data, error } = await supabase
       .from("courses")
       .insert({ title, created_by: admin.id })
@@ -48,16 +48,16 @@ export async function createCourse(
     if (error || !data) {
       return { error: error?.message ?? "Failed to create course." };
     }
-
-    await logAudit({ action: "course_created", targetType: "course", targetId: data.id });
-    revalidatePath("/admin/courses");
-    redirect(`/admin/courses/${data.id}`);
+    courseId = data.id;
   } catch (err) {
-    if (isRedirectError(err)) throw err;
     return {
       error: err instanceof Error ? err.message : "Could not create course.",
     };
   }
+
+  await logAudit({ action: "course_created", targetType: "course", targetId: courseId });
+  revalidatePath("/admin/courses");
+  redirect(`/admin/courses/${courseId}`);
 }
 
 export async function updateCourseSettings(

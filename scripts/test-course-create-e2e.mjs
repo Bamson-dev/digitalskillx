@@ -1,11 +1,33 @@
 #!/usr/bin/env node
 /**
  * Production E2E: admin login + create course via server action.
+ * Optional credentials file: .env.test (gitignored)
  */
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const testEnvPath = join(root, ".env.test");
+if (existsSync(testEnvPath)) {
+  for (const line of readFileSync(testEnvPath, "utf8").split("\n")) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) continue;
+    const eq = trimmed.indexOf("=");
+    if (eq === -1) continue;
+    const key = trimmed.slice(0, eq).trim();
+    let value = trimmed.slice(eq + 1).trim();
+    if (
+      (value.startsWith('"') && value.endsWith('"')) ||
+      (value.startsWith("'") && value.endsWith("'"))
+    ) {
+      value = value.slice(1, -1);
+    }
+    if (value && !process.env[key]) process.env[key] = value;
+  }
+}
 
 const base = (process.argv[2] ?? "https://www.digitalskillx.com").replace(/\/$/, "");
 const email = process.env.TEST_ADMIN_EMAIL ?? "admin@digitalskillx.com";
@@ -68,7 +90,7 @@ function extractNextAction(html) {
   const patterns = [
     /\\"id\\":\\"([a-f0-9]{40,})\\"/g,
     /"id":"([a-f0-9]{40,})"/g,
-    /createCourse[\s\S]{0,200}?([a-f0-9]{40,})/,
+    /createCourse[\s\S]{0,200}?([a-f0-9]{40,})/g,
   ];
   for (const pattern of patterns) {
     const matches = [...html.matchAll(pattern)].map((m) => m[1]);
