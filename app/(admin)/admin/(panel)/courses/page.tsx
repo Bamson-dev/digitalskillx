@@ -1,22 +1,24 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Plus, BookOpen } from "lucide-react";
-import { createClient } from "@/lib/supabase/server";
+import { BookOpen } from "lucide-react";
+import { getAdminSupabase } from "@/lib/admin-supabase";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import { SubmitButton } from "@/components/auth/submit-button";
-import { createCourse } from "./actions";
+import { CreateCourseForm } from "@/components/admin/create-course-form";
 import { formatDate } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "Courses" };
 
 export default async function AdminCoursesPage() {
-  const supabase = createClient();
-  const { data: courses } = await supabase
+  const supabase = await getAdminSupabase();
+  const { data: courses, error } = await supabase
     .from("courses")
     .select("id, title, visibility, created_at, modules(id)")
     .order("created_at", { ascending: false });
+
+  if (error) {
+    throw new Error(error.message);
+  }
 
   return (
     <div className="space-y-6">
@@ -27,17 +29,7 @@ export default async function AdminCoursesPage() {
         </div>
       </div>
 
-      <Card>
-        <form action={createCourse} className="flex flex-col gap-3 sm:flex-row sm:items-end">
-          <div className="flex-1">
-            <label className="mb-1.5 block text-sm font-medium">New course title</label>
-            <Input name="title" placeholder="e.g. Facebook Ads Mastery" required />
-          </div>
-          <SubmitButton pendingText="Creating…">
-            <Plus className="h-4 w-4" /> Create course
-          </SubmitButton>
-        </form>
-      </Card>
+      <CreateCourseForm />
 
       {!courses || courses.length === 0 ? (
         <Card className="text-center text-sm text-muted">

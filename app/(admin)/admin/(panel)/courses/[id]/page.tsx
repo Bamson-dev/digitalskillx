@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, Eye } from "lucide-react";
-import { createClient } from "@/lib/supabase/server";
+import { getAdminSupabase } from "@/lib/admin-supabase";
 import { requireAdmin } from "@/lib/auth";
 import { getPlatformSettings } from "@/lib/platform-settings";
 import {
@@ -21,7 +21,7 @@ export default async function AdminCourseEditorPage({
   params: { id: string };
 }) {
   await requireAdmin();
-  const supabase = createClient();
+  const supabase = await getAdminSupabase();
 
   const { data: course } = await supabase
     .from("courses")

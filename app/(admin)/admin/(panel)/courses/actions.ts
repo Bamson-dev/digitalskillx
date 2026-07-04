@@ -2,8 +2,9 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { isRedirectError } from "next/dist/client/components/redirect";
 import { requireAdmin } from "@/lib/auth";
+import { getAdminSupabase } from "@/lib/admin-supabase";
 import { logAudit } from "@/lib/audit";
 import {
   inferAttachmentType,
@@ -21,6 +22,7 @@ export type CourseSettingsState = {
   message?: string;
   thumbnail_url?: string | null;
 };
+export type CreateCourseState = { error?: string };
 
 function fileFrom(formData: FormData, key: string): File | null {
   const value = formData.get(key);
@@ -28,20 +30,34 @@ function fileFrom(formData: FormData, key: string): File | null {
   return value;
 }
 
-export async function createCourse(formData: FormData) {
-  const admin = await requireAdmin();
-  const supabase = createClient();
-  const title = String(formData.get("title") ?? "").trim() || "Untitled course";
+export async function createCourse(
+  _prev: CreateCourseState,
+  formData: FormData,
+): Promise<CreateCourseState> {
+  try {
+    const admin = await requireAdmin();
+    const supabase = await getAdminSupabase();
+    const title = String(formData.get("title") ?? "").trim() || "Untitled course";
 
-  const { data, error } = await supabase
-    .from("courses")
-    .insert({ title, created_by: admin.id })
-    .select("id")
-    .single();
-  if (error || !data) throw new Error(error?.message ?? "Failed to create course");
+    const { data, error } = await supabase
+      .from("courses")
+      .insert({ title, created_by: admin.id })
+      .select("id")
+      .single();
 
-  await logAudit({ action: "course_created", targetType: "course", targetId: data.id });
-  redirect(`/admin/courses/${data.id}`);
+    if (error || !data) {
+      return { error: error?.message ?? "Failed to create course." };
+    }
+
+    await logAudit({ action: "course_created", targetType: "course", targetId: data.id });
+    revalidatePath("/admin/courses");
+    redirect(`/admin/courses/${data.id}`);
+  } catch (err) {
+    if (isRedirectError(err)) throw err;
+    return {
+      error: err instanceof Error ? err.message : "Could not create course.",
+    };
+  }
 }
 
 export async function updateCourseSettings(
@@ -49,8 +65,7 @@ export async function updateCourseSettings(
   formData: FormData,
 ): Promise<CourseSettingsState> {
   try {
-    await requireAdmin();
-    const supabase = createClient();
+    const supabase = await getAdminSupabase();
     const id = String(formData.get("id"));
 
     const { data: before, error: beforeError } = await supabase
@@ -161,8 +176,7 @@ export async function updateCourseSettings(
 }
 
 export async function deleteCourse(formData: FormData) {
-  await requireAdmin();
-  const supabase = createClient();
+  const supabase = await getAdminSupabase();
   const id = String(formData.get("id"));
   const { error } = await supabase.from("courses").delete().eq("id", id);
   if (error) throw new Error(error.message);
@@ -171,8 +185,7 @@ export async function deleteCourse(formData: FormData) {
 }
 
 export async function createModule(formData: FormData) {
-  await requireAdmin();
-  const supabase = createClient();
+  const supabase = await getAdminSupabase();
   const courseId = String(formData.get("course_id"));
   const title = String(formData.get("title") ?? "").trim() || "New module";
 
@@ -189,8 +202,7 @@ export async function createModule(formData: FormData) {
 }
 
 export async function renameModule(formData: FormData) {
-  await requireAdmin();
-  const supabase = createClient();
+  const supabase = await getAdminSupabase();
   const id = String(formData.get("id"));
   const courseId = String(formData.get("course_id"));
   await supabase.from("modules").update({ title: String(formData.get("title") ?? "") }).eq("id", id);
@@ -198,8 +210,7 @@ export async function renameModule(formData: FormData) {
 }
 
 export async function deleteModule(formData: FormData) {
-  await requireAdmin();
-  const supabase = createClient();
+  const supabase = await getAdminSupabase();
   const id = String(formData.get("id"));
   const courseId = String(formData.get("course_id"));
   await supabase.from("modules").delete().eq("id", id);
@@ -207,8 +218,7 @@ export async function deleteModule(formData: FormData) {
 }
 
 export async function createLesson(formData: FormData) {
-  await requireAdmin();
-  const supabase = createClient();
+  const supabase = await getAdminSupabase();
   const moduleId = String(formData.get("module_id"));
   const courseId = String(formData.get("course_id"));
 
@@ -228,8 +238,7 @@ export async function createLesson(formData: FormData) {
 }
 
 export async function updateLesson(formData: FormData) {
-  await requireAdmin();
-  const supabase = createClient();
+  const supabase = await getAdminSupabase();
   const id = String(formData.get("id"));
   const courseId = String(formData.get("course_id"));
 
@@ -259,8 +268,7 @@ export async function updateLesson(formData: FormData) {
 }
 
 export async function deleteLesson(formData: FormData) {
-  await requireAdmin();
-  const supabase = createClient();
+  const supabase = await getAdminSupabase();
   const id = String(formData.get("id"));
   const courseId = String(formData.get("course_id"));
   await supabase.from("lessons").delete().eq("id", id);
@@ -272,8 +280,7 @@ export async function reorderLessons(
   moduleId: string,
   lessonIds: string[],
 ) {
-  await requireAdmin();
-  const supabase = createClient();
+  const supabase = await getAdminSupabase();
 
   const updates = lessonIds.map((id, position) =>
     supabase.from("lessons").update({ position }).eq("id", id).eq("module_id", moduleId),
@@ -289,8 +296,7 @@ export async function addLessonAttachment(
   _prev: LessonAttachmentState,
   formData: FormData,
 ): Promise<LessonAttachmentState> {
-  await requireAdmin();
-  const supabase = createClient();
+  const supabase = await getAdminSupabase();
 
   const courseId = String(formData.get("course_id") ?? "");
   const lessonId = String(formData.get("lesson_id") ?? "");
@@ -344,8 +350,7 @@ export async function addLessonAttachment(
 }
 
 export async function deleteLessonResource(formData: FormData) {
-  await requireAdmin();
-  const supabase = createClient();
+  const supabase = await getAdminSupabase();
   const id = String(formData.get("id"));
   const courseId = String(formData.get("course_id"));
   const lessonId = String(formData.get("lesson_id"));
@@ -365,8 +370,7 @@ export async function addCourseResource(
   _prev: CourseResourceState,
   formData: FormData,
 ): Promise<CourseResourceState> {
-  await requireAdmin();
-  const supabase = createClient();
+  const supabase = await getAdminSupabase();
 
   const courseId = String(formData.get("course_id") ?? "");
   const title = String(formData.get("title") ?? "").trim();
@@ -426,8 +430,7 @@ export async function addCourseResource(
 }
 
 export async function deleteCourseResource(formData: FormData) {
-  await requireAdmin();
-  const supabase = createClient();
+  const supabase = await getAdminSupabase();
   const id = String(formData.get("id"));
   const courseId = String(formData.get("course_id"));
 
@@ -450,8 +453,7 @@ export async function reorderCourseResources(
   courseId: string,
   resourceIds: string[],
 ) {
-  await requireAdmin();
-  const supabase = createClient();
+  const supabase = await getAdminSupabase();
 
   const updates = resourceIds.map((id, position) =>
     supabase
