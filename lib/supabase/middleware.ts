@@ -14,6 +14,7 @@ const PUBLIC_PREFIXES = [
   "/api/admin/sync-password",
   "/api/admin/setup-production",
   "/api/payments/confirm",
+  "/api/payments/initialize",
 ];
 
 const PUBLIC_PATHS = [
