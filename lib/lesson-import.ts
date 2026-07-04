@@ -2,6 +2,7 @@ import "server-only";
 import {
   detectYoutubeInput,
   fetchPlaylist,
+  fetchPlaylistTitle,
   fetchSingleVideo,
   type YoutubeVideo,
 } from "@/lib/youtube";
@@ -136,8 +137,9 @@ async function fetchOembed(endpoint: string, url: string): Promise<OembedPayload
 }
 
 function fromYoutubeVideo(v: YoutubeVideo, contentUrl: string): ImportedLessonDraft {
+  const title = v.title.trim() || `Video ${v.videoId}`;
   return {
-    title: v.title,
+    title,
     description: v.description.slice(0, 5000),
     contentUrl,
     youtubeVideoId: v.videoId,
@@ -179,7 +181,7 @@ async function importVimeo(url: string): Promise<ImportedLessonDraft[]> {
   if (!embedUrl) throw new Error("Vimeo did not return an embed URL.");
   return [
     {
-      title: data.title?.trim() || "Imported Vimeo lesson",
+      title: data.title?.trim() || "Untitled video",
       description: "",
       contentUrl: embedUrl,
       youtubeVideoId: null,
@@ -248,18 +250,24 @@ export async function fetchLessonsForImport(
   }
 }
 
-export function defaultModuleTitle(source: LessonImportSource) {
-  switch (source) {
-    case "youtube_playlist":
-    case "youtube_video":
-      return "Imported from YouTube";
-    case "vimeo":
-      return "Imported from Vimeo";
-    case "wistia":
-      return "Imported from Wistia";
-    case "loom":
-      return "Imported from Loom";
-    default:
-      return "Imported lessons";
+export async function resolveImportModuleTitle(
+  source: LessonImportSource,
+  rawUrl: string,
+  lessons: ImportedLessonDraft[],
+  options?: { youtubeApiKey?: string },
+): Promise<string> {
+  const firstTitle = lessons[0]?.title?.trim();
+
+  if (source === "youtube_playlist") {
+    const input = detectYoutubeInput(normalizeUrl(rawUrl));
+    if (input?.type === "playlist") {
+      const playlistTitle = await fetchPlaylistTitle(input.id, {
+        apiKey: options?.youtubeApiKey,
+      });
+      if (playlistTitle) return playlistTitle;
+    }
   }
+
+  if (firstTitle) return firstTitle;
+  return "New module";
 }

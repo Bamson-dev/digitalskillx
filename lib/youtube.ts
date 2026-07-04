@@ -88,13 +88,28 @@ export async function fetchSingleVideo(
   return [
     {
       videoId: id,
-      title: item.snippet.title,
+      title: String(item.snippet?.title ?? "").trim() || `Video ${id}`,
       description: item.snippet.description ?? "",
       thumbnail: item.snippet.thumbnails?.high?.url ?? null,
       durationSeconds: parseDuration(item.contentDetails?.duration ?? "PT0S"),
       position: 0,
     },
   ];
+}
+
+/** Fetch a playlist title for naming imported modules. */
+export async function fetchPlaylistTitle(
+  playlistId: string,
+  options?: YoutubeFetchOptions,
+): Promise<string | null> {
+  const apiKey = await resolveKey(options);
+  const res = await fetch(
+    `${API}/playlists?part=snippet&id=${encodeURIComponent(playlistId)}&key=${apiKey}`,
+  );
+  const json = await res.json();
+  if (!res.ok) return null;
+  const title = json.items?.[0]?.snippet?.title;
+  return typeof title === "string" && title.trim() ? title.trim() : null;
 }
 
 export async function fetchPlaylist(
@@ -121,7 +136,7 @@ export async function fetchPlaylist(
       if (!videoId) continue;
       videos.push({
         videoId,
-        title: item.snippet.title,
+        title: String(item.snippet?.title ?? "").trim() || `Video ${videoId}`,
         description: item.snippet.description ?? "",
         thumbnail: item.snippet.thumbnails?.high?.url ?? null,
         durationSeconds: null,

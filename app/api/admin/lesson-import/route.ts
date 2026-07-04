@@ -9,8 +9,8 @@ import {
   youtubeApiKeyError,
 } from "@/lib/env-youtube";
 import {
-  defaultModuleTitle,
   fetchLessonsForImport,
+  resolveImportModuleTitle,
   type LessonImportSource,
 } from "@/lib/lesson-import";
 
@@ -90,6 +90,9 @@ export async function POST(request: NextRequest) {
 
   let moduleId = body.moduleId;
   if (!moduleId) {
+    const moduleTitle = await resolveImportModuleTitle(source, body.url, lessons, {
+      youtubeApiKey,
+    });
     const { count } = await supabase
       .from("modules")
       .select("*", { count: "exact", head: true })
@@ -98,7 +101,7 @@ export async function POST(request: NextRequest) {
       .from("modules")
       .insert({
         course_id: body.courseId,
-        title: defaultModuleTitle(source),
+        title: moduleTitle,
         position: count ?? 0,
       })
       .select("id")
