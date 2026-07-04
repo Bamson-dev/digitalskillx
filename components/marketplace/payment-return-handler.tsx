@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { CheckCircle2, Loader2, Mail } from "lucide-react";
+import { syncSessionAndRedirect } from "@/lib/auth/sync-session-client";
 
 type ConfirmState =
   | { status: "idle" | "confirming" }
@@ -14,6 +15,7 @@ type ConfirmState =
       buyerEmail?: string;
       isNewAccount?: boolean;
       needsLogin?: boolean;
+      autoRedirected?: boolean;
     }
   | { status: "error"; message: string };
 
@@ -60,6 +62,7 @@ export function PaymentReturnHandler({
           buyerEmail?: string;
           isNewAccount?: boolean;
           needsLogin?: boolean;
+          session?: { access_token: string; refresh_token: string };
         };
 
         if (cancelled) return;
@@ -72,6 +75,16 @@ export function PaymentReturnHandler({
           return;
         }
 
+        if (json.session?.access_token && json.session.refresh_token) {
+          setState({
+            status: "success",
+            courseId: json.courseId,
+            autoRedirected: true,
+          });
+          await syncSessionAndRedirect(json.session, `/courses/${json.courseId}`);
+          return;
+        }
+
         setState({
           status: "success",
           courseId: json.courseId,
@@ -81,7 +94,10 @@ export function PaymentReturnHandler({
           needsLogin: json.needsLogin ?? true,
         });
 
-        router.replace(`/course/${courseId}?enrolled=1`, { scroll: false });
+        router.replace(
+          `/course/${courseId}?enrolled=1&ref=${encodeURIComponent(reference)}`,
+          { scroll: false },
+        );
       } catch {
         if (!cancelled) {
           setState({
@@ -102,6 +118,17 @@ export function PaymentReturnHandler({
   const enrolled = searchParams.get("enrolled") === "1";
 
   if (!paymentSuccess && !enrolled) return null;
+
+  if (state.status === "success" && state.autoRedirected) {
+    return (
+      <div className="border-b border-brand/20 bg-brand/5 px-4 py-4 text-center text-sm text-brand-700">
+        <span className="inline-flex items-center gap-2">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          Opening your course…
+        </span>
+      </div>
+    );
+  }
 
   // Free enroll uses ?enrolled=1 only — sidebar card handles that UX.
   if (enrolled && state.status === "idle" && !paymentSuccess) return null;
@@ -129,6 +156,9 @@ export function PaymentReturnHandler({
   const needsLogin =
     state.status === "success" ? (state.needsLogin ?? !isLoggedIn) : !isLoggedIn;
   const isNewAccount = state.status === "success" ? state.isNewAccount : false;
+  const loginHref = displayEmail
+    ? `/login?email=${encodeURIComponent(displayEmail)}&next=${encodeURIComponent(`/courses/${courseId}`)}`
+    : `/login?next=${encodeURIComponent(`/courses/${courseId}`)}`;
 
   if (enrolled || state.status === "success") {
     return (
@@ -148,13 +178,12 @@ export function PaymentReturnHandler({
                 <>
                   {isNewAccount ? (
                     <>
-                      We sent your login password to <strong>{displayEmail}</strong>. Check your
-                      inbox and spam folder, then sign in to start learning.
+                      We sent your login password to <strong>{displayEmail}</strong>. Sign in to
+                      start learning (check spam if you don&apos;t see it).
                     </>
                   ) : (
                     <>
-                      Sign in with <strong>{displayEmail}</strong> to access your course. Check
-                      your inbox if you need your password reset.
+                      Sign in with <strong>{displayEmail}</strong> to access your course.
                     </>
                   )}
                 </>
@@ -169,7 +198,7 @@ export function PaymentReturnHandler({
             </p>
           ) : null}
           <Link
-            href={needsLogin ? "/login" : `/courses/${courseId}`}
+            href={needsLogin ? loginHref : `/courses/${courseId}`}
             className="mt-1 inline-flex h-11 items-center justify-center rounded-lg bg-brand px-6 text-sm font-bold text-white hover:bg-brand-700"
           >
             {needsLogin ? "Log in to start learning" : "Start learning"}

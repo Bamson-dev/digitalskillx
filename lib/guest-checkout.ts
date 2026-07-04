@@ -1,4 +1,5 @@
 import "server-only";
+import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createAdminClientAsync } from "@/lib/supabase/admin";
 import {
@@ -10,6 +11,11 @@ import { fulfillPurchase } from "@/lib/purchase";
 import { verifyTransaction, type VerifiedTransaction } from "@/lib/paystack";
 import { runAutomations } from "@/lib/automation";
 import type { Database } from "@/types/database";
+
+export type CheckoutSession = {
+  access_token: string;
+  refresh_token: string;
+};
 
 const PLACEHOLDER_DOMAIN = "checkout.digitalskillx.com";
 
@@ -102,7 +108,16 @@ export async function resolveOrCreateStudentForPurchase(
     throw new Error(error.message);
   }
 
-  await admin.from("profiles").update({ full_name: fullName }).eq("id", created.user.id);
+  await admin.from("profiles").upsert(
+    {
+      id: created.user.id,
+      email,
+      full_name: fullName,
+      role: "student",
+      is_suspended: false,
+    },
+    { onConflict: "id" },
+  );
   await runAutomations("account_created", { studentId: created.user.id });
 
   return {
@@ -135,6 +150,40 @@ async function syncProfileEmailIfMissing(
   if (Object.keys(updates).length > 0) {
     await admin.from("profiles").update(updates).eq("id", studentId);
   }
+}
+
+async function signInCheckoutUser(email: string, password: string): Promise<CheckoutSession | null> {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (!supabaseUrl || !supabaseAnonKey) return null;
+
+  const authClient = createSupabaseClient<Database>(supabaseUrl, supabaseAnonKey, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+
+  const { data, error } = await authClient.auth.signInWithPassword({
+    email: email.trim().toLowerCase(),
+    password,
+  });
+
+  if (error || !data.session) return null;
+
+  return {
+    access_token: data.session.access_token,
+    refresh_token: data.session.refresh_token,
+  };
+}
+
+/** True when a Paystack reference completed successfully for this course. */
+export async function isSuccessfulGuestPurchase(reference: string, courseId: string) {
+  const admin = await createAdminClientAsync();
+  const { data: tx } = await admin
+    .from("transactions")
+    .select("status, course_id")
+    .eq("reference", reference)
+    .maybeSingle();
+
+  return Boolean(tx && tx.status === "success" && tx.course_id === courseId);
 }
 
 /** Idempotent paid checkout completion for browser confirm + Paystack webhook. */
@@ -217,12 +266,19 @@ export async function completePaidCheckout(reference: string) {
     reference,
     welcomePassword: password,
     buyerEmail,
+    buyerName: buyerName ?? undefined,
   });
+
+  let session: CheckoutSession | undefined;
+  if (isNewAccount && password) {
+    session = (await signInCheckoutUser(buyerEmail, password)) ?? undefined;
+  }
 
   return {
     ok: true as const,
     courseId: tx.course_id,
     buyerEmail,
     isNewAccount,
+    session,
   };
 }

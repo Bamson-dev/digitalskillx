@@ -4,6 +4,8 @@ import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getAdminSupabase } from "@/lib/admin-supabase";
 import { fetchPublishedCourseById, fetchPublishedCourses, type CatalogCourse, type LandingCourse } from "@/lib/published-courses";
+import { isCourseFree } from "@/lib/currency";
+import { isSuccessfulGuestPurchase } from "@/lib/guest-checkout";
 import { ORG, siteUrl } from "@/lib/org";
 import { MarketplaceNav, MarketplaceFooter } from "@/components/marketplace/marketplace-chrome";
 import { CourseLandingView } from "@/components/marketplace/course-landing-view";
@@ -52,7 +54,7 @@ export default async function CourseLandingPage({
   searchParams,
 }: {
   params: { id: string };
-  searchParams: { enroll?: string; payment?: string; enrolled?: string };
+  searchParams: { enroll?: string; payment?: string; enrolled?: string; ref?: string };
 }) {
   const supabase = createClient();
   const {
@@ -101,7 +103,16 @@ export default async function CourseLandingPage({
   const modules = [...(course.modules ?? [])].sort((a, b) => a.position - b.position);
   const lessonCount = modules.reduce((n, m) => n + (m.lessons?.length ?? 0), 0);
   const category = Array.isArray(course.category) ? course.category[0] : course.category;
-  const purchaseComplete = searchParams.enrolled === "1" && !isEnrolled;
+  const paymentRef = searchParams.ref?.trim() ?? "";
+  const paidPurchaseComplete =
+    Boolean(paymentRef) &&
+    (await isSuccessfulGuestPurchase(paymentRef, course.id));
+  const freeEnrollComplete =
+    searchParams.enrolled === "1" &&
+    !paymentRef &&
+    searchParams.payment !== "success" &&
+    isCourseFree(course, "NGN");
+  const purchaseComplete = !isEnrolled && (paidPurchaseComplete || freeEnrollComplete);
 
   return (
     <div className="flex min-h-screen flex-col bg-white text-neutral-900">

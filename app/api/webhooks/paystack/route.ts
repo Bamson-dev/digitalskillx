@@ -3,7 +3,7 @@ import * as Sentry from "@sentry/nextjs";
 import { bootstrapRuntimeSecrets } from "@/lib/bootstrap-runtime-secrets";
 import { createAdminClientAsync } from "@/lib/supabase/admin";
 import { verifyWebhookSignature } from "@/lib/paystack";
-import { completePaidCheckout } from "@/lib/guest-checkout";
+import { completePaidCheckout, readPendingCheckoutDetails } from "@/lib/guest-checkout";
 import { rateLimitedResponse } from "@/lib/api-rate-limit";
 import type { Json } from "@/types/database";
 
@@ -42,7 +42,7 @@ export async function POST(request: NextRequest) {
   const admin = await createAdminClientAsync();
   const { data: txBefore } = await admin
     .from("transactions")
-    .select("status")
+    .select("status, paystack_data")
     .eq("reference", reference)
     .maybeSingle();
 
@@ -50,9 +50,20 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ received: true, alreadyFulfilled: true });
   }
 
+  const pendingCheckout = readPendingCheckoutDetails(txBefore?.paystack_data);
   await admin
     .from("transactions")
-    .update({ paystack_data: event.data as unknown as Json })
+    .update({
+      paystack_data: {
+        ...(event.data as Record<string, unknown>),
+        ...(pendingCheckout.checkout_email
+          ? { checkout_email: pendingCheckout.checkout_email }
+          : {}),
+        ...(pendingCheckout.checkout_full_name
+          ? { checkout_full_name: pendingCheckout.checkout_full_name }
+          : {}),
+      } as unknown as Json,
+    })
     .eq("reference", reference);
 
   const result = await completePaidCheckout(reference);

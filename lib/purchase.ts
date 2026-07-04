@@ -1,7 +1,7 @@
 import "server-only";
 import { createAdminClientAsync } from "@/lib/supabase/admin";
 import { notify } from "@/lib/notifications";
-import { sendPaymentReceiptEmail, sendWelcomeEmailIfNeeded } from "@/lib/system-email-triggers";
+import { sendPaymentReceiptEmail, sendWelcomeEmailIfNeeded, sendCourseEnrollmentEmail } from "@/lib/system-email-triggers";
 
 /** Grant course access after a verified purchase. Idempotent for webhook retries. */
 export async function fulfillPurchase(params: {
@@ -13,6 +13,7 @@ export async function fulfillPurchase(params: {
   welcomePassword?: string;
   /** Used when profile email is not set yet (guest checkout). */
   buyerEmail?: string;
+  buyerName?: string;
 }) {
   const admin = await createAdminClientAsync();
 
@@ -63,13 +64,22 @@ export async function fulfillPurchase(params: {
 
   const receiptEmail = profile?.email?.trim() || params.buyerEmail?.trim();
   if (receiptEmail) {
-    await sendWelcomeEmailIfNeeded({
+    const welcome = await sendWelcomeEmailIfNeeded({
       studentId: params.studentId,
-      fullName: profile?.full_name ?? "there",
+      fullName: params.buyerName?.trim() || profile?.full_name || "there",
       email: receiptEmail,
       password: params.welcomePassword,
       checkoutCourseId: params.courseId,
     });
+
+    if (!welcome.sent) {
+      await sendCourseEnrollmentEmail({
+        studentId: params.studentId,
+        courseId: params.courseId,
+        fullName: params.buyerName?.trim() || profile?.full_name || "there",
+        email: receiptEmail,
+      });
+    }
 
     await sendPaymentReceiptEmail({
       studentId: params.studentId,
