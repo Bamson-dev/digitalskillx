@@ -5,6 +5,7 @@ import { ArrowRight, BookOpen } from "lucide-react";
 import { requireStudent } from "@/lib/auth";
 import { fetchPublishedCourses, type CatalogCourse } from "@/lib/published-courses";
 import { getStudentEnrolledCoursesWithProgress } from "@/lib/student-enrollments";
+import { DashboardAnnouncements } from "@/components/student/dashboard-announcements";
 import { toPercent } from "@/lib/utils";
 import { PriceDisplay } from "@/components/marketplace/price-display";
 import { EnrollLink } from "@/components/marketplace/enroll-button";
@@ -40,6 +41,8 @@ export default async function StudentDashboardPage() {
           Welcome back. Ready to pick up where you left off?
         </p>
       </div>
+
+      <DashboardAnnouncements studentId={profile.id} />
 
       {/* Continue learning — featured */}
       {continueCourse?.course ? (
