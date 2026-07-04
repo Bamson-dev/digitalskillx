@@ -47,7 +47,7 @@ function CourseCheckboxList({ courses }: { courses: PublishedCourse[] }) {
   if (courses.length === 0) {
     return (
       <p className="rounded-lg border border-app bg-surface-muted/30 px-3 py-4 text-sm text-muted">
-        No published courses yet.
+        No courses yet. Create a course under Admin → Courses first.
       </p>
     );
   }

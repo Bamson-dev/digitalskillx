@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Search } from "lucide-react";
+import { requireAdmin } from "@/lib/auth";
+import { getAdminSupabase } from "@/lib/admin-supabase";
 import { createClient } from "@/lib/supabase/server";
 import { serviceRoleKeyConfigured } from "@/lib/env-service-role";
 import { Card } from "@/components/ui/card";
@@ -16,14 +18,15 @@ export default async function AdminStudentsPage({
 }: {
   searchParams: { q?: string; status?: string; tag?: string };
 }) {
-  const supabase = createClient();
+  await requireAdmin();
+  const supabase = await getAdminSupabase();
+  const session = createClient();
 
-  const serviceRoleReady = await serviceRoleKeyConfigured(supabase);
+  const serviceRoleReady = await serviceRoleKeyConfigured(session);
 
   const { data: publishedCourses } = await supabase
     .from("courses")
     .select("id, title")
-    .eq("visibility", "published")
     .order("title");
 
   let query = supabase

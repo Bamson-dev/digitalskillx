@@ -4,6 +4,7 @@ import Image from "next/image";
 import { ArrowRight, BookOpen } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { requireStudent } from "@/lib/auth";
+import { fetchPublishedCourses, type CatalogCourse } from "@/lib/published-courses";
 import { courseCompletionPct } from "@/lib/progress";
 import { toPercent } from "@/lib/utils";
 import { PriceDisplay } from "@/components/marketplace/price-display";
@@ -25,13 +26,11 @@ export default async function StudentDashboardPage() {
 
   const enrolledIds = new Set((enrollments ?? []).map((e) => e.course_id));
 
-  const { data: catalog } = await supabase
-    .from("courses")
-    .select("id, title, description, short_description, thumbnail_url, price_ngn, price_usd, instructor_name")
-    .eq("visibility", "published")
-    .order("created_at", { ascending: false });
+  const catalog = await fetchPublishedCourses<CatalogCourse>(
+    "id, title, description, short_description, thumbnail_url, price_ngn, price_usd, instructor_name",
+  );
 
-  const upsell = (catalog ?? []).filter((c) => !enrolledIds.has(c.id));
+  const upsell = catalog.filter((c) => !enrolledIds.has(c.id));
 
   const myCourses = await Promise.all(
     (enrollments ?? []).map(async (e) => {

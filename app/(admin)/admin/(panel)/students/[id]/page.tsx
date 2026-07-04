@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, Trash2, KeyRound, Ban, CheckCircle2 } from "lucide-react";
-import { createClient } from "@/lib/supabase/server";
 import { requireAdmin } from "@/lib/auth";
+import { getAdminSupabase } from "@/lib/admin-supabase";
 import { Card, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -32,7 +32,7 @@ export default async function StudentDetailPage({
   searchParams: { enrolled?: string };
 }) {
   await requireAdmin();
-  const supabase = createClient();
+  const supabase = await getAdminSupabase();
 
   const { data: student } = await supabase
     .from("profiles")
@@ -48,7 +48,7 @@ export default async function StudentDetailPage({
         .from("enrollments")
         .select("id, completed_at, enrolled_at, course:courses(id, title)")
         .eq("student_id", params.id),
-      supabase.from("courses").select("id, title").order("title"),
+      supabase.from("courses").select("id, title, visibility").order("title"),
       supabase
         .from("admin_notes")
         .select("id, content, created_at")

@@ -2,23 +2,25 @@ import type { Metadata } from "next";
 import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { getAdminSupabase } from "@/lib/admin-supabase";
+import { fetchPublishedCourseById, fetchPublishedCourses, type CatalogCourse, type LandingCourse } from "@/lib/published-courses";
 import { ORG, siteUrl } from "@/lib/org";
 import { MarketplaceNav, MarketplaceFooter } from "@/components/marketplace/marketplace-chrome";
 import { CourseLandingView } from "@/components/marketplace/course-landing-view";
 import { PaymentReturnHandler } from "@/components/marketplace/payment-return-handler";
+
+const courseSelect =
+  "id, title, description, short_description, thumbnail_url, price_ngn, price_usd, learning_outcomes, instructor_name, instructor_bio, promo_video_url, category:course_categories(name), modules(id, title, position, lessons(id, title, position, lesson_type))";
 
 export async function generateMetadata({
   params,
 }: {
   params: { id: string };
 }): Promise<Metadata> {
-  const supabase = createClient();
-  const { data: course } = await supabase
-    .from("courses")
-    .select("title, short_description, description, thumbnail_url")
-    .eq("id", params.id)
-    .eq("visibility", "published")
-    .maybeSingle();
+  const course = await fetchPublishedCourseById<{ title: string; short_description: string | null; description: string | null; thumbnail_url: string | null }>(
+    params.id,
+    "title, short_description, description, thumbnail_url",
+  );
   if (!course) return { title: "Course" };
 
   const title = course.title;
@@ -69,18 +71,14 @@ export default async function CourseLandingPage({
     isAdmin = p?.role === "admin";
   }
 
-  let courseQuery = supabase
-    .from("courses")
-    .select(
-      "id, title, description, short_description, thumbnail_url, price_ngn, price_usd, learning_outcomes, instructor_name, instructor_bio, promo_video_url, category:course_categories(name), modules(id, title, position, lessons(id, title, position, lesson_type))",
-    )
-    .eq("id", params.id);
-
-  if (!isAdmin) {
-    courseQuery = courseQuery.eq("visibility", "published");
+  let course: LandingCourse | null = null;
+  if (isAdmin) {
+    const admin = await getAdminSupabase();
+    const { data } = await admin.from("courses").select(courseSelect).eq("id", params.id).single();
+    course = data as LandingCourse | null;
+  } else {
+    course = await fetchPublishedCourseById<LandingCourse>(params.id, courseSelect);
   }
-
-  const { data: course } = await courseQuery.single();
 
   if (!course) notFound();
 
@@ -95,12 +93,10 @@ export default async function CourseLandingPage({
     isEnrolled = Boolean(e);
   }
 
-  const { data: relatedRaw } = await supabase
-    .from("courses")
-    .select("id, title, description, short_description, thumbnail_url, price_ngn, price_usd, instructor_name")
-    .eq("visibility", "published")
-    .neq("id", course.id)
-    .limit(2);
+  const relatedAll = await fetchPublishedCourses<CatalogCourse>(
+    "id, title, description, short_description, thumbnail_url, price_ngn, price_usd, instructor_name",
+  );
+  const relatedRaw = relatedAll.filter((c) => c.id !== course.id).slice(0, 2);
 
   const modules = [...(course.modules ?? [])].sort((a, b) => a.position - b.position);
   const lessonCount = modules.reduce((n, m) => n + (m.lessons?.length ?? 0), 0);
@@ -121,6 +117,7 @@ export default async function CourseLandingPage({
         <CourseLandingView
           course={{
             ...course,
+            learning_outcomes: course.learning_outcomes ?? [],
             modules,
             category_name: category?.name ?? null,
           }}

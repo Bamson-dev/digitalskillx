@@ -3,6 +3,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { Megaphone, PenLine, ShoppingBag, TrendingUp } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
+import { fetchCourseCategories, fetchPublishedCourses, type CatalogCourse } from "@/lib/published-courses";
 import { ORG } from "@/lib/org";
 import { MarketplaceNav, MarketplaceFooter } from "@/components/marketplace/marketplace-chrome";
 import { CourseCard } from "@/components/marketplace/course-card";
@@ -39,20 +40,14 @@ export default async function HomePage() {
     profile = data;
   }
 
-  const [{ data: courses }, { data: categories }] = await Promise.all([
-    supabase
-      .from("courses")
-      .select(
-        "id, title, description, short_description, thumbnail_url, price_ngn, price_usd, instructor_name, created_at, category:course_categories(name)",
-      )
-      .eq("visibility", "published")
-      .order("created_at", { ascending: false }),
-    supabase.from("course_categories").select("id, name, slug").order("name"),
+  const [courses, categories] = await Promise.all([
+    fetchPublishedCourses<CatalogCourse>(
+      "id, title, description, short_description, thumbnail_url, price_ngn, price_usd, instructor_name, created_at, category:course_categories(name)",
+    ),
+    fetchCourseCategories(),
   ]);
 
-  type CourseRow = NonNullable<typeof courses>[number] & {
-    category?: { name: string } | null;
-  };
+  type CourseRow = CatalogCourse;
 
   const catalog = (courses ?? []).map((c) => {
     const row = c as CourseRow;
