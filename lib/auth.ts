@@ -1,8 +1,8 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getAdminMfaStatus, isAdminMfaRequired } from "@/lib/admin-mfa";
-import { ensureAdminProfileSession } from "@/lib/ensure-admin-profile-session";
-import { ensureStudentProfile } from "@/lib/ensure-student-profile";
+import { ensureAdminProfileSession, platformAdminProfileFromUser } from "@/lib/ensure-admin-profile-session";
+import { ensureStudentProfile, studentProfileFromUser } from "@/lib/ensure-student-profile";
 import type { Profile } from "@/types/database";
 
 /** Returns the current user's profile, or null if signed out. */
@@ -24,7 +24,15 @@ export async function getProfile(): Promise<Profile | null> {
 
 /** Guards a student route. Redirects to /login when not authenticated. */
 export async function requireStudent(): Promise<Profile> {
-  const profile = (await getProfile()) ?? (await ensureStudentProfile());
+  const supabase = createClient();
+  await supabase.auth.getSession();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/login");
+
+  let profile = (await getProfile()) ?? (await ensureStudentProfile());
+  if (!profile) profile = studentProfileFromUser(user);
   if (!profile) redirect("/login?error=no_profile");
   if (profile.is_suspended) redirect("/login?error=account_suspended");
   // Admins can also browse student views, so no role rejection here.
@@ -49,7 +57,15 @@ async function touchLastActive(profile: Profile) {
 
 /** Guards an admin route. Redirects to /admin/login for non-admins (PRD §4.3). */
 export async function requireAdmin(): Promise<Profile> {
-  const profile = (await getProfile()) ?? (await ensureAdminProfileSession());
+  const supabase = createClient();
+  await supabase.auth.getSession();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/admin/login");
+
+  let profile = (await getProfile()) ?? (await ensureAdminProfileSession());
+  if (!profile) profile = platformAdminProfileFromUser(user);
   if (!profile) redirect("/admin/login");
   if (profile.role !== "admin" || profile.is_suspended) {
     redirect("/admin/login?error=forbidden");
@@ -66,7 +82,15 @@ export async function requireAdmin(): Promise<Profile> {
 
 /** Admin auth without MFA gate (login / MFA enrollment pages). */
 export async function requireAdminPasswordOnly(): Promise<Profile> {
-  const profile = (await getProfile()) ?? (await ensureAdminProfileSession());
+  const supabase = createClient();
+  await supabase.auth.getSession();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) redirect("/admin/login");
+
+  let profile = (await getProfile()) ?? (await ensureAdminProfileSession());
+  if (!profile) profile = platformAdminProfileFromUser(user);
   if (!profile) redirect("/admin/login");
   if (profile.role !== "admin" || profile.is_suspended) {
     redirect("/admin/login?error=forbidden");

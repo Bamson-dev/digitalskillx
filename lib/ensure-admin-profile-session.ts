@@ -1,9 +1,17 @@
 import "server-only";
 import { createClient } from "@/lib/supabase/server";
-import { createAdminClientAsync } from "@/lib/supabase/admin";
+import { createAdminClient, createAdminClientAsync } from "@/lib/supabase/admin";
 import { ensureAdminProfile } from "@/lib/ensure-admin-profile";
 import { isPlatformAdminEmail } from "@/lib/admin-email";
 import type { Profile } from "@/types/database";
+
+async function serviceRoleClient() {
+  try {
+    return createAdminClient();
+  } catch {
+    return createAdminClientAsync();
+  }
+}
 
 /** Load admin profile via service role (RLS-safe) for authenticated admin routes. */
 export async function ensureAdminProfileSession(): Promise<Profile | null> {
@@ -15,7 +23,7 @@ export async function ensureAdminProfileSession(): Promise<Profile | null> {
   if (!user?.email) return null;
 
   try {
-    const admin = await createAdminClientAsync();
+    const admin = await serviceRoleClient();
     const { data: profile } = await admin
       .from("profiles")
       .select("*")
@@ -41,4 +49,28 @@ export async function ensureAdminProfileSession(): Promise<Profile | null> {
   } catch {
     return null;
   }
+}
+
+/** Fallback profile when DB read fails but Supabase auth session is valid. */
+export function platformAdminProfileFromUser(user: {
+  id: string;
+  email?: string | null;
+  user_metadata?: Record<string, unknown>;
+}): Profile | null {
+  const email = user.email?.trim().toLowerCase();
+  if (!email || !isPlatformAdminEmail(email)) return null;
+  const now = new Date().toISOString();
+  return {
+    id: user.id,
+    email,
+    full_name: (user.user_metadata?.full_name as string | undefined) ?? "Platform Admin",
+    role: "admin",
+    is_suspended: false,
+    avatar_url: null,
+    tags: [],
+    last_active_at: null,
+    welcome_email_sent_at: null,
+    created_at: now,
+    updated_at: now,
+  };
 }
