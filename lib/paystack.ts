@@ -67,23 +67,30 @@ export async function verifyWebhookSignature(
   return hash === signature;
 }
 
+export type VerifiedTransaction = {
+  status: string;
+  reference: string;
+  amount: number;
+  currency: string;
+  metadata: Record<string, string>;
+  customer?: {
+    email?: string;
+    first_name?: string;
+    last_name?: string;
+  };
+};
+
 export async function verifyTransaction(
   reference: string,
   supabase?: SupabaseClient<Database>,
-) {
+): Promise<VerifiedTransaction | null> {
   const secret = await getPaystackSecretKey(supabase);
   const res = await fetch(`${BASE}/transaction/verify/${encodeURIComponent(reference)}`, {
     headers: { Authorization: `Bearer ${secret}` },
   });
   const json = await res.json();
   if (!json.status) return null;
-  return json.data as {
-    status: string;
-    reference: string;
-    amount: number;
-    currency: string;
-    metadata: Record<string, string>;
-  };
+  return json.data as VerifiedTransaction;
 }
 
 export function generateReference() {

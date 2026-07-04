@@ -9,6 +9,10 @@ export async function fulfillPurchase(params: {
   courseId: string;
   reference: string;
   skipTransaction?: boolean;
+  /** Included in welcome email when checkout created a new account. */
+  welcomePassword?: string;
+  /** Used when profile email is not set yet (guest checkout). */
+  buyerEmail?: string;
 }) {
   const admin = await createAdminClientAsync();
 
@@ -57,11 +61,13 @@ export async function fulfillPurchase(params: {
     });
   }
 
-  if (profile?.email) {
+  const receiptEmail = profile?.email?.trim() || params.buyerEmail?.trim();
+  if (receiptEmail) {
     await sendWelcomeEmailIfNeeded({
       studentId: params.studentId,
-      fullName: profile.full_name ?? "there",
-      email: profile.email,
+      fullName: profile?.full_name ?? "there",
+      email: receiptEmail,
+      password: params.welcomePassword,
       checkoutCourseId: params.courseId,
     });
 

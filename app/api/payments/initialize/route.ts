@@ -7,6 +7,12 @@ import { initializeTransaction, generateReference, paystackConfigured } from "@/
 import { isCourseFree, nairaToKobo, type CurrencyCode } from "@/lib/currency";
 import { siteUrl } from "@/lib/org";
 import { rateLimitedResponse } from "@/lib/api-rate-limit";
+import {
+  checkoutPlaceholderEmail,
+  resolveOrCreateStudentForPurchase,
+} from "@/lib/guest-checkout";
+import { isValidStudentEmail } from "@/lib/admin-student-onboarding";
+import { sendWelcomeEmailIfNeeded } from "@/lib/system-email-triggers";
 
 function jsonError(message: string, status: number) {
   return NextResponse.json({ error: message }, { status });
@@ -21,9 +27,8 @@ export async function POST(request: NextRequest) {
     const {
       data: { user },
     } = await supabase.auth.getUser();
-    if (!user) return jsonError("Please sign in to enroll.", 401);
 
-    let body: { courseId?: string; currency?: CurrencyCode };
+    let body: { courseId?: string; currency?: CurrencyCode; email?: string; fullName?: string };
     try {
       body = await request.json();
     } catch {
@@ -42,13 +47,14 @@ export async function POST(request: NextRequest) {
     await bootstrapRuntimeSecrets();
     const admin = await createAdminClientAsync(supabase);
 
-    const { data: profile } = await admin
-      .from("profiles")
-      .select("email, full_name")
-      .eq("id", user.id)
-      .single();
-    if (!profile?.email) {
-      return jsonError("Add an email address to your profile before enrolling.", 400);
+    let profile: { email: string; full_name: string | null } | null = null;
+    if (user) {
+      const { data: p } = await admin
+        .from("profiles")
+        .select("email, full_name")
+        .eq("id", user.id)
+        .single();
+      profile = p;
     }
 
     const course = await fetchPublishedCourseById<{
@@ -68,37 +74,86 @@ export async function POST(request: NextRequest) {
       return jsonError("This course requires admin enrollment. Contact support to join.", 403);
     }
 
-    const { data: enrollment } = await admin
-      .from("enrollments")
-      .select("id")
-      .eq("student_id", user.id)
-      .eq("course_id", course.id)
-      .maybeSingle();
+    const studentIdForEnrollment = user?.id ?? null;
 
-    if (enrollment) {
-      return NextResponse.json({ enrolled: true });
+    if (studentIdForEnrollment) {
+      const { data: enrollment } = await admin
+        .from("enrollments")
+        .select("id")
+        .eq("student_id", studentIdForEnrollment)
+        .eq("course_id", course.id)
+        .maybeSingle();
+
+      if (enrollment) {
+        return NextResponse.json({ enrolled: true });
+      }
     }
 
     if (isCourseFree(course, "NGN")) {
-      const { error: enrollError } = await admin.from("enrollments").insert({
-        student_id: user.id,
-        course_id: course.id,
-        source: "self",
-      });
+      if (studentIdForEnrollment) {
+        const { error: enrollError } = await admin.from("enrollments").insert({
+          student_id: studentIdForEnrollment,
+          course_id: course.id,
+          source: "self",
+        });
 
-      if (enrollError && !enrollError.message.toLowerCase().includes("duplicate")) {
-        return jsonError(enrollError.message, 500);
+        if (enrollError && !enrollError.message.toLowerCase().includes("duplicate")) {
+          return jsonError(enrollError.message, 500);
+        }
+
+        if (profile?.email) {
+          void sendWelcomeEmailIfNeeded({
+            studentId: studentIdForEnrollment,
+            fullName: profile.full_name ?? "there",
+            email: profile.email,
+            checkoutCourseId: course.id,
+          });
+        }
+
+        return NextResponse.json({ enrolled: true });
       }
 
-      const { sendWelcomeEmailIfNeeded } = await import("@/lib/system-email-triggers");
+      const guestEmail = body.email?.trim().toLowerCase() ?? "";
+      if (!isValidStudentEmail(guestEmail)) {
+        return jsonError("Enter your email address to enroll in this free course.", 400);
+      }
+
+      const resolved = await resolveOrCreateStudentForPurchase(admin, {
+        email: guestEmail,
+        fullName: body.fullName,
+      });
+
+      const { data: existingEnrollment } = await admin
+        .from("enrollments")
+        .select("id")
+        .eq("student_id", resolved.studentId)
+        .eq("course_id", course.id)
+        .maybeSingle();
+
+      if (!existingEnrollment) {
+        const { error: enrollError } = await admin.from("enrollments").insert({
+          student_id: resolved.studentId,
+          course_id: course.id,
+          source: "self",
+        });
+        if (enrollError && !enrollError.message.toLowerCase().includes("duplicate")) {
+          return jsonError(enrollError.message, 500);
+        }
+      }
+
       void sendWelcomeEmailIfNeeded({
-        studentId: user.id,
-        fullName: profile.full_name ?? "there",
-        email: profile.email,
+        studentId: resolved.studentId,
+        fullName: resolved.fullName,
+        email: resolved.email,
+        password: resolved.password,
         checkoutCourseId: course.id,
       });
 
-      return NextResponse.json({ enrolled: true });
+      return NextResponse.json({
+        enrolled: true,
+        isNewAccount: resolved.isNewAccount,
+        buyerEmail: resolved.email,
+      });
     }
 
     if (!(await paystackConfigured())) {
@@ -114,9 +169,13 @@ export async function POST(request: NextRequest) {
     }
 
     const reference = generateReference();
+    const paystackEmail =
+      profile?.email?.trim() ||
+      body.email?.trim() ||
+      checkoutPlaceholderEmail(reference);
 
     const { error: txError } = await admin.from("transactions").insert({
-      student_id: user.id,
+      student_id: studentIdForEnrollment,
       course_id: course.id,
       amount: chargeAmount,
       currency: "NGN",
@@ -134,17 +193,21 @@ export async function POST(request: NextRequest) {
       return jsonError(txError.message, 500);
     }
 
+    const metadata: Record<string, string> = {
+      course_id: course.id,
+      currency: "NGN",
+    };
+    if (studentIdForEnrollment) {
+      metadata.student_id = studentIdForEnrollment;
+    }
+
     const init = await initializeTransaction({
-      email: profile.email,
+      email: paystackEmail,
       amountMinor: chargeAmount,
       currency: "NGN",
       reference,
       callbackUrl: `${siteUrl()}/course/${course.id}?payment=success`,
-      metadata: {
-        student_id: user.id,
-        course_id: course.id,
-        currency: "NGN",
-      },
+      metadata,
     });
 
     return NextResponse.json({

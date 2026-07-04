@@ -7,7 +7,13 @@ import { CheckCircle2, Loader2, Mail } from "lucide-react";
 
 type ConfirmState =
   | { status: "idle" | "confirming" }
-  | { status: "success"; courseId: string; alreadyFulfilled?: boolean }
+  | {
+      status: "success";
+      courseId: string;
+      alreadyFulfilled?: boolean;
+      buyerEmail?: string;
+      isNewAccount?: boolean;
+    }
   | { status: "error"; message: string };
 
 export function PaymentReturnHandler({
@@ -48,18 +54,13 @@ export function PaymentReturnHandler({
           enrolled?: boolean;
           courseId?: string;
           alreadyFulfilled?: boolean;
+          buyerEmail?: string;
+          isNewAccount?: boolean;
         };
 
         if (cancelled) return;
 
         if (!res.ok || !json.enrolled || !json.courseId) {
-          if (res.status === 401) {
-            setState({
-              status: "error",
-              message: "Please log in with the same account you used to pay, then refresh this page.",
-            });
-            return;
-          }
           setState({
             status: "error",
             message: json.error ?? "We could not confirm your payment yet.",
@@ -71,6 +72,8 @@ export function PaymentReturnHandler({
           status: "success",
           courseId: json.courseId,
           alreadyFulfilled: json.alreadyFulfilled,
+          buyerEmail: json.buyerEmail,
+          isNewAccount: json.isNewAccount,
         });
 
         router.replace(`/course/${courseId}?enrolled=1`, { scroll: false });
@@ -114,6 +117,9 @@ export function PaymentReturnHandler({
     );
   }
 
+  const displayEmail = state.status === "success" ? state.buyerEmail ?? userEmail : userEmail;
+  const isNewAccount = state.status === "success" ? state.isNewAccount : false;
+
   if (enrolled || state.status === "success") {
     return (
       <div className="border-b border-green-200 bg-green-50 px-4 py-5">
@@ -125,10 +131,19 @@ export function PaymentReturnHandler({
               <strong>{courseTitle}</strong> is now unlocked on your account.
             </p>
           </div>
-          {userEmail ? (
+          {displayEmail ? (
             <p className="inline-flex items-center gap-2 text-sm text-green-800">
               <Mail className="h-4 w-4" />
-              Course access details are being sent to <strong>{userEmail}</strong>
+              {isNewAccount ? (
+                <>
+                  We sent your login password to <strong>{displayEmail}</strong>. Check your inbox
+                  (and spam folder).
+                </>
+              ) : (
+                <>
+                  Course access details are being sent to <strong>{displayEmail}</strong>
+                </>
+              )}
             </p>
           ) : (
             <p className="text-sm text-green-800">
@@ -136,10 +151,10 @@ export function PaymentReturnHandler({
             </p>
           )}
           <Link
-            href={`/courses/${courseId}`}
+            href={isNewAccount ? "/login" : `/courses/${courseId}`}
             className="mt-1 inline-flex h-11 items-center justify-center rounded-lg bg-brand px-6 text-sm font-bold text-white hover:bg-brand-700"
           >
-            Start learning
+            {isNewAccount ? "Log in to start learning" : "Start learning"}
           </Link>
         </div>
       </div>

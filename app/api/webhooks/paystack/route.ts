@@ -2,8 +2,8 @@ import { NextResponse, type NextRequest } from "next/server";
 import * as Sentry from "@sentry/nextjs";
 import { bootstrapRuntimeSecrets } from "@/lib/bootstrap-runtime-secrets";
 import { createAdminClientAsync } from "@/lib/supabase/admin";
-import { verifyWebhookSignature, verifyTransaction } from "@/lib/paystack";
-import { fulfillPurchase } from "@/lib/purchase";
+import { verifyWebhookSignature } from "@/lib/paystack";
+import { completePaidCheckout } from "@/lib/guest-checkout";
 import { rateLimitedResponse } from "@/lib/api-rate-limit";
 import type { Json } from "@/types/database";
 
@@ -38,31 +38,15 @@ export async function POST(request: NextRequest) {
   }
 
   const reference = event.data.reference;
-  const verified = await verifyTransaction(reference);
-  if (!verified || verified.status !== "success") {
-    Sentry.captureMessage("Paystack webhook: verification failed", {
-      level: "error",
-      extra: { reference },
-    });
-    return NextResponse.json({ error: "Verification failed" }, { status: 400 });
-  }
 
   const admin = await createAdminClientAsync();
-  const { data: tx } = await admin
+  const { data: txBefore } = await admin
     .from("transactions")
-    .select("student_id, course_id, status")
+    .select("status")
     .eq("reference", reference)
     .maybeSingle();
 
-  if (!tx) {
-    return NextResponse.json({ error: "Transaction not found" }, { status: 404 });
-  }
-
-  if (!tx.student_id) {
-    return NextResponse.json({ error: "Transaction has no student" }, { status: 400 });
-  }
-
-  if (tx.status === "success") {
+  if (txBefore?.status === "success") {
     return NextResponse.json({ received: true, alreadyFulfilled: true });
   }
 
@@ -71,11 +55,15 @@ export async function POST(request: NextRequest) {
     .update({ paystack_data: event.data as unknown as Json })
     .eq("reference", reference);
 
-  await fulfillPurchase({
-    studentId: tx.student_id,
-    courseId: tx.course_id,
-    reference,
-  });
+  const result = await completePaidCheckout(reference);
+
+  if (!result.ok) {
+    Sentry.captureMessage("Paystack webhook: fulfillment failed", {
+      level: "error",
+      extra: { reference, error: result.error },
+    });
+    return NextResponse.json({ error: result.error }, { status: result.status });
+  }
 
   return NextResponse.json({ received: true });
 }
