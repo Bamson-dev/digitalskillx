@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { AdminLoginForm } from "@/components/auth/admin-login-form";
+import { createAdminClientAsync } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
 export const metadata: Metadata = { title: "Admin login" };
@@ -17,11 +18,28 @@ export default async function AdminLoginPage({
   } = await supabase.auth.getUser();
 
   if (user) {
-    const { data: profile } = await supabase
+    let profile: { role: string; is_suspended: boolean } | null = null;
+    const { data: row } = await supabase
       .from("profiles")
       .select("role, is_suspended")
       .eq("id", user.id)
       .maybeSingle();
+    profile = row;
+
+    if (!profile) {
+      try {
+        const admin = await createAdminClientAsync();
+        const { data: verified } = await admin
+          .from("profiles")
+          .select("role, is_suspended")
+          .eq("id", user.id)
+          .maybeSingle();
+        profile = verified;
+      } catch {
+        profile = null;
+      }
+    }
+
     if (profile?.role === "admin" && !profile.is_suspended) {
       redirect("/admin/dashboard");
     }

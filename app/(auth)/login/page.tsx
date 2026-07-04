@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { LoginForm } from "@/components/auth/login-form";
 import { authQueryErrorMessage } from "@/lib/auth-errors";
+import { ensureStudentProfile } from "@/lib/ensure-student-profile";
 import { createClient } from "@/lib/supabase/server";
 
 export const metadata: Metadata = { title: "Log in" };
@@ -22,11 +23,7 @@ export default async function LoginPage({
   } = await supabase.auth.getUser();
 
   if (user) {
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("role, is_suspended")
-      .eq("id", user.id)
-      .maybeSingle();
+    const profile = await ensureStudentProfile();
     if (profile && !profile.is_suspended) {
       const destination =
         profile.role === "admin" ? "/admin/dashboard" : next;
