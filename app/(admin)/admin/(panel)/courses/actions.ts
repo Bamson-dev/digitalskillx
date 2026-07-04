@@ -221,9 +221,19 @@ export async function renameModule(formData: FormData) {
 
 export async function deleteModule(formData: FormData) {
   const supabase = await getAdminSupabase();
-  const id = String(formData.get("id"));
-  const courseId = String(formData.get("course_id"));
-  await supabase.from("modules").delete().eq("id", id);
+  const id = String(formData.get("id") ?? "").trim();
+  const courseId = String(formData.get("course_id") ?? "").trim();
+  if (!id || !courseId) throw new Error("Missing module or course id.");
+
+  const { error } = await supabase.from("modules").delete().eq("id", id);
+  if (error) throw new Error(error.message);
+
+  await logAudit({
+    action: "module_deleted",
+    targetType: "course",
+    targetId: courseId,
+    metadata: { module_id: id },
+  });
   revalidatePath(`/admin/courses/${courseId}`);
 }
 
@@ -279,9 +289,19 @@ export async function updateLesson(formData: FormData) {
 
 export async function deleteLesson(formData: FormData) {
   const supabase = await getAdminSupabase();
-  const id = String(formData.get("id"));
-  const courseId = String(formData.get("course_id"));
-  await supabase.from("lessons").delete().eq("id", id);
+  const id = String(formData.get("id") ?? "").trim();
+  const courseId = String(formData.get("course_id") ?? "").trim();
+  if (!id || !courseId) throw new Error("Missing lesson or course id.");
+
+  const { error } = await supabase.from("lessons").delete().eq("id", id);
+  if (error) throw new Error(error.message);
+
+  await logAudit({
+    action: "lesson_deleted",
+    targetType: "course",
+    targetId: courseId,
+    metadata: { lesson_id: id },
+  });
   revalidatePath(`/admin/courses/${courseId}`);
 }
 

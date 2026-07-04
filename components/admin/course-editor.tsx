@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { CourseSettingsForm } from "@/components/admin/course-settings-form";
 import Link from "next/link";
 import { Plus, Trash2, ChevronDown, ChevronUp, GripVertical, Save, HelpCircle } from "lucide-react";
@@ -160,21 +161,15 @@ function ModuleBlock({
     <div className="rounded-lg border border-app">
       <div className="flex items-center gap-2 border-b border-app bg-brand-50/50 p-3">
         <GripVertical className="h-4 w-4 text-muted" aria-hidden />
-        <form action={renameModule} className="flex flex-1 items-center gap-2">
+        <form action={renameModule} method="post" className="flex min-w-0 flex-1 items-center gap-2">
           <input type="hidden" name="id" value={module.id} />
           <input type="hidden" name="course_id" value={courseId} />
-          <Input name="title" defaultValue={module.title} className="h-8" />
+          <Input name="title" defaultValue={module.title} className="h-8 min-w-0" />
           <Button size="sm" variant="ghost" type="submit">
             Rename
           </Button>
         </form>
-        <form action={deleteModule}>
-          <input type="hidden" name="id" value={module.id} />
-          <input type="hidden" name="course_id" value={courseId} />
-          <button type="submit" aria-label="Delete module" className="rounded p-1.5 text-red-600 hover:bg-red-50">
-            <Trash2 className="h-4 w-4" />
-          </button>
-        </form>
+        <DeleteModuleButton courseId={courseId} moduleId={module.id} moduleTitle={module.title} />
       </div>
 
       <div className="divide-y divide-[rgb(var(--border))]">
@@ -370,8 +365,8 @@ function LessonRow({
             attachments={attachments}
           />
 
-          <div className="flex items-center justify-between sm:col-span-2">
-            <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center justify-between gap-3 sm:col-span-2">
+            <div className="flex flex-wrap items-center gap-3">
               <SubmitButton size="sm" pendingText="Saving…">
                 <Save className="h-4 w-4" /> Save lesson
               </SubmitButton>
@@ -382,23 +377,103 @@ function LessonRow({
                 <HelpCircle className="h-4 w-4" /> Manage quiz
               </Link>
             </div>
-            <DeleteLessonButton courseId={courseId} lessonId={lesson.id} />
           </div>
         </form>
+      ) : null}
+      {open ? (
+        <div className="flex justify-end border-t border-app bg-card px-3 py-2">
+          <DeleteLessonButton courseId={courseId} lessonId={lesson.id} lessonTitle={lesson.title} />
+        </div>
       ) : null}
     </div>
   );
 }
 
-function DeleteLessonButton({ courseId, lessonId }: { courseId: string; lessonId: string }) {
+function DeleteModuleButton({
+  courseId,
+  moduleId,
+  moduleTitle,
+}: {
+  courseId: string;
+  moduleId: string;
+  moduleTitle: string;
+}) {
+  const router = useRouter();
+  const [error, setError] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
+
+  function onDelete() {
+    const label = moduleTitle.trim() || "this module";
+    if (!confirm(`Delete "${label}" and all its lessons? This cannot be undone.`)) return;
+
+    setError(null);
+    startTransition(async () => {
+      try {
+        const formData = new FormData();
+        formData.set("id", moduleId);
+        formData.set("course_id", courseId);
+        await deleteModule(formData);
+        router.refresh();
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Could not delete module.");
+      }
+    });
+  }
+
   return (
-    <form action={deleteLesson}>
-      <input type="hidden" name="id" value={lessonId} />
-      <input type="hidden" name="course_id" value={courseId} />
-      <Button size="sm" variant="danger" type="submit">
+    <div className="relative z-10 flex shrink-0 flex-col items-end gap-1">
+      <button
+        type="button"
+        disabled={isPending}
+        onClick={onDelete}
+        aria-label="Delete module"
+        className="rounded p-1.5 text-red-600 hover:bg-red-50 disabled:opacity-50"
+      >
+        <Trash2 className="h-4 w-4" />
+      </button>
+      {error ? <p className="max-w-[12rem] text-right text-xs text-red-600">{error}</p> : null}
+    </div>
+  );
+}
+
+function DeleteLessonButton({
+  courseId,
+  lessonId,
+  lessonTitle,
+}: {
+  courseId: string;
+  lessonId: string;
+  lessonTitle: string;
+}) {
+  const router = useRouter();
+  const [error, setError] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
+
+  function onDelete() {
+    const label = lessonTitle.trim() || "this lesson";
+    if (!confirm(`Delete "${label}"? This cannot be undone.`)) return;
+
+    setError(null);
+    startTransition(async () => {
+      try {
+        const formData = new FormData();
+        formData.set("id", lessonId);
+        formData.set("course_id", courseId);
+        await deleteLesson(formData);
+        router.refresh();
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Could not delete lesson.");
+      }
+    });
+  }
+
+  return (
+    <div className="flex flex-col items-end gap-1">
+      <Button size="sm" variant="danger" type="button" disabled={isPending} onClick={onDelete}>
         <Trash2 className="h-4 w-4" /> Delete
       </Button>
-    </form>
+      {error ? <p className="text-xs text-red-600">{error}</p> : null}
+    </div>
   );
 }
 
