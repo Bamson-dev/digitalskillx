@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { requireAdmin } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { rateLimitedResponse } from "@/lib/api-rate-limit";
 import { generateCourseCopy } from "@/lib/ai/course-copy";
@@ -15,6 +16,7 @@ const VALID_FIELDS = new Set<CourseCopyField>([
 ]);
 
 async function requireAdminApi() {
+  await requireAdmin();
   const supabase = createClient();
   const {
     data: { user },
@@ -22,16 +24,6 @@ async function requireAdminApi() {
   if (!user) {
     return { error: NextResponse.json({ error: "Unauthorized" }, { status: 401 }) };
   }
-
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("role, is_suspended")
-    .eq("id", user.id)
-    .single();
-  if (profile?.role !== "admin" || profile?.is_suspended) {
-    return { error: NextResponse.json({ error: "Forbidden" }, { status: 403 }) };
-  }
-
   return { user, supabase };
 }
 

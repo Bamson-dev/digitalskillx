@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { isRedirectError } from "next/dist/client/components/redirect";
 import { requireAdmin } from "@/lib/auth";
 import { getAdminSupabase } from "@/lib/admin-supabase";
 import { logAudit } from "@/lib/audit";
@@ -33,9 +34,10 @@ export async function createCourse(
   _prev: CreateCourseState,
   formData: FormData,
 ): Promise<CreateCourseState> {
+  const admin = await requireAdmin();
+  const title = String(formData.get("title") ?? "").trim() || "Untitled course";
+
   try {
-    const admin = await requireAdmin();
-    const title = String(formData.get("title") ?? "").trim() || "Untitled course";
     const supabase = await getAdminSupabase();
 
     const { data, error } = await supabase
@@ -52,6 +54,7 @@ export async function createCourse(
     revalidatePath("/admin/courses");
     return { redirectTo: `/admin/courses/${data.id}` };
   } catch (err) {
+    if (isRedirectError(err)) throw err;
     return {
       error: err instanceof Error ? err.message : "Could not create course.",
     };
