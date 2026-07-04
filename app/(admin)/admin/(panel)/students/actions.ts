@@ -6,14 +6,12 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClientAsync } from "@/lib/supabase/admin";
 import { requireAdmin } from "@/lib/auth";
 import { logAudit } from "@/lib/audit";
-import { notify } from "@/lib/notifications";
 import { sendEmail } from "@/lib/email";
 import { emailTemplates } from "@/lib/email/templates";
 import { runAutomations } from "@/lib/automation";
 import { issueCertificate } from "@/lib/certificates";
 import { getPlatformSettingsAdmin } from "@/lib/platform-settings";
 import { deleteStudentAccount } from "@/lib/student-data";
-import { sendCourseEnrollmentEmail } from "@/lib/system-email-triggers";
 import {
   buildCourseResolver,
   enrollStudentInCourses,
@@ -410,10 +408,11 @@ export async function bulkUploadStudents(
 
 export async function suspendStudent(formData: FormData) {
   await requireAdmin();
-  const supabase = createClient();
+  const admin = await getAdminSupabase();
   const id = String(formData.get("id"));
   const suspend = formData.get("suspend") === "true";
-  await supabase.from("profiles").update({ is_suspended: suspend }).eq("id", id);
+  const { error } = await admin.from("profiles").update({ is_suspended: suspend }).eq("id", id);
+  if (error) throw new Error(error.message);
   await logAudit({
     action: suspend ? "student_suspended" : "student_unsuspended",
     targetType: "profile",
@@ -430,6 +429,67 @@ export async function deleteStudent(formData: FormData) {
   await logAudit({ action: "student_deleted", targetType: "profile", targetId: id });
   revalidatePath("/admin/students");
   redirect("/admin/students");
+}
+
+export async function updateStudentProfile(
+  _prev: StudentActionState,
+  formData: FormData,
+): Promise<StudentActionState> {
+  try {
+    await requireAdmin();
+    const admin = await getAdminSupabase();
+    const id = String(formData.get("id") ?? "").trim();
+    const fullName = String(formData.get("full_name") ?? "").trim();
+    const email = String(formData.get("email") ?? "").trim().toLowerCase();
+
+    if (!id) return { error: "Student not found." };
+    if (!fullName || !email) return { error: "Name and email are required." };
+    if (!isValidStudentEmail(email)) return { error: "Enter a valid email address." };
+
+    const { data: current } = await admin
+      .from("profiles")
+      .select("id, email, role")
+      .eq("id", id)
+      .eq("role", "student")
+      .maybeSingle();
+    if (!current) return { error: "Student not found." };
+
+    const existing = await findProfileByEmail(admin, email);
+    if (existing && existing.id !== id) {
+      return { error: "That email is already used by another account." };
+    }
+
+    if (email !== current.email.toLowerCase()) {
+      const { error: authError } = await admin.auth.admin.updateUserById(id, {
+        email,
+        user_metadata: { full_name: fullName },
+      });
+      if (authError) return { error: authError.message };
+    } else {
+      const { error: metaError } = await admin.auth.admin.updateUserById(id, {
+        user_metadata: { full_name: fullName },
+      });
+      if (metaError) return { error: metaError.message };
+    }
+
+    const { error: profileError } = await admin
+      .from("profiles")
+      .update({ full_name: fullName, email })
+      .eq("id", id);
+    if (profileError) return { error: profileError.message };
+
+    await logAudit({
+      action: "student_profile_updated",
+      targetType: "profile",
+      targetId: id,
+      metadata: { emailChanged: email !== current.email.toLowerCase() },
+    });
+    revalidatePath(`/admin/students/${id}`);
+    revalidatePath("/admin/students");
+    return { message: "Student profile updated." };
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "Could not update profile." };
+  }
 }
 
 export async function resetStudentPassword(formData: FormData) {
@@ -457,45 +517,23 @@ export async function enrollStudent(formData: FormData) {
   const courseId = String(formData.get("course_id"));
   if (!courseId) return;
 
-  await enrollStudentInCourses(admin, {
-    studentId,
-    courseIds: [courseId],
-    enrolledBy: adminUser.id,
-  });
-
   const { data: profile } = await admin
     .from("profiles")
     .select("full_name, email")
     .eq("id", studentId)
     .single();
-  const { data: course } = await admin.from("courses").select("title").eq("id", courseId).single();
+  if (!profile?.email) throw new Error("Student profile not found.");
 
-  await notify({
+  const { newlyEnrolled } = await grantCourseAccessToStudent(admin, {
     studentId,
-    type: "enrollment",
-    title: "New course",
-    message: `You've been enrolled in "${course?.title ?? "a course"}".`,
-    linkUrl: `/courses/${courseId}`,
+    courseIds: [courseId],
+    enrolledBy: adminUser.id,
+    fullName: profile.full_name ?? "there",
+    email: profile.email,
   });
 
-  if (profile?.email && course) {
-    const emailResult = await sendCourseEnrollmentEmail({
-      studentId,
-      courseId,
-      fullName: profile.full_name ?? "there",
-      email: profile.email,
-    });
-    if (!emailResult.sent) {
-      const reason =
-        "error" in emailResult
-          ? emailResult.error
-          : "reason" in emailResult
-            ? emailResult.reason
-            : "Email not configured";
-      throw new Error(
-        `Student enrolled in "${course.title}" but email failed: ${reason}. Save ZeptoMail SMTP password under Admin → Settings → Integrations.`,
-      );
-    }
+  if (newlyEnrolled.length === 0) {
+    redirect(`/admin/students/${studentId}?already_enrolled=1`);
   }
 
   await logAudit({ action: "student_enrolled", targetType: "enrollment", metadata: { studentId, courseId } });
@@ -505,23 +543,30 @@ export async function enrollStudent(formData: FormData) {
 
 export async function unenrollStudent(formData: FormData) {
   await requireAdmin();
-  const supabase = createClient();
+  const admin = await getAdminSupabase();
   const studentId = String(formData.get("student_id"));
   const courseId = String(formData.get("course_id"));
-  await supabase.from("enrollments").delete().eq("student_id", studentId).eq("course_id", courseId);
+  const { error } = await admin
+    .from("enrollments")
+    .delete()
+    .eq("student_id", studentId)
+    .eq("course_id", courseId);
+  if (error) throw new Error(error.message);
   await logAudit({ action: "student_unenrolled", metadata: { studentId, courseId } });
   revalidatePath(`/admin/students/${studentId}`);
+  revalidatePath("/admin/students");
 }
 
 export async function setStudentTags(formData: FormData) {
   await requireAdmin();
-  const supabase = createClient();
+  const admin = await getAdminSupabase();
   const id = String(formData.get("id"));
   const tags = String(formData.get("tags") ?? "")
     .split(",")
     .map((t) => t.trim())
     .filter(Boolean);
-  await supabase.from("profiles").update({ tags }).eq("id", id);
+  const { error } = await admin.from("profiles").update({ tags }).eq("id", id);
+  if (error) throw new Error(error.message);
   revalidatePath(`/admin/students/${id}`);
 }
 
@@ -536,11 +581,16 @@ export async function issueCertificateManual(formData: FormData) {
 }
 
 export async function addAdminNote(formData: FormData) {
-  const admin = await requireAdmin();
-  const supabase = createClient();
+  const adminUser = await requireAdmin();
+  const admin = await getAdminSupabase();
   const studentId = String(formData.get("student_id"));
   const content = String(formData.get("content") ?? "").trim();
   if (!content) return;
-  await supabase.from("admin_notes").insert({ admin_id: admin.id, student_id: studentId, content });
+  const { error } = await admin.from("admin_notes").insert({
+    admin_id: adminUser.id,
+    student_id: studentId,
+    content,
+  });
+  if (error) throw new Error(error.message);
   revalidatePath(`/admin/students/${studentId}`);
 }
