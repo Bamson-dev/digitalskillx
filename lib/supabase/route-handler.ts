@@ -1,6 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
-import { cookies } from "next/headers";
 import { NextResponse, type NextRequest } from "next/server";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 
 type CookieToSet = {
@@ -9,39 +9,11 @@ type CookieToSet = {
   options?: Record<string, unknown>;
 };
 
-/**
- * Route handler client — writes session cookies via next/headers so they
- * are merged onto the final redirect response by Next.js.
- */
-export function createRouteHandlerClientFromCookies() {
-  const cookieStore = cookies();
-
-  return createServerClient<Database>(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() {
-          return cookieStore.getAll();
-        },
-        setAll(cookiesToSet: CookieToSet[]) {
-          cookiesToSet.forEach(({ name, value, options }) =>
-            cookieStore.set(name, value, options),
-          );
-        },
-      },
-    },
-  );
-}
-
-/**
- * Route handler client — writes session cookies directly onto a Response
- * (use when returning that same response, e.g. redirect).
- */
-export function createRouteHandlerClient(
+/** Collect Supabase session cookies during sign-in, then attach to the final redirect. */
+export function createRouteHandlerClientWithPendingCookies(
   request: NextRequest,
-  response: NextResponse,
-) {
+  pending: CookieToSet[],
+): SupabaseClient<Database> {
   return createServerClient<Database>(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -51,11 +23,25 @@ export function createRouteHandlerClient(
           return request.cookies.getAll();
         },
         setAll(cookiesToSet: CookieToSet[]) {
-          cookiesToSet.forEach(({ name, value, options }) =>
-            response.cookies.set(name, value, options),
-          );
+          for (const cookie of cookiesToSet) {
+            const index = pending.findIndex((c) => c.name === cookie.name);
+            if (index >= 0) pending[index] = cookie;
+            else pending.push(cookie);
+          }
         },
       },
     },
   );
+}
+
+export function redirectWithPendingCookies(
+  request: NextRequest,
+  pending: CookieToSet[],
+  pathname: string,
+) {
+  const response = NextResponse.redirect(new URL(pathname, request.url), 303);
+  for (const { name, value, options } of pending) {
+    response.cookies.set(name, value, options);
+  }
+  return response;
 }

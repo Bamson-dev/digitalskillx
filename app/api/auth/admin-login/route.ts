@@ -1,16 +1,20 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { runAdminLogin } from "@/lib/auth/run-admin-login";
-import { createRouteHandlerClientFromCookies } from "@/lib/supabase/route-handler";
+import {
+  createRouteHandlerClientWithPendingCookies,
+  redirectWithPendingCookies,
+} from "@/lib/supabase/route-handler";
 
 export const dynamic = "force-dynamic";
 
-/** Admin password login — session cookies persist via next/headers cookie store. */
+/** Admin password login — Supabase cookies are written onto the redirect response. */
 export async function POST(request: NextRequest) {
   const formData = await request.formData();
   const email = String(formData.get("email") ?? "");
   const password = String(formData.get("password") ?? "");
 
-  const supabase = createRouteHandlerClientFromCookies();
+  const pending: Parameters<typeof createRouteHandlerClientWithPendingCookies>[1] = [];
+  const supabase = createRouteHandlerClientWithPendingCookies(request, pending);
   const result = await runAdminLogin({ email, password }, supabase);
 
   if (!result.ok) {
@@ -19,5 +23,5 @@ export async function POST(request: NextRequest) {
     return NextResponse.redirect(errorUrl, 303);
   }
 
-  return NextResponse.redirect(new URL(result.redirectTo, request.url), 303);
+  return redirectWithPendingCookies(request, pending, result.redirectTo);
 }
