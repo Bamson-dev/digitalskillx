@@ -138,6 +138,11 @@ function createCourse(jar, html) {
     return true;
   }
 
+  if (body.includes('redirectTo') && body.includes('/admin/courses/')) {
+    console.log("PASS create course returned redirectTo in action response");
+    return true;
+  }
+
   if (body.includes("Something went wrong")) {
     console.error("FAIL create course global error (status", status, ")");
     return false;

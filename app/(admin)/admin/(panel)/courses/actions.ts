@@ -33,12 +33,11 @@ export async function createCourse(
   _prev: CreateCourseState,
   formData: FormData,
 ): Promise<CreateCourseState> {
-  const admin = await requireAdmin();
-  const title = String(formData.get("title") ?? "").trim() || "Untitled course";
-
-  let courseId: string;
   try {
+    const admin = await requireAdmin();
+    const title = String(formData.get("title") ?? "").trim() || "Untitled course";
     const supabase = await getAdminSupabase();
+
     const { data, error } = await supabase
       .from("courses")
       .insert({ title, created_by: admin.id })
@@ -48,16 +47,15 @@ export async function createCourse(
     if (error || !data) {
       return { error: error?.message ?? "Failed to create course." };
     }
-    courseId = data.id;
+
+    await logAudit({ action: "course_created", targetType: "course", targetId: data.id });
+    revalidatePath("/admin/courses");
+    return { redirectTo: `/admin/courses/${data.id}` };
   } catch (err) {
     return {
       error: err instanceof Error ? err.message : "Could not create course.",
     };
   }
-
-  await logAudit({ action: "course_created", targetType: "course", targetId: courseId });
-  revalidatePath("/admin/courses");
-  return { redirectTo: `/admin/courses/${courseId}` };
 }
 
 export async function updateCourseSettings(
