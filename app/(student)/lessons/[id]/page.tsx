@@ -4,6 +4,7 @@ import Link from "next/link";
 import { Lock } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { requireStudent } from "@/lib/auth";
+import { getStudentViewSupabase } from "@/lib/student-view-supabase";
 import { LessonOutline } from "@/components/student/lesson-outline";
 import { LessonPlayer } from "@/components/student/lesson-player";
 import { LessonAttachments } from "@/components/student/lesson-attachments";
@@ -17,7 +18,9 @@ type ModuleWithLessons = Module & { lessons: Lesson[] };
 
 export default async function LessonPage({ params }: { params: { id: string } }) {
   const profile = await requireStudent();
-  const supabase = createClient();
+  const isAdminPreview = profile.role === "admin";
+  const supabase = await getStudentViewSupabase(profile);
+  const session = createClient();
 
   // RLS gates this read to enrolled students / free previews.
   const { data: lesson } = await supabase.from("lessons").select("*").eq("id", params.id).single();
@@ -35,10 +38,10 @@ export default async function LessonPage({ params }: { params: { id: string } })
     await Promise.all([
       supabase.from("courses").select("id, title").eq("id", courseId).single(),
       supabase.from("modules").select("*, lessons(*)").eq("course_id", courseId),
-      supabase.from("lesson_progress").select("lesson_id, completed").eq("student_id", profile.id),
-      supabase.from("student_notes").select("content").eq("student_id", profile.id).eq("lesson_id", params.id).maybeSingle(),
-      supabase.from("bookmarks").select("*").eq("student_id", profile.id).eq("lesson_id", params.id).order("timestamp_seconds"),
-      supabase.from("enrollments").select("enrolled_at").eq("student_id", profile.id).eq("course_id", courseId).maybeSingle(),
+      session.from("lesson_progress").select("lesson_id, completed").eq("student_id", profile.id),
+      session.from("student_notes").select("content").eq("student_id", profile.id).eq("lesson_id", params.id).maybeSingle(),
+      session.from("bookmarks").select("*").eq("student_id", profile.id).eq("lesson_id", params.id).order("timestamp_seconds"),
+      session.from("enrollments").select("enrolled_at").eq("student_id", profile.id).eq("course_id", courseId).maybeSingle(),
       supabase
         .from("resources")
         .select("id, title, file_url, file_type")
@@ -62,7 +65,9 @@ export default async function LessonPage({ params }: { params: { id: string } })
   const ordered: Lesson[] = sortedModules.flatMap((m) =>
     [...(m.lessons ?? [])].sort((a, b) => a.position - b.position),
   );
-  const lockedIds = computeLockedIds(ordered, completedIds, enrollment?.enrolled_at ?? null);
+  const lockedIds = isAdminPreview
+    ? new Set<string>()
+    : computeLockedIds(ordered, completedIds, enrollment?.enrolled_at ?? null);
 
   const { data: quiz } = await supabase
     .from("quizzes")

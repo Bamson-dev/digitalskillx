@@ -4,6 +4,7 @@ import Link from "next/link";
 import { ArrowLeft, PlayCircle, Lock } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { requireStudent } from "@/lib/auth";
+import { getStudentViewSupabase } from "@/lib/student-view-supabase";
 import { Card } from "@/components/ui/card";
 import { CourseResources } from "@/components/student/course-resources";
 
@@ -15,8 +16,8 @@ export default async function CourseDetailPage({
   params: { id: string };
 }) {
   const profile = await requireStudent();
-  const supabase = createClient();
   const isAdminPreview = profile.role === "admin";
+  const supabase = await getStudentViewSupabase(profile);
 
   const { data: enrollment } = await supabase
     .from("enrollments")
