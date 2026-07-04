@@ -1,22 +1,32 @@
 import "server-only";
-import type { SupabaseClient } from "@supabase/supabase-js";
-import { createClient } from "@/lib/supabase/server";
+import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { createAdminClientAsync } from "@/lib/supabase/admin";
 import type { Database } from "@/types/database";
 
-export async function runStudentLogin(
-  params: { email: string; password: string },
-  supabase?: SupabaseClient<Database>,
-): Promise<{ ok: true } | { ok: false; error: string }> {
+export type LoginSession = {
+  access_token: string;
+  refresh_token: string;
+};
+
+export async function runStudentLogin(params: {
+  email: string;
+  password: string;
+}): Promise<{ ok: true; session: LoginSession } | { ok: false; error: string }> {
   const email = params.email.trim().toLowerCase();
   const password = params.password;
   if (!email || !password) {
     return { ok: false, error: "Email and password are required." };
   }
 
-  const client = supabase ?? createClient();
-  const { data, error } = await client.auth.signInWithPassword({ email, password });
+  const authClient = createSupabaseClient<Database>(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    { auth: { persistSession: false, autoRefreshToken: false } },
+  );
+
+  const { data, error } = await authClient.auth.signInWithPassword({ email, password });
   if (error) return { ok: false, error: error.message };
+  if (!data.session) return { ok: false, error: "No session returned from sign-in." };
 
   try {
     const admin = await createAdminClientAsync();
@@ -45,10 +55,15 @@ export async function runStudentLogin(
     if (verifyError) throw new Error(verifyError.message);
     if (!verified) throw new Error("Profile was not created.");
   } catch (err) {
-    await client.auth.signOut();
     const message = err instanceof Error ? err.message : "Could not load your profile.";
     return { ok: false, error: message };
   }
 
-  return { ok: true };
+  return {
+    ok: true,
+    session: {
+      access_token: data.session.access_token,
+      refresh_token: data.session.refresh_token,
+    },
+  };
 }

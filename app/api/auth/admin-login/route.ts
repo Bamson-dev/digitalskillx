@@ -8,21 +8,27 @@ import {
 
 export const dynamic = "force-dynamic";
 
-/** Admin password login — waits for Supabase to flush session cookies before redirect. */
+/** Admin password login — sign in for tokens, then setSession on redirect response. */
 export async function POST(request: NextRequest) {
   const formData = await request.formData();
   const email = String(formData.get("email") ?? "");
   const password = String(formData.get("password") ?? "");
 
+  const result = await runAdminLogin({ email, password });
+  if (!result.ok) {
+    const errorUrl = new URL("/admin/login", request.url);
+    errorUrl.searchParams.set("auth_error", result.error);
+    return NextResponse.redirect(errorUrl, 303);
+  }
+
   const pending: Parameters<typeof createRouteHandlerClientWithPendingCookies>[1] = [];
   const supabase = createRouteHandlerClientWithPendingCookies(request, pending);
   const cookiesReady = waitForSignedInCookies(supabase, pending);
 
-  const result = await runAdminLogin({ email, password }, supabase);
-
-  if (!result.ok) {
+  const { error: sessionError } = await supabase.auth.setSession(result.session);
+  if (sessionError) {
     const errorUrl = new URL("/admin/login", request.url);
-    errorUrl.searchParams.set("auth_error", result.error);
+    errorUrl.searchParams.set("auth_error", sessionError.message);
     return NextResponse.redirect(errorUrl, 303);
   }
 
