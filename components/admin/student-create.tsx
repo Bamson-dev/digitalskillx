@@ -114,7 +114,8 @@ function Feedback({ state }: { state: StudentActionState }) {
           <p className="font-semibold text-neutral-900">Upload summary</p>
           <ul className="mt-2 space-y-1 text-neutral-700">
             <li>Created: {state.bulkSummary.created}</li>
-            <li>Skipped (duplicate email): {state.bulkSummary.skipped}</li>
+            <li>Existing students enrolled: {state.bulkSummary.enrolled}</li>
+            <li>Skipped: {state.bulkSummary.skipped}</li>
             <li>Failed: {state.bulkSummary.failed.length}</li>
           </ul>
           {state.bulkSummary.failed.length > 0 ? (
@@ -204,6 +205,10 @@ export function StudentCreate({
 
           <div>
             <Label>Courses</Label>
+            <p className="mb-1.5 text-xs text-muted">
+              Select courses to grant access. If the email is already registered, the student will
+              be enrolled in your selection (no duplicate account).
+            </p>
             <div className="mt-1.5">
               <CourseCheckboxList courses={courses} />
             </div>
@@ -214,8 +219,8 @@ export function StudentCreate({
             <PasswordInput id="password" name="password" placeholder="Leave blank to auto-generate" />
           </div>
 
-          <SubmitButton pendingText="Creating…">
-            <UserPlus className="h-4 w-4" /> Create student
+          <SubmitButton pendingText="Saving…">
+            <UserPlus className="h-4 w-4" /> Create / enroll student
           </SubmitButton>
         </form>
       ) : (

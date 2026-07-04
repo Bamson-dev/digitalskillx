@@ -1,6 +1,8 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClientAsync } from "@/lib/supabase/admin";
 import { bootstrapRuntimeSecrets } from "@/lib/bootstrap-runtime-secrets";
+import { fetchPublishedCourseById } from "@/lib/published-courses";
 import { initializeTransaction, generateReference, paystackConfigured } from "@/lib/paystack";
 import { isCourseFree, nairaToKobo, type CurrencyCode } from "@/lib/currency";
 import { siteUrl } from "@/lib/org";
@@ -37,7 +39,10 @@ export async function POST(request: NextRequest) {
       return jsonError("USD payments are not available yet", 400);
     }
 
-    const { data: profile } = await supabase
+    await bootstrapRuntimeSecrets();
+    const admin = await createAdminClientAsync(supabase);
+
+    const { data: profile } = await admin
       .from("profiles")
       .select("email, full_name")
       .eq("id", user.id)
@@ -46,13 +51,16 @@ export async function POST(request: NextRequest) {
       return jsonError("Add an email address to your profile before enrolling.", 400);
     }
 
-    const { data: course, error: courseError } = await supabase
-      .from("courses")
-      .select("id, title, price_ngn, price_usd, visibility, enrollment_type")
-      .eq("id", body.courseId)
-      .single();
+    const course = await fetchPublishedCourseById<{
+      id: string;
+      title: string;
+      price_ngn: number;
+      price_usd: number;
+      visibility: string;
+      enrollment_type: string;
+    }>(body.courseId, "id, title, price_ngn, price_usd, visibility, enrollment_type");
 
-    if (courseError || !course || course.visibility !== "published") {
+    if (!course || course.visibility !== "published") {
       return jsonError("Course not available for enrollment.", 404);
     }
 
@@ -60,7 +68,7 @@ export async function POST(request: NextRequest) {
       return jsonError("This course requires admin enrollment. Contact support to join.", 403);
     }
 
-    const { data: enrollment } = await supabase
+    const { data: enrollment } = await admin
       .from("enrollments")
       .select("id")
       .eq("student_id", user.id)
@@ -72,7 +80,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (isCourseFree(course, "NGN")) {
-      const { error: enrollError } = await supabase.from("enrollments").insert({
+      const { error: enrollError } = await admin.from("enrollments").insert({
         student_id: user.id,
         course_id: course.id,
         source: "self",
@@ -93,8 +101,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ enrolled: true });
     }
 
-    await bootstrapRuntimeSecrets();
-
     if (!(await paystackConfigured())) {
       return jsonError(
         "Paystack is not configured. Save your Paystack secret key under Admin → Settings → Integrations, then open any admin page once (or redeploy with PAYSTACK_SECRET_KEY in Coolify Runtime).",
@@ -109,7 +115,7 @@ export async function POST(request: NextRequest) {
 
     const reference = generateReference();
 
-    const { error: txError } = await supabase.from("transactions").insert({
+    const { error: txError } = await admin.from("transactions").insert({
       student_id: user.id,
       course_id: course.id,
       amount: chargeAmount,
@@ -122,12 +128,6 @@ export async function POST(request: NextRequest) {
       if (txError.message.includes("does not exist")) {
         return jsonError(
           "Payments database is not set up. Run sql/transactions-student-checkout.sql in Supabase.",
-          503,
-        );
-      }
-      if (txError.message.toLowerCase().includes("policy")) {
-        return jsonError(
-          "Checkout is blocked by database permissions. Run sql/transactions-student-checkout.sql in Supabase.",
           503,
         );
       }

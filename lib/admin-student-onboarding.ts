@@ -118,13 +118,89 @@ export async function profileEmailExists(
   admin: SupabaseClient<Database>,
   email: string,
 ) {
+  const profile = await findProfileByEmail(admin, email);
+  return Boolean(profile);
+}
+
+export async function findProfileByEmail(
+  admin: SupabaseClient<Database>,
+  email: string,
+) {
   const normalized = email.trim().toLowerCase();
-  const { data } = await admin
+  const { data, error } = await admin
     .from("profiles")
-    .select("id")
+    .select("id, full_name, email, role, is_suspended")
     .ilike("email", normalized)
     .maybeSingle();
-  return Boolean(data);
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+export async function grantCourseAccessToStudent(
+  admin: SupabaseClient<Database>,
+  params: {
+    studentId: string;
+    courseIds: string[];
+    enrolledBy: string;
+    fullName: string;
+    email: string;
+    sendEnrollmentEmail?: boolean;
+  },
+): Promise<{ newlyEnrolled: string[] }> {
+  const { sendCourseEnrollmentEmail } = await import("@/lib/system-email-triggers");
+  const { notify } = await import("@/lib/notifications");
+
+  const uniqueIds = [...new Set(params.courseIds.filter(Boolean))];
+  const newlyEnrolled: string[] = [];
+
+  for (const courseId of uniqueIds) {
+    const { data: existing } = await admin
+      .from("enrollments")
+      .select("id")
+      .eq("student_id", params.studentId)
+      .eq("course_id", courseId)
+      .maybeSingle();
+
+    if (existing) continue;
+
+    const { error } = await admin.from("enrollments").insert({
+      student_id: params.studentId,
+      course_id: courseId,
+      enrolled_by: params.enrolledBy,
+      source: "admin",
+    });
+    if (error) throw new Error(error.message);
+
+    newlyEnrolled.push(courseId);
+    await runAutomations("course_enrolled", { studentId: params.studentId, courseId });
+
+    const { data: course } = await admin
+      .from("courses")
+      .select("title")
+      .eq("id", courseId)
+      .maybeSingle();
+
+    if (course?.title) {
+      await notify({
+        studentId: params.studentId,
+        type: "enrollment",
+        title: "New course",
+        message: `You've been enrolled in "${course.title}".`,
+        linkUrl: `/courses/${courseId}`,
+      });
+    }
+
+    if (params.sendEnrollmentEmail !== false) {
+      await sendCourseEnrollmentEmail({
+        studentId: params.studentId,
+        courseId,
+        fullName: params.fullName,
+        email: params.email,
+      });
+    }
+  }
+
+  return { newlyEnrolled };
 }
 
 export async function enrollStudentInCourses(
