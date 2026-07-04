@@ -91,6 +91,9 @@ export async function updateSession(request: NextRequest) {
     const { pathname } = request.nextUrl;
 
     if (!user && !isPublic(pathname)) {
+      if (pathname.startsWith("/api/")) {
+        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      }
       const url = request.nextUrl.clone();
       if (pathname.startsWith("/admin/mfa")) {
         url.pathname = "/admin/login";

@@ -1,6 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { requireAdmin } from "@/lib/auth";
-import { createClient } from "@/lib/supabase/server";
+import { requireAdminApiAuth } from "@/lib/admin-api-auth";
 import { rateLimitedResponse } from "@/lib/api-rate-limit";
 import { generateCourseCopy } from "@/lib/ai/course-copy";
 import type { CourseCopyField } from "@/lib/ai/course-copy-shared";
@@ -16,15 +15,7 @@ const VALID_FIELDS = new Set<CourseCopyField>([
 ]);
 
 async function requireAdminApi() {
-  await requireAdmin();
-  const supabase = createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) {
-    return { error: NextResponse.json({ error: "Unauthorized" }, { status: 401 }) };
-  }
-  return { user, supabase };
+  return requireAdminApiAuth();
 }
 
 export async function POST(request: NextRequest) {
@@ -32,9 +23,9 @@ export async function POST(request: NextRequest) {
   if (limited) return limited;
 
   const auth = await requireAdminApi();
-  if ("error" in auth && auth.error) return auth.error;
+  if ("error" in auth) return auth.error;
 
-  const { supabase } = auth;
+  const { session: supabase } = auth;
 
   let body: {
     title?: string;

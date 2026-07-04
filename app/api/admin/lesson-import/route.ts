@@ -1,6 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { requireAdmin } from "@/lib/auth";
-import { createClient } from "@/lib/supabase/server";
+import { requireAdminApiAuth } from "@/lib/admin-api-auth";
 import { logAudit } from "@/lib/audit";
 import { rateLimitedResponse } from "@/lib/api-rate-limit";
 import {
@@ -26,24 +25,12 @@ const VALID_SOURCES = new Set<LessonImportSource>([
   "loom",
 ]);
 
-async function requireAdminApi() {
-  await requireAdmin();
-  const supabase = createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) {
-    return { error: NextResponse.json({ error: "Unauthorized" }, { status: 401 }) };
-  }
-  return { user, supabase };
-}
-
 /** Admin diagnostic: is YouTube API key configured? */
 export async function GET() {
-  const auth = await requireAdminApi();
-  if ("error" in auth && auth.error) return auth.error;
+  const auth = await requireAdminApiAuth();
+  if ("error" in auth) return auth.error;
 
-  const youtube = await youtubeApiKeyDiagnostics(auth.supabase);
+  const youtube = await youtubeApiKeyDiagnostics(auth.session);
   return NextResponse.json({
     youtubeApiKeyConfigured: youtube.status === "ok",
     youtubeApiKeyStatus: youtube.status,
@@ -58,10 +45,10 @@ export async function POST(request: NextRequest) {
   const limited = await rateLimitedResponse(request, "admin-lesson-import", 30);
   if (limited) return limited;
 
-  const auth = await requireAdminApi();
-  if ("error" in auth && auth.error) return auth.error;
+  const auth = await requireAdminApiAuth();
+  if ("error" in auth) return auth.error;
 
-  const supabase = auth.supabase;
+  const supabase = auth.admin;
   const body = (await request.json()) as {
     courseId?: string;
     url?: string;
@@ -78,13 +65,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid import source." }, { status: 400 });
   }
 
-  if (source.startsWith("youtube_") && !(await youtubeApiKeyConfigured(supabase))) {
-    return NextResponse.json({ error: await youtubeApiKeyError(supabase) }, { status: 503 });
+  if (source.startsWith("youtube_") && !(await youtubeApiKeyConfigured(auth.session))) {
+    return NextResponse.json({ error: await youtubeApiKeyError(auth.session) }, { status: 503 });
   }
 
   let youtubeApiKey: string | undefined;
   if (source.startsWith("youtube_")) {
-    youtubeApiKey = await getYoutubeApiKey(supabase);
+    youtubeApiKey = await getYoutubeApiKey(auth.session);
   }
 
   let lessons;

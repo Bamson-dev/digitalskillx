@@ -47,11 +47,12 @@ export function YoutubeImport({
     try {
       const res = await fetch("/api/admin/lesson-import", {
         method: "POST",
+        credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ courseId, url, moduleId: moduleId || undefined, source }),
       });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error ?? "Import failed");
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.error ?? `Import failed (${res.status})`);
       setResult(`Imported ${json.imported}, skipped ${json.skipped} of ${json.total}. Refresh to see lessons.`);
       setUrl("");
     } catch (e) {

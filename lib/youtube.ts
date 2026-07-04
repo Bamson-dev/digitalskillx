@@ -110,6 +110,12 @@ export async function fetchPlaylist(
       `${API}/playlistItems?part=snippet&maxResults=50&playlistId=${playlistId}&pageToken=${pageToken}&key=${apiKey}`,
     );
     const json = await res.json();
+    if (!res.ok) {
+      const message =
+        json?.error?.message ??
+        `YouTube API error (${res.status}). Check that the API key is valid and the YouTube Data API is enabled.`;
+      throw new Error(message);
+    }
     for (const item of json.items ?? []) {
       const videoId = item.snippet?.resourceId?.videoId;
       if (!videoId) continue;
