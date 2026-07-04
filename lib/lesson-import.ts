@@ -197,7 +197,7 @@ async function importWistia(url: string): Promise<ImportedLessonDraft[]> {
   if (!embedUrl) throw new Error("Wistia did not return an embed URL.");
   return [
     {
-      title: data.title?.trim() || "Imported Wistia lesson",
+      title: data.title?.trim() || "Untitled video",
       description: "",
       contentUrl: embedUrl,
       youtubeVideoId: null,
@@ -213,7 +213,7 @@ async function importLoom(url: string): Promise<ImportedLessonDraft[]> {
   if (!embedUrl) throw new Error("Loom did not return an embed URL.");
   return [
     {
-      title: data.title?.trim() || "Imported Loom lesson",
+      title: data.title?.trim() || "Untitled video",
       description: "",
       contentUrl: embedUrl,
       youtubeVideoId: null,

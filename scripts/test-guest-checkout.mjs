@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-/** Verify guest checkout: unauthenticated initialize returns Paystack URL (no login/email required). */
+/** Verify guest checkout: name + email required before Paystack; then Paystack URL returned. */
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { join, resolve, dirname } from "node:path";
@@ -63,7 +63,7 @@ if (hasEmailBlocker) {
   process.exit(1);
 }
 
-const init = curlJson([
+const missingDetails = curlJson([
   "-X",
   "POST",
   `${base}/api/payments/initialize`,
@@ -73,6 +73,38 @@ const init = curlJson([
   JSON.stringify({ courseId, currency: "NGN" }),
 ]);
 
+console.log("Initialize without details:", missingDetails.error ?? missingDetails);
+
+if (missingDetails.enrolled) {
+  console.log("OK: course is free — guest enrolled requires details in UI (API may still need email for free)");
+} else if (!missingDetails.error) {
+  console.error("FAIL: paid checkout should require name and email before Paystack");
+  process.exit(1);
+} else if (
+  !/email/i.test(String(missingDetails.error)) &&
+  !/name/i.test(String(missingDetails.error))
+) {
+  console.error("FAIL: expected name/email validation error, got:", missingDetails.error);
+  process.exit(1);
+} else {
+  console.log("OK: paid checkout rejects missing name/email");
+}
+
+const init = curlJson([
+  "-X",
+  "POST",
+  `${base}/api/payments/initialize`,
+  "-H",
+  "Content-Type: application/json",
+  "-d",
+  JSON.stringify({
+    courseId,
+    currency: "NGN",
+    email: `guest-test-${Date.now()}@example.com`,
+    fullName: "Guest Checkout Test",
+  }),
+]);
+
 console.log("Initialize response keys:", Object.keys(init).join(", "));
 
 if (init.error?.includes("sign in")) {
@@ -80,13 +112,8 @@ if (init.error?.includes("sign in")) {
   process.exit(1);
 }
 
-if (init.error?.includes("email address to your profile")) {
-  console.error("FAIL: initialize still requires profile email:", init.error);
-  process.exit(1);
-}
-
 if (init.enrolled) {
-  console.log("OK: course is free — guest enrolled without auth");
+  console.log("OK: course is free — guest enrolled with name + email");
   process.exit(0);
 }
 
@@ -100,5 +127,5 @@ if (!init.authorizationUrl.includes("paystack.com")) {
   process.exit(1);
 }
 
-console.log("OK: guest checkout returns Paystack URL without login");
+console.log("OK: guest checkout returns Paystack URL after name + email");
 console.log("Reference:", init.reference);

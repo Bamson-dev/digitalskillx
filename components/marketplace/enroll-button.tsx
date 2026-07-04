@@ -17,6 +17,7 @@ type Props = {
   label?: string;
   className?: string;
   size?: "default" | "bar";
+  hidden?: boolean;
 };
 
 function UsdComingSoonButton({
@@ -44,24 +45,27 @@ function UsdComingSoonButton({
   );
 }
 
-function GuestEmailModal({
+function CheckoutDetailsModal({
+  isFree,
   onClose,
   onSubmit,
   loading,
   error,
 }: {
+  isFree: boolean;
   onClose: () => void;
-  onSubmit: (email: string) => void;
+  onSubmit: (details: { email: string; fullName: string }) => void;
   loading: boolean;
   error: string | null;
 }) {
   const [email, setEmail] = useState("");
+  const [fullName, setFullName] = useState("");
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
       <div
         role="dialog"
-        aria-labelledby="guest-enroll-title"
+        aria-labelledby="checkout-details-title"
         className="relative w-full max-w-md rounded-xl bg-white p-6 shadow-xl"
       >
         <button
@@ -72,36 +76,49 @@ function GuestEmailModal({
         >
           <X className="h-5 w-5" />
         </button>
-        <h2 id="guest-enroll-title" className="text-lg font-bold text-neutral-900">
-          Get course access
+        <h2 id="checkout-details-title" className="text-lg font-bold text-neutral-900">
+          {isFree ? "Get course access" : "Checkout details"}
         </h2>
         <p className="mt-2 text-sm text-neutral-600">
-          Enter your email and we&apos;ll send your login details and course access right away.
+          {isFree
+            ? "Enter your details and we'll send your login and course access right away."
+            : "Enter your details to continue. After payment we'll email your login and unlock the course on your account."}
         </p>
         <form
           className="mt-4 space-y-3"
           onSubmit={(e) => {
             e.preventDefault();
-            onSubmit(email.trim());
+            onSubmit({ email: email.trim(), fullName: fullName.trim() });
           }}
         >
           <input
-            type="email"
+            type="text"
             required
             autoFocus
+            value={fullName}
+            onChange={(e) => setFullName(e.target.value)}
+            placeholder="Full name"
+            autoComplete="name"
+            minLength={2}
+            className="h-11 w-full rounded-lg border border-neutral-200 px-3 text-sm outline-none ring-brand focus:ring-2"
+          />
+          <input
+            type="email"
+            required
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            placeholder="you@example.com"
+            placeholder="Email address"
+            autoComplete="email"
             className="h-11 w-full rounded-lg border border-neutral-200 px-3 text-sm outline-none ring-brand focus:ring-2"
           />
           {error ? <p className="text-sm text-brand">{error}</p> : null}
           <button
             type="submit"
-            disabled={loading || !email.trim()}
+            disabled={loading || !email.trim() || fullName.trim().length < 2}
             className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-brand font-bold text-white hover:bg-brand-700 disabled:opacity-70"
           >
             {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-            Enroll free
+            {isFree ? "Enroll free" : "Continue to payment"}
           </button>
         </form>
       </div>
@@ -118,16 +135,19 @@ export function EnrollButton({
   label,
   className,
   size = "default",
+  hidden = false,
 }: Props) {
   const router = useRouter();
   const { currency, courseIsFree } = useCurrency();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [showEmailModal, setShowEmailModal] = useState(false);
+  const [showCheckoutModal, setShowCheckoutModal] = useState(false);
 
   const isFree = courseIsFree({ price_ngn: priceNgn, price_usd: priceUsd });
   const buttonLabel =
     label ?? (isEnrolled ? "Continue Learning" : isFree ? "Enroll Free" : "Enroll Now");
+
+  if (hidden) return null;
 
   if (currency === "USD" && !isEnrolled) {
     return (
@@ -137,15 +157,23 @@ export function EnrollButton({
     );
   }
 
-  async function startCheckout(guestEmail?: string) {
+  async function startCheckout(guest?: { email: string; fullName: string }) {
     setLoading(true);
     setError(null);
     try {
-      const payload: { courseId: string; currency: "NGN"; email?: string } = {
+      const payload: {
+        courseId: string;
+        currency: "NGN";
+        email?: string;
+        fullName?: string;
+      } = {
         courseId,
         currency: "NGN",
       };
-      if (guestEmail) payload.email = guestEmail;
+      if (guest) {
+        payload.email = guest.email;
+        payload.fullName = guest.fullName;
+      }
 
       const res = await fetch("/api/payments/initialize", {
         method: "POST",
@@ -178,7 +206,7 @@ export function EnrollButton({
 
       if (!res.ok) throw new Error(json.error ?? "Payment could not start");
       if (json.enrolled) {
-        setShowEmailModal(false);
+        setShowCheckoutModal(false);
         router.push(`/course/${courseId}?enrolled=1`);
         return;
       }
@@ -199,8 +227,8 @@ export function EnrollButton({
       return;
     }
 
-    if (isFree && !isLoggedIn) {
-      setShowEmailModal(true);
+    if (!isLoggedIn) {
+      setShowCheckoutModal(true);
       setError(null);
       return;
     }
@@ -210,12 +238,13 @@ export function EnrollButton({
 
   return (
     <div className={className}>
-      {showEmailModal ? (
-        <GuestEmailModal
+      {showCheckoutModal ? (
+        <CheckoutDetailsModal
+          isFree={isFree}
           onClose={() => {
-            if (!loading) setShowEmailModal(false);
+            if (!loading) setShowCheckoutModal(false);
           }}
-          onSubmit={(email) => void startCheckout(email)}
+          onSubmit={(details) => void startCheckout(details)}
           loading={loading}
           error={error}
         />
@@ -234,7 +263,7 @@ export function EnrollButton({
         {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : null}
         {buttonLabel}
       </button>
-      {error && !showEmailModal ? <p className="mt-2 text-sm text-brand">{error}</p> : null}
+      {error && !showCheckoutModal ? <p className="mt-2 text-sm text-brand">{error}</p> : null}
     </div>
   );
 }

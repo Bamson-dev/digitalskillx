@@ -13,6 +13,7 @@ type ConfirmState =
       alreadyFulfilled?: boolean;
       buyerEmail?: string;
       isNewAccount?: boolean;
+      needsLogin?: boolean;
     }
   | { status: "error"; message: string };
 
@@ -20,10 +21,12 @@ export function PaymentReturnHandler({
   courseId,
   courseTitle,
   userEmail,
+  isLoggedIn,
 }: {
   courseId: string;
   courseTitle: string;
   userEmail?: string | null;
+  isLoggedIn: boolean;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -56,6 +59,7 @@ export function PaymentReturnHandler({
           alreadyFulfilled?: boolean;
           buyerEmail?: string;
           isNewAccount?: boolean;
+          needsLogin?: boolean;
         };
 
         if (cancelled) return;
@@ -74,6 +78,7 @@ export function PaymentReturnHandler({
           alreadyFulfilled: json.alreadyFulfilled,
           buyerEmail: json.buyerEmail,
           isNewAccount: json.isNewAccount,
+          needsLogin: json.needsLogin ?? true,
         });
 
         router.replace(`/course/${courseId}?enrolled=1`, { scroll: false });
@@ -98,6 +103,9 @@ export function PaymentReturnHandler({
 
   if (!paymentSuccess && !enrolled) return null;
 
+  // Free enroll uses ?enrolled=1 only — sidebar card handles that UX.
+  if (enrolled && state.status === "idle" && !paymentSuccess) return null;
+
   if (state.status === "confirming" || (paymentSuccess && state.status === "idle")) {
     return (
       <div className="border-b border-brand/20 bg-brand/5 px-4 py-4 text-center text-sm text-brand-700">
@@ -118,6 +126,8 @@ export function PaymentReturnHandler({
   }
 
   const displayEmail = state.status === "success" ? state.buyerEmail ?? userEmail : userEmail;
+  const needsLogin =
+    state.status === "success" ? (state.needsLogin ?? !isLoggedIn) : !isLoggedIn;
   const isNewAccount = state.status === "success" ? state.isNewAccount : false;
 
   if (enrolled || state.status === "success") {
@@ -128,33 +138,41 @@ export function PaymentReturnHandler({
           <div>
             <p className="text-base font-semibold text-green-900">Payment successful!</p>
             <p className="mt-1 text-sm text-green-800">
-              <strong>{courseTitle}</strong> is now unlocked on your account.
+              <strong>{courseTitle}</strong> is unlocked on your account.
             </p>
           </div>
-          {displayEmail ? (
+          {needsLogin ? (
             <p className="inline-flex items-center gap-2 text-sm text-green-800">
               <Mail className="h-4 w-4" />
-              {isNewAccount ? (
+              {displayEmail ? (
                 <>
-                  We sent your login password to <strong>{displayEmail}</strong>. Check your inbox
-                  (and spam folder).
+                  {isNewAccount ? (
+                    <>
+                      We sent your login password to <strong>{displayEmail}</strong>. Check your
+                      inbox and spam folder, then sign in to start learning.
+                    </>
+                  ) : (
+                    <>
+                      Sign in with <strong>{displayEmail}</strong> to access your course. Check
+                      your inbox if you need your password reset.
+                    </>
+                  )}
                 </>
               ) : (
-                <>
-                  Course access details are being sent to <strong>{displayEmail}</strong>
-                </>
+                <>Check your email for login details, then sign in to access your course.</>
               )}
             </p>
-          ) : (
-            <p className="text-sm text-green-800">
-              Check your inbox for your receipt and course access email.
+          ) : displayEmail ? (
+            <p className="inline-flex items-center gap-2 text-sm text-green-800">
+              <Mail className="h-4 w-4" />
+              A receipt was sent to <strong>{displayEmail}</strong>.
             </p>
-          )}
+          ) : null}
           <Link
-            href={isNewAccount ? "/login" : `/courses/${courseId}`}
+            href={needsLogin ? "/login" : `/courses/${courseId}`}
             className="mt-1 inline-flex h-11 items-center justify-center rounded-lg bg-brand px-6 text-sm font-bold text-white hover:bg-brand-700"
           >
-            {isNewAccount ? "Log in to start learning" : "Start learning"}
+            {needsLogin ? "Log in to start learning" : "Start learning"}
           </Link>
         </div>
       </div>

@@ -69,7 +69,7 @@ const body = out.replace(/\nHTTP:\d+$/, "");
 console.log("URL:", `${base}/courses/${courseId}`);
 console.log("Status:", status);
 
-if (status === "404" || /This page could not be found/i.test(body)) {
+if (status === "404" || /NEXT_NOT_FOUND/.test(body)) {
   console.error("FAIL: 404 on student course preview");
   process.exit(1);
 }
@@ -82,6 +82,18 @@ if (/Admin preview/i.test(body)) {
   console.error("FAIL: unexpected page content");
   console.log(body.slice(0, 800));
   process.exit(1);
+}
+
+const lessonId = body.match(/\/lessons\/([0-9a-f-]{36})/i)?.[1];
+if (lessonId) {
+  const lessonOut = curl(["-b", jar, `${base}/lessons/${lessonId}`]);
+  const lessonStatus = lessonOut.match(/HTTP:(\d+)/)?.[1];
+  const lessonBody = lessonOut.replace(/\nHTTP:\d+$/, "");
+  if (lessonStatus === "404" || /NEXT_NOT_FOUND/.test(lessonBody)) {
+    console.error("FAIL: lesson preview 404 for", lessonId);
+    process.exit(1);
+  }
+  console.log("PASS: lesson preview", lessonId);
 }
 
 console.log("=== ALL PASSED ===");

@@ -61,6 +61,7 @@ export async function POST(request: NextRequest) {
       alreadyFulfilled: result.alreadyFulfilled ?? false,
       buyerEmail: result.buyerEmail ?? undefined,
       isNewAccount: result.isNewAccount ?? false,
+      needsLogin: !user,
     });
   } catch (err) {
     console.error("[payments/confirm]", err);

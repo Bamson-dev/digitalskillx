@@ -347,11 +347,6 @@ update public.platform_secrets set
   deepseek_api_key          = 'PASTE_DEEPSEEK_API_KEY_HERE'
 where id = 'default';
 
--- Vercel CRON bootstrap (same value as CRON_SECRET in Vercel env):
--- update public.platform_settings
--- set cron_auth_secret = 'paste-your-cron-secret-here'
--- where id = 'default';
-
 
 -- ── 11. Verification ────────────────────────────────────────────────────────
 
@@ -359,9 +354,6 @@ select
   (select count(*) from public.platform_settings where id = 'default') as platform_settings,
   (select count(*) from public.platform_secrets where id = 'default') as platform_secrets,
   (select proname from pg_proc where proname = 'is_admin' limit 1) as is_admin_function,
-  (select proname from pg_proc where proname = 'server_bootstrap_platform_secrets' limit 1) as cron_bootstrap_rpc,
-  (select cron_auth_secret is not null and cron_auth_secret <> ''
-   from public.platform_settings where id = 'default') as cron_auth_secret_set,
   (select supabase_service_role_key is not null
      and supabase_service_role_key <> 'PASTE_SUPABASE_SERVICE_ROLE_KEY_HERE'
    from public.platform_secrets where id = 'default') as service_role_saved,

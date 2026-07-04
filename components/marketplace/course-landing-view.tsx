@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { CheckCircle2, Users } from "lucide-react";
 import { ORG } from "@/lib/org";
 import { useCurrency } from "@/components/providers/currency-provider";
@@ -38,12 +39,14 @@ export function CourseLandingView({
   isLoggedIn,
   related,
   lessonCount,
+  purchaseComplete = false,
 }: {
   course: CourseData;
   isEnrolled: boolean;
   isLoggedIn: boolean;
   related: MarketplaceCourse[];
   lessonCount: number;
+  purchaseComplete?: boolean;
 }) {
   const [tab, setTab] = useState<(typeof TABS)[number]>("About");
   const { formatCoursePrice } = useCurrency();
@@ -56,14 +59,31 @@ export function CourseLandingView({
         <PriceDisplay course={course} />
       </p>
       <p className="mt-1 text-xs text-neutral-500">One-time payment · Lifetime access</p>
-      <EnrollButton
-        courseId={course.id}
-        priceNgn={course.price_ngn}
-        priceUsd={course.price_usd}
-        isEnrolled={isEnrolled}
-        isLoggedIn={isLoggedIn}
-        className="mt-5"
-      />
+      {purchaseComplete && !isEnrolled ? (
+        <div className="mt-5 rounded-lg border border-green-200 bg-green-50 p-4 text-sm text-green-900">
+          <p className="font-semibold">Enrollment complete</p>
+          <p className="mt-1 text-green-800">
+            Check your email for login details, then sign in to start learning.
+          </p>
+          {!isLoggedIn ? (
+            <Link
+              href="/login"
+              className="mt-3 inline-flex h-11 w-full items-center justify-center rounded-lg bg-brand text-sm font-bold text-white hover:bg-brand-700"
+            >
+              Log in
+            </Link>
+          ) : null}
+        </div>
+      ) : (
+        <EnrollButton
+          courseId={course.id}
+          priceNgn={course.price_ngn}
+          priceUsd={course.price_usd}
+          isEnrolled={isEnrolled}
+          isLoggedIn={isLoggedIn}
+          className="mt-5"
+        />
+      )}
       <ul className="mt-6 space-y-3 border-t border-surface-border pt-5 text-sm text-neutral-600">
         <li className="flex items-center gap-2">
           <CheckCircle2 className="h-4 w-4 text-brand" />
@@ -233,7 +253,7 @@ export function CourseLandingView({
       </div>
 
       {/* Mobile sticky purchase bar */}
-      {!isEnrolled ? (
+      {!isEnrolled && !purchaseComplete ? (
         <div className="fixed inset-x-0 bottom-0 z-40 border-t border-surface-border bg-white p-4 shadow-[0_-4px_20px_rgba(0,0,0,0.08)] lg:hidden">
           <div className="mx-auto flex max-w-lg items-center justify-between gap-4">
             <div>

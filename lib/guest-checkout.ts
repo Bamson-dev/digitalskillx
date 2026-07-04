@@ -13,6 +13,22 @@ import type { Database } from "@/types/database";
 
 const PLACEHOLDER_DOMAIN = "checkout.digitalskillx.com";
 
+export type PendingCheckoutDetails = {
+  checkout_email?: string;
+  checkout_full_name?: string;
+};
+
+export function readPendingCheckoutDetails(
+  paystackData: unknown,
+): PendingCheckoutDetails {
+  if (!paystackData || typeof paystackData !== "object") return {};
+  const data = paystackData as PendingCheckoutDetails;
+  return {
+    checkout_email: data.checkout_email?.trim().toLowerCase(),
+    checkout_full_name: data.checkout_full_name?.trim(),
+  };
+}
+
 export function checkoutPlaceholderEmail(reference: string) {
   return `checkout+${reference}@${PLACEHOLDER_DOMAIN}`;
 }
@@ -126,7 +142,7 @@ export async function completePaidCheckout(reference: string) {
   const admin = await createAdminClientAsync();
   const { data: tx } = await admin
     .from("transactions")
-    .select("student_id, course_id, status")
+    .select("student_id, course_id, status, paystack_data")
     .eq("reference", reference)
     .maybeSingle();
 
@@ -158,16 +174,25 @@ export async function completePaidCheckout(reference: string) {
     };
   }
 
-  const buyerEmail = verified.customer?.email?.trim().toLowerCase() ?? "";
+  const pending = readPendingCheckoutDetails(tx.paystack_data);
+  const buyerEmail =
+    pending.checkout_email ||
+    verified.metadata?.buyer_email?.trim().toLowerCase() ||
+    verified.customer?.email?.trim().toLowerCase() ||
+    "";
+  const buyerName =
+    pending.checkout_full_name ||
+    verified.metadata?.buyer_full_name?.trim() ||
+    buyerNameFromVerified(verified);
+
   if (!buyerEmail || isCheckoutPlaceholderEmail(buyerEmail)) {
     return {
       ok: false as const,
-      error: "Paystack did not return a customer email for this payment.",
+      error: "Checkout email was not captured for this payment. Contact support with your payment reference.",
       status: 422 as const,
     };
   }
 
-  const buyerName = buyerNameFromVerified(verified);
   let studentId = tx.student_id;
   let isNewAccount = false;
   let password: string | undefined;

@@ -8,7 +8,6 @@ import { isCourseFree, nairaToKobo, type CurrencyCode } from "@/lib/currency";
 import { siteUrl } from "@/lib/org";
 import { rateLimitedResponse } from "@/lib/api-rate-limit";
 import {
-  checkoutPlaceholderEmail,
   resolveOrCreateStudentForPurchase,
 } from "@/lib/guest-checkout";
 import { isValidStudentEmail } from "@/lib/admin-student-onboarding";
@@ -114,13 +113,17 @@ export async function POST(request: NextRequest) {
       }
 
       const guestEmail = body.email?.trim().toLowerCase() ?? "";
+      const guestName = body.fullName?.trim() ?? "";
       if (!isValidStudentEmail(guestEmail)) {
         return jsonError("Enter your email address to enroll in this free course.", 400);
+      }
+      if (guestName.length < 2) {
+        return jsonError("Enter your full name to enroll.", 400);
       }
 
       const resolved = await resolveOrCreateStudentForPurchase(admin, {
         email: guestEmail,
-        fullName: body.fullName,
+        fullName: guestName,
       });
 
       const { data: existingEnrollment } = await admin
@@ -168,11 +171,23 @@ export async function POST(request: NextRequest) {
       return jsonError("Course price is not set.", 400);
     }
 
+    let checkoutEmail = profile?.email?.trim().toLowerCase() ?? "";
+    let checkoutName = profile?.full_name?.trim() ?? "";
+
+    if (!studentIdForEnrollment) {
+      checkoutEmail = body.email?.trim().toLowerCase() ?? "";
+      checkoutName = body.fullName?.trim() ?? "";
+      if (!isValidStudentEmail(checkoutEmail)) {
+        return jsonError("Enter your email address before checkout.", 400);
+      }
+      if (checkoutName.length < 2) {
+        return jsonError("Enter your full name before checkout.", 400);
+      }
+    } else if (!checkoutEmail) {
+      return jsonError("Add an email address to your profile before enrolling.", 400);
+    }
+
     const reference = generateReference();
-    const paystackEmail =
-      profile?.email?.trim() ||
-      body.email?.trim() ||
-      checkoutPlaceholderEmail(reference);
 
     const { error: txError } = await admin.from("transactions").insert({
       student_id: studentIdForEnrollment,
@@ -181,6 +196,14 @@ export async function POST(request: NextRequest) {
       currency: "NGN",
       reference,
       status: "pending",
+      ...(studentIdForEnrollment
+        ? {}
+        : {
+            paystack_data: {
+              checkout_email: checkoutEmail,
+              checkout_full_name: checkoutName,
+            },
+          }),
     });
 
     if (txError) {
@@ -196,18 +219,21 @@ export async function POST(request: NextRequest) {
     const metadata: Record<string, string> = {
       course_id: course.id,
       currency: "NGN",
+      buyer_email: checkoutEmail,
+      buyer_full_name: checkoutName,
     };
     if (studentIdForEnrollment) {
       metadata.student_id = studentIdForEnrollment;
     }
 
     const init = await initializeTransaction({
-      email: paystackEmail,
+      email: checkoutEmail,
       amountMinor: chargeAmount,
       currency: "NGN",
       reference,
       callbackUrl: `${siteUrl()}/course/${course.id}?payment=success`,
       metadata,
+      customerName: checkoutName,
     });
 
     return NextResponse.json({

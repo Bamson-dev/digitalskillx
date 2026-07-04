@@ -22,6 +22,8 @@ export type InitializeParams = {
   reference: string;
   callbackUrl: string;
   metadata: Record<string, string>;
+  /** Pre-fills customer name on Paystack checkout. */
+  customerName?: string;
 };
 
 export async function initializeTransaction(
@@ -42,6 +44,7 @@ export async function initializeTransaction(
       callback_url: params.callbackUrl,
       metadata: params.metadata,
       currency: params.currency,
+      ...(params.customerName ? { name: params.customerName } : {}),
     }),
   });
   const json = await res.json();

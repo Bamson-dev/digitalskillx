@@ -101,6 +101,7 @@ export default async function CourseLandingPage({
   const modules = [...(course.modules ?? [])].sort((a, b) => a.position - b.position);
   const lessonCount = modules.reduce((n, m) => n + (m.lessons?.length ?? 0), 0);
   const category = Array.isArray(course.category) ? course.category[0] : course.category;
+  const purchaseComplete = searchParams.enrolled === "1" && !isEnrolled;
 
   return (
     <div className="flex min-h-screen flex-col bg-white text-neutral-900">
@@ -112,6 +113,7 @@ export default async function CourseLandingPage({
             courseId={course.id}
             courseTitle={course.title}
             userEmail={profile?.email}
+            isLoggedIn={Boolean(user)}
           />
         </Suspense>
         <CourseLandingView
@@ -125,6 +127,7 @@ export default async function CourseLandingPage({
           isLoggedIn={Boolean(user)}
           related={relatedRaw ?? []}
           lessonCount={lessonCount}
+          purchaseComplete={purchaseComplete}
         />
       </main>
 
