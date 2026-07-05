@@ -2,9 +2,8 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, Linkedin, ExternalLink } from "lucide-react";
-import { createAdminClientAsync } from "@/lib/supabase/admin";
-import { createClient } from "@/lib/supabase/server";
 import { requireStudent } from "@/lib/auth";
+import { getStudentCertificateById } from "@/lib/student-certificates";
 import { CertificateView } from "@/components/certificate-view";
 import { PrintButton } from "@/components/print-button";
 import { DEFAULT_CERTIFICATE_TEMPLATE_KEY, normalizeCertificateTemplateKey } from "@/lib/certificate-templates";
@@ -15,23 +14,15 @@ export const metadata: Metadata = { title: "Certificate" };
 
 export default async function CertificateDetailPage({ params }: { params: { id: string } }) {
   const profile = await requireStudent();
-  const admin = await createAdminClientAsync(createClient());
-
-  const { data: cert } = await admin
-    .from("certificates")
-    .select("id, certificate_number, issued_at, completed_at, template_key, course:courses(title)")
-    .eq("id", params.id)
-    .eq("student_id", profile.id)
-    .single();
+  const cert = await getStudentCertificateById(profile.id, params.id);
   if (!cert) notFound();
 
-  const course = Array.isArray(cert.course) ? cert.course[0] : cert.course;
-  const verifyUrl = `${siteUrl()}/verify/${cert.certificate_number}`;
+  const verifyUrl = `${siteUrl()}/verify/${cert.certificateNumber}`;
   const qr = await qrDataUrl(verifyUrl);
   const linkedinUrl = `https://www.linkedin.com/profile/add?startTask=CERTIFICATION_NAME&name=${encodeURIComponent(
-    course?.title ?? "Course",
+    cert.courseTitle,
   )}&organizationName=${encodeURIComponent(ORG.certificateOrg)}&certUrl=${encodeURIComponent(verifyUrl)}&certId=${encodeURIComponent(
-    cert.certificate_number,
+    cert.certificateNumber,
   )}`;
 
   return (
@@ -62,14 +53,14 @@ export default async function CertificateDetailPage({ params }: { params: { id: 
       </div>
 
       <CertificateView
-        studentName={profile.full_name ?? profile.email}
-        courseName={course?.title ?? "Course"}
-        completedAt={cert.completed_at}
-        issuedAt={cert.issued_at}
-        certificateNumber={cert.certificate_number}
+        studentName={cert.recipientName}
+        courseName={cert.courseTitle}
+        completedAt={cert.completedAt}
+        issuedAt={cert.issuedAt}
+        certificateNumber={cert.certificateNumber}
         qrDataUrl={qr}
         templateKey={
-          normalizeCertificateTemplateKey(cert.template_key) ?? DEFAULT_CERTIFICATE_TEMPLATE_KEY
+          normalizeCertificateTemplateKey(cert.templateKey) ?? DEFAULT_CERTIFICATE_TEMPLATE_KEY
         }
       />
     </div>

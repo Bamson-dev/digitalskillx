@@ -316,6 +316,7 @@ export type Certificate = {
   completed_at: string | null;
   pdf_url: string | null;
   template_key: string | null;
+  recipient_name: string | null;
   is_valid: boolean;
 };
 

@@ -35,6 +35,7 @@ export default async function CertificatesPage() {
                 </div>
                 <div className="min-w-0">
                   <h3 className="truncate font-semibold">{c.courseTitle ?? "Course"}</h3>
+                  <p className="truncate text-sm text-neutral-700">{c.recipientName}</p>
                   <p className="text-xs text-muted">
                     #{c.certificateNumber} · Issued {formatDate(c.issuedAt)}
                   </p>

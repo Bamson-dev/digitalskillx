@@ -1,6 +1,9 @@
 import "server-only";
 import { bootstrapRuntimeSecrets } from "@/lib/bootstrap-runtime-secrets";
-import { syncStudentCourseAccess, reconcileOrphanCertificatesForEmail } from "@/lib/admin-student-onboarding";
+import {
+  reconcileOrphanCertificatesForEmail,
+  syncStudentCourseAccess,
+} from "@/lib/admin-student-onboarding";
 import { createAdminClientAsync } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
@@ -10,6 +13,17 @@ export type StudentCertificateRow = {
   issuedAt: string;
   isValid: boolean;
   courseTitle: string | null;
+  recipientName: string;
+};
+
+export type StudentCertificateDetail = {
+  id: string;
+  certificateNumber: string;
+  issuedAt: string;
+  completedAt: string | null;
+  templateKey: string | null;
+  recipientName: string;
+  courseTitle: string;
 };
 
 async function assertOwnStudentAccess(studentId: string) {
@@ -22,15 +36,13 @@ async function assertOwnStudentAccess(studentId: string) {
   if (user.id !== studentId) throw new Error("Forbidden.");
 }
 
-/** Load certificates for the signed-in student (service role after auth check). */
-export async function getStudentCertificates(studentId: string): Promise<StudentCertificateRow[]> {
-  await assertOwnStudentAccess(studentId);
+async function resolveTargetStudentId(studentId: string) {
   await bootstrapRuntimeSecrets();
   const admin = await createAdminClientAsync(createClient());
 
   const { data: profile } = await admin
     .from("profiles")
-    .select("email")
+    .select("email, full_name")
     .eq("id", studentId)
     .maybeSingle();
 
@@ -38,6 +50,7 @@ export async function getStudentCertificates(studentId: string): Promise<Student
     authUserId: studentId,
     profileEmail: profile?.email,
   });
+
   if (profile?.email) {
     await reconcileOrphanCertificatesForEmail(admin, {
       authUserId: targetStudentId,
@@ -45,9 +58,29 @@ export async function getStudentCertificates(studentId: string): Promise<Student
     });
   }
 
+  return { admin, targetStudentId, profile };
+}
+
+function displayNameFrom(
+  recipientName: string | null | undefined,
+  profileName: string | null | undefined,
+  email: string | null | undefined,
+) {
+  const trimmed = recipientName?.trim();
+  if (trimmed) return trimmed;
+  const fromProfile = profileName?.trim();
+  if (fromProfile) return fromProfile;
+  return email?.split("@")[0] ?? "Student";
+}
+
+/** Load certificates for the signed-in student (service role after auth check). */
+export async function getStudentCertificates(studentId: string): Promise<StudentCertificateRow[]> {
+  await assertOwnStudentAccess(studentId);
+  const { admin, targetStudentId, profile } = await resolveTargetStudentId(studentId);
+
   const { data: certs, error } = await admin
     .from("certificates")
-    .select("id, certificate_number, issued_at, is_valid, course_id")
+    .select("id, certificate_number, issued_at, is_valid, course_id, recipient_name")
     .eq("student_id", targetStudentId)
     .order("issued_at", { ascending: false });
 
@@ -64,5 +97,38 @@ export async function getStudentCertificates(studentId: string): Promise<Student
     issuedAt: row.issued_at,
     isValid: row.is_valid,
     courseTitle: titleById.get(row.course_id) ?? null,
+    recipientName: displayNameFrom(row.recipient_name, profile?.full_name, profile?.email),
   }));
+}
+
+/** Load one certificate for the signed-in student after ID sync. */
+export async function getStudentCertificateById(
+  studentId: string,
+  certificateId: string,
+): Promise<StudentCertificateDetail | null> {
+  await assertOwnStudentAccess(studentId);
+  const { admin, targetStudentId, profile } = await resolveTargetStudentId(studentId);
+
+  const { data: cert, error } = await admin
+    .from("certificates")
+    .select(
+      "id, certificate_number, issued_at, completed_at, template_key, recipient_name, student_id, course:courses(title)",
+    )
+    .eq("id", certificateId)
+    .maybeSingle();
+
+  if (error) throw new Error(error.message);
+  if (!cert || cert.student_id !== targetStudentId) return null;
+
+  const course = Array.isArray(cert.course) ? cert.course[0] : cert.course;
+
+  return {
+    id: cert.id,
+    certificateNumber: cert.certificate_number,
+    issuedAt: cert.issued_at,
+    completedAt: cert.completed_at,
+    templateKey: cert.template_key,
+    recipientName: displayNameFrom(cert.recipient_name, profile?.full_name, profile?.email),
+    courseTitle: course?.title ?? "Course",
+  };
 }

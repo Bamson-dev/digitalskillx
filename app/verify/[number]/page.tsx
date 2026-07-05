@@ -13,13 +13,17 @@ export default async function VerifyPage({ params }: { params: { number: string 
   const supabase = createAdminClient();
   const { data: cert } = await supabase
     .from("certificates")
-    .select("certificate_number, issued_at, completed_at, is_valid, student:profiles(full_name), course:courses(title)")
+    .select(
+      "certificate_number, issued_at, completed_at, is_valid, recipient_name, student:profiles(full_name), course:courses(title)",
+    )
     .eq("certificate_number", params.number)
     .maybeSingle();
 
   const valid = !!cert && cert.is_valid;
   const student = cert ? (Array.isArray(cert.student) ? cert.student[0] : cert.student) : null;
   const course = cert ? (Array.isArray(cert.course) ? cert.course[0] : cert.course) : null;
+  const studentName =
+    cert?.recipient_name?.trim() || student?.full_name?.trim() || "—";
   const checkedAt = new Date().toISOString();
 
   return (
@@ -34,7 +38,7 @@ export default async function VerifyPage({ params }: { params: { number: string 
             <CheckCircle2 className="mx-auto h-14 w-14 text-green-600" />
             <h1 className="mt-4 text-2xl font-bold text-green-700">Valid certificate</h1>
             <dl className="mt-6 space-y-3 text-left text-sm">
-              <Row label="Student" value={student?.full_name ?? "—"} />
+              <Row label="Student" value={studentName} />
               <Row label="Course" value={course?.title ?? "—"} />
               <Row label="Completed" value={formatDate(cert!.completed_at ?? cert!.issued_at)} />
               <Row label="Issued" value={formatDate(cert!.issued_at)} />

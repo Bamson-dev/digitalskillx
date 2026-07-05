@@ -193,6 +193,7 @@ export default async function StudentDashboardPage() {
                   <p className="truncate font-semibold text-neutral-900">
                     {cert.courseTitle ?? "Course certificate"}
                   </p>
+                  <p className="mt-0.5 truncate text-sm text-neutral-600">{cert.recipientName}</p>
                   <p className="mt-1 text-xs text-neutral-500">#{cert.certificateNumber}</p>
                 </div>
               </Link>

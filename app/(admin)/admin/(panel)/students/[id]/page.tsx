@@ -15,6 +15,8 @@ import { courseCompletionPct } from "@/lib/progress";
 import { loadAuthEmailIndex } from "@/lib/admin-student-overview";
 import { StudentProfileForm } from "@/components/admin/student-profile-form";
 import { StudentAdminToolbar, StudentEnrollmentList } from "@/components/admin/student-manage-panel";
+import { AdminCertificatePanel } from "@/components/admin/admin-certificate-panel";
+import { certificateRecipientName } from "@/lib/certificates";
 import {
   suspendStudent,
   deleteStudent,
@@ -23,7 +25,6 @@ import {
   unenrollStudent,
   setStudentTags,
   addAdminNote,
-  issueCertificateManual,
 } from "../actions";
 
 export const metadata: Metadata = { title: "Student" };
@@ -68,8 +69,8 @@ export default async function StudentDetailPage({
         .order("created_at", { ascending: false }),
       supabase
         .from("certificates")
-        .select("id, certificate_number, course:courses(title)")
-        .eq("student_id", params.id),
+        .select("id, certificate_number, recipient_name, student_id, course:courses(title)")
+        .in("student_id", enrollmentStudentIds),
     ]);
 
   const enrollmentRows = await Promise.all(
@@ -95,6 +96,22 @@ export default async function StudentDetailPage({
 
   const enrolledCourseIds = new Set(enrollmentRowsFiltered.map((row) => row.courseId));
   const availableCourses = (allCourses ?? []).filter((c) => !enrolledCourseIds.has(c.id));
+
+  const certificateRows = (certs ?? [])
+    .map((c) => {
+      const course = Array.isArray(c.course) ? c.course[0] : c.course;
+      return {
+        id: c.id,
+        certificateNumber: c.certificate_number,
+        courseTitle: course?.title ?? null,
+        recipientName: certificateRecipientName({
+          recipientName: c.recipient_name,
+          profileFullName: student.full_name,
+          email: student.email,
+        }),
+      };
+    })
+    .filter((row, index, rows) => rows.findIndex((item) => item.id === row.id) === index);
 
   return (
     <div className="space-y-6">
@@ -179,7 +196,7 @@ export default async function StudentDetailPage({
               <Award className="h-5 w-5" />
             </div>
             <div>
-              <p className="text-2xl font-bold">{certs?.length ?? 0}</p>
+              <p className="text-2xl font-bold">{certificateRows.length}</p>
               <p className="text-xs text-muted">Certificates</p>
             </div>
           </div>
@@ -253,37 +270,15 @@ export default async function StudentDetailPage({
             </Button>
           </form>
 
-          <div className="mt-6">
-            <h4 className="mb-2 text-sm font-semibold">Certificates</h4>
-            <form action={issueCertificateManual} className="mb-3 flex gap-2">
-              <input type="hidden" name="student_id" value={student.id} />
-              <Select name="course_id" className="flex-1" defaultValue="">
-                <option value="">Issue certificate for…</option>
-                {enrollmentRowsFiltered.map((row) => (
-                  <option key={row.courseId} value={row.courseId}>
-                    {row.courseTitle}
-                  </option>
-                ))}
-              </Select>
-              <Button type="submit" size="sm">
-                Issue
-              </Button>
-            </form>
-            {(certs ?? []).length === 0 ? (
-              <p className="text-sm text-muted">None yet.</p>
-            ) : (
-              <ul className="space-y-1 text-sm">
-                {(certs ?? []).map((c) => {
-                  const course = Array.isArray(c.course) ? c.course[0] : c.course;
-                  return (
-                    <li key={c.id} className="text-muted">
-                      {course?.title} · #{c.certificate_number}
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-          </div>
+          <AdminCertificatePanel
+            studentId={student.id}
+            fullName={student.full_name}
+            enrolledCourses={enrollmentRowsFiltered.map((row) => ({
+              courseId: row.courseId,
+              courseTitle: row.courseTitle,
+            }))}
+            certificates={certificateRows}
+          />
         </Card>
 
         <Card>

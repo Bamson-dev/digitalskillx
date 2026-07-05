@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Admin issues certificate → student login → certificate visible on dashboard/certificates.
+ * Admin issues certificate via API → student login → certificate visible + detail page loads.
  * Usage: node scripts/test-admin-certificate-issue.mjs [baseUrl]
  */
 import { execFileSync } from "node:child_process";
@@ -109,14 +109,14 @@ console.log("Created student:", studentId);
 const detailPage = curl(["-b", adminJar, `${base}/admin/students/${studentId}`]);
 const courseOptions = [
   ...detailPage.matchAll(/<option value="([0-9a-f-]{36})">([^<]+)<\/option>/gi),
-].filter((m) => !m[2].includes("Select a course"));
-if (courseOptions.length === 0) {
+].filter((m) => !/Select|Issue|Grant/i.test(m[2]));
+const courseId = courseOptions[0]?.[1];
+if (!courseId) {
   console.error("FAIL: no courses on student detail page");
   process.exit(1);
 }
-const courseId = courseOptions[0][1];
 
-let issueOk = false;
+let enrolled = false;
 for (const actionId of actionIdsFrom(detailPage)) {
   const res = curl([
     "-b",
@@ -133,17 +133,48 @@ for (const actionId of actionIdsFrom(detailPage)) {
     "-F",
     `course_id=${courseId}`,
   ]);
-  if (/cert_issued=1|Certificate issued/i.test(res)) {
-    issueOk = true;
+  if (/enrolled=1|already_enrolled|Course enrolled|Granted/i.test(res)) {
+    enrolled = true;
     break;
   }
 }
 
-if (!issueOk) {
-  console.error("FAIL: certificate issue action did not succeed");
+if (!enrolled) {
+  console.error("FAIL: could not grant course access before issuing certificate");
   process.exit(1);
 }
-console.log("PASS: admin issued certificate");
+console.log("Granted course access:", courseId);
+
+const issueRes = curl([
+  "-b",
+  adminJar,
+  "-X",
+  "POST",
+  `${base}/api/admin/certificates`,
+  "-H",
+  "Content-Type: application/json",
+  "-d",
+  JSON.stringify({
+    action: "issue",
+    studentId,
+    courseId,
+    recipientName: testName,
+  }),
+]);
+
+let issueJson;
+try {
+  issueJson = JSON.parse(issueRes);
+} catch {
+  console.error("FAIL: certificate issue API did not return JSON", issueRes.slice(0, 500));
+  process.exit(1);
+}
+
+if (!issueJson.ok || !issueJson.certificateId) {
+  console.error("FAIL: certificate issue API failed", issueRes.slice(0, 500));
+  process.exit(1);
+}
+console.log("PASS: admin issued certificate", issueJson.certificateNumber);
 
 const studentJar = join(mkdtempSync(join(tmpdir(), "student-cert-")), "student.txt");
 curl([
@@ -162,15 +193,31 @@ curl([
 
 const dashboard = curl(["-b", studentJar, `${base}/dashboard`]);
 const certsPage = curl(["-b", studentJar, `${base}/certificates`]);
+const certDetail = curl([
+  "-b",
+  studentJar,
+  "-w",
+  "\n__HTTP__%{http_code}",
+  `${base}/certificates/${issueJson.certificateId}`,
+]);
+
 if (/auth_error|Could not load your profile/i.test(dashboard)) {
   console.error("FAIL: student login failed");
+  process.exit(1);
+}
+
+const detailBody = certDetail.replace(/\n__HTTP__.*$/, "");
+const detailStatus = certDetail.match(/__HTTP__(\d+)/)?.[1];
+if (detailStatus === "404" || /404\s*\|\s*This page could not be found/i.test(detailBody)) {
+  console.error("FAIL: certificate detail page returned 404");
   process.exit(1);
 }
 
 const hasCert =
   /Your certificates/i.test(dashboard) ||
   /PDG-/i.test(dashboard + certsPage) ||
-  /\/certificates\//i.test(dashboard + certsPage);
+  dashboard.includes(testName) ||
+  certsPage.includes(testName);
 const empty = /No certificates yet/i.test(certsPage);
 
 if (!hasCert || empty) {
@@ -179,5 +226,11 @@ if (!hasCert || empty) {
   process.exit(1);
 }
 
+if (!detailBody.includes(testName)) {
+  console.error("FAIL: certificate detail missing recipient name");
+  process.exit(1);
+}
+
 console.log("PASS: student sees certificate on dashboard/certificates page");
+console.log("PASS: certificate detail page loads with recipient name");
 console.log("=== ALL PASSED ===");
