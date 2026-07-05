@@ -1,5 +1,6 @@
 import "server-only";
 import { bootstrapRuntimeSecrets } from "@/lib/bootstrap-runtime-secrets";
+import { syncStudentCourseAccess } from "@/lib/admin-student-onboarding";
 import { createAdminClientAsync } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { courseCompletionPct } from "@/lib/progress";
@@ -36,10 +37,21 @@ export async function getStudentEnrolledCourses(studentId: string): Promise<Stud
   await bootstrapRuntimeSecrets();
   const admin = await createAdminClientAsync(createClient());
 
+  const { data: profile } = await admin
+    .from("profiles")
+    .select("email")
+    .eq("id", studentId)
+    .maybeSingle();
+
+  const targetStudentId = await syncStudentCourseAccess(admin, {
+    authUserId: studentId,
+    profileEmail: profile?.email,
+  });
+
   const { data: enrollments, error: enrollError } = await admin
     .from("enrollments")
     .select("id, course_id, enrolled_at")
-    .eq("student_id", studentId)
+    .eq("student_id", targetStudentId)
     .order("enrolled_at", { ascending: false });
 
   if (enrollError) throw new Error(enrollError.message);

@@ -114,6 +114,22 @@ export async function createStudent(
         email: existing.email,
       });
 
+      const canonicalStudentId = await resolveCanonicalStudentId(admin, {
+        studentId: existing.id,
+        email: existing.email,
+      });
+      const { enrolledCourseIds } = await verifyStudentCourseAccess(
+        admin,
+        canonicalStudentId,
+        validCourseIds,
+      );
+      if (enrolledCourseIds.length === 0) {
+        return {
+          error:
+            "Course access could not be saved for this student. Open their profile and enroll them again.",
+        };
+      }
+
       await logAudit({
         action: "student_enrolled",
         targetType: "profile",

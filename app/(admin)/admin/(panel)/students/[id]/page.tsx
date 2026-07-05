@@ -51,13 +51,14 @@ export default async function StudentDetailPage({
   const lastSignInAt = authMeta?.lastSignInAt ?? null;
   const lastAccessAt = student.last_active_at ?? lastSignInAt;
   const hasLoggedIn = Boolean(lastSignInAt || student.last_active_at);
+  const enrollmentStudentIds = [...new Set([params.id, authMeta?.id].filter(Boolean))] as string[];
 
   const [{ data: enrollments }, { data: allCourses }, { data: notes }, { data: certs }] =
     await Promise.all([
       supabase
         .from("enrollments")
-        .select("id, completed_at, enrolled_at, course_id, course:courses(id, title, visibility)")
-        .eq("student_id", params.id)
+        .select("id, completed_at, enrolled_at, course_id, student_id, course:courses(id, title, visibility)")
+        .in("student_id", enrollmentStudentIds)
         .order("enrolled_at", { ascending: false }),
       supabase.from("courses").select("id, title, visibility").order("title"),
       supabase
@@ -75,7 +76,8 @@ export default async function StudentDetailPage({
     (enrollments ?? []).map(async (e) => {
       const c = Array.isArray(e.course) ? e.course[0] : e.course;
       const courseId = e.course_id;
-      const progressPct = courseId ? await courseCompletionPct(params.id, courseId) : 0;
+      const progressStudentId = e.student_id ?? params.id;
+      const progressPct = courseId ? await courseCompletionPct(progressStudentId, courseId) : 0;
       return {
         enrollmentId: e.id,
         courseId,
@@ -87,7 +89,9 @@ export default async function StudentDetailPage({
       };
     }),
   );
-  const enrollmentRowsFiltered = enrollmentRows.filter((row) => Boolean(row.courseId));
+  const enrollmentRowsFiltered = enrollmentRows
+    .filter((row) => Boolean(row.courseId))
+    .filter((row, index, rows) => rows.findIndex((item) => item.courseId === row.courseId) === index);
 
   const enrolledCourseIds = new Set(enrollmentRowsFiltered.map((row) => row.courseId));
   const availableCourses = (allCourses ?? []).filter((c) => !enrolledCourseIds.has(c.id));

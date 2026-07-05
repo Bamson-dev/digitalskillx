@@ -1,5 +1,6 @@
 import "server-only";
 import { bootstrapRuntimeSecrets } from "@/lib/bootstrap-runtime-secrets";
+import { syncStudentCourseAccess, reconcileOrphanCertificatesForEmail } from "@/lib/admin-student-onboarding";
 import { createAdminClientAsync } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
@@ -27,10 +28,27 @@ export async function getStudentCertificates(studentId: string): Promise<Student
   await bootstrapRuntimeSecrets();
   const admin = await createAdminClientAsync(createClient());
 
+  const { data: profile } = await admin
+    .from("profiles")
+    .select("email")
+    .eq("id", studentId)
+    .maybeSingle();
+
+  const targetStudentId = await syncStudentCourseAccess(admin, {
+    authUserId: studentId,
+    profileEmail: profile?.email,
+  });
+  if (profile?.email) {
+    await reconcileOrphanCertificatesForEmail(admin, {
+      authUserId: targetStudentId,
+      email: profile.email.trim().toLowerCase(),
+    });
+  }
+
   const { data: certs, error } = await admin
     .from("certificates")
     .select("id, certificate_number, issued_at, is_valid, course_id")
-    .eq("student_id", studentId)
+    .eq("student_id", targetStudentId)
     .order("issued_at", { ascending: false });
 
   if (error) throw new Error(error.message);

@@ -26,6 +26,24 @@ async function redirectAfterAuth(
       .single();
 
     if (profile?.role === "student" && profile.email) {
+      try {
+        const { createAdminClientAsync } = await import("@/lib/supabase/admin");
+        const { syncStudentCourseAccess, reconcileOrphanCertificatesForEmail } = await import(
+          "@/lib/admin-student-onboarding"
+        );
+        const admin = await createAdminClientAsync(supabase);
+        await syncStudentCourseAccess(admin, {
+          authUserId: user.id,
+          profileEmail: profile.email,
+        });
+        await reconcileOrphanCertificatesForEmail(admin, {
+          authUserId: user.id,
+          email: profile.email.trim().toLowerCase(),
+        });
+      } catch (err) {
+        console.error("[auth/callback] student access sync failed:", err);
+      }
+
       const { sendWelcomeEmailIfNeeded, parseCourseIdFromNext } = await import(
         "@/lib/system-email-triggers"
       );

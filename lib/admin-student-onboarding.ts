@@ -249,16 +249,56 @@ export async function ensureImportedStudentProfile(
   if (error) throw new Error(error.message);
 }
 
-/** Auth user id for this email — may differ from a stale profiles.id shown in admin. */
+/** Auth user id that will actually sign in with this profile email. */
 export async function resolveCanonicalStudentId(
   admin: SupabaseClient<Database>,
   params: { studentId: string; email: string },
 ) {
   const normalizedEmail = params.email.trim().toLowerCase();
   const authIndex = await loadAuthEmailIndex(admin);
-  const authId = authIndex.get(normalizedEmail)?.id;
-  if (authId) return authId;
+  const idByEmail = authIndex.get(normalizedEmail)?.id;
+  if (idByEmail) return idByEmail;
+
+  const { data: authUser, error } = await admin.auth.admin.getUserById(params.studentId);
+  if (error) throw new Error(error.message);
+  if (authUser.user?.id) return authUser.user.id;
+
   return params.studentId;
+}
+
+async function moveEnrollmentsBetweenStudents(
+  admin: SupabaseClient<Database>,
+  fromStudentId: string,
+  toStudentId: string,
+) {
+  if (fromStudentId === toStudentId) return;
+
+  const { data: orphanEnrollments, error: enrollError } = await admin
+    .from("enrollments")
+    .select("id, course_id")
+    .eq("student_id", fromStudentId);
+
+  if (enrollError) throw new Error(enrollError.message);
+
+  for (const enrollment of orphanEnrollments ?? []) {
+    const { data: existing } = await admin
+      .from("enrollments")
+      .select("id")
+      .eq("student_id", toStudentId)
+      .eq("course_id", enrollment.course_id)
+      .maybeSingle();
+
+    if (existing) {
+      await admin.from("enrollments").delete().eq("id", enrollment.id);
+      continue;
+    }
+
+    const { error: moveError } = await admin
+      .from("enrollments")
+      .update({ student_id: toStudentId })
+      .eq("id", enrollment.id);
+    if (moveError) throw new Error(moveError.message);
+  }
 }
 
 /** Move enrollments off duplicate profile rows that share the login email. */
@@ -276,33 +316,49 @@ export async function reconcileOrphanEnrollmentsForEmail(
   if (profileError) throw new Error(profileError.message);
 
   for (const orphan of duplicateProfiles ?? []) {
-    const { data: orphanEnrollments, error: enrollError } = await admin
-      .from("enrollments")
-      .select("id, course_id")
-      .eq("student_id", orphan.id);
-
-    if (enrollError) throw new Error(enrollError.message);
-
-    for (const enrollment of orphanEnrollments ?? []) {
-      const { data: existing } = await admin
-        .from("enrollments")
-        .select("id")
-        .eq("student_id", params.authUserId)
-        .eq("course_id", enrollment.course_id)
-        .maybeSingle();
-
-      if (existing) {
-        await admin.from("enrollments").delete().eq("id", enrollment.id);
-        continue;
-      }
-
-      const { error: moveError } = await admin
-        .from("enrollments")
-        .update({ student_id: params.authUserId })
-        .eq("id", enrollment.id);
-      if (moveError) throw new Error(moveError.message);
-    }
+    await moveEnrollmentsBetweenStudents(admin, orphan.id, params.authUserId);
   }
+}
+
+/**
+ * Consolidate course access onto the signed-in student account.
+ * Runs on login and dashboard reads so admin-granted courses appear without re-login.
+ */
+export async function syncStudentCourseAccess(
+  admin: SupabaseClient<Database>,
+  params: { authUserId: string; profileEmail?: string | null },
+): Promise<string> {
+  const profileEmail = params.profileEmail?.trim().toLowerCase() ?? null;
+
+  const { data: authUserData, error: authError } = await admin.auth.admin.getUserById(
+    params.authUserId,
+  );
+  if (authError) throw new Error(authError.message);
+
+  const authEmail = authUserData.user?.email?.trim().toLowerCase() ?? null;
+  if (authEmail && profileEmail && authEmail !== profileEmail) {
+    await admin.from("profiles").update({ email: authEmail }).eq("id", params.authUserId);
+  }
+
+  const emails = [...new Set([profileEmail, authEmail].filter(Boolean))] as string[];
+  for (const email of emails) {
+    await reconcileOrphanEnrollmentsForEmail(admin, { authUserId: params.authUserId, email });
+  }
+
+  const authIndex = await loadAuthEmailIndex(admin);
+  const relatedIds = new Set<string>();
+  for (const email of emails) {
+    const { data: profiles } = await admin.from("profiles").select("id").ilike("email", email);
+    for (const profile of profiles ?? []) relatedIds.add(profile.id);
+    const mappedId = authIndex.get(email)?.id;
+    if (mappedId) relatedIds.add(mappedId);
+  }
+
+  for (const relatedId of relatedIds) {
+    await moveEnrollmentsBetweenStudents(admin, relatedId, params.authUserId);
+  }
+
+  return params.authUserId;
 }
 
 /** Move certificates off duplicate profile rows that share the login email. */
@@ -367,9 +423,9 @@ export async function grantCourseAccessToStudent(
     studentId: params.studentId,
     email: params.email,
   });
-  await reconcileOrphanEnrollmentsForEmail(admin, {
+  await syncStudentCourseAccess(admin, {
     authUserId: canonicalStudentId,
-    email: params.email,
+    profileEmail: params.email,
   });
 
   const uniqueIds = [...new Set(params.courseIds.filter(Boolean))];
