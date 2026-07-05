@@ -17,7 +17,6 @@ export default async function CourseDetailPage({
 }) {
   const profile = await requireStudent();
   const isAdminPreview = profile.role === "admin";
-  const supabase = await getStudentViewSupabase(profile);
 
   const { enrolled, enrollmentId } = await checkStudentCourseEnrollment(profile.id, params.id);
   const enrollment = enrolled ? { id: enrollmentId! } : null;
@@ -25,6 +24,11 @@ export default async function CourseDetailPage({
   if (!enrolled && !isAdminPreview) {
     redirect(`/course/${params.id}`);
   }
+
+  const supabase = await getStudentViewSupabase(profile, {
+    courseId: params.id,
+    enrolled,
+  });
 
   const { data: course } = await supabase
     .from("courses")

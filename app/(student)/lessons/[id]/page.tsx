@@ -1,9 +1,12 @@
 import type { Metadata } from "next";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { Lock } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClientAsync } from "@/lib/supabase/admin";
+import { bootstrapRuntimeSecrets } from "@/lib/bootstrap-runtime-secrets";
 import { requireStudent } from "@/lib/auth";
+import { checkStudentCourseEnrollment } from "@/lib/student-enrollments";
 import { getStudentViewSupabase } from "@/lib/student-view-supabase";
 import { LessonOutline } from "@/components/student/lesson-outline";
 import { LessonPlayer } from "@/components/student/lesson-player";
@@ -19,29 +22,57 @@ type ModuleWithLessons = Module & { lessons: Lesson[] };
 export default async function LessonPage({ params }: { params: { id: string } }) {
   const profile = await requireStudent();
   const isAdminPreview = profile.role === "admin";
-  const supabase = await getStudentViewSupabase(profile);
   const session = createClient();
 
-  // RLS gates this read to enrolled students / free previews.
-  const { data: lesson } = await supabase.from("lessons").select("*").eq("id", params.id).single();
-  if (!lesson) notFound();
+  await bootstrapRuntimeSecrets();
+  const lookup = await createAdminClientAsync(session);
+  const { data: lessonMeta } = await lookup
+    .from("lessons")
+    .select("id, module_id, is_free_preview")
+    .eq("id", params.id)
+    .single();
+  if (!lessonMeta) notFound();
 
-  const { data: moduleRow } = await supabase
+  const { data: moduleRow } = await lookup
     .from("modules")
     .select("course_id")
-    .eq("id", lesson.module_id)
+    .eq("id", lessonMeta.module_id)
     .single();
   const courseId = moduleRow?.course_id;
   if (!courseId) notFound();
+
+  const { enrolled, targetStudentId } = await checkStudentCourseEnrollment(profile.id, courseId);
+  if (!enrolled && !isAdminPreview && !lessonMeta.is_free_preview) {
+    redirect(`/course/${courseId}`);
+  }
+
+  const supabase = await getStudentViewSupabase(profile, { courseId, enrolled });
+
+  const { data: lesson } = await supabase.from("lessons").select("*").eq("id", params.id).single();
+  if (!lesson) notFound();
+
+  const studentId = enrolled ? targetStudentId : profile.id;
 
   const [{ data: course }, { data: modules }, { data: progress }, { data: note }, { data: bookmarks }, { data: enrollment }, { data: attachments }, { data: courseResources }] =
     await Promise.all([
       supabase.from("courses").select("id, title").eq("id", courseId).single(),
       supabase.from("modules").select("*, lessons(*)").eq("course_id", courseId),
-      session.from("lesson_progress").select("lesson_id, completed").eq("student_id", profile.id),
-      session.from("student_notes").select("content").eq("student_id", profile.id).eq("lesson_id", params.id).maybeSingle(),
-      session.from("bookmarks").select("*").eq("student_id", profile.id).eq("lesson_id", params.id).order("timestamp_seconds"),
-      session.from("enrollments").select("enrolled_at").eq("student_id", profile.id).eq("course_id", courseId).maybeSingle(),
+      session.from("lesson_progress").select("lesson_id, completed").eq("student_id", studentId),
+      session.from("student_notes").select("content").eq("student_id", studentId).eq("lesson_id", params.id).maybeSingle(),
+      session.from("bookmarks").select("*").eq("student_id", studentId).eq("lesson_id", params.id).order("timestamp_seconds"),
+      enrolled
+        ? supabase
+            .from("enrollments")
+            .select("enrolled_at")
+            .eq("student_id", studentId)
+            .eq("course_id", courseId)
+            .maybeSingle()
+        : session
+            .from("enrollments")
+            .select("enrolled_at")
+            .eq("student_id", studentId)
+            .eq("course_id", courseId)
+            .maybeSingle(),
       supabase
         .from("resources")
         .select("id, title, file_url, file_type")

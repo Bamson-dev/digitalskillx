@@ -183,6 +183,11 @@ if (effectiveUrl.includes(`/course/${courseId}`) && !effectiveUrl.includes(`/cou
   process.exit(1);
 }
 
+if (/404\s*\|\s*This page could not be found/i.test(body)) {
+  console.error("FAIL: course player returned 404");
+  process.exit(1);
+}
+
 if (!/Back to courses/i.test(body)) {
   console.error("FAIL: course player content not found");
   console.error(body.slice(0, 500));
