@@ -2,7 +2,7 @@
 export function youtubeId(url: string | null | undefined): string | null {
   if (!url) return null;
   const patterns = [
-    /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/|youtube\.com\/shorts\/)([\w-]{11})/,
+    /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/|youtube-nocookie\.com\/embed\/|youtube\.com\/shorts\/)([\w-]{11})/,
   ];
   for (const re of patterns) {
     const m = url.match(re);
@@ -43,6 +43,18 @@ export type EmbeddedVideo =
   | { provider: "loom"; embedUrl: string }
   | { provider: "file"; embedUrl: string }
   | null;
+
+/** Privacy-enhanced YouTube embed URL for student lesson pages only. */
+export function youtubeLessonEmbedUrl(videoId: string, origin?: string): string {
+  const params = new URLSearchParams({
+    modestbranding: "1",
+    rel: "0",
+    disablekb: "0",
+    playsinline: "1",
+  });
+  if (origin) params.set("origin", origin);
+  return `https://www.youtube-nocookie.com/embed/${videoId}?${params.toString()}`;
+}
 
 /** Resolve a lesson content URL to a playable embed descriptor. */
 export function resolveVideo(url: string | null | undefined): EmbeddedVideo {

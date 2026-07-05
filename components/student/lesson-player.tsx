@@ -6,7 +6,8 @@ import { Card, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
-import { resolveVideo } from "@/lib/video";
+import { resolveVideo, youtubeLessonEmbedUrl } from "@/lib/video";
+import { siteUrl } from "@/lib/org";
 import type { Lesson, Bookmark as BookmarkType } from "@/types/database";
 import {
   markLessonComplete,
@@ -178,6 +179,22 @@ function VideoContent({
         <div>
           <video ref={fileRef} controls className="aspect-video w-full" src={video.embedUrl} controlsList="nodownload" />
           <FileVideoControls videoRef={fileRef} />
+        </div>
+      ) : video.provider === "youtube" ? (
+        <div className="relative aspect-video">
+          {/* Blocks the iframe "Watch on YouTube" link; embed params handle the rest. */}
+          <div
+            className="absolute left-0 top-0 z-[5] h-12 w-28 pointer-events-auto"
+            aria-hidden
+          />
+          <iframe
+            src={youtubeLessonEmbedUrl(video.id, siteUrl())}
+            className="aspect-video w-full"
+            title="Lesson video"
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+            allowFullScreen
+            referrerPolicy="strict-origin-when-cross-origin"
+          />
         </div>
       ) : (
         <iframe
