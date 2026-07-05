@@ -1,32 +1,37 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { submitStudentAssignment } from "@/lib/assignment-submission";
 
-export async function submitAssignment(formData: FormData) {
+export type AssignmentSubmitState = {
+  error?: string;
+};
+
+export async function submitAssignment(
+  _prev: AssignmentSubmitState,
+  formData: FormData,
+): Promise<AssignmentSubmitState> {
   const supabase = createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) throw new Error("Not authenticated");
+  if (!user) return { error: "Please sign in again to submit." };
 
-  const assignmentId = String(formData.get("assignment_id"));
-  const { data: assignment } = await supabase
-    .from("assignments")
-    .select("status")
-    .eq("id", assignmentId)
-    .single();
-  if (!assignment || assignment.status === "draft") {
-    throw new Error("This assignment is not available yet.");
+  const result = await submitStudentAssignment({
+    studentId: user.id,
+    studentEmail: user.email ?? null,
+    assignmentId: String(formData.get("assignment_id") ?? ""),
+    content: String(formData.get("content") ?? "") || null,
+    linkUrl: String(formData.get("link_url") ?? "") || null,
+    fileUrl: String(formData.get("file_url") ?? "") || null,
+  });
+
+  if ("error" in result) {
+    return { error: result.error };
   }
 
-  await supabase.from("assignment_submissions").insert({
-    assignment_id: assignmentId,
-    student_id: user.id,
-    content: String(formData.get("content") ?? "") || null,
-    link_url: String(formData.get("link_url") ?? "") || null,
-    file_url: String(formData.get("file_url") ?? "") || null,
-    status: "pending",
-  });
-  revalidatePath(`/assignments/${assignmentId}`);
+  revalidatePath(`/assignments/${String(formData.get("assignment_id"))}`);
+  redirect(`/assignments/${String(formData.get("assignment_id"))}?submitted=1`);
 }
