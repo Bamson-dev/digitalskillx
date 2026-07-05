@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { PlayCircle } from "lucide-react";
 import { resolveVideo } from "@/lib/video";
 import { normalizeMediaUrl } from "@/lib/media-url";
+import { CourseThumbnailPlaceholder } from "@/components/marketplace/course-thumbnail-placeholder";
 import { cn } from "@/lib/utils";
 
 function isDirectVideoUrl(url: string) {
@@ -92,9 +92,7 @@ export function CourseHeroMedia({
           onError={() => setImageFailed(true)}
         />
       ) : (
-        <div className="flex h-full items-center justify-center bg-neutral-100">
-          <PlayCircle className="h-16 w-16 text-neutral-300" aria-hidden />
-        </div>
+        <CourseThumbnailPlaceholder title={title} size="hero" className="absolute inset-0" />
       )}
     </div>
   );

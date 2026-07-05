@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { bootstrapRuntimeSecrets } from "@/lib/bootstrap-runtime-secrets";
+import { createAdminClientAsync } from "@/lib/supabase/admin";
 import { ORG, siteUrl } from "@/lib/org";
 import { MarketplaceNav, MarketplaceFooter } from "@/components/marketplace/marketplace-chrome";
 import { CourseLandingView } from "@/components/marketplace/course-landing-view";
@@ -102,6 +104,19 @@ export default async function CourseLandingPage({
     .neq("id", course.id)
     .limit(2);
 
+  let enrollmentCount: number | null = null;
+  try {
+    await bootstrapRuntimeSecrets();
+    const countAdmin = await createAdminClientAsync(supabase);
+    const { count } = await countAdmin
+      .from("enrollments")
+      .select("id", { count: "exact", head: true })
+      .eq("course_id", course.id);
+    enrollmentCount = count ?? null;
+  } catch {
+    enrollmentCount = null;
+  }
+
   const modules = [...(course.modules ?? [])].sort((a, b) => a.position - b.position);
   const lessonCount = modules.reduce((n, m) => n + (m.lessons?.length ?? 0), 0);
   const category = Array.isArray(course.category) ? course.category[0] : course.category;
@@ -128,6 +143,7 @@ export default async function CourseLandingPage({
           isLoggedIn={Boolean(user)}
           related={relatedRaw ?? []}
           lessonCount={lessonCount}
+          enrollmentCount={enrollmentCount}
         />
       </main>
 

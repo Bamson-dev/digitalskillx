@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { CheckCircle2, Users } from "lucide-react";
+import { CheckCircle2, MessageSquare, Star, Users } from "lucide-react";
 import { ORG } from "@/lib/org";
 import { useCurrency } from "@/components/providers/currency-provider";
 import { EnrollButton } from "@/components/marketplace/enroll-button";
@@ -28,9 +28,18 @@ type CourseData = {
   promo_video_url: string | null;
   modules: Module[];
   category_name?: string | null;
+  rating?: number | null;
 };
 
-const TABS = ["About", "Curriculum", "Instructor"] as const;
+const TABS = ["About", "Curriculum", "Instructor", "Reviews"] as const;
+
+function instructorInitials(name: string) {
+  return name
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((w) => w[0]?.toUpperCase() ?? "")
+    .join("");
+}
 
 export function CourseLandingView({
   course,
@@ -38,21 +47,26 @@ export function CourseLandingView({
   isLoggedIn,
   related,
   lessonCount,
+  enrollmentCount,
 }: {
   course: CourseData;
   isEnrolled: boolean;
   isLoggedIn: boolean;
   related: MarketplaceCourse[];
   lessonCount: number;
+  enrollmentCount?: number | null;
 }) {
   const [tab, setTab] = useState<(typeof TABS)[number]>("About");
   const { formatCoursePrice } = useCurrency();
   const outcomes = course.learning_outcomes ?? [];
   const modules = [...course.modules].sort((a, b) => a.position - b.position);
+  const instructorName = course.instructor_name ?? ORG.instructor;
+  const hasRating = typeof course.rating === "number" && course.rating > 0;
+  const showEnrollmentCount = typeof enrollmentCount === "number" && enrollmentCount > 0;
 
   const purchaseCard = (
     <div className="rounded-xl border border-surface-border bg-white p-5 shadow-card">
-      <p className="text-3xl font-bold text-neutral-900">
+      <p className="text-3xl font-bold text-brand">
         <PriceDisplay course={course} />
       </p>
       <p className="mt-1 text-xs text-neutral-500">One-time payment · Lifetime access</p>
@@ -66,25 +80,44 @@ export function CourseLandingView({
       />
       <ul className="mt-6 space-y-3 border-t border-surface-border pt-5 text-sm text-neutral-600">
         <li className="flex items-center gap-2">
-          <CheckCircle2 className="h-4 w-4 text-brand" />
+          <CheckCircle2 className="h-4 w-4 shrink-0 text-brand" />
           Full lifetime access
         </li>
         <li className="flex items-center gap-2">
-          <CheckCircle2 className="h-4 w-4 text-brand" />
+          <CheckCircle2 className="h-4 w-4 shrink-0 text-brand" />
           {lessonCount} on-demand lessons
         </li>
         <li className="flex items-center gap-2">
-          <CheckCircle2 className="h-4 w-4 text-brand" />
+          <CheckCircle2 className="h-4 w-4 shrink-0 text-brand" />
           Certificate of completion
         </li>
       </ul>
     </div>
   );
 
+  const metaRow = (
+    <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-neutral-500">
+      {hasRating ? (
+        <span className="inline-flex items-center gap-1 font-medium text-neutral-800">
+          <Star className="h-4 w-4 fill-brand text-brand" />
+          {course.rating!.toFixed(1)}
+        </span>
+      ) : null}
+      {showEnrollmentCount ? (
+        <span className="inline-flex items-center gap-1">
+          <Users className="h-4 w-4" />
+          {enrollmentCount!.toLocaleString()} enrolled
+        </span>
+      ) : null}
+      <span>{lessonCount} lessons</span>
+      <span>Self-paced</span>
+    </div>
+  );
+
   return (
     <>
-      {/* Mobile hero: video/image first */}
-      <section className="border-b border-surface-border lg:hidden">
+      {/* Mobile hero */}
+      <section className="overflow-x-hidden border-b border-surface-border lg:hidden">
         <CourseHeroMedia
           title={course.title}
           thumbnailUrl={course.thumbnail_url}
@@ -103,23 +136,17 @@ export function CourseLandingView({
           <p className="mt-3 text-base text-neutral-600">
             {course.short_description ?? course.description}
           </p>
-          <div className="mt-4 flex items-center gap-4 text-sm text-neutral-500">
-            <span className="inline-flex items-center gap-1">
-              <Users className="h-4 w-4" />
-              Self-paced
-            </span>
-            <span>{lessonCount} lessons</span>
-          </div>
+          {metaRow}
         </div>
       </section>
 
-      <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:py-10">
+      <div className="mx-auto max-w-6xl overflow-x-hidden px-4 py-8 sm:px-6 lg:py-10">
         <div className="grid gap-10 lg:grid-cols-[1fr_340px] lg:items-start">
           <div className="min-w-0">
             {/* Desktop hero text */}
             <div className="hidden lg:block">
               {course.category_name ? (
-                <p className="text-sm text-neutral-500">{course.category_name}</p>
+                <p className="text-sm font-medium text-neutral-500">{course.category_name}</p>
               ) : null}
               <h1 className="mt-2 font-display text-4xl font-bold leading-tight text-neutral-900">
                 {course.title}
@@ -127,33 +154,26 @@ export function CourseLandingView({
               <p className="mt-4 text-lg text-neutral-600">
                 {course.short_description ?? course.description}
               </p>
-              <div className="mt-4 flex items-center gap-4 text-sm text-neutral-500">
-                <span className="inline-flex items-center gap-1">
-                  <Users className="h-4 w-4" />
-                  Self-paced
-                </span>
-                <span>{lessonCount} lessons</span>
-              </div>
+              {metaRow}
             </div>
 
-            {/* Desktop video / product image */}
             <CourseHeroMedia
               title={course.title}
               thumbnailUrl={course.thumbnail_url}
               promoVideoUrl={course.promo_video_url}
-              className="mt-8 hidden lg:block rounded-xl border border-surface-border shadow-sm"
+              className="mt-8 hidden rounded-xl border border-surface-border shadow-sm lg:block"
             />
 
             {/* Tabs */}
             <div className="mt-8 border-b border-surface-border">
-              <div className="flex gap-6 overflow-x-auto">
+              <div className="flex gap-4 overflow-x-auto pb-px [-ms-overflow-style:none] [scrollbar-width:none] sm:gap-6 [&::-webkit-scrollbar]:hidden">
                 {TABS.map((t) => (
                   <button
                     key={t}
                     type="button"
                     onClick={() => setTab(t)}
                     className={cn(
-                      "shrink-0 border-b-2 pb-3 text-sm font-semibold transition",
+                      "shrink-0 border-b-2 pb-3 text-sm font-semibold transition min-h-[44px]",
                       tab === t
                         ? "border-brand text-neutral-900"
                         : "border-transparent text-neutral-500 hover:text-neutral-800",
@@ -191,28 +211,48 @@ export function CourseLandingView({
                 </div>
               ) : null}
 
-              {tab === "Curriculum" ? (
-                <CurriculumAccordion modules={modules} />
-              ) : null}
+              {tab === "Curriculum" ? <CurriculumAccordion modules={modules} /> : null}
 
               {tab === "Instructor" ? (
                 <div className="rounded-xl border border-surface-border bg-white p-6">
-                  <p className="font-display text-lg font-semibold text-neutral-900">
-                    {course.instructor_name ?? ORG.instructor}
-                  </p>
+                  <div className="flex items-start gap-4">
+                    <div
+                      className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-brand/10 font-display text-lg font-bold text-brand"
+                      aria-hidden
+                    >
+                      {instructorInitials(instructorName)}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="font-display text-lg font-semibold text-neutral-900">
+                        {instructorName}
+                      </p>
+                      <p className="mt-0.5 text-sm text-neutral-500">Course instructor</p>
+                    </div>
+                  </div>
                   {course.instructor_bio ? (
-                    <p className="mt-3 text-sm leading-relaxed text-neutral-600">
+                    <p className="mt-5 text-sm leading-relaxed text-neutral-600">
                       {course.instructor_bio}
                     </p>
                   ) : (
-                    <p className="mt-3 text-sm text-neutral-500">Experienced industry practitioner.</p>
+                    <p className="mt-5 text-sm text-neutral-500">
+                      Experienced industry practitioner.
+                    </p>
                   )}
+                </div>
+              ) : null}
+
+              {tab === "Reviews" ? (
+                <div className="rounded-xl border border-dashed border-surface-border bg-surface-muted px-6 py-14 text-center">
+                  <MessageSquare className="mx-auto h-10 w-10 text-neutral-300" aria-hidden />
+                  <p className="mt-4 font-medium text-neutral-800">No reviews yet</p>
+                  <p className="mt-2 text-sm text-neutral-500">
+                    Be the first to share your experience after completing this course.
+                  </p>
                 </div>
               ) : null}
             </div>
           </div>
 
-          {/* Desktop sticky purchase card */}
           <aside className="hidden lg:block">
             <div className="sticky top-20">{purchaseCard}</div>
           </aside>
@@ -221,8 +261,8 @@ export function CourseLandingView({
         {related.length > 0 ? (
           <section className="mt-4 border-t border-surface-border pt-10 pb-24 lg:pb-10">
             <h2 className="font-display text-xl font-bold text-neutral-900">Related courses</h2>
-            <div className="mt-6 grid gap-4 sm:grid-cols-2">
-              {related.slice(0, 2).map((c) => (
+            <div className="mt-6 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+              {related.map((c) => (
                 <CourseCard key={c.id} course={c} />
               ))}
             </div>
@@ -236,9 +276,9 @@ export function CourseLandingView({
       {!isEnrolled ? (
         <div className="fixed inset-x-0 bottom-0 z-40 border-t border-surface-border bg-white p-4 shadow-[0_-4px_20px_rgba(0,0,0,0.08)] lg:hidden">
           <div className="mx-auto flex max-w-lg items-center justify-between gap-4">
-            <div>
+            <div className="min-w-0">
               <p className="text-xs text-neutral-500">Total price</p>
-              <p className="text-xl font-bold text-neutral-900">{formatCoursePrice(course)}</p>
+              <p className="truncate text-xl font-bold text-brand">{formatCoursePrice(course)}</p>
             </div>
             <EnrollButton
               courseId={course.id}
