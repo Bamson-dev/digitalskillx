@@ -2,8 +2,9 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { BookOpen, Clock, Star } from "lucide-react";
+import { ArrowUpRight } from "lucide-react";
 import { useCurrency } from "@/components/providers/currency-provider";
+import { CourseThumbnailPlaceholder } from "@/components/marketplace/course-thumbnail-placeholder";
 import { cn } from "@/lib/utils";
 
 export type MarketplaceCourse = {
@@ -16,6 +17,7 @@ export type MarketplaceCourse = {
   price_usd: number;
   instructor_name?: string | null;
   category_name?: string | null;
+  rating?: number | null;
 };
 
 export function CourseCard({
@@ -30,86 +32,76 @@ export function CourseCard({
   const { formatCoursePrice } = useCurrency();
   const blurb = course.short_description ?? course.description ?? "Self-paced digital skills training.";
   const category = course.category_name ?? "Course";
+  const instructor = course.instructor_name ?? "DigitalSkillX";
 
   if (variant === "compact") {
     return (
       <Link
         href={`/course/${course.id}`}
         className={cn(
-          "flex gap-3 rounded-xl border border-surface-border bg-white p-3 transition hover:border-neutral-300 hover:shadow-card",
+          "group flex min-h-[44px] gap-4 border-b border-neutral-200 py-4 transition hover:border-neutral-400",
           className,
         )}
       >
-        <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-lg bg-neutral-100">
+        <div className="relative h-[72px] w-[108px] shrink-0 overflow-hidden bg-neutral-100">
           {course.thumbnail_url ? (
-            <Image src={course.thumbnail_url} alt="" fill className="object-cover" sizes="64px" />
+            <Image src={course.thumbnail_url} alt="" fill className="object-cover" sizes="108px" />
           ) : (
-            <div className="flex h-full items-center justify-center text-brand/50">
-              <BookOpen className="h-6 w-6" />
-            </div>
+            <CourseThumbnailPlaceholder title={course.title} size="compact" />
           )}
         </div>
         <div className="min-w-0 flex-1">
-          <p className="line-clamp-2 text-sm font-semibold text-neutral-900">{course.title}</p>
-          <p className="mt-1 text-sm font-bold text-neutral-900">{formatCoursePrice(course)}</p>
+          <p className="text-[11px] font-medium uppercase tracking-wider text-neutral-400">{instructor}</p>
+          <p className="mt-0.5 line-clamp-2 font-display text-[15px] font-semibold leading-snug text-neutral-900">
+            {course.title}
+          </p>
+          <p className="mt-2 text-[15px] font-semibold tabular-nums text-brand">{formatCoursePrice(course)}</p>
         </div>
       </Link>
     );
   }
 
   return (
-    <article
+    <Link
+      href={`/course/${course.id}`}
       className={cn(
-        "group flex flex-col overflow-hidden rounded-xl border border-surface-border bg-white transition hover:border-neutral-300 hover:shadow-card",
+        "group flex min-h-[44px] flex-col bg-white transition active:opacity-90",
         className,
       )}
     >
-      <div className="relative aspect-[16/10] overflow-hidden bg-neutral-100">
+      <div className="relative aspect-[4/3] overflow-hidden bg-neutral-100">
         {course.thumbnail_url ? (
           <Image
             src={course.thumbnail_url}
             alt={course.title}
             fill
-            className="object-cover transition duration-500 group-hover:scale-[1.02]"
+            className="object-cover transition duration-700 group-hover:scale-[1.03]"
             sizes="(max-width: 640px) 100vw, 33vw"
           />
         ) : (
-          <div className="flex h-full items-center justify-center text-brand/40">
-            <BookOpen className="h-12 w-12" />
-          </div>
+          <CourseThumbnailPlaceholder title={course.title} />
         )}
-        <span className="absolute left-3 top-3 rounded-md bg-white/95 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-neutral-700 shadow-sm">
+        <span className="absolute bottom-0 left-0 bg-neutral-900/80 px-2.5 py-1 text-[10px] font-medium uppercase tracking-widest text-white">
           {category}
         </span>
       </div>
-      <div className="flex flex-1 flex-col p-4 sm:p-5">
-        <div className="mb-2 flex items-center justify-between text-xs text-neutral-500">
-          <span className="inline-flex items-center gap-1 font-semibold text-neutral-800">
-            <Star className="h-3.5 w-3.5 fill-brand text-brand" />
-            4.9
-          </span>
-          <span className="inline-flex items-center gap-1">
-            <Clock className="h-3.5 w-3.5" />
-            Self-paced
-          </span>
-        </div>
-        <h3 className="line-clamp-2 font-display text-base font-bold text-neutral-900 sm:text-lg">
+      <div className="flex flex-1 flex-col border border-t-0 border-neutral-200 px-4 pb-5 pt-4">
+        <p className="text-[11px] font-medium uppercase tracking-wider text-neutral-400">{instructor}</p>
+        <h3 className="mt-1.5 line-clamp-2 font-display text-[17px] font-bold leading-[1.25] text-neutral-950 sm:text-lg">
           {course.title}
         </h3>
-        <p className="mt-2 line-clamp-2 flex-1 text-sm leading-relaxed text-neutral-500">
-          {blurb}
-        </p>
-        <div className="mt-4 flex items-center justify-between gap-2 border-t border-surface-border pt-4">
-          <span className="text-lg font-bold text-neutral-900">{formatCoursePrice(course)}</span>
-          <Link
-            href={`/course/${course.id}`}
-            className="inline-flex h-10 items-center justify-center rounded-lg bg-brand px-4 text-sm font-semibold text-white transition hover:bg-brand-700"
-          >
-            View Course
-          </Link>
+        <p className="mt-2.5 line-clamp-2 flex-1 text-[13px] leading-relaxed text-neutral-500">{blurb}</p>
+        <div className="mt-5 flex items-end justify-between gap-3">
+          <span className="font-display text-xl font-bold tabular-nums tracking-tight text-brand">
+            {formatCoursePrice(course)}
+          </span>
+          <span className="inline-flex items-center gap-0.5 text-xs font-semibold uppercase tracking-wider text-neutral-400 transition group-hover:text-brand">
+            View
+            <ArrowUpRight className="h-3.5 w-3.5" strokeWidth={2.5} />
+          </span>
         </div>
       </div>
-    </article>
+    </Link>
   );
 }
 
@@ -125,33 +117,26 @@ export function CourseCardHorizontal({
   return (
     <Link
       href={`/course/${course.id}`}
-      className="group flex flex-col overflow-hidden rounded-xl border border-surface-border bg-white sm:flex-row"
+      className="group flex min-h-[44px] flex-col border border-neutral-200 bg-white sm:flex-row"
     >
-      <div className="relative aspect-video w-full shrink-0 bg-neutral-100 sm:aspect-auto sm:w-48 md:w-56">
+      <div className="relative aspect-[4/3] w-full shrink-0 bg-neutral-100 sm:aspect-auto sm:h-auto sm:w-52">
         {course.thumbnail_url ? (
-          <Image src={course.thumbnail_url} alt="" fill className="object-cover" sizes="224px" />
+          <Image src={course.thumbnail_url} alt="" fill className="object-cover" sizes="208px" />
         ) : (
-          <div className="flex h-full min-h-[120px] items-center justify-center text-brand/40">
-            <BookOpen className="h-10 w-10" />
-          </div>
+          <CourseThumbnailPlaceholder title={course.title} />
         )}
         {badge ? (
-          <span className="absolute left-3 top-3 rounded-full bg-brand/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-brand">
+          <span className="absolute left-0 top-0 bg-brand px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-white">
             {badge}
           </span>
         ) : null}
       </div>
-      <div className="flex flex-1 flex-col justify-center p-4 sm:p-5">
-        <h3 className="font-display text-lg font-bold text-neutral-900 group-hover:text-brand">
-          {course.title}
-        </h3>
+      <div className="flex flex-1 flex-col justify-center px-5 py-5">
+        <h3 className="font-display text-xl font-bold text-neutral-950">{course.title}</h3>
         <p className="mt-2 line-clamp-2 text-sm text-neutral-500">
           {course.short_description ?? course.description}
         </p>
-        <div className="mt-4 flex items-center gap-2">
-          <Star className="h-4 w-4 fill-brand text-brand" />
-          <span className="text-sm font-bold text-neutral-900">{formatCoursePrice(course)}</span>
-        </div>
+        <p className="mt-4 font-display text-lg font-bold tabular-nums text-brand">{formatCoursePrice(course)}</p>
       </div>
     </Link>
   );

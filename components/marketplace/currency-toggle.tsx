@@ -14,7 +14,7 @@ export function CurrencyToggle({ className }: { className?: string }) {
   return (
     <div
       className={cn(
-        "inline-flex items-center rounded-lg border border-neutral-200 bg-neutral-100 p-0.5",
+        "inline-flex items-center border border-neutral-200 p-0.5",
         className,
       )}
       role="group"

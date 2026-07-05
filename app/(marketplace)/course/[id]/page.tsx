@@ -6,7 +6,12 @@ import { getAdminSupabase } from "@/lib/admin-supabase";
 import { bootstrapRuntimeSecrets } from "@/lib/bootstrap-runtime-secrets";
 import { createAdminClientAsync } from "@/lib/supabase/admin";
 import { syncStudentCourseAccess } from "@/lib/admin-student-onboarding";
-import { fetchPublishedCourseById, fetchPublishedCourses, type CatalogCourse, type LandingCourse } from "@/lib/published-courses";
+import {
+  fetchPublishedCourseById,
+  fetchPublishedCourses,
+  type CatalogCourse,
+  type LandingCourse,
+} from "@/lib/published-courses";
 import { isCourseFree } from "@/lib/currency";
 import { isSuccessfulGuestPurchase } from "@/lib/guest-checkout";
 import { ORG, siteUrl } from "@/lib/org";
@@ -22,10 +27,12 @@ export async function generateMetadata({
 }: {
   params: { id: string };
 }): Promise<Metadata> {
-  const course = await fetchPublishedCourseById<{ title: string; short_description: string | null; description: string | null; thumbnail_url: string | null }>(
-    params.id,
-    "title, short_description, description, thumbnail_url",
-  );
+  const course = await fetchPublishedCourseById<{
+    title: string;
+    short_description: string | null;
+    description: string | null;
+    thumbnail_url: string | null;
+  }>(params.id, "title, short_description, description, thumbnail_url");
   if (!course) return { title: "Course" };
 
   const title = course.title;
@@ -89,8 +96,7 @@ export default async function CourseLandingPage({
 
   const paymentRef = searchParams.ref?.trim() ?? "";
   const paidPurchaseComplete =
-    Boolean(paymentRef) &&
-    (await isSuccessfulGuestPurchase(paymentRef, course.id));
+    Boolean(paymentRef) && (await isSuccessfulGuestPurchase(paymentRef, course.id));
 
   let isEnrolled = paidPurchaseComplete;
   if (user) {
@@ -110,9 +116,24 @@ export default async function CourseLandingPage({
   }
 
   const relatedAll = await fetchPublishedCourses<CatalogCourse>(
-    "id, title, description, short_description, thumbnail_url, price_ngn, price_usd, instructor_name",
+    "id, title, description, short_description, thumbnail_url, price_ngn, price_usd, instructor_name, category:course_categories(name)",
   );
-  const relatedRaw = relatedAll.filter((c) => c.id !== course.id).slice(0, 2);
+  const relatedRaw = relatedAll
+    .filter((c) => c.id !== course.id)
+    .map((c) => ({ ...c, category_name: c.category?.name ?? null }));
+
+  let enrollmentCount: number | null = null;
+  try {
+    await bootstrapRuntimeSecrets();
+    const countAdmin = await createAdminClientAsync(supabase);
+    const { count } = await countAdmin
+      .from("enrollments")
+      .select("id", { count: "exact", head: true })
+      .eq("course_id", course.id);
+    enrollmentCount = count ?? null;
+  } catch {
+    enrollmentCount = null;
+  }
 
   const modules = [...(course.modules ?? [])].sort((a, b) => a.position - b.position);
   const lessonCount = modules.reduce((n, m) => n + (m.lessons?.length ?? 0), 0);
@@ -125,7 +146,7 @@ export default async function CourseLandingPage({
   const purchaseComplete = !isEnrolled && (paidPurchaseComplete || freeEnrollComplete);
 
   return (
-    <div className="flex min-h-screen flex-col bg-white text-neutral-900">
+    <div className="flex min-h-screen flex-col overflow-x-hidden bg-white text-neutral-800">
       <MarketplaceNav user={profile} />
 
       <main className="flex-1">
@@ -148,6 +169,7 @@ export default async function CourseLandingPage({
           isLoggedIn={Boolean(profile?.email)}
           related={relatedRaw ?? []}
           lessonCount={lessonCount}
+          enrollmentCount={enrollmentCount}
           purchaseComplete={purchaseComplete}
         />
       </main>

@@ -1,0 +1,15 @@
+@import url("https://api.fontshare.com/v2/css?f[]=cabinet-grotesk@500,700,800&f[]=general-sans@400,500,600&display=swap");
+
+.marketplace {
+  --mp-display: "Cabinet Grotesk", var(--font-display), system-ui, sans-serif;
+  --mp-sans: "General Sans", var(--font-sans), system-ui, sans-serif;
+  font-family: var(--mp-sans);
+}
+
+.marketplace .font-display,
+.marketplace h1,
+.marketplace h2,
+.marketplace h3 {
+  font-family: var(--mp-display);
+  letter-spacing: -0.02em;
+}
