@@ -85,7 +85,10 @@ export default async function CourseLandingPage({
   if (!course) notFound();
 
   let isEnrolled = false;
-  if (user) {
+  if (user && profile?.email && profile.role === "student") {
+    const { studentHasCourseAccess } = await import("@/lib/student-enrollments");
+    isEnrolled = await studentHasCourseAccess(user.id, course.id);
+  } else if (user) {
     const { data: e } = await supabase
       .from("enrollments")
       .select("id")
