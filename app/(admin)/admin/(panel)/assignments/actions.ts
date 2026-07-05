@@ -7,7 +7,7 @@ import { requireAdmin } from "@/lib/auth";
 import { notify } from "@/lib/notifications";
 import { sendEmail } from "@/lib/email";
 import { emailTemplates } from "@/lib/email/templates";
-import { notifyAssignmentPublished } from "@/lib/assignment-publish";
+import { createDraftAssignment, publishDraftAssignment } from "@/lib/assignments-admin";
 import { logAudit } from "@/lib/audit";
 import type { SubmissionStatus } from "@/types/database";
 
@@ -17,37 +17,24 @@ function siteUrl() {
 
 export async function createAssignment(formData: FormData) {
   await requireAdmin();
-  const supabase = createClient();
+  const admin = createAdminClient();
 
-  const courseId = String(formData.get("course_id") ?? "").trim();
-  const moduleIdRaw = String(formData.get("module_id") ?? "").trim();
-  const moduleId = moduleIdRaw || null;
-
-  if (!courseId) {
-    throw new Error("Course is required.");
-  }
-
-  if (moduleId) {
-    const { data: moduleRow } = await supabase
-      .from("modules")
-      .select("course_id")
-      .eq("id", moduleId)
-      .single();
-    if (moduleRow?.course_id !== courseId) {
-      throw new Error("Selected module does not belong to the chosen course.");
-    }
-  }
-
+  const dueRaw = String(formData.get("due_date") ?? "").trim();
   const types = formData.getAll("submission_types").map(String);
-  await supabase.from("assignments").insert({
-    course_id: courseId,
-    module_id: moduleId,
+
+  const result = await createDraftAssignment(admin, {
+    courseId: String(formData.get("course_id") ?? ""),
+    moduleId: String(formData.get("module_id") ?? "").trim() || null,
     title: String(formData.get("title") ?? "Assignment"),
     instructions: String(formData.get("instructions") ?? "") || null,
-    due_date: formData.get("due_date") ? new Date(String(formData.get("due_date"))).toISOString() : null,
-    submission_types_allowed: types.length ? types : ["file", "text"],
-    status: "draft",
+    dueDate: dueRaw ? new Date(dueRaw).toISOString() : null,
+    submissionTypes: types.length ? types : ["file", "text"],
   });
+
+  if ("error" in result) {
+    throw new Error(result.error);
+  }
+
   revalidatePath("/admin/assignments");
 }
 
@@ -55,33 +42,20 @@ export async function publishAssignment(formData: FormData) {
   await requireAdmin();
   const admin = createAdminClient();
   const id = String(formData.get("id") ?? "").trim();
-  if (!id) return;
 
-  const { data: assignment } = await admin
-    .from("assignments")
-    .update({
-      status: "published",
-      published_at: new Date().toISOString(),
-    })
-    .eq("id", id)
-    .eq("status", "draft")
-    .select("id, title, instructions, due_date, course_id")
-    .maybeSingle();
-
-  if (!assignment) {
+  const result = await publishDraftAssignment(admin, id);
+  if ("error" in result) {
     revalidatePath("/admin/assignments");
     return;
   }
 
-  const delivery = await notifyAssignmentPublished(assignment);
-
   await logAudit({
     action: "assignment_published",
     metadata: {
-      assignmentId: assignment.id,
-      courseId: assignment.course_id,
-      notified: delivery.notified,
-      emailsSent: delivery.emailsSent,
+      assignmentId: result.assignment.id,
+      courseId: result.assignment.course_id,
+      notified: result.delivery.notified,
+      emailsSent: result.delivery.emailsSent,
     },
   });
 
