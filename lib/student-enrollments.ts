@@ -1,4 +1,6 @@
 import "server-only";
+import { bootstrapRuntimeSecrets } from "@/lib/bootstrap-runtime-secrets";
+import { createAdminClientAsync } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { courseCompletionPct } from "@/lib/progress";
 
@@ -18,11 +20,23 @@ export type StudentCourseRow = {
   } | null;
 };
 
-/** Load enrolled courses for the signed-in student (two-step query avoids silent embed drops). */
-export async function getStudentEnrolledCourses(studentId: string): Promise<StudentCourseRow[]> {
+async function assertOwnStudentAccess(studentId: string) {
   const supabase = createClient();
+  await supabase.auth.getSession();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error("Not authenticated.");
+  if (user.id !== studentId) throw new Error("Forbidden.");
+}
 
-  const { data: enrollments, error: enrollError } = await supabase
+/** Load enrolled courses for the signed-in student (service role after auth check). */
+export async function getStudentEnrolledCourses(studentId: string): Promise<StudentCourseRow[]> {
+  await assertOwnStudentAccess(studentId);
+  await bootstrapRuntimeSecrets();
+  const admin = await createAdminClientAsync(createClient());
+
+  const { data: enrollments, error: enrollError } = await admin
     .from("enrollments")
     .select("id, course_id, enrolled_at")
     .eq("student_id", studentId)
@@ -32,7 +46,7 @@ export async function getStudentEnrolledCourses(studentId: string): Promise<Stud
   if (!enrollments?.length) return [];
 
   const courseIds = [...new Set(enrollments.map((row) => row.course_id))];
-  const { data: courses, error: courseError } = await supabase
+  const { data: courses, error: courseError } = await admin
     .from("courses")
     .select("id, title, description, short_description, thumbnail_url, price_ngn, price_usd, instructor_name")
     .in("id", courseIds);

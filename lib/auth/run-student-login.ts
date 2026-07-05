@@ -1,6 +1,7 @@
 import "server-only";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import { createAdminClientAsync } from "@/lib/supabase/admin";
+import { reconcileOrphanEnrollmentsForEmail } from "@/lib/admin-student-onboarding";
 import type { Database } from "@/types/database";
 
 export type LoginSession = {
@@ -59,6 +60,11 @@ export async function runStudentLogin(params: {
       .maybeSingle();
     if (verifyError) throw new Error(verifyError.message);
     if (!verified) throw new Error("Profile was not created.");
+
+    await reconcileOrphanEnrollmentsForEmail(admin, {
+      authUserId: data.user.id,
+      email,
+    });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Could not load your profile.";
     return { ok: false, error: message };

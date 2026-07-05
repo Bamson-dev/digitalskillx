@@ -20,6 +20,7 @@ import {
   grantCourseAccessToStudent,
   isValidStudentEmail,
   parseStudentCsv,
+  resolveCanonicalStudentId,
   resolveStudentIdByEmail,
   sendStudentWelcomeEmail,
   verifyStudentCourseAccess,
@@ -590,6 +591,17 @@ export async function enrollStudent(formData: FormData) {
     fullName: profile.full_name ?? "there",
     email: profile.email,
   });
+
+  const canonicalStudentId = await resolveCanonicalStudentId(admin, {
+    studentId,
+    email: profile.email,
+  });
+  const { enrolledCourseIds } = await verifyStudentCourseAccess(admin, canonicalStudentId, [
+    courseId,
+  ]);
+  if (enrolledCourseIds.length === 0) {
+    throw new Error("Course enrollment did not save for this student.");
+  }
 
   if (newlyEnrolled.length === 0) {
     redirect(`/admin/students/${studentId}?already_enrolled=1`);

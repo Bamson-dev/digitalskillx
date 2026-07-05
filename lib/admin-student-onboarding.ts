@@ -2,6 +2,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { runAutomations } from "@/lib/automation";
 import type { Database } from "@/types/database";
+import { loadAuthEmailIndex } from "@/lib/admin-student-overview";
 import { sendWelcomeEmailIfNeeded } from "@/lib/system-email-triggers";
 import { studentFirstName } from "@/lib/student-name";
 
@@ -248,6 +249,62 @@ export async function ensureImportedStudentProfile(
   if (error) throw new Error(error.message);
 }
 
+/** Auth user id for this email — may differ from a stale profiles.id shown in admin. */
+export async function resolveCanonicalStudentId(
+  admin: SupabaseClient<Database>,
+  params: { studentId: string; email: string },
+) {
+  const normalizedEmail = params.email.trim().toLowerCase();
+  const authIndex = await loadAuthEmailIndex(admin);
+  const authId = authIndex.get(normalizedEmail)?.id;
+  if (authId) return authId;
+  return params.studentId;
+}
+
+/** Move enrollments off duplicate profile rows that share the login email. */
+export async function reconcileOrphanEnrollmentsForEmail(
+  admin: SupabaseClient<Database>,
+  params: { authUserId: string; email: string },
+) {
+  const normalizedEmail = params.email.trim().toLowerCase();
+  const { data: duplicateProfiles, error: profileError } = await admin
+    .from("profiles")
+    .select("id")
+    .ilike("email", normalizedEmail)
+    .neq("id", params.authUserId);
+
+  if (profileError) throw new Error(profileError.message);
+
+  for (const orphan of duplicateProfiles ?? []) {
+    const { data: orphanEnrollments, error: enrollError } = await admin
+      .from("enrollments")
+      .select("id, course_id")
+      .eq("student_id", orphan.id);
+
+    if (enrollError) throw new Error(enrollError.message);
+
+    for (const enrollment of orphanEnrollments ?? []) {
+      const { data: existing } = await admin
+        .from("enrollments")
+        .select("id")
+        .eq("student_id", params.authUserId)
+        .eq("course_id", enrollment.course_id)
+        .maybeSingle();
+
+      if (existing) {
+        await admin.from("enrollments").delete().eq("id", enrollment.id);
+        continue;
+      }
+
+      const { error: moveError } = await admin
+        .from("enrollments")
+        .update({ student_id: params.authUserId })
+        .eq("id", enrollment.id);
+      if (moveError) throw new Error(moveError.message);
+    }
+  }
+}
+
 export async function grantCourseAccessToStudent(
   admin: SupabaseClient<Database>,
   params: {
@@ -262,6 +319,15 @@ export async function grantCourseAccessToStudent(
   const { sendCourseEnrollmentEmail } = await import("@/lib/system-email-triggers");
   const { notify } = await import("@/lib/notifications");
 
+  const canonicalStudentId = await resolveCanonicalStudentId(admin, {
+    studentId: params.studentId,
+    email: params.email,
+  });
+  await reconcileOrphanEnrollmentsForEmail(admin, {
+    authUserId: canonicalStudentId,
+    email: params.email,
+  });
+
   const uniqueIds = [...new Set(params.courseIds.filter(Boolean))];
   const newlyEnrolled: string[] = [];
 
@@ -269,14 +335,14 @@ export async function grantCourseAccessToStudent(
     const { data: existing } = await admin
       .from("enrollments")
       .select("id")
-      .eq("student_id", params.studentId)
+      .eq("student_id", canonicalStudentId)
       .eq("course_id", courseId)
       .maybeSingle();
 
     if (existing) continue;
 
     const { error } = await admin.from("enrollments").insert({
-      student_id: params.studentId,
+      student_id: canonicalStudentId,
       course_id: courseId,
       enrolled_by: params.enrolledBy,
       source: "admin",
@@ -284,7 +350,7 @@ export async function grantCourseAccessToStudent(
     if (error) throw new Error(error.message);
 
     newlyEnrolled.push(courseId);
-    await runAutomations("course_enrolled", { studentId: params.studentId, courseId });
+    await runAutomations("course_enrolled", { studentId: canonicalStudentId, courseId });
 
     const { data: course } = await admin
       .from("courses")
@@ -294,7 +360,7 @@ export async function grantCourseAccessToStudent(
 
     if (course?.title) {
       await notify({
-        studentId: params.studentId,
+        studentId: canonicalStudentId,
         type: "enrollment",
         title: "New course",
         message: `You've been enrolled in "${course.title}".`,
@@ -304,7 +370,7 @@ export async function grantCourseAccessToStudent(
 
     if (params.sendEnrollmentEmail !== false) {
       await sendCourseEnrollmentEmail({
-        studentId: params.studentId,
+        studentId: canonicalStudentId,
         courseId,
         fullName: params.fullName,
         email: params.email,
