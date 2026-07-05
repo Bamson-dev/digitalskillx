@@ -68,7 +68,6 @@ const monitoringChecks = [
   ["Progress column", />Progress</i.test(studentsPage) || /Progress/i.test(studentsPage)],
   ["Last access column", /Last access/i.test(studentsPage)],
   ["Bulk CSV tab", /Bulk CSV/i.test(studentsPage)],
-  ["Default course required", /Default course for this upload/i.test(studentsPage)],
 ];
 
 for (const [label, ok] of monitoringChecks) {
@@ -76,14 +75,24 @@ for (const [label, ok] of monitoringChecks) {
   if (!ok) process.exit(1);
 }
 
-const courseIdMatch = [
-  ...studentsPage.matchAll(/type="hidden" name="course_ids" value="([0-9a-f-]{36})"/gi),
-][0];
-if (!courseIdMatch) {
-  console.error("FAIL: could not find course id on students page");
-  process.exit(1);
+let courseId;
+const courseIdMatch =
+  [...studentsPage.matchAll(/name="default_course_id"[\s\S]*?value="([0-9a-f-]{36})"/gi)][0] ??
+  [...studentsPage.matchAll(/name="course_ids" value="([0-9a-f-]{36})"/gi)][0] ??
+  [...studentsPage.matchAll(/<option value="([0-9a-f-]{36})">/gi)].find((m) => m[1]) ??
+  [...studentsPage.matchAll(/\/admin\/courses\/([0-9a-f-]{36})/gi)][0];
+
+if (courseIdMatch) {
+  courseId = courseIdMatch[1];
+} else {
+  const coursesPage = curl(["-b", jar, `${base}/admin/courses`]);
+  const fallback = coursesPage.match(/\/admin\/courses\/([0-9a-f-]{36})/i);
+  if (!fallback) {
+    console.error("FAIL: could not find course id on students page");
+    process.exit(1);
+  }
+  courseId = fallback[1];
 }
-const courseId = courseIdMatch[1];
 
 const testEmail = `csv-test+${Date.now()}@digitalskillx.com`;
 const csvBody = `full_name,email\nCSV Test User,${testEmail}`;

@@ -311,7 +311,11 @@ export async function bulkUploadStudents(
         sendEnrollmentEmail: !params.sendWelcome,
       });
 
-      const { enrolledCourseIds } = await verifyStudentCourseAccess(admin, params.studentId, [
+      const canonicalStudentId = await resolveCanonicalStudentId(admin, {
+        studentId: params.studentId,
+        email: params.email,
+      });
+      const { enrolledCourseIds } = await verifyStudentCourseAccess(admin, canonicalStudentId, [
         params.courseId,
       ]);
       if (enrolledCourseIds.length === 0) {
@@ -320,7 +324,7 @@ export async function bulkUploadStudents(
 
       if (params.sendWelcome) {
         await sendStudentWelcomeEmail({
-          studentId: params.studentId,
+          studentId: canonicalStudentId,
           fullName: params.fullName,
           email: params.email,
           password: params.sendWelcome.password,

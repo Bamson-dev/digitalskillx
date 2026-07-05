@@ -24,6 +24,7 @@ import {
   createLesson,
   updateLesson,
   deleteLesson,
+  deleteLessons,
   reorderLessons,
 } from "@/app/(admin)/admin/(panel)/courses/actions";
 
@@ -106,14 +107,49 @@ function ModuleBlock({
   module: ModuleWithLessons;
   lessonAttachments: Record<string, AttachmentDisplay[]>;
 }) {
+  const router = useRouter();
   const initialLessons = [...(module.lessons ?? [])].sort((a, b) => a.position - b.position);
   const [lessons, setLessons] = useState(initialLessons);
   const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
+  const [bulkError, setBulkError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
   useEffect(() => {
     setLessons([...(module.lessons ?? [])].sort((a, b) => a.position - b.position));
+    setSelectedIds(new Set());
   }, [module.id, module.lessons]);
+
+  function toggleLessonSelection(lessonId: string, checked: boolean) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (checked) next.add(lessonId);
+      else next.delete(lessonId);
+      return next;
+    });
+  }
+
+  function toggleSelectAll(checked: boolean) {
+    setSelectedIds(checked ? new Set(lessons.map((lesson) => lesson.id)) : new Set());
+  }
+
+  function deleteSelectedLessons() {
+    const ids = [...selectedIds];
+    if (ids.length === 0) return;
+    const label = ids.length === 1 ? "1 lesson" : `${ids.length} lessons`;
+    if (!confirm(`Delete ${label} from "${module.title}"? This cannot be undone.`)) return;
+
+    setBulkError(null);
+    startTransition(async () => {
+      try {
+        await deleteLessons(courseId, ids);
+        setSelectedIds(new Set());
+        router.refresh();
+      } catch (err) {
+        setBulkError(err instanceof Error ? err.message : "Could not delete lessons.");
+      }
+    });
+  }
 
   function persistOrder(nextLessons: Lesson[]) {
     setLessons(nextLessons);
@@ -172,6 +208,34 @@ function ModuleBlock({
         <DeleteModuleButton courseId={courseId} moduleId={module.id} moduleTitle={module.title} />
       </div>
 
+      {lessons.length > 0 ? (
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-app bg-surface-muted/20 px-3 py-2 text-xs text-muted">
+          <label className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={selectedIds.size > 0 && selectedIds.size === lessons.length}
+              onChange={(event) => toggleSelectAll(event.target.checked)}
+              aria-label="Select all lessons in module"
+            />
+            Select all
+          </label>
+          {selectedIds.size > 0 ? (
+            <Button
+              size="sm"
+              variant="danger"
+              type="button"
+              disabled={isPending}
+              onClick={deleteSelectedLessons}
+            >
+              <Trash2 className="h-4 w-4" /> Delete selected ({selectedIds.size})
+            </Button>
+          ) : (
+            <span>Use checkboxes or the trash icon to remove imported videos.</span>
+          )}
+        </div>
+      ) : null}
+      {bulkError ? <p className="px-3 py-2 text-xs text-red-600">{bulkError}</p> : null}
+
       <div className="divide-y divide-[rgb(var(--border))]">
         {lessons.map((lesson, index) => (
           <LessonRow
@@ -184,6 +248,8 @@ function ModuleBlock({
             isLast={index === lessons.length - 1}
             isDragging={draggingId === lesson.id}
             isPending={isPending}
+            selected={selectedIds.has(lesson.id)}
+            onToggleSelect={(checked) => toggleLessonSelection(lesson.id, checked)}
             onMoveUp={() => moveLesson(index, index - 1)}
             onMoveDown={() => moveLesson(index, index + 1)}
             onDragStart={(event) => handleDragStart(event, lesson.id)}
@@ -222,6 +288,8 @@ function LessonRow({
   isLast,
   isDragging,
   isPending,
+  selected,
+  onToggleSelect,
   onMoveUp,
   onMoveDown,
   onDragStart,
@@ -237,6 +305,8 @@ function LessonRow({
   isLast: boolean;
   isDragging: boolean;
   isPending: boolean;
+  selected: boolean;
+  onToggleSelect: (checked: boolean) => void;
   onMoveUp: () => void;
   onMoveDown: () => void;
   onDragStart: (event: React.DragEvent) => void;
@@ -250,9 +320,17 @@ function LessonRow({
     <div
       onDragOver={onDragOver}
       onDrop={onDrop}
-      className={`${isDragging ? "bg-brand-50/80" : ""} ${isPending ? "opacity-80" : ""}`}
+      className={`${isDragging ? "bg-brand-50/80" : ""} ${isPending ? "opacity-80" : ""} ${selected ? "bg-red-50/40" : ""}`}
     >
       <div className="flex items-center gap-1 px-2 py-2">
+        <input
+          type="checkbox"
+          checked={selected}
+          onChange={(event) => onToggleSelect(event.target.checked)}
+          className="h-4 w-4 shrink-0 rounded border-neutral-300 text-brand focus:ring-brand"
+          aria-label={`Select ${lesson.title}`}
+        />
+
         <div
           draggable
           onDragStart={onDragStart}
@@ -294,6 +372,11 @@ function LessonRow({
               {lesson.lesson_type}
             </span>
             <span className="truncate">{lesson.title}</span>
+            {lesson.youtube_video_id ? (
+              <span className="shrink-0 rounded bg-red-50 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-red-700">
+                YouTube
+              </span>
+            ) : null}
             {attachments.length > 0 ? (
               <span className="shrink-0 rounded-full bg-brand-50 px-2 py-0.5 text-[11px] font-medium text-brand">
                 {attachments.length} file{attachments.length === 1 ? "" : "s"}
@@ -302,6 +385,13 @@ function LessonRow({
           </span>
           <ChevronDown className={`h-4 w-4 shrink-0 transition-transform ${open ? "rotate-180" : ""}`} />
         </button>
+
+        <DeleteLessonButton
+          courseId={courseId}
+          lessonId={lesson.id}
+          lessonTitle={lesson.title}
+          variant="icon"
+        />
       </div>
 
       {open ? (
@@ -380,11 +470,6 @@ function LessonRow({
           </div>
         </form>
       ) : null}
-      {open ? (
-        <div className="flex justify-end border-t border-app bg-card px-3 py-2">
-          <DeleteLessonButton courseId={courseId} lessonId={lesson.id} lessonTitle={lesson.title} />
-        </div>
-      ) : null}
     </div>
   );
 }
@@ -440,10 +525,12 @@ function DeleteLessonButton({
   courseId,
   lessonId,
   lessonTitle,
+  variant = "button",
 }: {
   courseId: string;
   lessonId: string;
   lessonTitle: string;
+  variant?: "button" | "icon";
 }) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
@@ -465,6 +552,23 @@ function DeleteLessonButton({
         setError(err instanceof Error ? err.message : "Could not delete lesson.");
       }
     });
+  }
+
+  if (variant === "icon") {
+    return (
+      <div className="relative z-10 flex shrink-0 flex-col items-end gap-1">
+        <button
+          type="button"
+          disabled={isPending}
+          onClick={onDelete}
+          aria-label={`Delete ${lessonTitle}`}
+          className="rounded p-1.5 text-red-600 hover:bg-red-50 disabled:opacity-50"
+        >
+          <Trash2 className="h-4 w-4" />
+        </button>
+        {error ? <p className="max-w-[12rem] text-right text-xs text-red-600">{error}</p> : null}
+      </div>
+    );
   }
 
   return (

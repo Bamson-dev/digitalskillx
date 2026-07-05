@@ -305,6 +305,23 @@ export async function deleteLesson(formData: FormData) {
   revalidatePath(`/admin/courses/${courseId}`);
 }
 
+export async function deleteLessons(courseId: string, lessonIds: string[]) {
+  const supabase = await getAdminSupabase();
+  const ids = [...new Set(lessonIds.map((id) => id.trim()).filter(Boolean))];
+  if (!courseId.trim() || ids.length === 0) throw new Error("No lessons selected.");
+
+  const { error } = await supabase.from("lessons").delete().in("id", ids);
+  if (error) throw new Error(error.message);
+
+  await logAudit({
+    action: "lessons_bulk_deleted",
+    targetType: "course",
+    targetId: courseId,
+    metadata: { lesson_ids: ids, count: ids.length },
+  });
+  revalidatePath(`/admin/courses/${courseId}`);
+}
+
 export async function reorderLessons(
   courseId: string,
   moduleId: string,

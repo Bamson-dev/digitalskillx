@@ -54,6 +54,8 @@ export async function POST(request: NextRequest) {
     url?: string;
     moduleId?: string;
     source?: LessonImportSource;
+    preview?: boolean;
+    videoIds?: string[];
   };
 
   if (!body.courseId || !body.url) {
@@ -86,6 +88,33 @@ export async function POST(request: NextRequest) {
 
   if (lessons.length === 0) {
     return NextResponse.json({ error: "No lessons found to import." }, { status: 404 });
+  }
+
+  if (body.preview) {
+    return NextResponse.json({
+      preview: true,
+      videos: lessons.map((lesson) => ({
+        youtubeVideoId: lesson.youtubeVideoId,
+        title: lesson.title,
+        durationSeconds: lesson.durationSeconds,
+        contentUrl: lesson.contentUrl,
+      })),
+      total: lessons.length,
+    });
+  }
+
+  const selectedIds = body.videoIds?.filter(Boolean);
+  const lessonsToImport =
+    selectedIds && selectedIds.length > 0
+      ? lessons.filter((lesson) =>
+          lesson.youtubeVideoId
+            ? selectedIds.includes(lesson.youtubeVideoId)
+            : selectedIds.includes(lesson.dedupeKey),
+        )
+      : lessons;
+
+  if (lessonsToImport.length === 0) {
+    return NextResponse.json({ error: "No videos selected for import." }, { status: 400 });
   }
 
   let moduleId = body.moduleId;
@@ -131,7 +160,7 @@ export async function POST(request: NextRequest) {
   let skipped = 0;
   let pos = startPos ?? 0;
 
-  for (const lesson of lessons) {
+  for (const lesson of lessonsToImport) {
     const isDupe = lesson.youtubeVideoId
       ? existingYoutube.has(lesson.youtubeVideoId)
       : existingUrls.has(lesson.contentUrl);
@@ -163,8 +192,8 @@ export async function POST(request: NextRequest) {
     action: "lesson_imported",
     targetType: "course",
     targetId: body.courseId,
-    metadata: { source, imported, skipped, total: lessons.length },
+    metadata: { source, imported, skipped, total: lessonsToImport.length },
   });
 
-  return NextResponse.json({ imported, skipped, total: lessons.length });
+  return NextResponse.json({ imported, skipped, total: lessonsToImport.length });
 }
