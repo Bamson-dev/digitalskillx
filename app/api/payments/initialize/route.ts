@@ -174,9 +174,12 @@ export async function POST(request: NextRequest) {
     let checkoutEmail = profile?.email?.trim().toLowerCase() ?? "";
     let checkoutName = profile?.full_name?.trim() ?? "";
 
-    if (!studentIdForEnrollment) {
-      checkoutEmail = body.email?.trim().toLowerCase() ?? "";
-      checkoutName = body.fullName?.trim() ?? "";
+    if (!checkoutEmail && body.email?.trim()) {
+      checkoutEmail = body.email.trim().toLowerCase();
+      checkoutName = body.fullName?.trim() ?? checkoutName;
+    }
+
+    if (!studentIdForEnrollment || !profile?.email) {
       if (!isValidStudentEmail(checkoutEmail)) {
         return jsonError("Enter your email address before checkout.", 400);
       }
@@ -188,6 +191,7 @@ export async function POST(request: NextRequest) {
     }
 
     const reference = generateReference();
+    const storeCheckoutDetails = !studentIdForEnrollment || !profile?.email;
 
     const { error: txError } = await admin.from("transactions").insert({
       student_id: studentIdForEnrollment,
@@ -196,14 +200,14 @@ export async function POST(request: NextRequest) {
       currency: "NGN",
       reference,
       status: "pending",
-      ...(studentIdForEnrollment
-        ? {}
-        : {
+      ...(storeCheckoutDetails
+        ? {
             paystack_data: {
               checkout_email: checkoutEmail,
               checkout_full_name: checkoutName,
             },
-          }),
+          }
+        : {}),
     });
 
     if (txError) {

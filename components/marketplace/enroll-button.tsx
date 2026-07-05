@@ -13,12 +13,15 @@ type Props = {
   priceNgn: number;
   priceUsd: number;
   isEnrolled: boolean;
+  /** True when the visitor has a usable student profile (email on file). */
   isLoggedIn: boolean;
   label?: string;
   className?: string;
   size?: "default" | "bar";
   hidden?: boolean;
 };
+
+const CHECKOUT_TIMEOUT_MS = 45_000;
 
 function UsdComingSoonButton({
   className,
@@ -62,7 +65,7 @@ function CheckoutDetailsModal({
   const [fullName, setFullName] = useState("");
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4">
       <div
         role="dialog"
         aria-labelledby="checkout-details-title"
@@ -160,6 +163,10 @@ export function EnrollButton({
   async function startCheckout(guest?: { email: string; fullName: string }) {
     setLoading(true);
     setError(null);
+    let redirecting = false;
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), CHECKOUT_TIMEOUT_MS);
+
     try {
       const payload: {
         courseId: string;
@@ -179,6 +186,7 @@ export function EnrollButton({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
+        signal: controller.signal,
       });
 
       const text = await res.text();
@@ -207,17 +215,25 @@ export function EnrollButton({
       if (!res.ok) throw new Error(json.error ?? "Payment could not start");
       if (json.enrolled) {
         setShowCheckoutModal(false);
-        router.push(`/course/${courseId}?enrolled=1`);
+        redirecting = true;
+        window.location.assign(`/course/${courseId}?enrolled=1`);
         return;
       }
       if (json.authorizationUrl) {
-        window.location.href = json.authorizationUrl;
+        redirecting = true;
+        window.location.assign(json.authorizationUrl);
         return;
       }
       throw new Error("Unexpected payment response");
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Something went wrong");
-      setLoading(false);
+      if (e instanceof Error && e.name === "AbortError") {
+        setError("Checkout is taking too long. Please try again.");
+      } else {
+        setError(e instanceof Error ? e.message : "Something went wrong");
+      }
+    } finally {
+      window.clearTimeout(timeoutId);
+      if (!redirecting) setLoading(false);
     }
   }
 

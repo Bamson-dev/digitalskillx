@@ -135,7 +135,7 @@ export default async function CourseLandingPage({
             category_name: category?.name ?? null,
           }}
           isEnrolled={isEnrolled}
-          isLoggedIn={Boolean(user)}
+          isLoggedIn={Boolean(profile?.email)}
           related={relatedRaw ?? []}
           lessonCount={lessonCount}
           purchaseComplete={purchaseComplete}

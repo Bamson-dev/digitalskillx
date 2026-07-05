@@ -218,7 +218,7 @@ export default async function HomePage() {
                         priceNgn={featured.price_ngn}
                         priceUsd={featured.price_usd}
                         isEnrolled={featuredEnrolled}
-                        isLoggedIn={Boolean(user)}
+                        isLoggedIn={Boolean(profile?.email)}
                         className="sm:min-w-[160px]"
                       />
                     </div>
