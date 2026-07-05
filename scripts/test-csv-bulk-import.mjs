@@ -76,11 +76,9 @@ for (const [label, ok] of monitoringChecks) {
 }
 
 let courseId;
-const courseIdMatch =
-  [...studentsPage.matchAll(/name="default_course_id"[\s\S]*?value="([0-9a-f-]{36})"/gi)][0] ??
-  [...studentsPage.matchAll(/name="course_ids" value="([0-9a-f-]{36})"/gi)][0] ??
-  [...studentsPage.matchAll(/<option value="([0-9a-f-]{36})">/gi)].find((m) => m[1]) ??
-  [...studentsPage.matchAll(/\/admin\/courses\/([0-9a-f-]{36})/gi)][0];
+const courseIdMatch = [
+  ...studentsPage.matchAll(/name="default_course_id"[\s\S]*?<option value="([0-9a-f-]{36})">/gi),
+][0];
 
 if (courseIdMatch) {
   courseId = courseIdMatch[1];
@@ -97,35 +95,33 @@ if (courseIdMatch) {
 const testEmail = `csv-test+${Date.now()}@digitalskillx.com`;
 const csvBody = `full_name,email\nCSV Test User,${testEmail}`;
 
-const actionIds = [...new Set([...studentsPage.matchAll(/"\$ACTION_ID_([0-9a-f]+)"/gi)].map((m) => m[1]))];
 let importOk = false;
 let lastResponse = "";
 
-for (const actionId of actionIds) {
-  const res = curl([
-    "-b",
-    jar,
-    "-X",
-    "POST",
-    `${base}/admin/students`,
-    "-H",
-    "Accept: text/x-component",
-    "-H",
-    `Next-Action: ${actionId}`,
-    "-F",
-    `default_course_id=${courseId}`,
-    "-F",
-    `csv=${csvBody}`,
-  ]);
-  lastResponse = res;
-  if (/Bulk upload finished/i.test(res) && /1 created/i.test(res)) {
-    importOk = true;
-    break;
+const res = curl([
+  "-b",
+  jar,
+  "-X",
+  "POST",
+  `${base}/api/admin/bulk-students`,
+  "-F",
+  `default_course_id=${courseId}`,
+  "-F",
+  `csv=${csvBody}`,
+]);
+lastResponse = res;
+
+try {
+  const json = JSON.parse(res);
+  importOk =
+    /Bulk upload finished/i.test(json.message ?? "") &&
+    (json.bulkSummary?.failed?.length ?? 0) === 0 &&
+    ((json.bulkSummary?.created ?? 0) > 0 || (json.bulkSummary?.enrolled ?? 0) > 0);
+  if (!importOk && json.error) {
+    console.error("API error:", json.error);
   }
-  if (/Bulk upload finished/i.test(res) && /0 failed/i.test(res) && /created/i.test(res)) {
-    importOk = true;
-    break;
-  }
+} catch {
+  importOk = /Bulk upload finished/i.test(res) && /0 failed/i.test(res);
 }
 
 if (!importOk) {

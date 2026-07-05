@@ -23,10 +23,21 @@ import {
   deleteModule,
   createLesson,
   updateLesson,
-  deleteLesson,
-  deleteLessons,
   reorderLessons,
 } from "@/app/(admin)/admin/(panel)/courses/actions";
+
+async function deleteLessonsViaApi(courseId: string, lessonIds: string[]) {
+  const response = await fetch("/api/admin/lessons", {
+    method: "DELETE",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ courseId, lessonIds }),
+  });
+  const json = (await response.json()) as { error?: string; deleted?: number };
+  if (!response.ok) {
+    throw new Error(json.error ?? "Could not delete lessons.");
+  }
+}
 
 type ModuleWithLessons = Module & { lessons: Lesson[] };
 
@@ -79,8 +90,11 @@ function CurriculumCard({
   lessonAttachments: Record<string, AttachmentDisplay[]>;
 }) {
   return (
-    <Card>
-      <CardHeader title="Curriculum" description="Drag lessons by the grip handle, or use the arrows to reorder." />
+    <Card id="course-curriculum">
+      <CardHeader
+        title="Curriculum"
+        description="Remove imported videos with the trash icon, or select several and use Delete selected."
+      />
       <div className="space-y-4">
         {modules.map((m) => (
           <ModuleBlock key={m.id} courseId={courseId} module={m} lessonAttachments={lessonAttachments} />
@@ -142,7 +156,7 @@ function ModuleBlock({
     setBulkError(null);
     startTransition(async () => {
       try {
-        await deleteLessons(courseId, ids);
+        await deleteLessonsViaApi(courseId, ids);
         setSelectedIds(new Set());
         router.refresh();
       } catch (err) {
@@ -230,7 +244,7 @@ function ModuleBlock({
               <Trash2 className="h-4 w-4" /> Delete selected ({selectedIds.size})
             </Button>
           ) : (
-            <span>Use checkboxes or the trash icon to remove imported videos.</span>
+            <span>Check lessons, then delete with the red trash icon.</span>
           )}
         </div>
       ) : null}
@@ -543,10 +557,7 @@ function DeleteLessonButton({
     setError(null);
     startTransition(async () => {
       try {
-        const formData = new FormData();
-        formData.set("id", lessonId);
-        formData.set("course_id", courseId);
-        await deleteLesson(formData);
+        await deleteLessonsViaApi(courseId, [lessonId]);
         router.refresh();
       } catch (err) {
         setError(err instanceof Error ? err.message : "Could not delete lesson.");
@@ -562,9 +573,11 @@ function DeleteLessonButton({
           disabled={isPending}
           onClick={onDelete}
           aria-label={`Delete ${lessonTitle}`}
-          className="rounded p-1.5 text-red-600 hover:bg-red-50 disabled:opacity-50"
+          title={`Delete "${lessonTitle}"`}
+          className="inline-flex items-center gap-1 rounded px-2 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50 disabled:opacity-50"
         >
           <Trash2 className="h-4 w-4" />
+          <span className="hidden sm:inline">Delete</span>
         </button>
         {error ? <p className="max-w-[12rem] text-right text-xs text-red-600">{error}</p> : null}
       </div>

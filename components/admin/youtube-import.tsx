@@ -113,6 +113,7 @@ export function YoutubeImport({
       setPreviewVideos(null);
       setSelectedVideoIds(new Set());
       router.refresh();
+      document.getElementById("course-curriculum")?.scrollIntoView({ behavior: "smooth", block: "start" });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Import failed");
     } finally {
@@ -232,7 +233,8 @@ export function YoutubeImport({
       {result ? <p className="mt-3 rounded-lg bg-green-50 px-3 py-2 text-sm text-green-700">{result}</p> : null}
       {error ? <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p> : null}
       <p className="mt-3 text-xs text-muted">
-        After import, remove unwanted videos from the Curriculum section using the trash icon or bulk delete checkboxes.
+        After import, the Curriculum section below lists every video. Use the red Delete button or
+        select multiple lessons and click Delete selected.
       </p>
     </Card>
   );

@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useFormState } from "react-dom";
-import { Search, UserPlus, Upload } from "lucide-react";
+import { Search, UserPlus, Upload, Loader2 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Input, Label } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
@@ -13,7 +13,6 @@ import { Button } from "@/components/ui/button";
 import { SubmitButton } from "@/components/auth/submit-button";
 import {
   createStudent,
-  bulkUploadStudents,
   type StudentActionState,
 } from "@/app/(admin)/admin/(panel)/students/actions";
 
@@ -159,8 +158,34 @@ export function StudentCreate({
 }) {
   const [tab, setTab] = useState<"single" | "csv">("single");
   const [createState, createAction] = useFormState(createStudent, initial);
-  const [csvState, csvAction] = useFormState(bulkUploadStudents, initial);
+  const [csvState, setCsvState] = useState<StudentActionState>(initial);
+  const [csvLoading, setCsvLoading] = useState(false);
   const state = tab === "single" ? createState : csvState;
+
+  async function handleCsvUpload(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setCsvLoading(true);
+    setCsvState(initial);
+
+    try {
+      const formData = new FormData(event.currentTarget);
+      const response = await fetch("/api/admin/bulk-students", {
+        method: "POST",
+        credentials: "include",
+        body: formData,
+      });
+      const json = (await response.json()) as StudentActionState;
+      if (!response.ok) {
+        setCsvState({ error: json.error ?? "Bulk upload failed." });
+        return;
+      }
+      setCsvState(json);
+    } catch {
+      setCsvState({ error: "Bulk upload failed. Check your connection and try again." });
+    } finally {
+      setCsvLoading(false);
+    }
+  }
 
   return (
     <Card>
@@ -194,8 +219,7 @@ export function StudentCreate({
         </div>
       ) : null}
 
-      {tab === "single" ? (
-        <form action={createAction} className="space-y-4">
+      <form action={createAction} className={`space-y-4 ${tab === "single" ? "" : "hidden"}`}>
           <div className="grid gap-3 sm:grid-cols-2">
             <div>
               <Label htmlFor="full_name">Full name</Label>
@@ -227,8 +251,12 @@ export function StudentCreate({
             <UserPlus className="h-4 w-4" /> Create / enroll student
           </SubmitButton>
         </form>
-      ) : (
-        <form action={csvAction} className="space-y-4" encType="multipart/form-data">
+
+      <form
+        onSubmit={handleCsvUpload}
+        className={`space-y-4 ${tab === "csv" ? "" : "hidden"}`}
+        encType="multipart/form-data"
+      >
           <div className="grid gap-3 lg:grid-cols-2">
             <div>
               <Label htmlFor="csv_file">CSV file</Label>
@@ -271,11 +299,15 @@ export function StudentCreate({
             </p>
           </div>
 
-          <SubmitButton pendingText="Uploading…">
-            <Upload className="h-4 w-4" /> Import students
-          </SubmitButton>
+          <Button type="submit" disabled={csvLoading || !serviceRoleReady}>
+            {csvLoading ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Upload className="h-4 w-4" />
+            )}{" "}
+            {csvLoading ? "Uploading…" : "Import students"}
+          </Button>
         </form>
-      )}
 
       <div className="mt-4 space-y-3">
         <Feedback state={state} />
