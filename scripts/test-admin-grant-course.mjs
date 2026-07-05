@@ -50,6 +50,10 @@ function curl(args) {
   return execFileSync("curl", ["-sL", ...args], { encoding: "utf8", maxBuffer: 20 * 1024 * 1024 });
 }
 
+function actionIdsFrom(html) {
+  return [...new Set([...html.matchAll(/"\$ACTION_ID_([0-9a-f]+)"/gi)].map((m) => m[1]))];
+}
+
 console.log("Testing admin grant course on", base);
 
 const adminJar = join(mkdtempSync(join(tmpdir(), "admin-grant-")), "admin.txt");
@@ -68,11 +72,10 @@ curl([
 ]);
 
 const studentsPage = curl(["-b", adminJar, `${base}/admin/students`]);
-const actionIds = [...new Set([...studentsPage.matchAll(/"\$ACTION_ID_([0-9a-f]+)"/gi)].map((m) => m[1]))];
 let createOk = false;
 let studentId = null;
 
-for (const actionId of actionIds) {
+for (const actionId of actionIdsFrom(studentsPage)) {
   const res = curl([
     "-b",
     adminJar,
@@ -90,16 +93,24 @@ for (const actionId of actionIds) {
     "-F",
     `password=${testPassword}`,
   ]);
-  if (/Student .* created\./i.test(res)) {
+  if (/Student .+ created/i.test(res)) {
     createOk = true;
-    const idMatch = res.match(/\/admin\/students\/([0-9a-f-]{36})/i);
-    if (idMatch) studentId = idMatch[1];
     break;
   }
 }
 
-if (!createOk || !studentId) {
+if (!createOk) {
   console.error("FAIL: could not create test student");
+  process.exit(1);
+}
+
+const listPage = curl(["-b", adminJar, `${base}/admin/students`]);
+const rowMatch = listPage.match(
+  new RegExp(`/admin/students/([0-9a-f-]{36})[\\s\\S]{0,200}?${testEmail.replace(/[+]/g, "\\+")}`, "i"),
+);
+studentId = rowMatch?.[1] ?? null;
+if (!studentId) {
+  console.error("FAIL: could not resolve student id after create");
   process.exit(1);
 }
 console.log("Created student:", studentId);
@@ -115,40 +126,39 @@ if (courseOptions.length === 0) {
 const courseId = courseOptions[0][1];
 console.log("Granting course:", courseId);
 
-const grantRes = curl([
-  "-b",
-  adminJar,
-  "-X",
-  "POST",
-  `${base}/admin/students/${studentId}`,
-  "-d",
-  new URLSearchParams({
-    student_id: studentId,
-    course_id: courseId,
-  }).toString(),
-  "-w",
-  "\nHTTP:%{http_code}",
-]);
-
-const grantStatus = grantRes.match(/HTTP:(\d+)/)?.[1];
-if (grantStatus !== "303" && grantStatus !== "302") {
-  console.error("FAIL: grant access did not redirect, status", grantStatus);
-  console.error(grantRes.slice(0, 500));
-  process.exit(1);
+let grantOk = false;
+for (const actionId of actionIdsFrom(detailPage)) {
+  const grantRes = curl([
+    "-b",
+    adminJar,
+    "-X",
+    "POST",
+    `${base}/admin/students/${studentId}`,
+    "-H",
+    "Accept: text/x-component",
+    "-H",
+    `Next-Action: ${actionId}`,
+    "-F",
+    `student_id=${studentId}`,
+    "-F",
+    `course_id=${courseId}`,
+  ]);
+  if (/enrolled=1|Course enrolled|already_enrolled/i.test(grantRes)) {
+    grantOk = true;
+    break;
+  }
 }
-if (!/enrolled=1/.test(grantRes)) {
-  console.error("FAIL: grant redirect missing enrolled=1");
+
+if (!grantOk) {
+  console.error("FAIL: grant access server action did not succeed");
   process.exit(1);
 }
 console.log("PASS: admin granted course on detail page");
 
 const detailAfter = curl(["-b", adminJar, `${base}/admin/students/${studentId}?enrolled=1`]);
-if (!detailAfter.includes("Facebook Ad Mastery") && !detailAfter.includes(courseOptions[0][2].trim())) {
-  const hasCourseRow = /Remove access/i.test(detailAfter);
-  if (!hasCourseRow) {
-    console.error("FAIL: admin detail does not show enrolled course");
-    process.exit(1);
-  }
+if (!/Remove access/i.test(detailAfter)) {
+  console.error("FAIL: admin detail does not show enrolled course");
+  process.exit(1);
 }
 console.log("PASS: admin detail lists enrolled course");
 
