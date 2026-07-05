@@ -235,11 +235,13 @@ export async function sendCertificateIssuedEmail(params: {
     brandColor: settings.primary_color,
   });
 
+  const verifyUrl = `${baseUrl}/verify/${params.certificateNumber}`;
   const pdf = await generateCertificatePdfBuffer({
-    studentName: params.fullName,
+    recipientName: params.fullName,
     courseTitle: params.courseTitle,
     certificateNumber: params.certificateNumber,
     issuedAt: params.issuedAt,
+    verifyUrl,
   });
 
   return sendSystemEmail({
