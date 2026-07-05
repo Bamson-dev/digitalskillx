@@ -18,10 +18,10 @@ export default async function AssignmentPage({ params }: { params: { id: string 
 
   const { data: assignment } = await supabase
     .from("assignments")
-    .select("id, title, instructions, due_date, submission_types_allowed")
+    .select("id, title, instructions, due_date, submission_types_allowed, status")
     .eq("id", params.id)
     .single();
-  if (!assignment) notFound();
+  if (!assignment || assignment.status === "draft") notFound();
 
   const { data: submissions } = await supabase
     .from("assignment_submissions")

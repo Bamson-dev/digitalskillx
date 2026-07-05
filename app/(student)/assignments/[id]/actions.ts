@@ -11,6 +11,15 @@ export async function submitAssignment(formData: FormData) {
   if (!user) throw new Error("Not authenticated");
 
   const assignmentId = String(formData.get("assignment_id"));
+  const { data: assignment } = await supabase
+    .from("assignments")
+    .select("status")
+    .eq("id", assignmentId)
+    .single();
+  if (!assignment || assignment.status === "draft") {
+    throw new Error("This assignment is not available yet.");
+  }
+
   await supabase.from("assignment_submissions").insert({
     assignment_id: assignmentId,
     student_id: user.id,
