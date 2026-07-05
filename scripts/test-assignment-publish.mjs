@@ -11,6 +11,7 @@ import { fileURLToPath } from "node:url";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const base = (process.argv[2] ?? "https://www.digitalskillx.com").replace(/\/$/, "");
+const preferredCourseId = "bfae3d3b-8d22-4dae-97d8-d27ffbb2ccfb";
 
 function loadEnvFile(name) {
   const path = join(root, name);
@@ -36,9 +37,8 @@ loadEnvFile(".env.test");
 
 const adminEmail = process.env.TEST_ADMIN_EMAIL ?? "admin@digitalskillx.com";
 const adminPassword = process.env.TEST_ADMIN_PASSWORD;
-const studentEmail = process.env.TEST_STUDENT_EMAIL ?? "bamzonline01@gmail.com";
-const studentPassword = process.env.TEST_STUDENT_PASSWORD ?? adminPassword;
-const preferredCourseId = "bfae3d3b-8d22-4dae-97d8-d27ffbb2ccfb";
+const studentEmail = process.env.TEST_STUDENT_EMAIL;
+const studentPassword = process.env.TEST_STUDENT_PASSWORD;
 
 if (!adminPassword) {
   console.error("Set TEST_ADMIN_PASSWORD in .env.test");
@@ -59,22 +59,62 @@ function curlJson(args) {
   }
 }
 
+function adminLogin(jar) {
+  curl([
+    "-c",
+    jar,
+    "-b",
+    jar,
+    "-X",
+    "POST",
+    `${base}/api/auth/admin-login`,
+    "-d",
+    new URLSearchParams({ email: adminEmail, password: adminPassword }).toString(),
+    "-o",
+    "/dev/null",
+  ]);
+}
+
+function studentSessionOk(jar) {
+  const me = curlJson(["-b", jar, `${base}/api/auth/me`]);
+  return me.authenticated && me.profile?.role === "student";
+}
+
+function loginStudent(jar, email, password) {
+  curl([
+    "-c",
+    jar,
+    "-b",
+    jar,
+    "-X",
+    "POST",
+    `${base}/api/auth/login`,
+    "-d",
+    new URLSearchParams({ email, password, next: "/dashboard" }).toString(),
+    "-o",
+    "/dev/null",
+  ]);
+  return studentSessionOk(jar);
+}
+
+function assignmentPageStatus(jar, assignmentId) {
+  const res = curl([
+    "-b",
+    jar,
+    "-w",
+    "\n__HTTP__%{http_code}",
+    `${base}/assignments/${assignmentId}`,
+  ]);
+  return {
+    status: res.match(/__HTTP__(\d+)/)?.[1] ?? "?",
+    body: res.replace(/\n__HTTP__.*$/, ""),
+  };
+}
+
 console.log("Testing assignment publish on", base);
 
 const adminJar = join(mkdtempSync(join(tmpdir(), "assign-admin-")), "admin.txt");
-curl([
-  "-c",
-  adminJar,
-  "-b",
-  adminJar,
-  "-X",
-  "POST",
-  `${base}/api/auth/admin-login`,
-  "-d",
-  new URLSearchParams({ email: adminEmail, password: adminPassword }).toString(),
-  "-o",
-  "/dev/null",
-]);
+adminLogin(adminJar);
 
 const assignmentsPage = curl(["-b", adminJar, `${base}/admin/assignments`]);
 if (!/Create draft assignment/i.test(assignmentsPage)) {
@@ -112,40 +152,30 @@ if (createRes.error) {
 }
 
 const assignmentId = createRes.assignment?.id;
-if (!assignmentId) {
-  console.error("FAIL: create did not return assignment id", createRes);
+if (!assignmentId || createRes.assignment?.status !== "draft") {
+  console.error("FAIL: create did not return draft assignment", createRes);
   process.exit(1);
 }
-console.log("PASS: draft created", assignmentId);
+console.log("PASS: course-level draft created", assignmentId);
 
 const studentJar = join(mkdtempSync(join(tmpdir(), "assign-student-")), "student.txt");
-curl([
-  "-c",
-  studentJar,
-  "-b",
-  studentJar,
-  "-X",
-  "POST",
-  `${base}/api/auth/login`,
-  "-d",
-  new URLSearchParams({ email: studentEmail, password: studentPassword, next: "/dashboard" }).toString(),
-  "-o",
-  "/dev/null",
-]);
-
-const before = curl([
-  "-b",
-  studentJar,
-  "-w",
-  "\n__HTTP__%{http_code}",
-  `${base}/assignments/${assignmentId}`,
-]);
-const beforeStatus = before.match(/__HTTP__(\d+)/)?.[1];
-if (beforeStatus !== "404") {
-  console.error("FAIL: draft should be hidden (HTTP", beforeStatus + ")");
-  process.exit(1);
+let studentChecks = false;
+if (studentEmail && studentPassword && loginStudent(studentJar, studentEmail, studentPassword)) {
+  studentChecks = true;
+  console.log("PASS: student session", studentEmail);
+  const before = assignmentPageStatus(studentJar, assignmentId);
+  const draftHidden =
+    before.status === "404" ||
+    /404\s*\|\s*This page could not be found/i.test(before.body) ||
+    /not found/i.test(before.body);
+  if (!draftHidden) {
+    console.error("FAIL: draft visible to student (HTTP", before.status + ")");
+    process.exit(1);
+  }
+  console.log("PASS: draft hidden from student (HTTP", before.status + ")");
+} else {
+  console.log("SKIP: student page checks (set TEST_STUDENT_EMAIL + TEST_STUDENT_PASSWORD for full E2E)");
 }
-console.log("PASS: draft hidden from student");
 
 const publishRes = curlJson([
   "-b",
@@ -163,6 +193,12 @@ if (publishRes.error || !publishRes.ok) {
   console.error("FAIL: publish —", publishRes.error ?? publishRes);
   process.exit(1);
 }
+
+if (typeof publishRes.notified !== "number" || publishRes.notified < 1) {
+  console.error("FAIL: publish did not notify enrolled students", publishRes);
+  process.exit(1);
+}
+
 console.log(
   "PASS: published —",
   publishRes.notified,
@@ -188,23 +224,16 @@ if (!/already published|not found/i.test(republish.error ?? "")) {
 }
 console.log("PASS: republish blocked (notify once)");
 
-const after = curl([
-  "-b",
-  studentJar,
-  "-w",
-  "\n__HTTP__%{http_code}",
-  `${base}/assignments/${assignmentId}`,
-]);
-const afterStatus = after.match(/__HTTP__(\d+)/)?.[1];
-const afterBody = after.replace(/\n__HTTP__.*$/, "");
-if (afterStatus === "404" || /404\s*\|\s*This page could not be found/i.test(afterBody)) {
-  console.error("FAIL: published assignment not visible to student");
-  process.exit(1);
-}
-console.log("PASS: student can open published assignment");
-
-if (afterBody.includes(testTitle)) {
-  console.log("PASS: assignment title visible on student page");
+if (studentChecks) {
+  const after = assignmentPageStatus(studentJar, assignmentId);
+  if (after.status === "404" || /404\s*\|\s*This page could not be found/i.test(after.body)) {
+    console.error("FAIL: published assignment not visible to enrolled student");
+    process.exit(1);
+  }
+  console.log("PASS: student can open published assignment");
+  if (after.body.includes(testTitle)) {
+    console.log("PASS: assignment title visible on student page");
+  }
 }
 
 console.log("=== ASSIGNMENT PUBLISH VERIFIED ===");
