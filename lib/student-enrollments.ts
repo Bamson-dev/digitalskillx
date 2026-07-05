@@ -31,6 +31,40 @@ async function assertOwnStudentAccess(studentId: string) {
   if (user.id !== studentId) throw new Error("Forbidden.");
 }
 
+/** Sync orphan enrollments, then check access to one course (service role after auth check). */
+export async function checkStudentCourseEnrollment(
+  studentId: string,
+  courseId: string,
+): Promise<{ enrolled: boolean; enrollmentId: string | null; targetStudentId: string }> {
+  await assertOwnStudentAccess(studentId);
+  await bootstrapRuntimeSecrets();
+  const admin = await createAdminClientAsync(createClient());
+
+  const { data: profile } = await admin
+    .from("profiles")
+    .select("email")
+    .eq("id", studentId)
+    .maybeSingle();
+
+  const targetStudentId = await syncStudentCourseAccess(admin, {
+    authUserId: studentId,
+    profileEmail: profile?.email,
+  });
+
+  const { data: enrollment } = await admin
+    .from("enrollments")
+    .select("id")
+    .eq("student_id", targetStudentId)
+    .eq("course_id", courseId)
+    .maybeSingle();
+
+  return {
+    enrolled: Boolean(enrollment),
+    enrollmentId: enrollment?.id ?? null,
+    targetStudentId,
+  };
+}
+
 /** Load enrolled courses for the signed-in student (service role after auth check). */
 export async function getStudentEnrolledCourses(studentId: string): Promise<StudentCourseRow[]> {
   await assertOwnStudentAccess(studentId);
@@ -83,49 +117,4 @@ export async function getStudentEnrolledCoursesWithProgress(studentId: string) {
       pct: row.course ? await courseCompletionPct(studentId, row.course.id) : 0,
     })),
   );
-}
-
-/** Consolidate admin-granted enrollments onto the signed-in account (idempotent). */
-export async function ensureStudentCourseAccessSynced(
-  studentId: string,
-  profileEmail: string | null,
-) {
-  await assertOwnStudentAccess(studentId);
-  await bootstrapRuntimeSecrets();
-  const admin = await createAdminClientAsync(createClient());
-  await syncStudentCourseAccess(admin, {
-    authUserId: studentId,
-    profileEmail,
-  });
-}
-
-/** Whether the signed-in student may open the course player (/courses/:id). */
-export async function studentHasCourseAccess(
-  studentId: string,
-  courseId: string,
-): Promise<boolean> {
-  await assertOwnStudentAccess(studentId);
-  await bootstrapRuntimeSecrets();
-  const admin = await createAdminClientAsync(createClient());
-
-  const { data: profile } = await admin
-    .from("profiles")
-    .select("email")
-    .eq("id", studentId)
-    .maybeSingle();
-
-  const targetStudentId = await syncStudentCourseAccess(admin, {
-    authUserId: studentId,
-    profileEmail: profile?.email ?? null,
-  });
-
-  const { data: enrollment, error } = await admin
-    .from("enrollments")
-    .select("id")
-    .eq("student_id", targetStudentId)
-    .eq("course_id", courseId)
-    .maybeSingle();
-
-  if (error) throw new Error(error.message);
-  return Boolean(enrollment);
 }

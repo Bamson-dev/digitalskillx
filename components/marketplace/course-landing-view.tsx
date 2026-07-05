@@ -53,33 +53,33 @@ export function CourseLandingView({
   const outcomes = course.learning_outcomes ?? [];
   const modules = [...course.modules].sort((a, b) => a.position - b.position);
 
+  const hasCourseAccess = isEnrolled || purchaseComplete;
+
   const purchaseCard = (
     <div className="rounded-xl border border-surface-border bg-white p-5 shadow-card">
       <p className="text-3xl font-bold text-neutral-900">
         <PriceDisplay course={course} />
       </p>
       <p className="mt-1 text-xs text-neutral-500">One-time payment · Lifetime access</p>
-      {purchaseComplete && !isEnrolled ? (
+      {purchaseComplete && !isLoggedIn ? (
         <div className="mt-5 rounded-lg border border-green-200 bg-green-50 p-4 text-sm text-green-900">
           <p className="font-semibold">Enrollment complete</p>
           <p className="mt-1 text-green-800">
             Check your email for login details, then sign in to start learning.
           </p>
-          {!isLoggedIn ? (
-            <Link
-              href="/login"
-              className="mt-3 inline-flex h-11 w-full items-center justify-center rounded-lg bg-brand text-sm font-bold text-white hover:bg-brand-700"
-            >
-              Log in
-            </Link>
-          ) : null}
+          <Link
+            href={`/login?next=${encodeURIComponent(`/courses/${course.id}`)}`}
+            className="mt-3 inline-flex h-11 w-full items-center justify-center rounded-lg bg-brand text-sm font-bold text-white hover:bg-brand-700"
+          >
+            Log in to start learning
+          </Link>
         </div>
       ) : (
         <EnrollButton
           courseId={course.id}
           priceNgn={course.price_ngn}
           priceUsd={course.price_usd}
-          isEnrolled={isEnrolled}
+          isEnrolled={hasCourseAccess}
           isLoggedIn={isLoggedIn}
           className="mt-5"
         />
@@ -253,7 +253,7 @@ export function CourseLandingView({
       </div>
 
       {/* Mobile sticky purchase bar */}
-      {!isEnrolled && !purchaseComplete ? (
+      {!hasCourseAccess ? (
         <div className="fixed inset-x-0 bottom-0 z-40 border-t border-surface-border bg-white p-4 shadow-[0_-4px_20px_rgba(0,0,0,0.08)] lg:hidden">
           <div className="mx-auto flex max-w-lg items-center justify-between gap-4">
             <div>
@@ -264,7 +264,7 @@ export function CourseLandingView({
               courseId={course.id}
               priceNgn={course.price_ngn}
               priceUsd={course.price_usd}
-              isEnrolled={isEnrolled}
+              isEnrolled={hasCourseAccess}
               isLoggedIn={isLoggedIn}
               size="bar"
             />
@@ -272,15 +272,24 @@ export function CourseLandingView({
         </div>
       ) : (
         <div className="fixed inset-x-0 bottom-0 z-40 border-t border-surface-border bg-white p-4 lg:hidden">
-          <EnrollButton
-            courseId={course.id}
-            priceNgn={course.price_ngn}
-            priceUsd={course.price_usd}
-            isEnrolled={isEnrolled}
-            isLoggedIn={isLoggedIn}
-            label="Continue Learning"
-            className="mx-auto max-w-lg"
-          />
+          {purchaseComplete && !isLoggedIn ? (
+            <Link
+              href={`/login?next=${encodeURIComponent(`/courses/${course.id}`)}`}
+              className="mx-auto flex h-12 max-w-lg items-center justify-center rounded-lg bg-brand text-sm font-bold text-white hover:bg-brand-700"
+            >
+              Log in to start learning
+            </Link>
+          ) : (
+            <EnrollButton
+              courseId={course.id}
+              priceNgn={course.price_ngn}
+              priceUsd={course.price_usd}
+              isEnrolled={hasCourseAccess}
+              isLoggedIn={isLoggedIn}
+              label="Continue Learning"
+              className="mx-auto max-w-lg"
+            />
+          )}
         </div>
       )}
     </>

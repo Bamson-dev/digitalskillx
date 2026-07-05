@@ -2,10 +2,9 @@ import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, PlayCircle, Lock } from "lucide-react";
-import { createClient } from "@/lib/supabase/server";
 import { requireStudent } from "@/lib/auth";
 import { getStudentViewSupabase } from "@/lib/student-view-supabase";
-import { studentHasCourseAccess } from "@/lib/student-enrollments";
+import { checkStudentCourseEnrollment } from "@/lib/student-enrollments";
 import { Card } from "@/components/ui/card";
 import { CourseResources } from "@/components/student/course-resources";
 
@@ -20,18 +19,12 @@ export default async function CourseDetailPage({
   const isAdminPreview = profile.role === "admin";
   const supabase = await getStudentViewSupabase(profile);
 
-  const hasAccess = isAdminPreview || (await studentHasCourseAccess(profile.id, params.id));
+  const { enrolled, enrollmentId } = await checkStudentCourseEnrollment(profile.id, params.id);
+  const enrollment = enrolled ? { id: enrollmentId! } : null;
 
-  if (!hasAccess) {
+  if (!enrolled && !isAdminPreview) {
     redirect(`/course/${params.id}`);
   }
-
-  const { data: enrollment } = await supabase
-    .from("enrollments")
-    .select("id")
-    .eq("student_id", profile.id)
-    .eq("course_id", params.id)
-    .maybeSingle();
 
   const { data: course } = await supabase
     .from("courses")

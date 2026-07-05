@@ -3,6 +3,9 @@ import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getAdminSupabase } from "@/lib/admin-supabase";
+import { bootstrapRuntimeSecrets } from "@/lib/bootstrap-runtime-secrets";
+import { createAdminClientAsync } from "@/lib/supabase/admin";
+import { syncStudentCourseAccess } from "@/lib/admin-student-onboarding";
 import { fetchPublishedCourseById, fetchPublishedCourses, type CatalogCourse, type LandingCourse } from "@/lib/published-courses";
 import { isCourseFree } from "@/lib/currency";
 import { isSuccessfulGuestPurchase } from "@/lib/guest-checkout";
@@ -84,18 +87,26 @@ export default async function CourseLandingPage({
 
   if (!course) notFound();
 
-  let isEnrolled = false;
-  if (user && profile?.email && profile.role === "student") {
-    const { studentHasCourseAccess } = await import("@/lib/student-enrollments");
-    isEnrolled = await studentHasCourseAccess(user.id, course.id);
-  } else if (user) {
-    const { data: e } = await supabase
+  const paymentRef = searchParams.ref?.trim() ?? "";
+  const paidPurchaseComplete =
+    Boolean(paymentRef) &&
+    (await isSuccessfulGuestPurchase(paymentRef, course.id));
+
+  let isEnrolled = paidPurchaseComplete;
+  if (user) {
+    await bootstrapRuntimeSecrets();
+    const admin = await createAdminClientAsync(supabase);
+    const targetStudentId = await syncStudentCourseAccess(admin, {
+      authUserId: user.id,
+      profileEmail: profile?.email,
+    });
+    const { data: e } = await admin
       .from("enrollments")
       .select("id")
-      .eq("student_id", user.id)
+      .eq("student_id", targetStudentId)
       .eq("course_id", course.id)
       .maybeSingle();
-    isEnrolled = Boolean(e);
+    isEnrolled = Boolean(e) || paidPurchaseComplete;
   }
 
   const relatedAll = await fetchPublishedCourses<CatalogCourse>(
@@ -106,10 +117,6 @@ export default async function CourseLandingPage({
   const modules = [...(course.modules ?? [])].sort((a, b) => a.position - b.position);
   const lessonCount = modules.reduce((n, m) => n + (m.lessons?.length ?? 0), 0);
   const category = Array.isArray(course.category) ? course.category[0] : course.category;
-  const paymentRef = searchParams.ref?.trim() ?? "";
-  const paidPurchaseComplete =
-    Boolean(paymentRef) &&
-    (await isSuccessfulGuestPurchase(paymentRef, course.id));
   const freeEnrollComplete =
     searchParams.enrolled === "1" &&
     !paymentRef &&

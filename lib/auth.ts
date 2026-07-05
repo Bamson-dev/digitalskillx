@@ -3,7 +3,6 @@ import { createClient } from "@/lib/supabase/server";
 import { getAdminMfaStatus, isAdminMfaRequired } from "@/lib/admin-mfa";
 import { ensureAdminProfileSession, platformAdminProfileFromUser } from "@/lib/ensure-admin-profile-session";
 import { ensureStudentProfile, studentProfileFromUser } from "@/lib/ensure-student-profile";
-import { ensureStudentCourseAccessSynced } from "@/lib/student-enrollments";
 import type { Profile } from "@/types/database";
 
 /** Returns the current user's profile, or null if signed out. */
@@ -36,13 +35,6 @@ export async function requireStudent(): Promise<Profile> {
   if (!profile) profile = studentProfileFromUser(user);
   if (!profile) redirect("/login?error=no_profile");
   if (profile.is_suspended) redirect("/login?error=account_suspended");
-  if (profile.role === "student") {
-    try {
-      await ensureStudentCourseAccessSynced(profile.id, profile.email);
-    } catch {
-      // non-fatal; course pages re-check access explicitly
-    }
-  }
   // Admins can also browse student views, so no role rejection here.
   void touchLastActive(profile);
   return profile;

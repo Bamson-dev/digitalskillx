@@ -6,6 +6,8 @@ import {
   findProfileByEmail,
   generateStrongPassword,
   isValidStudentEmail,
+  resolveCanonicalStudentId,
+  syncStudentCourseAccess,
 } from "@/lib/admin-student-onboarding";
 import { fulfillPurchase } from "@/lib/purchase";
 import { verifyTransaction, type VerifiedTransaction } from "@/lib/paystack";
@@ -258,6 +260,26 @@ export async function completePaidCheckout(reference: string) {
     await admin.from("transactions").update({ student_id: studentId }).eq("reference", reference);
   } else {
     await syncProfileEmailIfMissing(admin, studentId, buyerEmail, buyerName);
+  }
+
+  const { data: profileRow } = await admin
+    .from("profiles")
+    .select("email")
+    .eq("id", studentId)
+    .maybeSingle();
+
+  const checkoutEmail = buyerEmail || profileRow?.email?.trim().toLowerCase() || "";
+  const canonicalStudentId = await resolveCanonicalStudentId(admin, {
+    studentId,
+    email: checkoutEmail,
+  });
+  studentId = await syncStudentCourseAccess(admin, {
+    authUserId: canonicalStudentId,
+    profileEmail: checkoutEmail || profileRow?.email,
+  });
+
+  if (studentId !== tx.student_id) {
+    await admin.from("transactions").update({ student_id: studentId }).eq("reference", reference);
   }
 
   await fulfillPurchase({
