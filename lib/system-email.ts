@@ -16,6 +16,11 @@ export type SendSystemEmailParams = {
   html: string;
   replyTo?: string;
   payload?: Record<string, Json>;
+  attachments?: Array<{
+    filename: string;
+    content: Buffer;
+    contentType?: string;
+  }>;
 };
 
 /** Send a system email; log failures for retry without throwing. */
@@ -25,6 +30,7 @@ export async function sendSystemEmail(params: SendSystemEmailParams) {
     subject: params.subject,
     html: params.html,
     replyTo: params.replyTo,
+    attachments: params.attachments,
   });
 
   if ("skipped" in result && result.skipped) {

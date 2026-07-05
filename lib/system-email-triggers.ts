@@ -208,6 +208,60 @@ export async function sendPaymentReceiptEmail(params: {
   return result;
 }
 
+/** Certificate issued email with PDF attachment — admin manual issue or auto completion. */
+export async function sendCertificateIssuedEmail(params: {
+  studentId: string;
+  courseId: string;
+  certificateId: string;
+  certificateNumber: string;
+  fullName: string;
+  email: string;
+  courseTitle: string;
+  issuedAt: string;
+}) {
+  const { generateCertificatePdfBuffer } = await import("@/lib/certificate-pdf");
+
+  const settings = await getPlatformSettingsAdmin();
+  const sender = await getEmailSenderConfig();
+  const baseUrl = siteUrl();
+  const certificateUrl = `${baseUrl}/certificates/${params.certificateId}`;
+
+  const tpl = courseCompletionCertificateEmail({
+    firstName: studentFirstName(params.fullName),
+    courseTitle: params.courseTitle,
+    certificateNumber: params.certificateNumber,
+    certificateUrl,
+    supportEmail: sender.replyTo ?? sender.fromAddress,
+    brandColor: settings.primary_color,
+  });
+
+  const pdf = await generateCertificatePdfBuffer({
+    studentName: params.fullName,
+    courseTitle: params.courseTitle,
+    certificateNumber: params.certificateNumber,
+    issuedAt: params.issuedAt,
+  });
+
+  return sendSystemEmail({
+    type: "course_completion_certificate",
+    to: params.email,
+    subject: tpl.subject,
+    html: tpl.html,
+    replyTo: sender.replyTo,
+    attachments: [
+      {
+        filename: `DigitalSkillX-Certificate-${params.certificateNumber}.pdf`,
+        content: pdf,
+      },
+    ],
+    payload: {
+      studentId: params.studentId,
+      courseId: params.courseId,
+      certificateId: params.certificateId,
+    },
+  });
+}
+
 /** Course completion + certificate email — once per enrollment after auto-issue. */
 export async function sendCourseCompletionCertificateEmail(params: {
   studentId: string;

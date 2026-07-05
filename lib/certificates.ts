@@ -1,16 +1,12 @@
 import "server-only";
-import { createAdminClient } from "@/lib/supabase/admin";
-import { resolveCertificateTemplateKey } from "@/lib/certificate-template-resolve";
+import { createAdminClientAsync } from "@/lib/supabase/admin";
+import {
+  reconcileOrphanCertificatesForEmail,
+  resolveCanonicalStudentId,
+} from "@/lib/admin-student-onboarding";
 import { notify } from "@/lib/notifications";
-import { sendEmail } from "@/lib/email";
-import { emailTemplates } from "@/lib/email/templates";
-
-function siteUrl() {
-  return (process.env.NEXT_PUBLIC_SITE_URL ?? "https://digitalskillx.com").replace(
-    /\/$/,
-    "",
-  );
-}
+import { sendCertificateIssuedEmail } from "@/lib/system-email-triggers";
+import { resolveCertificateTemplateKey } from "@/lib/certificate-template-resolve";
 
 /** Generate a unique, human-readable certificate number, e.g. PDG-7F3A9C2B. */
 export function generateCertificateNumber() {
@@ -19,8 +15,8 @@ export function generateCertificateNumber() {
 }
 
 /**
- * Issue a certificate for a student+course (idempotent). Sends the
- * "certificate ready" email + in-app notification (PRD §11.4).
+ * Issue a certificate for a student+course (idempotent). Sends email with PDF
+ * attachment and in-app notification when sendEmail is true (default).
  */
 export async function issueCertificate(params: {
   studentId: string;
@@ -28,23 +24,62 @@ export async function issueCertificate(params: {
   completedAt?: string;
   sendEmail?: boolean;
 }) {
-  const supabase = createAdminClient();
+  const admin = await createAdminClientAsync();
 
-  const { data: existing } = await supabase
+  const { data: profile } = await admin
+    .from("profiles")
+    .select("full_name, email")
+    .eq("id", params.studentId)
+    .maybeSingle();
+
+  if (!profile?.email) return null;
+
+  const canonicalStudentId = await resolveCanonicalStudentId(admin, {
+    studentId: params.studentId,
+    email: profile.email,
+  });
+  await reconcileOrphanCertificatesForEmail(admin, {
+    authUserId: canonicalStudentId,
+    email: profile.email,
+  });
+
+  const { data: existing } = await admin
     .from("certificates")
     .select("*")
-    .eq("student_id", params.studentId)
+    .eq("student_id", canonicalStudentId)
     .eq("course_id", params.courseId)
     .maybeSingle();
 
-  if (existing) return existing;
+  const { data: course } = await admin
+    .from("courses")
+    .select("title")
+    .eq("id", params.courseId)
+    .maybeSingle();
 
-  const templateKey = await resolveCertificateTemplateKey(supabase, params.courseId);
+  const shouldSendEmail = params.sendEmail !== false;
 
-  const { data: cert, error } = await supabase
+  if (existing) {
+    if (shouldSendEmail) {
+      await sendCertificateIssuedEmail({
+        studentId: canonicalStudentId,
+        courseId: params.courseId,
+        certificateId: existing.id,
+        certificateNumber: existing.certificate_number,
+        fullName: profile.full_name ?? profile.email.split("@")[0],
+        email: profile.email,
+        courseTitle: course?.title ?? "your course",
+        issuedAt: existing.issued_at,
+      });
+    }
+    return existing;
+  }
+
+  const templateKey = await resolveCertificateTemplateKey(admin, params.courseId);
+
+  const { data: cert, error } = await admin
     .from("certificates")
     .insert({
-      student_id: params.studentId,
+      student_id: canonicalStudentId,
       course_id: params.courseId,
       certificate_number: generateCertificateNumber(),
       completed_at: params.completedAt ?? new Date().toISOString(),
@@ -55,26 +90,25 @@ export async function issueCertificate(params: {
     .single();
   if (error || !cert) return null;
 
-  const [{ data: profile }, { data: course }] = await Promise.all([
-    supabase.from("profiles").select("full_name, email").eq("id", params.studentId).single(),
-    supabase.from("courses").select("title").eq("id", params.courseId).single(),
-  ]);
-
   await notify({
-    studentId: params.studentId,
+    studentId: canonicalStudentId,
     type: "certificate_issued",
     title: "Certificate issued",
     message: `Your certificate for "${course?.title ?? "your course"}" is ready.`,
-    linkUrl: "/certificates",
+    linkUrl: `/certificates/${cert.id}`,
   });
 
-  if (profile?.email && params.sendEmail) {
-    const tpl = emailTemplates.certificateReady({
-      name: profile.full_name ?? "there",
+  if (shouldSendEmail) {
+    await sendCertificateIssuedEmail({
+      studentId: canonicalStudentId,
+      courseId: params.courseId,
+      certificateId: cert.id,
+      certificateNumber: cert.certificate_number,
+      fullName: profile.full_name ?? profile.email.split("@")[0],
+      email: profile.email,
       courseTitle: course?.title ?? "your course",
-      url: `${siteUrl()}/certificates`,
+      issuedAt: cert.issued_at,
     });
-    await sendEmail({ to: profile.email, subject: tpl.subject, html: tpl.html });
   }
 
   return cert;

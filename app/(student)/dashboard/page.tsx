@@ -1,10 +1,11 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import Image from "next/image";
-import { ArrowRight, BookOpen } from "lucide-react";
+import { ArrowRight, Award, BookOpen } from "lucide-react";
 import { requireStudent } from "@/lib/auth";
 import { fetchPublishedCourses, type CatalogCourse } from "@/lib/published-courses";
 import { getStudentEnrolledCoursesWithProgress } from "@/lib/student-enrollments";
+import { getStudentCertificates } from "@/lib/student-certificates";
 import { DashboardAnnouncements } from "@/components/student/dashboard-announcements";
 import { toPercent } from "@/lib/utils";
 import { PriceDisplay } from "@/components/marketplace/price-display";
@@ -16,6 +17,7 @@ export default async function StudentDashboardPage() {
   const profile = await requireStudent();
 
   const myCourses = await getStudentEnrolledCoursesWithProgress(profile.id);
+  const certificates = await getStudentCertificates(profile.id);
   const enrolledIds = new Set(myCourses.map((row) => row.courseId));
 
   const catalog = await fetchPublishedCourses<CatalogCourse>(
@@ -168,6 +170,36 @@ export default async function StudentDashboardPage() {
           </div>
         )}
       </section>
+
+      {certificates.length > 0 ? (
+        <section>
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="font-display text-lg font-bold text-neutral-900">Your certificates</h2>
+            <Link href="/certificates" className="text-sm font-semibold text-brand hover:text-brand-700">
+              View all →
+            </Link>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            {certificates.slice(0, 2).map((cert) => (
+              <Link
+                key={cert.id}
+                href={`/certificates/${cert.id}`}
+                className="flex items-center gap-4 rounded-xl border border-surface-border bg-white p-4 transition hover:border-neutral-300 hover:shadow-card"
+              >
+                <div className="rounded-lg bg-brand/10 p-3 text-brand">
+                  <Award className="h-6 w-6" />
+                </div>
+                <div className="min-w-0">
+                  <p className="truncate font-semibold text-neutral-900">
+                    {cert.courseTitle ?? "Course certificate"}
+                  </p>
+                  <p className="mt-1 text-xs text-neutral-500">#{cert.certificateNumber}</p>
+                </div>
+              </Link>
+            ))}
+          </div>
+        </section>
+      ) : null}
 
       {/* Recommended upsell */}
       {upsell.length > 0 ? (

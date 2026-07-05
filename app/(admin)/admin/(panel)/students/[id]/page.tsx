@@ -33,7 +33,7 @@ export default async function StudentDetailPage({
   searchParams,
 }: {
   params: { id: string };
-  searchParams: { enrolled?: string; already_enrolled?: string };
+  searchParams: { enrolled?: string; already_enrolled?: string; cert_issued?: string };
 }) {
   await requireAdmin();
   const supabase = await getAdminSupabase();
@@ -138,6 +138,11 @@ export default async function StudentDetailPage({
           {searchParams.already_enrolled === "1" ? (
             <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">
               Student is already enrolled in that course.
+            </p>
+          ) : null}
+          {searchParams.cert_issued === "1" ? (
+            <p className="rounded-lg bg-green-50 px-3 py-2 text-sm text-green-800">
+              Certificate issued. The student was emailed a PDF copy and can view it under Certificates.
             </p>
           ) : null}
         </div>

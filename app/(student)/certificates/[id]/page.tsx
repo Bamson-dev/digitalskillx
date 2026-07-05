@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, Linkedin, ExternalLink } from "lucide-react";
+import { createAdminClientAsync } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { requireStudent } from "@/lib/auth";
 import { CertificateView } from "@/components/certificate-view";
@@ -14,9 +15,9 @@ export const metadata: Metadata = { title: "Certificate" };
 
 export default async function CertificateDetailPage({ params }: { params: { id: string } }) {
   const profile = await requireStudent();
-  const supabase = createClient();
+  const admin = await createAdminClientAsync(createClient());
 
-  const { data: cert } = await supabase
+  const { data: cert } = await admin
     .from("certificates")
     .select("id, certificate_number, issued_at, completed_at, template_key, course:courses(title)")
     .eq("id", params.id)

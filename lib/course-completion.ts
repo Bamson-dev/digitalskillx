@@ -5,7 +5,6 @@ import { runAutomations } from "@/lib/automation";
 import { issueCertificate } from "@/lib/certificates";
 import { courseCompletionPct } from "@/lib/progress";
 import { notify } from "@/lib/notifications";
-import { sendCourseCompletionCertificateEmail } from "@/lib/system-email-triggers";
 import type { Database } from "@/types/database";
 
 /** All quiz ids attached to lessons or modules in a course. */
@@ -129,16 +128,14 @@ export async function evaluateAndCompleteCourse(studentId: string, courseId: str
       studentId,
       courseId,
       completedAt,
-      sendEmail: false,
+      sendEmail: !enrollment.completion_email_sent_at,
     });
 
     if (cert && !enrollment.completion_email_sent_at) {
-      await sendCourseCompletionCertificateEmail({
-        studentId,
-        courseId,
-        certificateId: cert.id,
-        certificateNumber: cert.certificate_number,
-      });
+      await admin
+        .from("enrollments")
+        .update({ completion_email_sent_at: new Date().toISOString() })
+        .eq("id", enrollment.id);
     }
   }
 

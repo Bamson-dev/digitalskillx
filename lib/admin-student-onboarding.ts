@@ -305,6 +305,50 @@ export async function reconcileOrphanEnrollmentsForEmail(
   }
 }
 
+/** Move certificates off duplicate profile rows that share the login email. */
+export async function reconcileOrphanCertificatesForEmail(
+  admin: SupabaseClient<Database>,
+  params: { authUserId: string; email: string },
+) {
+  const normalizedEmail = params.email.trim().toLowerCase();
+  const { data: duplicateProfiles, error: profileError } = await admin
+    .from("profiles")
+    .select("id")
+    .ilike("email", normalizedEmail)
+    .neq("id", params.authUserId);
+
+  if (profileError) throw new Error(profileError.message);
+
+  for (const orphan of duplicateProfiles ?? []) {
+    const { data: orphanCerts, error: certError } = await admin
+      .from("certificates")
+      .select("id, course_id")
+      .eq("student_id", orphan.id);
+
+    if (certError) throw new Error(certError.message);
+
+    for (const cert of orphanCerts ?? []) {
+      const { data: existing } = await admin
+        .from("certificates")
+        .select("id")
+        .eq("student_id", params.authUserId)
+        .eq("course_id", cert.course_id)
+        .maybeSingle();
+
+      if (existing) {
+        await admin.from("certificates").delete().eq("id", cert.id);
+        continue;
+      }
+
+      const { error: moveError } = await admin
+        .from("certificates")
+        .update({ student_id: params.authUserId })
+        .eq("id", cert.id);
+      if (moveError) throw new Error(moveError.message);
+    }
+  }
+}
+
 export async function grantCourseAccessToStudent(
   admin: SupabaseClient<Database>,
   params: {

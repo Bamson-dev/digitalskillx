@@ -643,12 +643,25 @@ export async function setStudentTags(formData: FormData) {
 
 export async function issueCertificateManual(formData: FormData) {
   await requireAdmin();
+  const admin = await getAdminSupabase();
   const studentId = String(formData.get("student_id"));
   const courseId = String(formData.get("course_id"));
   if (!courseId) return;
-  await issueCertificate({ studentId, courseId });
+
+  const { data: profile } = await admin
+    .from("profiles")
+    .select("full_name, email")
+    .eq("id", studentId)
+    .single();
+  if (!profile?.email) throw new Error("Student profile not found.");
+
+  const cert = await issueCertificate({ studentId, courseId, sendEmail: true });
+  if (!cert) throw new Error("Could not issue certificate.");
+
   await logAudit({ action: "certificate_issued_manual", metadata: { studentId, courseId } });
   revalidatePath(`/admin/students/${studentId}`);
+  revalidatePath("/certificates");
+  redirect(`/admin/students/${studentId}?cert_issued=1`);
 }
 
 export async function addAdminNote(formData: FormData) {

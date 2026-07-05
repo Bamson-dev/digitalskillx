@@ -23,6 +23,11 @@ export type SendEmailParams = {
   subject: string;
   html: string;
   replyTo?: string;
+  attachments?: Array<{
+    filename: string;
+    content: Buffer;
+    contentType?: string;
+  }>;
 };
 
 /**
@@ -53,6 +58,11 @@ export async function sendEmail(params: SendEmailParams) {
       subject: params.subject,
       html: params.html,
       replyTo: params.replyTo ?? sender.replyTo,
+      attachments: params.attachments?.map((attachment) => ({
+        filename: attachment.filename,
+        content: attachment.content,
+        contentType: attachment.contentType ?? "application/pdf",
+      })),
     });
     return { messageId: info.messageId };
   } catch (error) {
