@@ -95,10 +95,7 @@ if (courseIdMatch) {
 const testEmail = `csv-test+${Date.now()}@digitalskillx.com`;
 const csvBody = `full_name,email\nCSV Test User,${testEmail}`;
 
-let importOk = false;
-let lastResponse = "";
-
-const res = curl([
+const importRes = curl([
   "-b",
   jar,
   "-X",
@@ -109,24 +106,25 @@ const res = curl([
   "-F",
   `csv=${csvBody}`,
 ]);
-lastResponse = res;
 
+let importOk = false;
 try {
-  const json = JSON.parse(res);
+  const json = JSON.parse(importRes);
   importOk =
-    /Bulk upload finished/i.test(json.message ?? "") &&
-    (json.bulkSummary?.failed?.length ?? 0) === 0 &&
-    ((json.bulkSummary?.created ?? 0) > 0 || (json.bulkSummary?.enrolled ?? 0) > 0);
-  if (!importOk && json.error) {
-    console.error("API error:", json.error);
+    typeof json.message === "string" &&
+    /Bulk upload finished/i.test(json.message) &&
+    json.bulkSummary?.failed?.length === 0 &&
+    (json.bulkSummary?.created >= 1 || json.bulkSummary?.enrolled >= 1);
+  if (!importOk) {
+    console.error("FAIL: unexpected bulk API response", importRes.slice(0, 900));
   }
 } catch {
-  importOk = /Bulk upload finished/i.test(res) && /0 failed/i.test(res);
+  console.error("FAIL: CSV bulk import API did not return JSON");
+  console.error(importRes.slice(0, 900));
+  process.exit(1);
 }
 
 if (!importOk) {
-  console.error("FAIL: CSV bulk import did not report success");
-  console.error(lastResponse.slice(0, 900));
   process.exit(1);
 }
 console.log("PASS: CSV bulk import succeeded for", testEmail);

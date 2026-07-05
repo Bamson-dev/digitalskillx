@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useFormState } from "react-dom";
-import { Search, UserPlus, Upload, Loader2 } from "lucide-react";
+import { Search, Upload, UserPlus } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Input, Label } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
@@ -15,6 +15,7 @@ import {
   createStudent,
   type StudentActionState,
 } from "@/app/(admin)/admin/(panel)/students/actions";
+import type { BulkUploadFailure } from "@/lib/bulk-student-upload";
 
 const initial: StudentActionState = {};
 
@@ -103,7 +104,18 @@ function CourseCheckboxList({ courses }: { courses: PublishedCourse[] }) {
   );
 }
 
-function Feedback({ state }: { state: StudentActionState }) {
+function Feedback({
+  state,
+}: {
+  state: StudentActionState & {
+    bulkSummary?: {
+      created: number;
+      enrolled: number;
+      skipped: number;
+      failed: BulkUploadFailure[];
+    };
+  };
+}) {
   return (
     <>
       {state.error ? (
@@ -159,31 +171,41 @@ export function StudentCreate({
   const [tab, setTab] = useState<"single" | "csv">("single");
   const [createState, createAction] = useFormState(createStudent, initial);
   const [csvState, setCsvState] = useState<StudentActionState>(initial);
-  const [csvLoading, setCsvLoading] = useState(false);
+  const [csvUploading, setCsvUploading] = useState(false);
   const state = tab === "single" ? createState : csvState;
 
-  async function handleCsvUpload(event: React.FormEvent<HTMLFormElement>) {
+  async function handleCsvSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setCsvLoading(true);
+    setCsvUploading(true);
     setCsvState(initial);
 
+    const form = event.currentTarget;
+    const formData = new FormData(form);
+
     try {
-      const formData = new FormData(event.currentTarget);
-      const response = await fetch("/api/admin/bulk-students", {
+      const res = await fetch("/api/admin/bulk-students", {
         method: "POST",
-        credentials: "include",
         body: formData,
+        credentials: "include",
       });
-      const json = (await response.json()) as StudentActionState;
-      if (!response.ok) {
+      const json = (await res.json()) as StudentActionState & {
+        bulkSummary?: StudentActionState["bulkSummary"];
+      };
+      if (!res.ok) {
         setCsvState({ error: json.error ?? "Bulk upload failed." });
         return;
       }
-      setCsvState(json);
-    } catch {
-      setCsvState({ error: "Bulk upload failed. Check your connection and try again." });
+      setCsvState({
+        message: json.message,
+        bulkSummary: json.bulkSummary,
+      });
+      form.reset();
+    } catch (err) {
+      setCsvState({
+        error: err instanceof Error ? err.message : "Bulk upload failed.",
+      });
     } finally {
-      setCsvLoading(false);
+      setCsvUploading(false);
     }
   }
 
@@ -253,7 +275,7 @@ export function StudentCreate({
         </form>
 
       <form
-        onSubmit={handleCsvUpload}
+        onSubmit={handleCsvSubmit}
         className={`space-y-4 ${tab === "csv" ? "" : "hidden"}`}
         encType="multipart/form-data"
       >
@@ -299,13 +321,8 @@ export function StudentCreate({
             </p>
           </div>
 
-          <Button type="submit" disabled={csvLoading || !serviceRoleReady}>
-            {csvLoading ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Upload className="h-4 w-4" />
-            )}{" "}
-            {csvLoading ? "Uploading…" : "Import students"}
+          <Button type="submit" disabled={csvUploading || !serviceRoleReady}>
+            <Upload className="h-4 w-4" /> {csvUploading ? "Uploading…" : "Import students"}
           </Button>
         </form>
 

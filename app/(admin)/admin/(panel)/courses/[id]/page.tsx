@@ -90,11 +90,6 @@ export default async function AdminCourseEditorPage({
         </Link>
       </div>
 
-      <YoutubeImport
-        courseId={course.id}
-        modules={modules.map((m) => ({ id: m.id, title: m.title }))}
-      />
-
       <CourseEditor
         course={course}
         modules={modules}
@@ -102,6 +97,21 @@ export default async function AdminCourseEditorPage({
         globalDefaultTemplateKey={globalDefaultTemplateKey}
         lessonAttachments={lessonAttachments}
         courseResources={(courseResources ?? []) as AttachmentDisplay[]}
+      />
+
+      <YoutubeImport
+        courseId={course.id}
+        modules={modules.map((m) => ({
+          id: m.id,
+          title: m.title,
+          lessons: [...(m.lessons ?? [])]
+            .sort((a, b) => a.position - b.position)
+            .map((l) => ({
+              id: l.id,
+              title: l.title,
+              youtube_video_id: l.youtube_video_id,
+            })),
+        }))}
       />
     </div>
   );

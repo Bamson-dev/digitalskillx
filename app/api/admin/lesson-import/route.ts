@@ -159,6 +159,12 @@ export async function POST(request: NextRequest) {
   let imported = 0;
   let skipped = 0;
   let pos = startPos ?? 0;
+  const importedLessons: {
+    id: string;
+    title: string;
+    youtubeVideoId: string | null;
+    moduleId: string;
+  }[] = [];
 
   for (const lesson of lessonsToImport) {
     const isDupe = lesson.youtubeVideoId
@@ -170,19 +176,29 @@ export async function POST(request: NextRequest) {
       continue;
     }
 
-    const { error } = await supabase.from("lessons").insert({
-      module_id: moduleId,
-      title: lesson.title,
-      description: lesson.description,
-      lesson_type: "video",
-      content_url: lesson.contentUrl,
-      youtube_video_id: lesson.youtubeVideoId,
-      duration_seconds: lesson.durationSeconds,
-      position: pos++,
-    });
+    const { data: inserted, error } = await supabase
+      .from("lessons")
+      .insert({
+        module_id: moduleId,
+        title: lesson.title,
+        description: lesson.description,
+        lesson_type: "video",
+        content_url: lesson.contentUrl,
+        youtube_video_id: lesson.youtubeVideoId,
+        duration_seconds: lesson.durationSeconds,
+        position: pos++,
+      })
+      .select("id, title, youtube_video_id")
+      .single();
 
-    if (!error) {
+    if (!error && inserted) {
       imported++;
+      importedLessons.push({
+        id: inserted.id,
+        title: inserted.title,
+        youtubeVideoId: inserted.youtube_video_id,
+        moduleId,
+      });
       if (lesson.youtubeVideoId) existingYoutube.add(lesson.youtubeVideoId);
       else existingUrls.add(lesson.contentUrl);
     }
@@ -195,5 +211,11 @@ export async function POST(request: NextRequest) {
     metadata: { source, imported, skipped, total: lessonsToImport.length },
   });
 
-  return NextResponse.json({ imported, skipped, total: lessonsToImport.length });
+  return NextResponse.json({
+    imported,
+    skipped,
+    total: lessonsToImport.length,
+    moduleId,
+    lessons: importedLessons,
+  });
 }

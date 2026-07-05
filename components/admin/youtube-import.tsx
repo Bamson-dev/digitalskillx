@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Download, Eye, Loader2 } from "lucide-react";
+import { Download, Eye, Loader2, Trash2 } from "lucide-react";
 import { Card, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
@@ -32,6 +32,25 @@ type PreviewVideo = {
   contentUrl: string;
 };
 
+type ImportedLesson = {
+  id: string;
+  title: string;
+  youtubeVideoId: string | null;
+  moduleId: string;
+};
+
+type ModuleLesson = {
+  id: string;
+  title: string;
+  youtube_video_id: string | null;
+};
+
+type ModuleWithLessons = {
+  id: string;
+  title: string;
+  lessons: ModuleLesson[];
+};
+
 function formatDuration(seconds: number | null) {
   if (!seconds || seconds <= 0) return "—";
   const mins = Math.floor(seconds / 60);
@@ -44,7 +63,7 @@ export function YoutubeImport({
   modules,
 }: {
   courseId: string;
-  modules: { id: string; title: string }[];
+  modules: ModuleWithLessons[];
 }) {
   const router = useRouter();
   const [source, setSource] = useState<LessonImportSource>("youtube_playlist");
@@ -55,9 +74,32 @@ export function YoutubeImport({
   const [error, setError] = useState<string | null>(null);
   const [previewVideos, setPreviewVideos] = useState<PreviewVideo[] | null>(null);
   const [selectedVideoIds, setSelectedVideoIds] = useState<Set<string>>(() => new Set());
+  const [recentImports, setRecentImports] = useState<ImportedLesson[]>([]);
+  const [manageModuleId, setManageModuleId] = useState("");
+  const [selectedDeleteIds, setSelectedDeleteIds] = useState<Set<string>>(() => new Set());
+  const [deleting, setDeleting] = useState(false);
 
   const placeholder = useMemo(() => PLACEHOLDERS[source], [source]);
   const isPlaylist = source === "youtube_playlist";
+
+  const youtubeLessons = useMemo(
+    () =>
+      modules.flatMap((module) =>
+        (module.lessons ?? [])
+          .filter((lesson) => lesson.youtube_video_id)
+          .map((lesson) => ({
+            ...lesson,
+            moduleId: module.id,
+            moduleTitle: module.title,
+          })),
+      ),
+    [modules],
+  );
+
+  const manageLessons = useMemo(() => {
+    if (!manageModuleId) return youtubeLessons;
+    return youtubeLessons.filter((lesson) => lesson.moduleId === manageModuleId);
+  }, [manageModuleId, youtubeLessons]);
 
   function videoKey(video: PreviewVideo) {
     return video.youtubeVideoId ?? video.contentUrl;
@@ -72,7 +114,14 @@ export function YoutubeImport({
     });
     const json = await res.json();
     if (!res.ok) throw new Error(json.error ?? `Import failed (${res.status})`);
-    return json as { imported: number; skipped: number; total: number; videos?: PreviewVideo[] };
+    return json as {
+      imported: number;
+      skipped: number;
+      total: number;
+      videos?: PreviewVideo[];
+      lessons?: ImportedLesson[];
+      moduleId?: string;
+    };
   }
 
   async function preview() {
@@ -98,9 +147,7 @@ export function YoutubeImport({
     setError(null);
     try {
       const videoIds =
-        selectedOnly && previewVideos
-          ? [...selectedVideoIds]
-          : undefined;
+        selectedOnly && previewVideos ? [...selectedVideoIds] : undefined;
       const json = await postImport({
         courseId,
         url,
@@ -109,15 +156,50 @@ export function YoutubeImport({
         videoIds,
       });
       setResult(`Imported ${json.imported}, skipped ${json.skipped} of ${json.total}.`);
+      if (json.lessons?.length) {
+        setRecentImports(json.lessons);
+        setManageModuleId(json.moduleId ?? json.lessons[0]?.moduleId ?? "");
+      }
       setUrl("");
       setPreviewVideos(null);
       setSelectedVideoIds(new Set());
       router.refresh();
-      document.getElementById("course-curriculum")?.scrollIntoView({ behavior: "smooth", block: "start" });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Import failed");
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function deleteLessons(lessonIds: string[]) {
+    if (lessonIds.length === 0) return;
+    const label = lessonIds.length === 1 ? "this video" : `${lessonIds.length} videos`;
+    if (!confirm(`Delete ${label} from the course? This cannot be undone.`)) return;
+
+    setDeleting(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/admin/lessons", {
+        method: "DELETE",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ courseId, lessonIds }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "Delete failed");
+
+      setRecentImports((prev) => prev.filter((lesson) => !lessonIds.includes(lesson.id)));
+      setSelectedDeleteIds((prev) => {
+        const next = new Set(prev);
+        for (const id of lessonIds) next.delete(id);
+        return next;
+      });
+      setResult(`Removed ${json.deleted ?? lessonIds.length} video(s).`);
+      router.refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Delete failed");
+    } finally {
+      setDeleting(false);
     }
   }
 
@@ -135,6 +217,19 @@ export function YoutubeImport({
     setSelectedVideoIds(
       checked ? new Set(previewVideos.map((video) => videoKey(video))) : new Set(),
     );
+  }
+
+  function toggleDeleteSelection(id: string, checked: boolean) {
+    setSelectedDeleteIds((prev) => {
+      const next = new Set(prev);
+      if (checked) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  }
+
+  function toggleDeleteAll(checked: boolean) {
+    setSelectedDeleteIds(checked ? new Set(manageLessons.map((lesson) => lesson.id)) : new Set());
   }
 
   return (
@@ -230,12 +325,154 @@ export function YoutubeImport({
         </div>
       ) : null}
 
+      {recentImports.length > 0 ? (
+        <ImportedVideoList
+          title="Just imported — remove any you do not want"
+          lessons={recentImports.map((lesson) => ({
+            id: lesson.id,
+            title: lesson.title,
+            youtube_video_id: lesson.youtubeVideoId,
+            moduleTitle:
+              modules.find((module) => module.id === lesson.moduleId)?.title ?? "Imported module",
+          }))}
+          deleting={deleting}
+          onDelete={(id) => deleteLessons([id])}
+        />
+      ) : null}
+
+      {youtubeLessons.length > 0 ? (
+        <div className="mt-5 rounded-lg border border-app bg-surface-muted/20">
+          <div className="border-b border-app px-3 py-3">
+            <p className="text-sm font-semibold text-neutral-900">Manage imported YouTube videos</p>
+            <p className="mt-1 text-xs text-muted">
+              Delete individual playlist videos after import without scrolling through the full curriculum.
+            </p>
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <Select
+                value={manageModuleId}
+                onChange={(e) => {
+                  setManageModuleId(e.target.value);
+                  setSelectedDeleteIds(new Set());
+                }}
+                className="min-w-[12rem] flex-1 sm:flex-none"
+                aria-label="Filter by module"
+              >
+                <option value="">All YouTube videos</option>
+                {modules
+                  .filter((module) => module.lessons.some((lesson) => lesson.youtube_video_id))
+                  .map((module) => (
+                    <option key={module.id} value={module.id}>
+                      {module.title}
+                    </option>
+                  ))}
+              </Select>
+              {selectedDeleteIds.size > 0 ? (
+                <Button
+                  size="sm"
+                  variant="danger"
+                  type="button"
+                  disabled={deleting}
+                  onClick={() => deleteLessons([...selectedDeleteIds])}
+                >
+                  <Trash2 className="h-4 w-4" /> Delete selected ({selectedDeleteIds.size})
+                </Button>
+              ) : null}
+            </div>
+          </div>
+          <div className="flex items-center justify-between gap-2 border-b border-app px-3 py-2 text-xs text-muted">
+            <label className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={
+                  manageLessons.length > 0 && selectedDeleteIds.size === manageLessons.length
+                }
+                onChange={(event) => toggleDeleteAll(event.target.checked)}
+              />
+              Select all ({manageLessons.length})
+            </label>
+          </div>
+          <ul className="max-h-80 divide-y divide-app overflow-y-auto">
+            {manageLessons.map((lesson) => (
+              <li key={lesson.id} className="flex items-start gap-3 px-3 py-2.5">
+                <input
+                  type="checkbox"
+                  checked={selectedDeleteIds.has(lesson.id)}
+                  onChange={(event) => toggleDeleteSelection(lesson.id, event.target.checked)}
+                  className="mt-1 h-4 w-4 shrink-0"
+                  aria-label={`Select ${lesson.title}`}
+                />
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium text-neutral-900">{lesson.title}</p>
+                  <p className="mt-0.5 text-xs text-muted">
+                    {lesson.moduleTitle}
+                    {lesson.youtube_video_id ? ` · ${lesson.youtube_video_id}` : ""}
+                  </p>
+                </div>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  type="button"
+                  disabled={deleting}
+                  onClick={() => deleteLessons([lesson.id])}
+                  aria-label={`Delete ${lesson.title}`}
+                  className="shrink-0 text-red-600 hover:bg-red-50 hover:text-red-700"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
       {result ? <p className="mt-3 rounded-lg bg-green-50 px-3 py-2 text-sm text-green-700">{result}</p> : null}
       {error ? <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p> : null}
-      <p className="mt-3 text-xs text-muted">
-        After import, the Curriculum section below lists every video. Use the red Delete button or
-        select multiple lessons and click Delete selected.
-      </p>
     </Card>
+  );
+}
+
+function ImportedVideoList({
+  title,
+  lessons,
+  deleting,
+  onDelete,
+}: {
+  title: string;
+  lessons: Array<{
+    id: string;
+    title: string;
+    youtube_video_id: string | null;
+    moduleTitle: string;
+  }>;
+  deleting: boolean;
+  onDelete: (id: string) => void;
+}) {
+  return (
+    <div className="mt-4 rounded-lg border border-green-200 bg-green-50/40">
+      <p className="border-b border-green-200 px-3 py-2 text-sm font-semibold text-green-900">{title}</p>
+      <ul className="divide-y divide-green-200/80">
+        {lessons.map((lesson) => (
+          <li key={lesson.id} className="flex items-start gap-3 px-3 py-2.5">
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-medium text-neutral-900">{lesson.title}</p>
+              <p className="mt-0.5 text-xs text-muted">
+                {lesson.moduleTitle}
+                {lesson.youtube_video_id ? ` · ${lesson.youtube_video_id}` : ""}
+              </p>
+            </div>
+            <Button
+              size="sm"
+              variant="ghost"
+              type="button"
+              disabled={deleting}
+              onClick={() => onDelete(lesson.id)}
+              className="shrink-0 text-red-600 hover:bg-red-50 hover:text-red-700"
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
