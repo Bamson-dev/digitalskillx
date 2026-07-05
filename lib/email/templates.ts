@@ -78,6 +78,26 @@ export const emailTemplates = {
     ),
   }),
 
+  assignmentPublished: (p: {
+    firstName: string;
+    courseTitle: string;
+    assignmentTitle: string;
+    instructionsSummary: string;
+    dueDate: string | null;
+    url: string;
+  }) => ({
+    subject: `New assignment: ${p.assignmentTitle}`,
+    html: shell(
+      `New assignment in ${p.courseTitle}`,
+      `Hi ${p.firstName}, a new assignment <b>${p.assignmentTitle}</b> is now available in <b>${p.courseTitle}</b>.${
+        p.instructionsSummary
+          ? `<br/><br/><b>Instructions:</b> ${p.instructionsSummary}`
+          : ""
+      }${p.dueDate ? `<br/><br/><b>Due:</b> ${p.dueDate}` : ""}`,
+      { label: "Submit assignment", url: p.url },
+    ),
+  }),
+
   inactivity: (p: { name: string; url: string }) => ({
     subject: "We miss you at DigitalSkillX",
     html: shell(

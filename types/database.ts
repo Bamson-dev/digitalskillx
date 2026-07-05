@@ -47,6 +47,7 @@ export type NotificationType =
   | "lesson_unlocked"
   | "quiz_graded"
   | "assignment_feedback"
+  | "assignment_published"
   | "certificate_issued"
   | "announcement"
   | "enrollment";
@@ -320,14 +321,25 @@ export type Certificate = {
   is_valid: boolean;
 };
 
+export type AssignmentStatus = "draft" | "published";
+
 export type Assignment = Timestamps & {
   id: string;
-  module_id: string;
+  course_id: string;
+  module_id: string | null;
   title: string;
   instructions: string | null;
   due_date: string | null;
   submission_types_allowed: string[];
+  status: AssignmentStatus;
+  published_at: string | null;
   updated_at: string;
+};
+
+export type AssignmentPublishDelivery = {
+  assignment_id: string;
+  student_id: string;
+  notified_at: string;
 };
 
 export type AssignmentSubmission = {
@@ -481,7 +493,27 @@ export type Database = {
       >;
       assignments: Table<
         Assignment,
-        [Rel<"assignments_module_id_fkey", "module_id", "modules", "id">]
+        [
+          Rel<"assignments_course_id_fkey", "course_id", "courses", "id">,
+          Rel<"assignments_module_id_fkey", "module_id", "modules", "id">,
+        ]
+      >;
+      assignment_publish_deliveries: Table<
+        AssignmentPublishDelivery,
+        [
+          Rel<
+            "assignment_publish_deliveries_assignment_id_fkey",
+            "assignment_id",
+            "assignments",
+            "id"
+          >,
+          Rel<
+            "assignment_publish_deliveries_student_id_fkey",
+            "student_id",
+            "profiles",
+            "id"
+          >,
+        ]
       >;
       assignment_submissions: Table<
         AssignmentSubmission,
@@ -557,6 +589,7 @@ export type Database = {
       show_answers_mode: ShowAnswersMode;
       retake_rule: RetakeRule;
       submission_status: SubmissionStatus;
+      assignment_status: AssignmentStatus;
       notification_type: NotificationType;
       automation_trigger: AutomationTrigger;
       transaction_status: TransactionStatus;
