@@ -5,6 +5,7 @@ import { ArrowLeft, Linkedin, ExternalLink } from "lucide-react";
 import { requireStudent } from "@/lib/auth";
 import { getStudentCertificateById } from "@/lib/student-certificates";
 import { CertificateView } from "@/components/certificate-view";
+import { CertificateShareButton } from "@/components/certificate-share-button";
 import { PrintButton } from "@/components/print-button";
 import { DEFAULT_CERTIFICATE_TEMPLATE_KEY, normalizeCertificateTemplateKey } from "@/lib/certificate-templates";
 import { qrDataUrl } from "@/lib/qr";
@@ -33,6 +34,7 @@ export default async function CertificateDetailPage({ params }: { params: { id: 
         </Link>
         <div className="flex flex-wrap gap-2">
           <PrintButton />
+          <CertificateShareButton verifyUrl={verifyUrl} courseTitle={cert.courseTitle} />
           <a
             href={linkedinUrl}
             target="_blank"
