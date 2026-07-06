@@ -38,7 +38,13 @@ function NavSearch({ className }: { className?: string }) {
   );
 }
 
-export function MarketplaceNav({ user }: { user: NavUser }) {
+export function MarketplaceNav({
+  user,
+  hideCurrencyToggle = false,
+}: {
+  user: NavUser;
+  hideCurrencyToggle?: boolean;
+}) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
 
@@ -86,7 +92,7 @@ export function MarketplaceNav({ user }: { user: NavUser }) {
           </div>
 
           <div className="ml-auto flex items-center gap-2 sm:gap-3">
-            <CurrencyToggle className="shrink-0" />
+            {!hideCurrencyToggle ? <CurrencyToggle className="shrink-0" /> : null}
 
             {user ? (
               <Link
@@ -172,13 +178,22 @@ export function MarketplaceNav({ user }: { user: NavUser }) {
               <NavSearch />
             </div>
             <div className="mt-auto border-t border-neutral-200 px-4 py-4">
-              <p className="mb-2 text-[11px] font-medium uppercase tracking-wider text-neutral-400">Currency</p>
-              <CurrencyToggle />
+              {!hideCurrencyToggle ? (
+                <>
+                  <p className="mb-2 text-[11px] font-medium uppercase tracking-wider text-neutral-400">
+                    Currency
+                  </p>
+                  <CurrencyToggle />
+                </>
+              ) : null}
               {!user ? (
                 <Link
                   href="/register"
                   onClick={() => setOpen(false)}
-                  className="mt-4 inline-flex h-12 w-full items-center justify-center bg-brand text-sm font-semibold text-white"
+                  className={cn(
+                    "inline-flex h-12 w-full items-center justify-center bg-brand text-sm font-semibold text-white",
+                    hideCurrencyToggle ? "mt-0" : "mt-4",
+                  )}
                 >
                   Get Started
                 </Link>
