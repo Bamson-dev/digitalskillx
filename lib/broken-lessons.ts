@@ -10,60 +10,52 @@ import {
 export type { BrokenLessonRow } from "@/lib/broken-lessons-shared";
 export { getBrokenLessonFlags, isBrokenLesson } from "@/lib/broken-lessons-shared";
 
-type LessonWithModule = {
-  id: string;
-  title: string;
-  youtube_video_id: string | null;
-  modules: {
-    id: string;
-    title: string;
-    course_id: string;
-    courses: {
-      id: string;
-      title: string;
-    };
-  };
-};
-
 export async function fetchBrokenLessonsReport(
   supabase: SupabaseClient<Database>,
 ): Promise<BrokenLessonRow[]> {
-  const { data: lessons, error } = await supabase
-    .from("lessons")
-    .select(
-      "id, title, youtube_video_id, modules!inner(id, title, course_id, courses!inner(id, title))",
-    )
-    .order("position", { ascending: true });
+  const { data: courses, error: coursesError } = await supabase
+    .from("courses")
+    .select("id, title")
+    .order("title");
 
-  if (error) {
-    console.error("[broken-lessons] query failed:", error.message);
+  if (coursesError) {
+    console.error("[broken-lessons] courses query failed:", coursesError.message);
     return [];
   }
+  if (!courses?.length) return [];
 
   const rows: BrokenLessonRow[] = [];
 
-  for (const lesson of (lessons ?? []) as LessonWithModule[]) {
-    const mod = lesson.modules;
-    const course = mod.courses;
-    const flags = getBrokenLessonFlags(lesson);
-    if (flags.length === 0) continue;
-    rows.push({
-      id: lesson.id,
-      title: lesson.title?.trim() || "(no title)",
-      courseId: course.id,
-      courseTitle: course.title,
-      moduleId: mod.id,
-      moduleTitle: mod.title,
-      youtubeVideoId: lesson.youtube_video_id,
-      flags,
-    });
-  }
+  for (const course of courses) {
+    const { data: modules, error: modulesError } = await supabase
+      .from("modules")
+      .select("id, title, lessons(id, title, youtube_video_id, position)")
+      .eq("course_id", course.id)
+      .order("position", { ascending: true });
 
-  rows.sort((a, b) => {
-    const byCourse = a.courseTitle.localeCompare(b.courseTitle);
-    if (byCourse !== 0) return byCourse;
-    return a.title.localeCompare(b.title);
-  });
+    if (modulesError) {
+      console.error("[broken-lessons] modules query failed:", course.id, modulesError.message);
+      continue;
+    }
+
+    for (const mod of modules ?? []) {
+      const lessons = [...(mod.lessons ?? [])].sort((a, b) => a.position - b.position);
+      for (const lesson of lessons) {
+        const flags = getBrokenLessonFlags(lesson);
+        if (flags.length === 0) continue;
+        rows.push({
+          id: lesson.id,
+          title: lesson.title?.trim() || "(no title)",
+          courseId: course.id,
+          courseTitle: course.title,
+          moduleId: mod.id,
+          moduleTitle: mod.title,
+          youtubeVideoId: lesson.youtube_video_id,
+          flags,
+        });
+      }
+    }
+  }
 
   return rows;
 }
