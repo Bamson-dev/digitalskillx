@@ -16,6 +16,7 @@ import { CourseResourcesPanel } from "@/components/admin/course-resources-panel"
 import type { AttachmentDisplay } from "@/lib/lesson-attachments-shared";
 import type { Course, CourseCategory, Lesson, Module } from "@/types/database";
 import type { CertificateTemplateKey } from "@/lib/certificate-templates";
+import { getBrokenLessonFlags } from "@/lib/broken-lessons-shared";
 import {
   deleteCourse,
   createModule,
@@ -329,6 +330,8 @@ function LessonRow({
   onDragEnd: () => void;
 }) {
   const [open, setOpen] = useState(false);
+  const brokenFlags = getBrokenLessonFlags(lesson);
+  const displayTitle = lesson.title?.trim() || "(no title)";
 
   return (
     <div
@@ -385,7 +388,15 @@ function LessonRow({
             <span className="shrink-0 rounded bg-slate-100 px-1.5 py-0.5 text-xs text-slate-600">
               {lesson.lesson_type}
             </span>
-            <span className="truncate">{lesson.title}</span>
+            <span className="truncate">{displayTitle}</span>
+            {brokenFlags.length > 0 ? (
+              <span
+                className="shrink-0 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-900"
+                title={brokenFlags.join(", ")}
+              >
+                Broken
+              </span>
+            ) : null}
             {lesson.youtube_video_id ? (
               <span className="shrink-0 rounded bg-red-50 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-red-700">
                 YouTube

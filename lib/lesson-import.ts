@@ -6,9 +6,9 @@ import {
   fetchSingleVideo,
   type YoutubeVideo,
 } from "@/lib/youtube";
-import type { LessonImportSource } from "@/lib/lesson-import-shared";
+import type { LessonImportSource, ImportSkipReason } from "@/lib/lesson-import-shared";
 
-export type { LessonImportSource } from "@/lib/lesson-import-shared";
+export type { LessonImportSource, ImportSkipReason } from "@/lib/lesson-import-shared";
 
 export type ImportedLessonDraft = {
   title: string;
@@ -17,6 +17,11 @@ export type ImportedLessonDraft = {
   youtubeVideoId: string | null;
   durationSeconds: number | null;
   dedupeKey: string;
+};
+
+export type LessonsImportResult = {
+  lessons: ImportedLessonDraft[];
+  skipped: ImportSkipReason[];
 };
 
 type OembedPayload = {
@@ -136,8 +141,14 @@ async function fetchOembed(endpoint: string, url: string): Promise<OembedPayload
   return res.json() as Promise<OembedPayload>;
 }
 
-function fromYoutubeVideo(v: YoutubeVideo, contentUrl: string): ImportedLessonDraft {
-  const title = v.title.trim() || `Video ${v.videoId}`;
+function isUnavailableYoutubeTitle(title: string) {
+  const normalized = title.trim().toLowerCase();
+  return normalized === "private video" || normalized === "deleted video";
+}
+
+function fromYoutubeVideo(v: YoutubeVideo, contentUrl: string): ImportedLessonDraft | null {
+  const title = v.title.trim();
+  if (!title || isUnavailableYoutubeTitle(title)) return null;
   return {
     title,
     description: v.description.slice(0, 5000),
@@ -148,86 +159,139 @@ function fromYoutubeVideo(v: YoutubeVideo, contentUrl: string): ImportedLessonDr
   };
 }
 
+function skipReasonForVideo(v: YoutubeVideo): ImportSkipReason {
+  const title = v.title.trim();
+  if (!title) {
+    return { videoId: v.videoId, title: "", reason: "Missing video title" };
+  }
+  if (isUnavailableYoutubeTitle(title)) {
+    return { videoId: v.videoId, title, reason: "Video is private or deleted on YouTube" };
+  }
+  return { videoId: v.videoId, title, reason: "Could not import video" };
+}
+
 async function importYoutubePlaylist(
   url: string,
   options?: { youtubeApiKey?: string },
-): Promise<ImportedLessonDraft[]> {
+): Promise<LessonsImportResult> {
   const input = detectYoutubeInput(url);
   if (!input || input.type !== "playlist") {
     throw new Error("Invalid YouTube playlist URL.");
   }
   const videos = await fetchPlaylist(input.id, { apiKey: options?.youtubeApiKey });
-  return videos.map((v) =>
-    fromYoutubeVideo(v, `https://www.youtube.com/watch?v=${v.videoId}`),
-  );
+  const lessons: ImportedLessonDraft[] = [];
+  const skipped: ImportSkipReason[] = [];
+
+  for (const video of videos) {
+    const draft = fromYoutubeVideo(video, `https://www.youtube.com/watch?v=${video.videoId}`);
+    if (draft) lessons.push(draft);
+    else skipped.push(skipReasonForVideo(video));
+  }
+
+  return { lessons, skipped };
 }
 
 async function importYoutubeVideo(
   url: string,
   options?: { youtubeApiKey?: string },
-): Promise<ImportedLessonDraft[]> {
+): Promise<LessonsImportResult> {
   const input = detectYoutubeInput(url);
   if (!input || input.type !== "video") {
     throw new Error("Invalid YouTube video URL.");
   }
   const videos = await fetchSingleVideo(input.id, { apiKey: options?.youtubeApiKey });
   if (videos.length === 0) throw new Error("YouTube video not found.");
-  return [fromYoutubeVideo(videos[0], `https://www.youtube.com/watch?v=${input.id}`)];
+
+  const draft = fromYoutubeVideo(videos[0], `https://www.youtube.com/watch?v=${input.id}`);
+  if (!draft) {
+    return { lessons: [], skipped: [skipReasonForVideo(videos[0])] };
+  }
+  return { lessons: [draft], skipped: [] };
 }
 
-async function importVimeo(url: string): Promise<ImportedLessonDraft[]> {
+async function importVimeo(url: string): Promise<LessonsImportResult> {
   const data = await fetchOembed("https://vimeo.com/api/oembed.json", url);
   const embedUrl = iframeSrcFromHtml(data.html);
   if (!embedUrl) throw new Error("Vimeo did not return an embed URL.");
-  return [
-    {
-      title: data.title?.trim() || "Untitled video",
-      description: "",
-      contentUrl: embedUrl,
-      youtubeVideoId: null,
-      durationSeconds: typeof data.duration === "number" ? Math.round(data.duration) : null,
-      dedupeKey: `vimeo:${embedUrl}`,
-    },
-  ];
+  const title = data.title?.trim();
+  if (!title) {
+    return {
+      lessons: [],
+      skipped: [{ videoId: null, title: "", reason: "Missing video title" }],
+    };
+  }
+  return {
+    lessons: [
+      {
+        title,
+        description: "",
+        contentUrl: embedUrl,
+        youtubeVideoId: null,
+        durationSeconds: typeof data.duration === "number" ? Math.round(data.duration) : null,
+        dedupeKey: `vimeo:${embedUrl}`,
+      },
+    ],
+    skipped: [],
+  };
 }
 
-async function importWistia(url: string): Promise<ImportedLessonDraft[]> {
+async function importWistia(url: string): Promise<LessonsImportResult> {
   const data = await fetchOembed("https://fast.wistia.com/oembed", url);
   const embedUrl = iframeSrcFromHtml(data.html);
   if (!embedUrl) throw new Error("Wistia did not return an embed URL.");
-  return [
-    {
-      title: data.title?.trim() || "Untitled video",
-      description: "",
-      contentUrl: embedUrl,
-      youtubeVideoId: null,
-      durationSeconds: typeof data.duration === "number" ? Math.round(data.duration) : null,
-      dedupeKey: `wistia:${embedUrl}`,
-    },
-  ];
+  const title = data.title?.trim();
+  if (!title) {
+    return {
+      lessons: [],
+      skipped: [{ videoId: null, title: "", reason: "Missing video title" }],
+    };
+  }
+  return {
+    lessons: [
+      {
+        title,
+        description: "",
+        contentUrl: embedUrl,
+        youtubeVideoId: null,
+        durationSeconds: typeof data.duration === "number" ? Math.round(data.duration) : null,
+        dedupeKey: `wistia:${embedUrl}`,
+      },
+    ],
+    skipped: [],
+  };
 }
 
-async function importLoom(url: string): Promise<ImportedLessonDraft[]> {
+async function importLoom(url: string): Promise<LessonsImportResult> {
   const data = await fetchOembed("https://www.loom.com/v1/oembed", url);
   const embedUrl = iframeSrcFromHtml(data.html);
   if (!embedUrl) throw new Error("Loom did not return an embed URL.");
-  return [
-    {
-      title: data.title?.trim() || "Untitled video",
-      description: "",
-      contentUrl: embedUrl,
-      youtubeVideoId: null,
-      durationSeconds: null,
-      dedupeKey: `loom:${embedUrl}`,
-    },
-  ];
+  const title = data.title?.trim();
+  if (!title) {
+    return {
+      lessons: [],
+      skipped: [{ videoId: null, title: "", reason: "Missing video title" }],
+    };
+  }
+  return {
+    lessons: [
+      {
+        title,
+        description: "",
+        contentUrl: embedUrl,
+        youtubeVideoId: null,
+        durationSeconds: null,
+        dedupeKey: `loom:${embedUrl}`,
+      },
+    ],
+    skipped: [],
+  };
 }
 
 export async function fetchLessonsForImport(
   source: LessonImportSource,
   rawUrl: string,
   options?: { youtubeApiKey?: string },
-): Promise<ImportedLessonDraft[]> {
+): Promise<LessonsImportResult> {
   const validationError = validateImportUrl(source, rawUrl);
   if (validationError) throw new Error(validationError);
 

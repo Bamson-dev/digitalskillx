@@ -12,6 +12,7 @@ import {
   CheckSquare,
   Zap,
   Megaphone,
+  AlertTriangle,
   LogOut,
 } from "lucide-react";
 import { signOutAdmin } from "@/app/(admin)/admin/actions";
@@ -21,6 +22,7 @@ const nav = [
   { href: "/admin/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/admin/students", label: "Students", icon: Users },
   { href: "/admin/courses", label: "Courses", icon: BookOpen },
+  { href: "/admin/broken-lessons", label: "Broken lessons", icon: AlertTriangle },
   { href: "/admin/assignments", label: "Assignments", icon: ClipboardList },
   { href: "/admin/grading", label: "Grading", icon: CheckSquare },
   { href: "/admin/announcements", label: "Announcements", icon: Megaphone },

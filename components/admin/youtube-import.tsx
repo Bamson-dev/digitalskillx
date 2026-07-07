@@ -7,7 +7,7 @@ import { Card, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import type { LessonImportSource } from "@/lib/lesson-import-shared";
+import type { LessonImportSource, ImportSkipReason } from "@/lib/lesson-import-shared";
 
 const SOURCE_OPTIONS: { value: LessonImportSource; label: string }[] = [
   { value: "youtube_playlist", label: "YouTube playlist" },
@@ -78,6 +78,7 @@ export function YoutubeImport({
   const [manageModuleId, setManageModuleId] = useState("");
   const [selectedDeleteIds, setSelectedDeleteIds] = useState<Set<string>>(() => new Set());
   const [deleting, setDeleting] = useState(false);
+  const [skipReasons, setSkipReasons] = useState<ImportSkipReason[]>([]);
 
   const placeholder = useMemo(() => PLACEHOLDERS[source], [source]);
   const isPlaylist = source === "youtube_playlist";
@@ -121,6 +122,7 @@ export function YoutubeImport({
       videos?: PreviewVideo[];
       lessons?: ImportedLesson[];
       moduleId?: string;
+      skipReasons?: ImportSkipReason[];
     };
   }
 
@@ -129,11 +131,13 @@ export function YoutubeImport({
     setResult(null);
     setError(null);
     setPreviewVideos(null);
+    setSkipReasons([]);
     try {
       const json = await postImport({ courseId, url, source, preview: true });
       const videos = json.videos ?? [];
       setPreviewVideos(videos);
       setSelectedVideoIds(new Set(videos.map((video) => videoKey(video))));
+      setSkipReasons(json.skipReasons ?? []);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Preview failed");
     } finally {
@@ -156,6 +160,7 @@ export function YoutubeImport({
         videoIds,
       });
       setResult(`Imported ${json.imported}, skipped ${json.skipped} of ${json.total}.`);
+      setSkipReasons(json.skipReasons ?? []);
       if (json.lessons?.length) {
         setRecentImports(json.lessons);
         setManageModuleId(json.moduleId ?? json.lessons[0]?.moduleId ?? "");
@@ -426,6 +431,22 @@ export function YoutubeImport({
       ) : null}
 
       {result ? <p className="mt-3 rounded-lg bg-green-50 px-3 py-2 text-sm text-green-700">{result}</p> : null}
+      {skipReasons.length > 0 ? (
+        <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50/60 px-3 py-2">
+          <p className="text-sm font-semibold text-amber-900">
+            Skipped {skipReasons.length} video{skipReasons.length === 1 ? "" : "s"}
+          </p>
+          <ul className="mt-2 max-h-40 space-y-1 overflow-y-auto text-xs text-amber-950">
+            {skipReasons.map((item, index) => (
+              <li key={`${item.videoId ?? item.title}-${index}`}>
+                <span className="font-medium">{item.title || item.videoId || "Unknown video"}</span>
+                {" — "}
+                {item.reason}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
       {error ? <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p> : null}
     </Card>
   );

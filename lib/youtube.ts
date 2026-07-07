@@ -133,7 +133,8 @@ export async function fetchPlaylist(
     }
     for (const item of json.items ?? []) {
       const videoId = item.snippet?.resourceId?.videoId;
-      if (!videoId) continue;
+      const kind = item.snippet?.resourceId?.kind;
+      if (!videoId || kind !== "youtube#video") continue;
       videos.push({
         videoId,
         title: String(item.snippet?.title ?? "").trim() || `Video ${videoId}`,

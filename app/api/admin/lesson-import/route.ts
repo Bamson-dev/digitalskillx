@@ -76,9 +76,9 @@ export async function POST(request: NextRequest) {
     youtubeApiKey = await getYoutubeApiKey(auth.session);
   }
 
-  let lessons;
+  let importResult;
   try {
-    lessons = await fetchLessonsForImport(source, body.url, { youtubeApiKey });
+    importResult = await fetchLessonsForImport(source, body.url, { youtubeApiKey });
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "Import failed" },
@@ -86,8 +86,17 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  const { lessons, skipped: skippedAtFetch } = importResult;
+
   if (lessons.length === 0) {
-    return NextResponse.json({ error: "No lessons found to import." }, { status: 404 });
+    return NextResponse.json(
+      {
+        error: "No lessons found to import.",
+        skipped: skippedAtFetch,
+        skipReasons: skippedAtFetch,
+      },
+      { status: 404 },
+    );
   }
 
   if (body.preview) {
@@ -100,6 +109,8 @@ export async function POST(request: NextRequest) {
         contentUrl: lesson.contentUrl,
       })),
       total: lessons.length,
+      skipped: skippedAtFetch.length,
+      skipReasons: skippedAtFetch,
     });
   }
 
@@ -157,7 +168,8 @@ export async function POST(request: NextRequest) {
     .eq("module_id", moduleId);
 
   let imported = 0;
-  let skipped = 0;
+  let skipped = skippedAtFetch.length;
+  const skipReasons = [...skippedAtFetch];
   let pos = startPos ?? 0;
   const importedLessons: {
     id: string;
@@ -173,6 +185,11 @@ export async function POST(request: NextRequest) {
 
     if (isDupe) {
       skipped++;
+      skipReasons.push({
+        videoId: lesson.youtubeVideoId,
+        title: lesson.title,
+        reason: "Already imported in this course",
+      });
       continue;
     }
 
@@ -217,5 +234,6 @@ export async function POST(request: NextRequest) {
     total: lessonsToImport.length,
     moduleId,
     lessons: importedLessons,
+    skipReasons,
   });
 }

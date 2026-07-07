@@ -130,8 +130,8 @@ export default async function LessonPage({ params }: { params: { id: string } })
       : null;
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[260px_1fr]">
-      <aside className="lg:sticky lg:top-20 lg:self-start">
+    <div className="grid gap-4 lg:grid-cols-[240px_1fr] lg:gap-6">
+      <aside className="order-2 lg:order-1 lg:sticky lg:top-20 lg:self-start">
         <LessonOutline
           courseId={courseId}
           courseTitle={course?.title ?? "Course"}
@@ -142,7 +142,7 @@ export default async function LessonPage({ params }: { params: { id: string } })
         />
       </aside>
 
-      <div>
+      <div className="order-1 lg:order-2">
         {isLocked ? (
           <Card className="flex flex-col items-center gap-3 py-16 text-center">
             <Lock className="h-8 w-8 text-muted" />

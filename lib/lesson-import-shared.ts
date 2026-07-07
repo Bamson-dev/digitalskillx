@@ -4,3 +4,9 @@ export type LessonImportSource =
   | "vimeo"
   | "wistia"
   | "loom";
+
+export type ImportSkipReason = {
+  videoId: string | null;
+  title: string;
+  reason: string;
+};

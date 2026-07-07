@@ -1,9 +1,14 @@
+"use client";
+
+import { useEffect, useMemo, useRef } from "react";
 import Link from "next/link";
 import { CheckCircle2, Circle, Lock, PlayCircle } from "lucide-react";
+import {
+  formatLessonDuration,
+  normalizeOutlineModules,
+  type ModuleWithLessons,
+} from "@/lib/lesson-display";
 import { cn } from "@/lib/utils";
-import type { Lesson, Module } from "@/types/database";
-
-type ModuleWithLessons = Module & { lessons: Lesson[] };
 
 export function LessonOutline({
   courseId,
@@ -20,44 +25,84 @@ export function LessonOutline({
   completedIds: Set<string>;
   lockedIds: Set<string>;
 }) {
+  const listRef = useRef<HTMLDivElement>(null);
+  const activeRef = useRef<HTMLLIElement>(null);
+
+  const displayModules = useMemo(() => normalizeOutlineModules(modules), [modules]);
+
+  useEffect(() => {
+    const node = activeRef.current;
+    const container = listRef.current;
+    if (!node || !container) return;
+    const frame = requestAnimationFrame(() => {
+      node.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [currentLessonId, displayModules]);
+
   return (
-    <nav className="space-y-4">
-      <Link href={`/courses/${courseId}`} className="block text-sm font-semibold hover:text-brand">
+    <nav className="flex flex-col gap-2">
+      <Link href={`/courses/${courseId}`} className="block text-sm font-semibold leading-tight hover:text-brand">
         {courseTitle}
       </Link>
-      {modules.map((m) => {
-        const lessons = [...(m.lessons ?? [])].sort((a, b) => a.position - b.position);
-        return (
-          <div key={m.id}>
-            <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted">{m.title}</p>
-            <ul className="space-y-0.5">
-              {lessons.map((l) => {
-                const isCurrent = l.id === currentLessonId;
-                const done = completedIds.has(l.id);
-                const locked = lockedIds.has(l.id);
-                const Icon = done ? CheckCircle2 : locked ? Lock : isCurrent ? PlayCircle : Circle;
-                const inner = (
-                  <span
-                    className={cn(
-                      "flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm",
-                      isCurrent ? "bg-brand-50 font-medium text-brand-700" : "text-foreground hover:bg-brand-50/50",
-                      locked && "text-muted",
-                    )}
-                  >
-                    <Icon className={cn("h-4 w-4 shrink-0", done && "text-green-600")} />
-                    <span className="truncate">{l.title}</span>
-                  </span>
-                );
-                return (
-                  <li key={l.id}>
-                    {locked ? inner : <Link href={`/lessons/${l.id}`}>{inner}</Link>}
-                  </li>
-                );
-              })}
-            </ul>
-          </div>
-        );
-      })}
+
+      <div ref={listRef} className="max-h-[min(50vh,28rem)] overflow-y-auto overscroll-contain lg:max-h-[calc(100vh-7rem)]">
+        {displayModules.map((mod) => {
+          const lessons = [...(mod.lessons ?? [])].sort((a, b) => a.position - b.position);
+          if (lessons.length === 0) return null;
+          const showModuleHeading = mod.title.trim().length > 0;
+
+          return (
+            <div key={mod.id} className={showModuleHeading ? "mt-2 first:mt-0" : ""}>
+              {showModuleHeading ? (
+                <p className="mb-0.5 px-1 text-[11px] font-semibold uppercase tracking-wide text-muted">
+                  {mod.title}
+                </p>
+              ) : null}
+              <ul>
+                {lessons.map((lesson) => {
+                  const isCurrent = lesson.id === currentLessonId;
+                  const done = completedIds.has(lesson.id);
+                  const locked = lockedIds.has(lesson.id);
+                  const Icon = done ? CheckCircle2 : locked ? Lock : isCurrent ? PlayCircle : Circle;
+                  const duration = formatLessonDuration(lesson.duration_seconds);
+                  const label = lesson.title?.trim() || "Untitled lesson";
+
+                  const inner = (
+                    <span
+                      className={cn(
+                        "flex items-center gap-2 rounded-md px-1 py-0.5 text-sm leading-tight",
+                        isCurrent
+                          ? "bg-brand-50 font-medium text-brand-700"
+                          : "text-foreground hover:bg-brand-50/50",
+                        locked && "text-muted",
+                      )}
+                    >
+                      <Icon
+                        className={cn(
+                          "h-3.5 w-3.5 shrink-0",
+                          done && "text-green-600",
+                          isCurrent && !done && "text-brand-600",
+                        )}
+                      />
+                      <span className="min-w-0 flex-1 truncate">{label}</span>
+                      {duration ? (
+                        <span className="shrink-0 text-[11px] tabular-nums text-muted">{duration}</span>
+                      ) : null}
+                    </span>
+                  );
+
+                  return (
+                    <li key={lesson.id} ref={isCurrent ? activeRef : undefined}>
+                      {locked ? inner : <Link href={`/lessons/${lesson.id}`}>{inner}</Link>}
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          );
+        })}
+      </div>
     </nav>
   );
 }
