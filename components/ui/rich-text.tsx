@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Bold, Italic, List, ListOrdered, Link2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -22,6 +22,13 @@ export function RichText({
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const [html, setHtml] = useState(defaultValue);
+  const initialHtmlSet = useRef(false);
+
+  useEffect(() => {
+    if (initialHtmlSet.current || !ref.current || !defaultValue) return;
+    ref.current.innerHTML = defaultValue;
+    initialHtmlSet.current = true;
+  }, [defaultValue]);
 
   function exec(command: string, value?: string) {
     document.execCommand(command, false, value);
@@ -66,7 +73,6 @@ export function RichText({
         data-placeholder={placeholder}
         onInput={(e) => setHtml((e.target as HTMLDivElement).innerHTML)}
         className="prose-sm min-h-[140px] px-3 py-2 text-sm outline-none empty:before:text-muted empty:before:content-[attr(data-placeholder)]"
-        dangerouslySetInnerHTML={{ __html: defaultValue }}
       />
       <input type="hidden" name={name} value={html} />
     </div>
