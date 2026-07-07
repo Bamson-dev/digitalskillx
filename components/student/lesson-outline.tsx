@@ -5,6 +5,7 @@ import Link from "next/link";
 import { CheckCircle2, Circle, Lock, PlayCircle } from "lucide-react";
 import {
   formatLessonDuration,
+  isGenericImportModuleTitle,
   normalizeOutlineModules,
   type ModuleWithLessons,
 } from "@/lib/lesson-display";
@@ -35,7 +36,8 @@ export function LessonOutline({
     const container = listRef.current;
     if (!node || !container) return;
     const frame = requestAnimationFrame(() => {
-      node.scrollIntoView({ block: "nearest", behavior: "smooth" });
+      const mobile = typeof window !== "undefined" && window.matchMedia("(max-width: 1023px)").matches;
+      node.scrollIntoView({ block: mobile ? "start" : "nearest", behavior: "smooth" });
     });
     return () => cancelAnimationFrame(frame);
   }, [currentLessonId, displayModules]);
@@ -46,11 +48,12 @@ export function LessonOutline({
         {courseTitle}
       </Link>
 
-      <div ref={listRef} className="max-h-[min(50vh,28rem)] overflow-y-auto overscroll-contain lg:max-h-[calc(100vh-7rem)]">
+      <div ref={listRef} className="max-h-[min(36vh,16rem)] overflow-y-auto overscroll-contain sm:max-h-[min(42vh,22rem)] lg:max-h-[calc(100vh-7rem)]">
         {displayModules.map((mod) => {
           const lessons = [...(mod.lessons ?? [])].sort((a, b) => a.position - b.position);
           if (lessons.length === 0) return null;
-          const showModuleHeading = mod.title.trim().length > 0;
+          const showModuleHeading =
+            mod.title.trim().length > 0 && !isGenericImportModuleTitle(mod.title);
 
           return (
             <div key={mod.id} className={showModuleHeading ? "mt-2 first:mt-0" : ""}>

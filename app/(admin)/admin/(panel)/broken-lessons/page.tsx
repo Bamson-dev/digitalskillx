@@ -8,6 +8,8 @@ import { Card } from "@/components/ui/card";
 
 export const metadata: Metadata = { title: "Broken lessons" };
 
+export const dynamic = "force-dynamic";
+
 export default async function BrokenLessonsPage() {
   await requireAdmin();
   const supabase = await getAdminSupabase();

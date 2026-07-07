@@ -88,7 +88,7 @@ export async function fetchSingleVideo(
   return [
     {
       videoId: id,
-      title: String(item.snippet?.title ?? "").trim() || `Video ${id}`,
+      title: String(item.snippet?.title ?? "").trim(),
       description: item.snippet.description ?? "",
       thumbnail: item.snippet.thumbnails?.high?.url ?? null,
       durationSeconds: parseDuration(item.contentDetails?.duration ?? "PT0S"),
@@ -137,7 +137,7 @@ export async function fetchPlaylist(
       if (!videoId || kind !== "youtube#video") continue;
       videos.push({
         videoId,
-        title: String(item.snippet?.title ?? "").trim() || `Video ${videoId}`,
+        title: String(item.snippet?.title ?? "").trim(),
         description: item.snippet.description ?? "",
         thumbnail: item.snippet.thumbnails?.high?.url ?? null,
         durationSeconds: null,

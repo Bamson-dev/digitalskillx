@@ -146,9 +146,11 @@ function isUnavailableYoutubeTitle(title: string) {
   return normalized === "private video" || normalized === "deleted video";
 }
 
+const GENERIC_FALLBACK_TITLE = /^video [\w-]{11}$/i;
+
 function fromYoutubeVideo(v: YoutubeVideo, contentUrl: string): ImportedLessonDraft | null {
   const title = v.title.trim();
-  if (!title || isUnavailableYoutubeTitle(title)) return null;
+  if (!title || GENERIC_FALLBACK_TITLE.test(title) || isUnavailableYoutubeTitle(title)) return null;
   return {
     title,
     description: v.description.slice(0, 5000),
@@ -163,6 +165,9 @@ function skipReasonForVideo(v: YoutubeVideo): ImportSkipReason {
   const title = v.title.trim();
   if (!title) {
     return { videoId: v.videoId, title: "", reason: "Missing video title" };
+  }
+  if (GENERIC_FALLBACK_TITLE.test(title)) {
+    return { videoId: v.videoId, title, reason: "Missing video title" };
   }
   if (isUnavailableYoutubeTitle(title)) {
     return { videoId: v.videoId, title, reason: "Video is private or deleted on YouTube" };
