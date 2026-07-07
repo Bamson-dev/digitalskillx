@@ -7,6 +7,7 @@ import {
   courseEnrollmentEmail,
   idleReminderEmail,
   paymentReceiptEmail,
+  progressMilestoneEmail,
 } from "@/lib/email/system-templates";
 import { sendSystemEmail } from "@/lib/system-email";
 import { studentFirstName } from "@/lib/student-name";
@@ -328,28 +329,26 @@ export async function sendCourseCompletionCertificateEmail(params: {
   return result;
 }
 
-/** Resolve the lesson URL where the student should resume a course. */
-export async function resumeLessonUrl(studentId: string, courseId: string) {
+/** Resolve the lesson id where the student should resume a course. */
+async function resolveResumeLessonId(studentId: string, courseId: string) {
   const admin = await createAdminClientAsync();
-  const baseUrl = siteUrl();
 
   const { data: modules } = await admin
     .from("modules")
-    .select("id, position, lessons(id, position)")
+    .select("id, position, lessons(id, position, title)")
     .eq("course_id", courseId)
     .order("position");
 
-  const orderedLessonIds: string[] = [];
+  const orderedLessons: { id: string; title: string }[] = [];
   for (const mod of modules ?? []) {
-    const lessons = (mod.lessons ?? []) as { id: string; position: number }[];
+    const lessons = (mod.lessons ?? []) as { id: string; position: number; title: string }[];
     lessons.sort((a, b) => a.position - b.position);
-    for (const lesson of lessons) orderedLessonIds.push(lesson.id);
+    for (const lesson of lessons) orderedLessons.push({ id: lesson.id, title: lesson.title });
   }
 
-  if (orderedLessonIds.length === 0) {
-    return `${baseUrl}/courses/${courseId}`;
-  }
+  if (orderedLessons.length === 0) return null;
 
+  const orderedLessonIds = orderedLessons.map((lesson) => lesson.id);
   const { data: progressRows } = await admin
     .from("lesson_progress")
     .select("lesson_id, completed, updated_at")
@@ -360,11 +359,11 @@ export async function resumeLessonUrl(studentId: string, courseId: string) {
     (progressRows ?? []).map((row) => [row.lesson_id, row]),
   );
 
-  let resumeId = orderedLessonIds[0];
-  for (const lessonId of orderedLessonIds) {
-    const row = progressByLesson.get(lessonId);
+  let resumeId = orderedLessons[0].id;
+  for (const lesson of orderedLessons) {
+    const row = progressByLesson.get(lesson.id);
     if (!row?.completed) {
-      resumeId = lessonId;
+      resumeId = lesson.id;
       break;
     }
   }
@@ -376,7 +375,151 @@ export async function resumeLessonUrl(studentId: string, courseId: string) {
     resumeId = lastTouched.lesson_id;
   }
 
-  return `${baseUrl}/lessons/${resumeId}`;
+  const resumeLesson = orderedLessons.find((lesson) => lesson.id === resumeId) ?? orderedLessons[0];
+  const nextIncomplete =
+    orderedLessons.find((lesson) => !progressByLesson.get(lesson.id)?.completed) ?? resumeLesson;
+
+  return {
+    resumeLessonId: resumeLesson.id,
+    nextLessonTitle: nextIncomplete.title,
+  };
+}
+
+/** Path-only resume link for in-app navigation (e.g. /lessons/{id}). */
+export async function resumeLessonPath(studentId: string, courseId: string) {
+  const resolved = await resolveResumeLessonId(studentId, courseId);
+  if (!resolved) return `/courses/${courseId}`;
+  return `/lessons/${resolved.resumeLessonId}`;
+}
+
+/** Resolve the lesson URL where the student should resume a course. */
+export async function resumeLessonUrl(studentId: string, courseId: string) {
+  const baseUrl = siteUrl();
+  return `${baseUrl}${await resumeLessonPath(studentId, courseId)}`;
+}
+
+const PROGRESS_MILESTONES = [25, 50, 75] as const;
+type ProgressMilestone = (typeof PROGRESS_MILESTONES)[number];
+
+const MILESTONE_SENT_COLUMNS: Record<
+  ProgressMilestone,
+  "milestone_25_email_sent_at" | "milestone_50_email_sent_at" | "milestone_75_email_sent_at"
+> = {
+  25: "milestone_25_email_sent_at",
+  50: "milestone_50_email_sent_at",
+  75: "milestone_75_email_sent_at",
+};
+
+/**
+ * Send 25/50/75% milestone emails once per student per course.
+ *
+ * Idempotency: each milestone is gated by a nullable `milestone_*_email_sent_at`
+ * column on enrollments. We read sent flags before sending, and only set the
+ * timestamp after ZeptoMail reports success — so retries never duplicate mail.
+ */
+export async function sendProgressMilestoneEmailsIfNeeded(params: {
+  studentId: string;
+  courseId: string;
+  pct: number;
+}) {
+  const admin = await createAdminClientAsync();
+
+  const { data: enrollment } = await admin
+    .from("enrollments")
+    .select(
+      "id, completed_at, milestone_25_email_sent_at, milestone_50_email_sent_at, milestone_75_email_sent_at",
+    )
+    .eq("student_id", params.studentId)
+    .eq("course_id", params.courseId)
+    .maybeSingle();
+
+  if (!enrollment || enrollment.completed_at) {
+    return { sent: 0 as const, skipped: true as const };
+  }
+
+  const pending = PROGRESS_MILESTONES.filter((milestone) => {
+    const sentAt = enrollment[MILESTONE_SENT_COLUMNS[milestone]];
+    return params.pct >= milestone && !sentAt;
+  });
+
+  if (pending.length === 0) {
+    return { sent: 0 as const, skipped: true as const };
+  }
+
+  const [{ data: profile }, { data: course }, resume] = await Promise.all([
+    admin.from("profiles").select("full_name, email, role, is_suspended").eq("id", params.studentId).maybeSingle(),
+    admin.from("courses").select("title").eq("id", params.courseId).maybeSingle(),
+    resolveResumeLessonId(params.studentId, params.courseId),
+  ]);
+
+  if (
+    !profile?.email ||
+    profile.role !== "student" ||
+    profile.is_suspended ||
+    !course?.title ||
+    !resume
+  ) {
+    return { sent: 0 as const, skipped: true as const, reason: "missing_data" as const };
+  }
+
+  const settings = await getPlatformSettingsAdmin();
+  const sender = await getEmailSenderConfig();
+  const baseUrl = siteUrl();
+  const resumeUrl = `${baseUrl}${await resumeLessonPath(params.studentId, params.courseId)}`;
+  const firstName = studentFirstName(profile.full_name ?? "there");
+
+  let sent = 0;
+  for (const milestone of pending) {
+    const tpl = progressMilestoneEmail({
+      firstName,
+      courseTitle: course.title,
+      milestonePct: milestone,
+      nextLessonTitle: resume.nextLessonTitle,
+      resumeUrl,
+      supportEmail: sender.replyTo ?? sender.fromAddress,
+      brandColor: settings.primary_color,
+    });
+
+    const result = await sendSystemEmail({
+      type: "progress_milestone",
+      to: profile.email,
+      subject: tpl.subject,
+      html: tpl.html,
+      replyTo: sender.replyTo,
+      payload: {
+        studentId: params.studentId,
+        courseId: params.courseId,
+        milestone,
+        enrollmentId: enrollment.id,
+      },
+    });
+
+    if (result.sent) {
+      const sentAt = new Date().toISOString();
+      if (milestone === 25) {
+        await admin
+          .from("enrollments")
+          .update({ milestone_25_email_sent_at: sentAt })
+          .eq("id", enrollment.id)
+          .is("milestone_25_email_sent_at", null);
+      } else if (milestone === 50) {
+        await admin
+          .from("enrollments")
+          .update({ milestone_50_email_sent_at: sentAt })
+          .eq("id", enrollment.id)
+          .is("milestone_50_email_sent_at", null);
+      } else {
+        await admin
+          .from("enrollments")
+          .update({ milestone_75_email_sent_at: sentAt })
+          .eq("id", enrollment.id)
+          .is("milestone_75_email_sent_at", null);
+      }
+      sent++;
+    }
+  }
+
+  return { sent, skipped: sent === 0 };
 }
 
 /** Daily cron: send idle reminders once per enrollment idle period. */

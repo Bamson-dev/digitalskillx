@@ -12,6 +12,9 @@ import { LessonOutline } from "@/components/student/lesson-outline";
 import { LessonPlayer } from "@/components/student/lesson-player";
 import { LessonAttachments } from "@/components/student/lesson-attachments";
 import { CourseResources } from "@/components/student/course-resources";
+import { CourseProgressNudge } from "@/components/student/course-progress-nudge";
+import { CourseCertificateGoal } from "@/components/student/course-certificate-goal";
+import { resolveCertificateTemplateKey } from "@/lib/certificate-template-resolve";
 import { Card } from "@/components/ui/card";
 import type { Lesson, Module } from "@/types/database";
 
@@ -53,9 +56,9 @@ export default async function LessonPage({ params }: { params: { id: string } })
 
   const studentId = enrolled ? targetStudentId : profile.id;
 
-  const [{ data: course }, { data: modules }, { data: progress }, { data: note }, { data: bookmarks }, { data: enrollment }, { data: attachments }, { data: courseResources }] =
+  const [{ data: course }, { data: modules }, { data: progress }, { data: note }, { data: bookmarks }, { data: enrollment }, { data: attachments }, { data: courseResources }, { data: certificate }] =
     await Promise.all([
-      supabase.from("courses").select("id, title").eq("id", courseId).single(),
+      supabase.from("courses").select("id, title, certificate_enabled").eq("id", courseId).single(),
       supabase.from("modules").select("*, lessons(*)").eq("course_id", courseId),
       session.from("lesson_progress").select("lesson_id, completed").eq("student_id", studentId),
       session.from("student_notes").select("content").eq("student_id", studentId).eq("lesson_id", params.id).maybeSingle(),
@@ -63,13 +66,13 @@ export default async function LessonPage({ params }: { params: { id: string } })
       enrolled
         ? supabase
             .from("enrollments")
-            .select("enrolled_at")
+            .select("enrolled_at, completed_at")
             .eq("student_id", studentId)
             .eq("course_id", courseId)
             .maybeSingle()
         : session
             .from("enrollments")
-            .select("enrolled_at")
+            .select("enrolled_at, completed_at")
             .eq("student_id", studentId)
             .eq("course_id", courseId)
             .maybeSingle(),
@@ -87,6 +90,14 @@ export default async function LessonPage({ params }: { params: { id: string } })
         .eq("is_archived", false)
         .order("position", { ascending: true })
         .order("created_at", { ascending: true }),
+      enrolled
+        ? supabase
+            .from("certificates")
+            .select("id")
+            .eq("student_id", studentId)
+            .eq("course_id", courseId)
+            .maybeSingle()
+        : Promise.resolve({ data: null }),
     ]);
 
   const sortedModules = [...((modules as ModuleWithLessons[]) ?? [])].sort((a, b) => a.position - b.position);
@@ -107,6 +118,16 @@ export default async function LessonPage({ params }: { params: { id: string } })
     .maybeSingle();
 
   const isLocked = lockedIds.has(lesson.id);
+
+  const totalLessons = ordered.length;
+  const completedLessons = ordered.filter((item) => completedIds.has(item.id)).length;
+  const lessonsLeft = totalLessons - completedLessons;
+  const progressPct = totalLessons > 0 ? Math.round((completedLessons / totalLessons) * 100) : 0;
+  const courseComplete = Boolean(enrollment?.completed_at) || (totalLessons > 0 && lessonsLeft === 0);
+  const certificateTemplateKey =
+    course?.certificate_enabled && enrolled
+      ? await resolveCertificateTemplateKey(supabase, courseId)
+      : null;
 
   return (
     <div className="grid gap-6 lg:grid-cols-[260px_1fr]">
@@ -132,6 +153,15 @@ export default async function LessonPage({ params }: { params: { id: string } })
           </Card>
         ) : (
           <div className="space-y-5">
+            {enrolled ? (
+              <Card className="p-4 sm:p-5">
+                <CourseProgressNudge
+                  pct={progressPct}
+                  lessonsLeft={lessonsLeft}
+                  totalLessons={totalLessons}
+                />
+              </Card>
+            ) : null}
             <LessonPlayer
               lesson={lesson}
               studentEmail={profile.email}
@@ -153,6 +183,13 @@ export default async function LessonPage({ params }: { params: { id: string } })
                   Take quiz
                 </Link>
               </Card>
+            ) : null}
+            {course?.certificate_enabled && enrolled ? (
+              <CourseCertificateGoal
+                unlocked={courseComplete || Boolean(certificate)}
+                certificateId={certificate?.id}
+                templateKey={certificateTemplateKey}
+              />
             ) : null}
           </div>
         )}

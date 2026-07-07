@@ -7,7 +7,8 @@ export type SystemEmailType =
   | "welcome"
   | "payment_receipt"
   | "course_completion_certificate"
-  | "idle_reminder";
+  | "idle_reminder"
+  | "progress_milestone";
 
 export type SendSystemEmailParams = {
   type: SystemEmailType;

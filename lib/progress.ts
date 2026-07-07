@@ -5,6 +5,7 @@ import {
   clearIdleReminderForCourse,
   evaluateAndCompleteCourse,
 } from "@/lib/course-completion";
+import { sendProgressMilestoneEmailsIfNeeded } from "@/lib/system-email-triggers";
 
 /** All lesson ids belonging to a course (via its modules). */
 async function courseLessonIds(courseId: string): Promise<string[]> {
@@ -24,8 +25,17 @@ async function courseLessonIds(courseId: string): Promise<string[]> {
 
 /** Returns 0-100 completion percentage for a student in a course. */
 export async function courseCompletionPct(studentId: string, courseId: string) {
+  const summary = await getCourseProgressSummary(studentId, courseId);
+  return summary.pct;
+}
+
+/** Lesson completion stats for progress UI and milestone emails. */
+export async function getCourseProgressSummary(studentId: string, courseId: string) {
   const lessonIds = await courseLessonIds(courseId);
-  if (lessonIds.length === 0) return 0;
+  const totalLessons = lessonIds.length;
+  if (totalLessons === 0) {
+    return { pct: 0, totalLessons: 0, completedLessons: 0, lessonsLeft: 0 };
+  }
   const supabase = createAdminClient();
   const { count } = await supabase
     .from("lesson_progress")
@@ -33,7 +43,13 @@ export async function courseCompletionPct(studentId: string, courseId: string) {
     .eq("student_id", studentId)
     .eq("completed", true)
     .in("lesson_id", lessonIds);
-  return Math.round(((count ?? 0) / lessonIds.length) * 100);
+  const completedLessons = count ?? 0;
+  return {
+    pct: Math.round((completedLessons / totalLessons) * 100),
+    totalLessons,
+    completedLessons,
+    lessonsLeft: totalLessons - completedLessons,
+  };
 }
 
 /**
@@ -86,6 +102,12 @@ export async function recordLessonProgress(params: {
 
   const completion = await evaluateAndCompleteCourse(params.studentId, courseId);
   const pct = completion.coursePct ?? (await courseCompletionPct(params.studentId, courseId));
+
+  void sendProgressMilestoneEmailsIfNeeded({
+    studentId: params.studentId,
+    courseId,
+    pct,
+  }).catch((err) => console.error("[progress] milestone email error:", err));
 
   return { completed: true, coursePct: pct, courseCompleted: completion.completed };
 }

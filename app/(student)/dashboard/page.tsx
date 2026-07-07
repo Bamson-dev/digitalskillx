@@ -7,6 +7,8 @@ import { fetchPublishedCourses, type CatalogCourse } from "@/lib/published-cours
 import { getStudentEnrolledCoursesWithProgress } from "@/lib/student-enrollments";
 import { getStudentCertificates } from "@/lib/student-certificates";
 import { DashboardAnnouncements } from "@/components/student/dashboard-announcements";
+import { CourseProgressNudge } from "@/components/student/course-progress-nudge";
+import { resumeLessonPath } from "@/lib/system-email-triggers";
 import { toPercent } from "@/lib/utils";
 import { PriceDisplay } from "@/components/marketplace/price-display";
 import { EnrollLink } from "@/components/marketplace/enroll-button";
@@ -30,6 +32,10 @@ export default async function StudentDashboardPage() {
     myCourses
       .filter(({ pct, course }) => course && pct < 100)
       .sort((a, b) => b.pct - a.pct)[0] ?? myCourses.find((row) => row.course);
+
+  const continueResumePath = continueCourse?.course
+    ? await resumeLessonPath(profile.id, continueCourse.course.id)
+    : null;
 
   const firstName = (profile.full_name ?? "there").split(" ")[0];
 
@@ -78,18 +84,14 @@ export default async function StudentDashboardPage() {
                   {continueCourse.course.short_description ?? continueCourse.course.description}
                 </p>
                 <div className="mt-4">
-                  <div className="mb-1.5 flex justify-between text-xs text-neutral-500">
-                    <span>{continueCourse.pct}% completed</span>
-                  </div>
-                  <div className="h-2 overflow-hidden rounded-full bg-neutral-100">
-                    <div
-                      className="h-full rounded-full bg-brand transition-all"
-                      style={{ width: `${toPercent(continueCourse.pct)}%` }}
-                    />
-                  </div>
+                  <CourseProgressNudge
+                    pct={continueCourse.pct}
+                    lessonsLeft={continueCourse.lessonsLeft}
+                    totalLessons={continueCourse.totalLessons}
+                  />
                 </div>
                 <Link
-                  href={`/courses/${continueCourse.course.id}`}
+                  href={continueResumePath ?? `/courses/${continueCourse.course.id}`}
                   className="mt-5 inline-flex h-12 min-h-[48px] items-center justify-center gap-2 rounded-lg bg-brand px-6 text-sm font-semibold text-white hover:bg-brand-700"
                 >
                   Resume course <ArrowRight className="h-4 w-4" />

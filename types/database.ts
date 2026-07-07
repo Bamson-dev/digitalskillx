@@ -186,6 +186,9 @@ export type Enrollment = {
   source: EnrollmentSource;
   completion_email_sent_at: string | null;
   idle_reminder_sent_at: string | null;
+  milestone_25_email_sent_at: string | null;
+  milestone_50_email_sent_at: string | null;
+  milestone_75_email_sent_at: string | null;
 };
 
 export type Transaction = Timestamps & {

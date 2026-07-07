@@ -6,6 +6,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAdmin } from "@/lib/auth";
 import { logAudit } from "@/lib/audit";
 import { evaluateAndCompleteCourse } from "@/lib/course-completion";
+import { courseCompletionPct } from "@/lib/progress";
+import { sendProgressMilestoneEmailsIfNeeded } from "@/lib/system-email-triggers";
 import { runAutomations } from "@/lib/automation";
 import { notify } from "@/lib/notifications";
 import type { Json } from "@/types/database";
@@ -97,7 +99,13 @@ export async function submitQuiz(
   if (passed === true) {
     await runAutomations("quiz_passed", { studentId: user.id, courseId, quizId });
     if (courseId) {
-      await evaluateAndCompleteCourse(user.id, courseId);
+      const completion = await evaluateAndCompleteCourse(user.id, courseId);
+      const pct = completion.coursePct ?? (await courseCompletionPct(user.id, courseId));
+      void sendProgressMilestoneEmailsIfNeeded({
+        studentId: user.id,
+        courseId,
+        pct,
+      }).catch((err) => console.error("[quiz] milestone email error:", err));
     }
   } else if (passed === false) {
     await runAutomations("quiz_failed", { studentId: user.id, courseId, quizId });

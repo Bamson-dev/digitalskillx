@@ -3,7 +3,7 @@ import { bootstrapRuntimeSecrets } from "@/lib/bootstrap-runtime-secrets";
 import { syncStudentCourseAccess } from "@/lib/admin-student-onboarding";
 import { createAdminClientAsync } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
-import { courseCompletionPct } from "@/lib/progress";
+import { getCourseProgressSummary } from "@/lib/progress";
 
 export type StudentCourseRow = {
   enrollmentId: string;
@@ -112,9 +112,17 @@ export async function getStudentEnrolledCourses(studentId: string): Promise<Stud
 export async function getStudentEnrolledCoursesWithProgress(studentId: string) {
   const rows = await getStudentEnrolledCourses(studentId);
   return Promise.all(
-    rows.map(async (row) => ({
-      ...row,
-      pct: row.course ? await courseCompletionPct(studentId, row.course.id) : 0,
-    })),
+    rows.map(async (row) => {
+      if (!row.course) {
+        return { ...row, pct: 0, totalLessons: 0, lessonsLeft: 0 };
+      }
+      const summary = await getCourseProgressSummary(studentId, row.course.id);
+      return {
+        ...row,
+        pct: summary.pct,
+        totalLessons: summary.totalLessons,
+        lessonsLeft: summary.lessonsLeft,
+      };
+    }),
   );
 }

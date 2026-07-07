@@ -156,4 +156,48 @@ export function idleReminderEmail(p: IdleReminderEmailParams) {
   };
 }
 
+export type ProgressMilestoneEmailParams = {
+  firstName: string;
+  courseTitle: string;
+  milestonePct: 25 | 50 | 75;
+  nextLessonTitle: string;
+  resumeUrl: string;
+  supportEmail: string;
+  brandColor?: string;
+};
+
+const MILESTONE_HEADLINES: Record<25 | 50 | 75, string> = {
+  25: "You're off to a great start!",
+  50: "Halfway there — nice work!",
+  75: "Almost at the finish line!",
+};
+
+export function progressMilestoneEmail(p: ProgressMilestoneEmailParams) {
+  const headline = MILESTONE_HEADLINES[p.milestonePct];
+  const bodyHtml = `
+    <h1 style="margin:0 0 12px;font-size:24px;line-height:1.3;color:#111827;">${escapeHtml(headline)}</h1>
+    <p style="margin:0 0 16px;font-size:15px;line-height:1.7;color:#475569;">
+      Hi ${escapeHtml(p.firstName)}, you&apos;ve reached <strong>${p.milestonePct}%</strong> of
+      <strong>${escapeHtml(p.courseTitle)}</strong> on DigitalSkillX. Keep the momentum going!
+    </p>
+    <div style="margin:0 0 20px;padding:16px 18px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;">
+      <p style="margin:0 0 8px;font-size:14px;font-weight:700;color:#111827;">Up next</p>
+      <p style="margin:0;font-size:14px;line-height:1.6;color:#334155;">${escapeHtml(p.nextLessonTitle)}</p>
+    </div>
+    <p style="margin:0;font-size:14px;line-height:1.7;color:#475569;">
+      Pick up right where you left off — we&apos;ll take you to your next lesson.
+    </p>`;
+
+  return {
+    subject: `${p.milestonePct}% complete — ${p.courseTitle}`,
+    html: emailLayout({
+      brandColor: p.brandColor,
+      title: `${p.milestonePct}% complete — ${p.courseTitle}`,
+      bodyHtml,
+      cta: { label: "Continue learning", url: p.resumeUrl },
+      supportEmail: p.supportEmail,
+    }),
+  };
+}
+
 export { courseListHtml };
