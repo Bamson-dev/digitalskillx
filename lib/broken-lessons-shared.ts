@@ -16,6 +16,8 @@ const UNAVAILABLE_VIDEO_TITLE = /^(private video|deleted video)$/i;
 const MUSIC_VIDEO_HINT =
   /\b(official\s+(music\s+)?video|lyrics?\s+video|\(mv\)|\(m\/v\))\b/i;
 
+const REPORTED_UNRELATED_PATTERNS = [/gangnam\s*style/i, /^psy\s[-–]/i];
+
 export function getBrokenLessonFlags(lesson: {
   title: string;
   youtube_video_id?: string | null;
@@ -33,6 +35,9 @@ export function getBrokenLessonFlags(lesson: {
   if (UNAVAILABLE_VIDEO_TITLE.test(title)) flags.push("unavailable video");
   if (lesson.youtube_video_id && MUSIC_VIDEO_HINT.test(title)) {
     flags.push("possible unrelated music video");
+  }
+  if (REPORTED_UNRELATED_PATTERNS.some((pattern) => pattern.test(title))) {
+    flags.push("likely unrelated import");
   }
 
   return flags;
