@@ -1,8 +1,5 @@
 import type { Metadata } from "next";
 import { createClient } from "@/lib/supabase/server";
-import { bootstrapRuntimeSecrets } from "@/lib/bootstrap-runtime-secrets";
-import { createAdminClientAsync } from "@/lib/supabase/admin";
-import { syncStudentCourseAccess } from "@/lib/admin-student-onboarding";
 import { fetchCourseCategories, fetchPublishedCourses, type CatalogCourse } from "@/lib/published-courses";
 import { ORG } from "@/lib/org";
 import { MarketplaceNav, MarketplaceFooter } from "@/components/marketplace/marketplace-chrome";

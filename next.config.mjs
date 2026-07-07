@@ -3,10 +3,13 @@ import { withSentryConfig } from "@sentry/nextjs";
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
+  productionBrowserSourceMaps: false,
   experimental: {
     serverActions: {
       bodySizeLimit: "12mb",
     },
+    // Lowers peak memory during `next build` on small Docker hosts (Coolify).
+    webpackBuildWorker: true,
   },
   images: {
     remotePatterns: [

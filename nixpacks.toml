@@ -1,13 +1,15 @@
-# Coolify / Nixpacks — Next.js builds are memory-heavy; raise heap for Docker on Mac.
+# Coolify / Nixpacks — Next.js builds need devDependencies and enough heap.
+# In Coolify: set NODE_ENV to **Runtime only** (not build time).
+
 [variables]
-NODE_OPTIONS = "--max-old-space-size=4096"
 NIXPACKS_NODE_VERSION = "22"
-# Do NOT set NODE_ENV here. Coolify often injects NODE_ENV=production at build time,
-# which makes npm skip devDependencies (tailwind, postcss, typescript) and breaks `next build`.
+NEXT_TELEMETRY_DISABLED = "1"
+# 2048 fits 2–4 GB Docker hosts; raise to 4096 only if the server has 8 GB+ RAM.
+NODE_OPTIONS = "--max-old-space-size=2048"
 
 [phases.install]
-# Force devDependencies even when Coolify sets NODE_ENV=production at build time.
-cmds = ["NODE_ENV=development npm ci"]
+# Coolify often injects NODE_ENV=production at build time — force devDependencies.
+cmds = ["npm ci --include=dev"]
 
 [phases.build]
 cmds = ["npm run build"]
