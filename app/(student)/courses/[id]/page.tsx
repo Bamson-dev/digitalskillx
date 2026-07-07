@@ -1,12 +1,14 @@
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, PlayCircle, Lock } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import { requireStudent } from "@/lib/auth";
 import { getStudentViewSupabase } from "@/lib/student-view-supabase";
 import { checkStudentCourseEnrollment } from "@/lib/student-enrollments";
 import { Card } from "@/components/ui/card";
 import { CourseResources } from "@/components/student/course-resources";
+import { CourseCurriculumList } from "@/components/student/course-curriculum-list";
+import type { Lesson, Module } from "@/types/database";
 
 export const metadata: Metadata = { title: "Course" };
 
@@ -32,7 +34,9 @@ export default async function CourseDetailPage({
 
   const { data: course } = await supabase
     .from("courses")
-    .select("id, title, description, modules(id, title, position, lessons(id, title, position))")
+    .select(
+      "id, title, description, modules(id, title, position, lessons(id, title, position, duration_seconds))",
+    )
     .eq("id", params.id)
     .single();
 
@@ -47,9 +51,9 @@ export default async function CourseDetailPage({
     .order("position", { ascending: true })
     .order("created_at", { ascending: true });
 
-  const modules = (course.modules ?? []).sort(
-    (a, b) => a.position - b.position,
-  );
+  const modules = [...(course.modules ?? [])].sort((a, b) => a.position - b.position) as (Module & {
+    lessons: Lesson[];
+  })[];
 
   return (
     <div className="space-y-6">
@@ -78,28 +82,7 @@ export default async function CourseDetailPage({
           (video, progress tracking, notes) arrives in Phase 2.
         </Card>
       ) : (
-        <div className="space-y-4">
-          {modules.map((m) => {
-            const lessons = (m.lessons ?? []).sort(
-              (a, b) => a.position - b.position,
-            );
-            return (
-              <Card key={m.id}>
-                <h3 className="font-semibold">{m.title}</h3>
-                <ul className="mt-2 divide-y divide-[rgb(var(--border))]">
-                  {lessons.map((l) => (
-                    <li key={l.id} className="py-2 text-sm">
-                      <Link href={`/lessons/${l.id}`} className="flex items-center justify-between hover:text-brand">
-                        <span>{l.title}</span>
-                        <PlayCircle className="h-4 w-4 text-muted" />
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
-              </Card>
-            );
-          })}
-        </div>
+        <CourseCurriculumList modules={modules} />
       )}
 
       <CourseResources resources={resources ?? []} />

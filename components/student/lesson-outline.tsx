@@ -4,8 +4,9 @@ import { useEffect, useMemo, useRef } from "react";
 import Link from "next/link";
 import { CheckCircle2, Circle, Lock, PlayCircle } from "lucide-react";
 import {
+  displayStudentLessonTitle,
+  displayStudentModuleTitle,
   formatLessonDuration,
-  isGenericImportModuleTitle,
   normalizeOutlineModules,
   type ModuleWithLessons,
 } from "@/lib/lesson-display";
@@ -52,24 +53,23 @@ export function LessonOutline({
         {displayModules.map((mod) => {
           const lessons = [...(mod.lessons ?? [])].sort((a, b) => a.position - b.position);
           if (lessons.length === 0) return null;
-          const showModuleHeading =
-            mod.title.trim().length > 0 && !isGenericImportModuleTitle(mod.title);
+          const moduleHeading = displayStudentModuleTitle(mod.title);
 
           return (
-            <div key={mod.id} className={showModuleHeading ? "mt-2 first:mt-0" : ""}>
-              {showModuleHeading ? (
+            <div key={mod.id} className={moduleHeading ? "mt-2 first:mt-0" : ""}>
+              {moduleHeading ? (
                 <p className="mb-0.5 px-1 text-[11px] font-semibold uppercase tracking-wide text-muted">
-                  {mod.title}
+                  {moduleHeading}
                 </p>
               ) : null}
-              <ul>
+              <ul className="space-y-0">
                 {lessons.map((lesson) => {
                   const isCurrent = lesson.id === currentLessonId;
                   const done = completedIds.has(lesson.id);
                   const locked = lockedIds.has(lesson.id);
                   const Icon = done ? CheckCircle2 : locked ? Lock : isCurrent ? PlayCircle : Circle;
                   const duration = formatLessonDuration(lesson.duration_seconds);
-                  const label = lesson.title?.trim() || "Untitled lesson";
+                  const label = displayStudentLessonTitle(lesson.title);
 
                   const inner = (
                     <span

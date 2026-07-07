@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { resolveVideo, youtubeLessonEmbedUrl } from "@/lib/video";
+import { displayStudentLessonTitle } from "@/lib/lesson-display";
 import { siteUrl } from "@/lib/org";
 import type { Lesson, Bookmark as BookmarkType } from "@/types/database";
 import {
@@ -30,10 +31,12 @@ export function LessonPlayer({
   note: string;
   bookmarks: BookmarkType[];
 }) {
+  const lessonTitle = displayStudentLessonTitle(lesson.title);
+
   return (
     <div className="space-y-5">
       <div>
-        <h1 className="text-2xl font-bold">{lesson.title}</h1>
+        <h1 className="text-2xl font-bold">{lessonTitle}</h1>
         {lesson.description ? <p className="mt-1 text-sm text-muted">{lesson.description}</p> : null}
       </div>
 
@@ -65,6 +68,7 @@ export function LessonPlayer({
 }
 
 function LessonContent({ lesson, studentEmail }: { lesson: Lesson; studentEmail: string }) {
+  const lessonTitle = displayStudentLessonTitle(lesson.title);
   switch (lesson.lesson_type) {
     case "video":
       return <VideoContent url={lesson.content_url} requiredPct={lesson.required_watch_pct} lessonId={lesson.id} studentEmail={studentEmail} />;
@@ -73,7 +77,7 @@ function LessonContent({ lesson, studentEmail }: { lesson: Lesson; studentEmail:
         <Card className="p-0">
           {lesson.content_url ? (
             <>
-              <iframe src={lesson.content_url} className="h-[70vh] w-full rounded-t-xl" title={lesson.title} />
+              <iframe src={lesson.content_url} className="h-[70vh] w-full rounded-t-xl" title={lessonTitle} />
               <div className="p-3">
                 <a href={lesson.content_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 text-sm text-brand hover:underline">
                   <Download className="h-4 w-4" /> Download PDF
@@ -109,7 +113,7 @@ function LessonContent({ lesson, studentEmail }: { lesson: Lesson; studentEmail:
       return (
         <Card className="p-0">
           {lesson.content_url ? (
-            <iframe src={lesson.content_url} className="h-[70vh] w-full rounded-xl" title={lesson.title} allowFullScreen />
+            <iframe src={lesson.content_url} className="h-[70vh] w-full rounded-xl" title={lessonTitle} allowFullScreen />
           ) : (
             <p className="p-6 text-sm text-muted">No embed URL set.</p>
           )}
@@ -119,7 +123,7 @@ function LessonContent({ lesson, studentEmail }: { lesson: Lesson; studentEmail:
       return (
         <Card className="flex items-center justify-between">
           <span className="flex items-center gap-2 text-sm">
-            <FileText className="h-5 w-5 text-brand" /> {lesson.title}
+            <FileText className="h-5 w-5 text-brand" /> {lessonTitle}
           </span>
           {lesson.content_url ? (
             <a href={lesson.content_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white">
