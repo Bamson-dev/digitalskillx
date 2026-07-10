@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { PlayCircle } from "lucide-react";
+import { Clock, PlayCircle } from "lucide-react";
 import {
   displayStudentLessonTitle,
   displayStudentModuleTitle,
@@ -7,6 +7,7 @@ import {
   normalizeOutlineModules,
   type ModuleWithLessons,
 } from "@/lib/lesson-display";
+import { isLessonComingSoon } from "@/lib/lesson-coming-soon";
 import { Card } from "@/components/ui/card";
 
 export function CourseCurriculumList({ modules }: { modules: ModuleWithLessons[] }) {
@@ -30,17 +31,26 @@ export function CourseCurriculumList({ modules }: { modules: ModuleWithLessons[]
               <ul>
                 {lessons.map((lesson) => {
                   const duration = formatLessonDuration(lesson.duration_seconds);
+                  const comingSoon = isLessonComingSoon(lesson);
                   return (
                     <li key={lesson.id}>
                       <Link
                         href={`/lessons/${lesson.id}`}
                         className="flex items-center gap-2 rounded-md px-1 py-0.5 text-sm leading-tight hover:bg-brand-50/50 hover:text-brand"
                       >
-                        <PlayCircle className="h-3.5 w-3.5 shrink-0 text-muted" />
+                        {comingSoon ? (
+                          <Clock className="h-3.5 w-3.5 shrink-0 text-amber-600" />
+                        ) : (
+                          <PlayCircle className="h-3.5 w-3.5 shrink-0 text-muted" />
+                        )}
                         <span className="min-w-0 flex-1 truncate">
                           {displayStudentLessonTitle(lesson.title)}
                         </span>
-                        {duration ? (
+                        {comingSoon ? (
+                          <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-amber-700">
+                            Soon
+                          </span>
+                        ) : duration ? (
                           <span className="shrink-0 text-[11px] tabular-nums text-muted">{duration}</span>
                         ) : null}
                       </Link>

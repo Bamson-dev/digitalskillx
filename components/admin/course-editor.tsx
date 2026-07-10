@@ -17,6 +17,7 @@ import type { AttachmentDisplay } from "@/lib/lesson-attachments-shared";
 import type { Course, CourseCategory, Lesson, Module } from "@/types/database";
 import type { CertificateTemplateKey } from "@/lib/certificate-templates";
 import { getBrokenLessonFlags } from "@/lib/broken-lessons-shared";
+import { comingSoonAvailableAtInputValue } from "@/lib/lesson-coming-soon";
 import {
   deleteCourse,
   createModule,
@@ -389,6 +390,11 @@ function LessonRow({
               {lesson.lesson_type}
             </span>
             <span className="truncate">{displayTitle}</span>
+            {lesson.is_coming_soon ? (
+              <span className="shrink-0 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-900">
+                Coming soon
+              </span>
+            ) : null}
             {brokenFlags.length > 0 ? (
               <span
                 className="shrink-0 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-900"
@@ -472,6 +478,32 @@ function LessonRow({
               <input type="checkbox" name="is_locked" defaultChecked={lesson.is_locked} />
               Locked until previous complete
             </label>
+            <label className="flex items-center gap-2 text-sm">
+              <input type="checkbox" name="is_coming_soon" defaultChecked={lesson.is_coming_soon} />
+              Coming soon
+            </label>
+          </div>
+
+          <div className="sm:col-span-2 rounded-xl border border-amber-200/80 bg-amber-50/50 p-4">
+            <p className="text-xs font-semibold uppercase tracking-wide text-amber-900">Coming soon</p>
+            <p className="mt-1 text-sm text-neutral-700">
+              Students see this lesson in the list and can open it, but content is replaced with a
+              Coming Soon page until you turn this off.
+            </p>
+            <div className="mt-3">
+              <Label htmlFor={`coming_soon_available_at_${lesson.id}`}>
+                Expected availability (optional)
+              </Label>
+              <Input
+                id={`coming_soon_available_at_${lesson.id}`}
+                name="coming_soon_available_at"
+                type="datetime-local"
+                defaultValue={comingSoonAvailableAtInputValue(lesson.coming_soon_available_at)}
+              />
+              <p className="mt-1 text-xs text-muted">
+                Shown to students on the Coming Soon page. Leave blank if the date is not set yet.
+              </p>
+            </div>
           </div>
 
           <LessonAttachmentsPanel

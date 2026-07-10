@@ -37,7 +37,7 @@ export default async function CourseDetailPage({
   const { data: course } = await supabase
     .from("courses")
     .select(
-      "id, title, description, short_description, thumbnail_url, promo_video_url, learning_outcomes, instructor_name, is_coming_soon, community_telegram_url, community_whatsapp_url, modules(id, title, position, lessons(id, title, position, duration_seconds))",
+      "id, title, description, short_description, thumbnail_url, promo_video_url, learning_outcomes, instructor_name, is_coming_soon, community_telegram_url, community_whatsapp_url, modules(id, title, position, lessons(id, title, position, duration_seconds, is_coming_soon, coming_soon_available_at))",
     )
     .eq("id", params.id)
     .single();

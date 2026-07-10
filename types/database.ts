@@ -176,6 +176,8 @@ export type Lesson = Timestamps & {
   position: number;
   duration_seconds: number | null;
   youtube_video_id: string | null;
+  is_coming_soon: boolean;
+  coming_soon_available_at: string | null;
   updated_at: string;
 };
 

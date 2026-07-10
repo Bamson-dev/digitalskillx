@@ -10,6 +10,8 @@ import { checkStudentCourseEnrollment } from "@/lib/student-enrollments";
 import { getStudentViewSupabase } from "@/lib/student-view-supabase";
 import { LessonOutline } from "@/components/student/lesson-outline";
 import { LessonPlayer } from "@/components/student/lesson-player";
+import { LessonComingSoonView } from "@/components/student/lesson-coming-soon-view";
+import { isLessonComingSoon } from "@/lib/lesson-coming-soon";
 import { LessonAttachments } from "@/components/student/lesson-attachments";
 import { CourseResources } from "@/components/student/course-resources";
 import { CourseProgressNudge } from "@/components/student/course-progress-nudge";
@@ -127,6 +129,7 @@ export default async function LessonPage({ params }: { params: { id: string } })
     .maybeSingle();
 
   const isLocked = lockedIds.has(lesson.id);
+  const isComingSoon = isLessonComingSoon(lesson) && !isAdminPreview;
 
   const totalLessons = ordered.length;
   const completedLessons = ordered.filter((item) => completedIds.has(item.id)).length;
@@ -152,7 +155,15 @@ export default async function LessonPage({ params }: { params: { id: string } })
       </aside>
 
       <div className="order-1 lg:order-2">
-        {isLocked ? (
+        {isComingSoon ? (
+          <LessonComingSoonView
+            lessonTitle={lesson.title}
+            courseTitle={course?.title ?? "Course"}
+            courseId={courseId}
+            description={lesson.description}
+            availableAt={lesson.coming_soon_available_at}
+          />
+        ) : isLocked ? (
           <Card className="flex flex-col items-center gap-3 py-16 text-center">
             <Lock className="h-8 w-8 text-muted" />
             <h2 className="text-lg font-semibold">This lesson is locked</h2>
@@ -219,12 +230,16 @@ function computeLockedIds(
   const locked = new Set<string>();
   for (let i = 0; i < ordered.length; i++) {
     const l = ordered[i];
-    if (l.is_free_preview) continue;
+    if (l.is_free_preview || l.is_coming_soon) continue;
 
-    // Sequential lock: previous lesson must be completed.
+    // Sequential lock: previous required lesson must be completed (skip coming-soon placeholders).
     if (l.is_locked && i > 0) {
-      const prev = ordered[i - 1];
-      if (!completedIds.has(prev.id)) locked.add(l.id);
+      let prevIdx = i - 1;
+      while (prevIdx >= 0 && ordered[prevIdx].is_coming_soon) prevIdx--;
+      if (prevIdx >= 0) {
+        const prev = ordered[prevIdx];
+        if (!completedIds.has(prev.id)) locked.add(l.id);
+      }
     }
 
     // Drip lock: not yet available X days after enrollment.

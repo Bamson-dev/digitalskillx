@@ -21,7 +21,7 @@ export async function resolveStudentLessonAccess(params: {
 
   const { data: lesson, error: lessonError } = await admin
     .from("lessons")
-    .select("id, is_free_preview, module:modules!inner(course_id)")
+    .select("id, is_free_preview, is_coming_soon, module:modules!inner(course_id)")
     .eq("id", params.lessonId)
     .maybeSingle();
 
@@ -33,6 +33,10 @@ export async function resolveStudentLessonAccess(params: {
   const courseId = Array.isArray(moduleRel) ? moduleRel[0]?.course_id : moduleRel?.course_id;
   if (!courseId) {
     return { ok: false as const, reason: "Course not found for this lesson." };
+  }
+
+  if (lesson.is_coming_soon) {
+    return { ok: false as const, reason: "This lesson is not available yet." };
   }
 
   if (lesson.is_free_preview) {

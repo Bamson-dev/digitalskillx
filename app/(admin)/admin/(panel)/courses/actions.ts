@@ -13,6 +13,7 @@ import {
 import { uploadCourseResourceFile } from "@/lib/upload-course-resource";
 import { uploadPublicAsset } from "@/lib/upload-public-asset";
 import { normalizeCertificateTemplateKey } from "@/lib/certificate-templates";
+import { parseComingSoonAvailableAt } from "@/lib/lesson-coming-soon";
 import {
   normalizeTelegramCommunityUrl,
   normalizeWhatsAppCommunityUrl,
@@ -309,6 +310,9 @@ export async function updateLesson(formData: FormData) {
   const duration = formData.get("duration_minutes")
     ? Math.round(Number(formData.get("duration_minutes")) * 60)
     : null;
+  const comingSoonAvailableAt = parseComingSoonAvailableAt(
+    String(formData.get("coming_soon_available_at") ?? ""),
+  );
 
   const { error } = await supabase
     .from("lessons")
@@ -320,13 +324,27 @@ export async function updateLesson(formData: FormData) {
       content_text: String(formData.get("content_text") ?? "") || null,
       is_free_preview: formData.get("is_free_preview") === "on",
       is_locked: formData.get("is_locked") === "on",
+      is_coming_soon: formData.get("is_coming_soon") === "on",
+      coming_soon_available_at: formData.get("is_coming_soon") === "on" ? comingSoonAvailableAt : null,
       required_watch_pct: Number.isFinite(watch) ? watch : 0,
       drip_days: dripDays,
       duration_seconds: duration,
     })
     .eq("id", id);
-  if (error) throw new Error(error.message);
+  if (error) {
+    if (
+      (error.message.includes("is_coming_soon") ||
+        error.message.includes("coming_soon_available_at")) &&
+      error.message.includes("does not exist")
+    ) {
+      throw new Error(
+        "Lesson coming soon columns are missing. Run supabase/migrations/0026_lesson_coming_soon.sql in the Supabase SQL Editor, then try again.",
+      );
+    }
+    throw new Error(error.message);
+  }
   revalidatePath(`/admin/courses/${courseId}`);
+  revalidatePath(`/lessons/${id}`);
 }
 
 export async function deleteLesson(formData: FormData) {

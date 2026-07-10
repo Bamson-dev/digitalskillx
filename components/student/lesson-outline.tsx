@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef } from "react";
 import Link from "next/link";
-import { CheckCircle2, Circle, Lock, PlayCircle } from "lucide-react";
+import { CheckCircle2, Circle, Clock, Lock, PlayCircle } from "lucide-react";
 import {
   displayStudentLessonTitle,
   displayStudentModuleTitle,
@@ -10,6 +10,7 @@ import {
   normalizeOutlineModules,
   type ModuleWithLessons,
 } from "@/lib/lesson-display";
+import { isLessonComingSoon } from "@/lib/lesson-coming-soon";
 import { cn } from "@/lib/utils";
 
 export function LessonOutline({
@@ -66,8 +67,17 @@ export function LessonOutline({
                 {lessons.map((lesson) => {
                   const isCurrent = lesson.id === currentLessonId;
                   const done = completedIds.has(lesson.id);
-                  const locked = lockedIds.has(lesson.id);
-                  const Icon = done ? CheckCircle2 : locked ? Lock : isCurrent ? PlayCircle : Circle;
+                  const comingSoon = isLessonComingSoon(lesson);
+                  const locked = !comingSoon && lockedIds.has(lesson.id);
+                  const Icon = done
+                    ? CheckCircle2
+                    : comingSoon
+                      ? Clock
+                      : locked
+                        ? Lock
+                        : isCurrent
+                          ? PlayCircle
+                          : Circle;
                   const duration = formatLessonDuration(lesson.duration_seconds);
                   const label = displayStudentLessonTitle(lesson.title);
 
@@ -79,17 +89,23 @@ export function LessonOutline({
                           ? "bg-brand-50 font-medium text-brand-700"
                           : "text-foreground hover:bg-brand-50/50",
                         locked && "text-muted",
+                        comingSoon && !isCurrent && "text-amber-900/80",
                       )}
                     >
                       <Icon
                         className={cn(
                           "h-3.5 w-3.5 shrink-0",
                           done && "text-green-600",
-                          isCurrent && !done && "text-brand-600",
+                          comingSoon && "text-amber-600",
+                          isCurrent && !done && !comingSoon && "text-brand-600",
                         )}
                       />
                       <span className="min-w-0 flex-1 truncate">{label}</span>
-                      {duration ? (
+                      {comingSoon ? (
+                        <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-amber-700">
+                          Soon
+                        </span>
+                      ) : duration ? (
                         <span className="shrink-0 text-[11px] tabular-nums text-muted">{duration}</span>
                       ) : null}
                     </span>
