@@ -3,7 +3,10 @@ import Link from "next/link";
 import { ArrowLeft, CheckCircle2, Clock } from "lucide-react";
 import { CourseHeroMedia } from "@/components/marketplace/course-hero-media";
 import { CourseThumbnailPlaceholder } from "@/components/marketplace/course-thumbnail-placeholder";
+import { CourseCommunitySection } from "@/components/course/course-community-section";
 import { Badge } from "@/components/ui/badge";
+import type { CourseCommunityLinks } from "@/lib/course-community";
+import { hasCourseCommunity } from "@/lib/course-community";
 import { cn } from "@/lib/utils";
 
 type CourseComingSoonViewProps = {
@@ -15,6 +18,7 @@ type CourseComingSoonViewProps = {
   learningOutcomes?: string[];
   categoryName?: string | null;
   instructorName?: string | null;
+  communityLinks?: CourseCommunityLinks;
   /** Student portal: link back to enrolled courses list. */
   backHref?: string;
   backLabel?: string;
@@ -32,6 +36,7 @@ export function CourseComingSoonView({
   learningOutcomes = [],
   categoryName,
   instructorName,
+  communityLinks,
   backHref,
   backLabel = "Back to courses",
   variant = "marketplace",
@@ -40,6 +45,7 @@ export function CourseComingSoonView({
   const blurb = shortDescription ?? description;
   const outcomes = learningOutcomes.filter(Boolean);
   const isStudent = variant === "student";
+  const showCommunity = communityLinks && hasCourseCommunity(communityLinks);
 
   return (
     <div className={cn("space-y-8", className)}>
@@ -108,6 +114,16 @@ export function CourseComingSoonView({
           {blurb ? <p className="mt-1 text-sm text-muted">{blurb}</p> : null}
         </div>
       )}
+
+      {showCommunity && isStudent ? (
+        <div className="mx-auto max-w-[1200px] px-0">
+          <CourseCommunitySection
+            links={communityLinks}
+            courseTitle={title}
+            variant="compact"
+          />
+        </div>
+      ) : null}
 
       <div
         className={cn(

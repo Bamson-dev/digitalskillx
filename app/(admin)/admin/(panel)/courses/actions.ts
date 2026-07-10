@@ -13,6 +13,10 @@ import {
 import { uploadCourseResourceFile } from "@/lib/upload-course-resource";
 import { uploadPublicAsset } from "@/lib/upload-public-asset";
 import { normalizeCertificateTemplateKey } from "@/lib/certificate-templates";
+import {
+  normalizeTelegramCommunityUrl,
+  normalizeWhatsAppCommunityUrl,
+} from "@/lib/course-community";
 import type { CourseVisibility, EnrollmentType, LessonType } from "@/types/database";
 
 export type LessonAttachmentState = { error?: string; message?: string };
@@ -124,6 +128,24 @@ export async function updateCourseSettings(
     const templateOverrideRaw = String(formData.get("certificate_template_override") ?? "").trim();
     const certificateTemplateOverride = normalizeCertificateTemplateKey(templateOverrideRaw);
 
+    const telegramRaw = String(formData.get("community_telegram_url") ?? "").trim();
+    const whatsappRaw = String(formData.get("community_whatsapp_url") ?? "").trim();
+    const communityTelegramUrl = telegramRaw ? normalizeTelegramCommunityUrl(telegramRaw) : null;
+    const communityWhatsappUrl = whatsappRaw ? normalizeWhatsAppCommunityUrl(whatsappRaw) : null;
+
+    if (telegramRaw && !communityTelegramUrl) {
+      return {
+        error:
+          "Telegram link must be a valid https://t.me/… or https://telegram.me/… invite URL.",
+      };
+    }
+    if (whatsappRaw && !communityWhatsappUrl) {
+      return {
+        error:
+          "WhatsApp link must be a valid https://chat.whatsapp.com/… or https://wa.me/… URL.",
+      };
+    }
+
     const { error } = await supabase
       .from("courses")
       .update({
@@ -139,6 +161,8 @@ export async function updateCourseSettings(
         certificate_template_override: certificateTemplateOverride,
         drip_enabled: formData.get("drip_enabled") === "on",
         is_coming_soon: formData.get("is_coming_soon") === "on",
+        community_telegram_url: communityTelegramUrl,
+        community_whatsapp_url: communityWhatsappUrl,
         required_completion_pct: Number.isFinite(required) ? required : 100,
         price_ngn: Number.isFinite(priceNgn) && priceNgn >= 0 ? Math.round(priceNgn) : 0,
         price_usd: Number.isFinite(priceUsd) && priceUsd >= 0 ? Math.round(priceUsd) : 0,
@@ -166,6 +190,16 @@ export async function updateCourseSettings(
             "The is_coming_soon column is missing on courses. Run supabase/migrations/0024_course_coming_soon.sql in the Supabase SQL Editor, then try again.",
         };
       }
+      if (
+        (error.message.includes("community_telegram_url") ||
+          error.message.includes("community_whatsapp_url")) &&
+        error.message.includes("does not exist")
+      ) {
+        return {
+          error:
+            "Community link columns are missing on courses. Run supabase/migrations/0025_course_community_links.sql in the Supabase SQL Editor, then try again.",
+        };
+      }
       return { error: error.message };
     }
 
@@ -186,6 +220,7 @@ export async function updateCourseSettings(
     await logAudit({ action: "course_edited", targetType: "course", targetId: id });
     revalidatePath(`/admin/courses/${id}`);
     revalidatePath(`/course/${id}`);
+    revalidatePath(`/courses/${id}`);
     return { message: "Course settings saved.", thumbnail_url: thumbnailUrl };
   } catch (err) {
     return { error: err instanceof Error ? err.message : "Could not save course settings." };

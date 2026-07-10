@@ -6,6 +6,8 @@ import { requireStudent } from "@/lib/auth";
 import { getStudentViewSupabase } from "@/lib/student-view-supabase";
 import { checkStudentCourseEnrollment } from "@/lib/student-enrollments";
 import { CourseComingSoonView } from "@/components/course/course-coming-soon-view";
+import { CourseCommunitySection } from "@/components/course/course-community-section";
+import { courseCommunityFromRow } from "@/lib/course-community";
 import { CourseResources } from "@/components/student/course-resources";
 import { CourseCurriculumList } from "@/components/student/course-curriculum-list";
 import type { Lesson, Module } from "@/types/database";
@@ -35,12 +37,14 @@ export default async function CourseDetailPage({
   const { data: course } = await supabase
     .from("courses")
     .select(
-      "id, title, description, short_description, thumbnail_url, promo_video_url, learning_outcomes, instructor_name, is_coming_soon, modules(id, title, position, lessons(id, title, position, duration_seconds))",
+      "id, title, description, short_description, thumbnail_url, promo_video_url, learning_outcomes, instructor_name, is_coming_soon, community_telegram_url, community_whatsapp_url, modules(id, title, position, lessons(id, title, position, duration_seconds))",
     )
     .eq("id", params.id)
     .single();
 
   if (!course) notFound();
+
+  const communityLinks = courseCommunityFromRow(course);
 
   if (course.is_coming_soon && !isAdminPreview) {
     return (
@@ -54,6 +58,7 @@ export default async function CourseDetailPage({
           promoVideoUrl={course.promo_video_url}
           learningOutcomes={course.learning_outcomes ?? []}
           instructorName={course.instructor_name}
+          communityLinks={communityLinks}
           backHref="/courses"
           backLabel="Back to courses"
         />
@@ -94,6 +99,8 @@ export default async function CourseDetailPage({
           <p className="mt-1 text-sm text-muted">{course.description}</p>
         ) : null}
       </div>
+
+      <CourseCommunitySection links={communityLinks} courseTitle={course.title} />
 
       {modules.length === 0 ? (
         <div className="rounded-xl border border-surface-border bg-white p-8 text-center text-sm text-muted">

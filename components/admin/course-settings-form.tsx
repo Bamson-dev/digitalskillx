@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useFormState } from "react-dom";
-import { Save, Sparkles } from "lucide-react";
+import { Save, Sparkles, Users } from "lucide-react";
 import { Card, CardHeader } from "@/components/ui/card";
 import { Input, Label } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -308,6 +308,51 @@ export function CourseSettingsForm({
           Coming soon courses appear in the catalog with a badge. Students can view the sales page but
           cannot enroll or open lessons until you turn this off.
         </p>
+
+        <div className="sm:col-span-2 rounded-2xl border-2 border-brand/20 bg-gradient-to-br from-brand-50/80 via-white to-sky-50/50 p-5 sm:p-6">
+          <div className="flex items-start gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand text-white">
+              <Users className="h-5 w-5" aria-hidden />
+            </div>
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-brand">
+                Community
+              </p>
+              <h3 className="mt-1 font-display text-lg font-bold text-neutral-950">
+                Student community links
+              </h3>
+              <p className="mt-1 text-sm text-neutral-600">
+                Add Telegram and/or WhatsApp invite links. Enrolled students see a prominent
+                Community section on their course page to join your group.
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-5 grid gap-4 sm:grid-cols-2">
+            <div>
+              <Label htmlFor="community_telegram_url">Telegram invite link</Label>
+              <Input
+                id="community_telegram_url"
+                name="community_telegram_url"
+                type="url"
+                defaultValue={course.community_telegram_url ?? ""}
+                placeholder="https://t.me/your_group"
+              />
+              <p className="mt-1 text-xs text-muted">Public t.me or telegram.me group/channel link.</p>
+            </div>
+            <div>
+              <Label htmlFor="community_whatsapp_url">WhatsApp invite link</Label>
+              <Input
+                id="community_whatsapp_url"
+                name="community_whatsapp_url"
+                type="url"
+                defaultValue={course.community_whatsapp_url ?? ""}
+                placeholder="https://chat.whatsapp.com/…"
+              />
+              <p className="mt-1 text-xs text-muted">WhatsApp community or group invite link.</p>
+            </div>
+          </div>
+        </div>
 
         <div className="sm:col-span-2">
           <Label htmlFor="certificate_template_override">Certificate template</Label>
