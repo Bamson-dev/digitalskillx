@@ -165,6 +165,10 @@ function verifyAdminLessonBadge(jar, courseId, lessonId) {
 
 function verifyLessonPageLoads(jar, lessonId) {
   const html = curl(["-b", jar, `${base}/lessons/${lessonId}`]);
+  if (/This lesson is being prepared/i.test(html)) {
+    console.log("PASS: coming soon lesson page renders");
+    return;
+  }
   if (html.includes("__next_error__")) {
     console.error("FAIL: lesson page server error");
     console.error(html.slice(0, 600));

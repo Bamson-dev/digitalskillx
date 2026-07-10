@@ -129,7 +129,7 @@ export default async function LessonPage({ params }: { params: { id: string } })
     .maybeSingle();
 
   const isLocked = lockedIds.has(lesson.id);
-  const isComingSoon = isLessonComingSoon(lesson) && !isAdminPreview;
+  const isComingSoon = isLessonComingSoon(lesson);
 
   const totalLessons = ordered.length;
   const completedLessons = ordered.filter((item) => completedIds.has(item.id)).length;
