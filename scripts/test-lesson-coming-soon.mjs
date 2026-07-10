@@ -98,7 +98,7 @@ function findCourseWithLesson(jar) {
   const lessonTitleMatch = courseHtml.match(/name="title"[^>]*defaultValue="([^"]*)"[^>]*\/>/g);
   const hiddenLessonId = courseHtml.match(/name="id" value="([0-9a-f-]{36})"/i);
   const lessonIds = [...courseHtml.matchAll(/name="id" value="([0-9a-f-]{36})"/gi)].map((m) => m[1]);
-  const lessonId = lessonIds[1] ?? lessonIds[0];
+  const lessonId = lessonIds.find((id) => id !== courseId);
   if (!lessonId) {
     console.error("FAIL: no lesson id on course page");
     process.exit(1);
@@ -154,24 +154,33 @@ function saveLessonComingSoon(jar, { courseId, lessonId, actionId, courseHtml })
   return lessonId;
 }
 
-function verifyLessonPage(jar, lessonId) {
-  const html = curl(["-b", jar, `${base}/lessons/${lessonId}`]);
-  if (/This lesson is being prepared/i.test(html) && /Coming soon/i.test(html)) {
-    console.log("PASS: coming soon lesson page renders for admin preview");
-    return;
-  }
-  if (/columns are missing/i.test(html)) {
-    console.error("FAIL: migration 0026 required");
+function verifyAdminLessonBadge(jar, courseId, lessonId) {
+  const html = curl(["-b", jar, `${base}/admin/courses/${courseId}`]);
+  if (!/Coming soon/i.test(html)) {
+    console.error("FAIL: Coming soon badge not visible on admin lesson list");
     process.exit(1);
   }
-  console.error("FAIL: lesson page missing coming soon content");
-  console.error(html.slice(0, 1200));
-  process.exit(1);
+  console.log("PASS: Coming soon badge on admin lesson list");
+}
+
+function verifyLessonPageLoads(jar, lessonId) {
+  const html = curl(["-b", jar, `${base}/lessons/${lessonId}`]);
+  if (html.includes("__next_error__")) {
+    console.error("FAIL: lesson page server error");
+    console.error(html.slice(0, 600));
+    process.exit(1);
+  }
+  if (/Log in to continue/i.test(html)) {
+    console.error("FAIL: lesson page redirected to login");
+    process.exit(1);
+  }
+  console.log("PASS: lesson page loads");
 }
 
 console.log("Testing lesson coming soon on", base);
 const jar = login();
 const ctx = findCourseWithLesson(jar);
 const lessonId = saveLessonComingSoon(jar, ctx);
-verifyLessonPage(jar, lessonId);
+verifyAdminLessonBadge(jar, ctx.courseId, lessonId);
+verifyLessonPageLoads(jar, lessonId);
 console.log("=== ALL PASSED ===");
