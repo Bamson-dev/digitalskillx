@@ -93,41 +93,55 @@ if (courseIdMatch) {
 }
 
 const testEmail = `csv-test+${Date.now()}@digitalskillx.com`;
-const csvBody = `full_name,email\nCSV Test User,${testEmail}`;
+const semicolonEmail = `csv-semi+${Date.now()}@digitalskillx.com`;
 
-const importRes = curl([
-  "-b",
-  jar,
-  "-X",
-  "POST",
-  `${base}/api/admin/bulk-students`,
+function runBulkImport(fields) {
+  return curl(["-b", jar, "-X", "POST", `${base}/api/admin/bulk-students`, ...fields]);
+}
+
+function assertBulkSuccess(importRes, label) {
+  let importOk = false;
+  try {
+    const json = JSON.parse(importRes);
+    importOk =
+      typeof json.message === "string" &&
+      /Bulk upload finished/i.test(json.message) &&
+      json.bulkSummary?.failed?.length === 0 &&
+      (json.bulkSummary?.created >= 1 || json.bulkSummary?.enrolled >= 1);
+    if (!importOk) {
+      console.error(`FAIL: ${label}`, importRes.slice(0, 900));
+    }
+    return importOk;
+  } catch {
+    console.error(`FAIL: ${label} did not return JSON`);
+    console.error(importRes.slice(0, 900));
+    return false;
+  }
+}
+
+const commaRes = runBulkImport([
   "-F",
   `default_course_id=${courseId}`,
   "-F",
-  `csv=${csvBody}`,
+  `csv=full_name,email\nCSV Test User,${testEmail}`,
 ]);
 
-let importOk = false;
-try {
-  const json = JSON.parse(importRes);
-  importOk =
-    typeof json.message === "string" &&
-    /Bulk upload finished/i.test(json.message) &&
-    json.bulkSummary?.failed?.length === 0 &&
-    (json.bulkSummary?.created >= 1 || json.bulkSummary?.enrolled >= 1);
-  if (!importOk) {
-    console.error("FAIL: unexpected bulk API response", importRes.slice(0, 900));
-  }
-} catch {
-  console.error("FAIL: CSV bulk import API did not return JSON");
-  console.error(importRes.slice(0, 900));
+if (!assertBulkSuccess(commaRes, "comma CSV import")) {
   process.exit(1);
 }
+console.log("PASS: comma CSV bulk import succeeded for", testEmail);
 
-if (!importOk) {
+const semicolonRes = runBulkImport([
+  "-F",
+  `default_course_id=${courseId}`,
+  "-F",
+  `csv=full_name;email\nCSV Semi User;${semicolonEmail}`,
+]);
+
+if (!assertBulkSuccess(semicolonRes, "semicolon CSV import")) {
   process.exit(1);
 }
-console.log("PASS: CSV bulk import succeeded for", testEmail);
+console.log("PASS: semicolon CSV bulk import succeeded for", semicolonEmail);
 
 const updatedPage = curl(["-b", jar, `${base}/admin/students`]);
 if (!updatedPage.toLowerCase().includes(testEmail.toLowerCase())) {

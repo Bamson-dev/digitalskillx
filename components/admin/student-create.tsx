@@ -286,9 +286,9 @@ export function StudentCreate({
             </div>
             <div>
               <Label htmlFor="default_course_id">Default course for this upload</Label>
-              <Select id="default_course_id" name="default_course_id" defaultValue="" required>
-                <option value="" disabled>
-                  Select a course…
+              <Select id="default_course_id" name="default_course_id" defaultValue="">
+                <option value="">
+                  Select a course… (optional if CSV has course column)
                 </option>
                 {courses.map((course) => (
                   <option key={course.id} value={course.id}>
@@ -316,8 +316,8 @@ export function StudentCreate({
             />
             <p className="mt-1 text-xs text-muted">
               Required columns: <code>full_name</code> (or <code>name</code>) and <code>email</code>.
-              Optional <code>course</code> column overrides the default course. Supports Excel-exported
-              CSVs (UTF-8). Each new student gets an account, course access, and welcome email.
+              Optional <code>course</code> column overrides the default course. Comma, semicolon, and
+              tab-separated Excel exports are supported (save as CSV UTF-8, not .xlsx).
             </p>
           </div>
 
