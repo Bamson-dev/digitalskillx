@@ -99,6 +99,15 @@ function runBulkImport(fields) {
   return curl(["-b", jar, "-X", "POST", `${base}/api/admin/bulk-students`, ...fields]);
 }
 
+/** curl -F splits on semicolons; use --form-string for delimiter-heavy CSV bodies. */
+function runBulkImportCsv(csvBody, courseIdValue) {
+  const fields = ["--form-string", `csv=${csvBody}`];
+  if (courseIdValue) {
+    fields.unshift("-F", `default_course_id=${courseIdValue}`);
+  }
+  return runBulkImport(fields);
+}
+
 function assertBulkSuccess(importRes, label) {
   let importOk = false;
   try {
@@ -119,24 +128,17 @@ function assertBulkSuccess(importRes, label) {
   }
 }
 
-const commaRes = runBulkImport([
-  "-F",
-  `default_course_id=${courseId}`,
-  "-F",
-  `csv=full_name,email\nCSV Test User,${testEmail}`,
-]);
+const commaRes = runBulkImportCsv(`full_name,email\nCSV Test User,${testEmail}`, courseId);
 
 if (!assertBulkSuccess(commaRes, "comma CSV import")) {
   process.exit(1);
 }
 console.log("PASS: comma CSV bulk import succeeded for", testEmail);
 
-const semicolonRes = runBulkImport([
-  "-F",
-  `default_course_id=${courseId}`,
-  "-F",
-  `csv=full_name;email\nCSV Semi User;${semicolonEmail}`,
-]);
+const semicolonRes = runBulkImportCsv(
+  `full_name;email\nCSV Semi User;${semicolonEmail}`,
+  courseId,
+);
 
 if (!assertBulkSuccess(semicolonRes, "semicolon CSV import")) {
   process.exit(1);
