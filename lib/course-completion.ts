@@ -1,6 +1,6 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { createAdminClientAsync } from "@/lib/supabase/admin";
 import { runAutomations } from "@/lib/automation";
 import { issueCertificate } from "@/lib/certificates";
 import { courseCompletionPct } from "@/lib/progress";
@@ -68,7 +68,7 @@ export async function studentPassedRequiredQuizzes(
 }
 
 export async function clearIdleReminderForCourse(studentId: string, courseId: string) {
-  const admin = createAdminClient();
+  const admin = await createAdminClientAsync();
   await admin
     .from("enrollments")
     .update({ idle_reminder_sent_at: null })
@@ -82,7 +82,7 @@ export async function clearIdleReminderForCourse(studentId: string, courseId: st
  * Marks enrollment complete, issues certificate, and sends the completion email once.
  */
 export async function evaluateAndCompleteCourse(studentId: string, courseId: string) {
-  const admin = createAdminClient();
+  const admin = await createAdminClientAsync();
 
   const { data: course } = await admin
     .from("courses")
@@ -146,7 +146,7 @@ export async function evaluateAndCompleteCourse(studentId: string, courseId: str
 
 /** Courses with certificates disabled (no auto-issue / completion email). */
 export async function coursesWithoutCertificateRule() {
-  const admin = createAdminClient();
+  const admin = await createAdminClientAsync();
   const { data } = await admin
     .from("courses")
     .select("id, title, visibility, certificate_enabled, required_completion_pct")

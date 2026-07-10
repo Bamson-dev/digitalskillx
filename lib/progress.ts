@@ -1,5 +1,5 @@
 import "server-only";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { createAdminClientAsync } from "@/lib/supabase/admin";
 import { runAutomations } from "@/lib/automation";
 import {
   clearIdleReminderForCourse,
@@ -9,7 +9,7 @@ import { sendProgressMilestoneEmailsIfNeeded } from "@/lib/system-email-triggers
 
 /** All lesson ids belonging to a course (via its modules). */
 async function courseLessonIds(courseId: string): Promise<string[]> {
-  const supabase = createAdminClient();
+  const supabase = await createAdminClientAsync();
   const { data: modules } = await supabase
     .from("modules")
     .select("id")
@@ -36,7 +36,7 @@ export async function getCourseProgressSummary(studentId: string, courseId: stri
   if (totalLessons === 0) {
     return { pct: 0, totalLessons: 0, completedLessons: 0, lessonsLeft: 0 };
   }
-  const supabase = createAdminClient();
+  const supabase = await createAdminClientAsync();
   const { count } = await supabase
     .from("lesson_progress")
     .select("*", { count: "exact", head: true })
@@ -63,11 +63,11 @@ export async function recordLessonProgress(params: {
   watchPercentage?: number;
   completed?: boolean;
 }) {
-  const supabase = createAdminClient();
+  const supabase = await createAdminClientAsync();
   const watch = Math.min(100, Math.max(0, params.watchPercentage ?? 0));
   const completed = params.completed ?? false;
 
-  await supabase.from("lesson_progress").upsert(
+  const { error: upsertError } = await supabase.from("lesson_progress").upsert(
     {
       student_id: params.studentId,
       lesson_id: params.lessonId,
@@ -77,6 +77,10 @@ export async function recordLessonProgress(params: {
     },
     { onConflict: "student_id,lesson_id" },
   );
+
+  if (upsertError) {
+    throw new Error(`Could not save lesson progress: ${upsertError.message}`);
+  }
 
   // Find the course this lesson belongs to.
   const { data: lesson } = await supabase
@@ -94,14 +98,27 @@ export async function recordLessonProgress(params: {
 
   if (!completed) return { completed: false };
 
-  await runAutomations("lesson_completed", {
-    studentId: params.studentId,
-    courseId,
-    lessonId: params.lessonId,
-  });
+  try {
+    await runAutomations("lesson_completed", {
+      studentId: params.studentId,
+      courseId,
+      lessonId: params.lessonId,
+    });
+  } catch (err) {
+    console.error("[progress] lesson_completed automation error:", err);
+  }
 
-  const completion = await evaluateAndCompleteCourse(params.studentId, courseId);
-  const pct = completion.coursePct ?? (await courseCompletionPct(params.studentId, courseId));
+  let coursePct: number | undefined;
+  let courseCompleted = false;
+  try {
+    const completion = await evaluateAndCompleteCourse(params.studentId, courseId);
+    coursePct = completion.coursePct;
+    courseCompleted = completion.completed === true;
+  } catch (err) {
+    console.error("[progress] course completion error:", err);
+  }
+
+  const pct = coursePct ?? (await courseCompletionPct(params.studentId, courseId));
 
   void sendProgressMilestoneEmailsIfNeeded({
     studentId: params.studentId,
@@ -109,5 +126,5 @@ export async function recordLessonProgress(params: {
     pct,
   }).catch((err) => console.error("[progress] milestone email error:", err));
 
-  return { completed: true, coursePct: pct, courseCompleted: completion.completed };
+  return { completed: true, coursePct: pct, courseCompleted };
 }

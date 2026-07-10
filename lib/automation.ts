@@ -1,5 +1,5 @@
 import "server-only";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { createAdminClientAsync } from "@/lib/supabase/admin";
 import { notify } from "@/lib/notifications";
 import { sendEmail } from "@/lib/email";
 import { emailTemplates } from "@/lib/email/templates";
@@ -29,7 +29,7 @@ export async function runAutomations(
   event: AutomationTrigger,
   ctx: AutomationContext,
 ) {
-  const supabase = createAdminClient();
+  const supabase = await createAdminClientAsync();
 
   const { data: rules } = await supabase
     .from("automation_rules")
@@ -59,12 +59,16 @@ export async function runAutomations(
       }
     }
 
-    await supabase.from("audit_logs").insert({
-      action: "automation_executed",
-      target_type: "automation_rule",
-      target_id: rule.id,
-      metadata: { event, context: ctx },
-    });
+    try {
+      await supabase.from("audit_logs").insert({
+        action: "automation_executed",
+        target_type: "automation_rule",
+        target_id: rule.id,
+        metadata: { event, context: ctx },
+      });
+    } catch (err) {
+      console.error("[automation] audit log failed", rule.id, err);
+    }
   }
 }
 
@@ -74,7 +78,7 @@ async function executeAction(
   email?: string | null,
   name?: string | null,
 ) {
-  const supabase = createAdminClient();
+  const supabase = await createAdminClientAsync();
   switch (action.type) {
     case "send_email":
       if (email) {

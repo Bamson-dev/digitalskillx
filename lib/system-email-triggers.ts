@@ -424,7 +424,7 @@ export async function sendProgressMilestoneEmailsIfNeeded(params: {
 }) {
   const admin = await createAdminClientAsync();
 
-  const { data: enrollment } = await admin
+  const { data: enrollment, error: enrollmentError } = await admin
     .from("enrollments")
     .select(
       "id, completed_at, milestone_25_email_sent_at, milestone_50_email_sent_at, milestone_75_email_sent_at",
@@ -432,6 +432,11 @@ export async function sendProgressMilestoneEmailsIfNeeded(params: {
     .eq("student_id", params.studentId)
     .eq("course_id", params.courseId)
     .maybeSingle();
+
+  if (enrollmentError) {
+    console.error("[progress] milestone enrollment lookup failed:", enrollmentError.message);
+    return { sent: 0 as const, skipped: true as const };
+  }
 
   if (!enrollment || enrollment.completed_at) {
     return { sent: 0 as const, skipped: true as const };

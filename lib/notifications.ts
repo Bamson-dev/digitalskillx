@@ -1,5 +1,5 @@
 import "server-only";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { createAdminClientAsync } from "@/lib/supabase/admin";
 import type { NotificationType } from "@/types/database";
 
 /**
@@ -13,7 +13,7 @@ export async function notify(params: {
   title?: string;
   linkUrl?: string;
 }) {
-  const supabase = createAdminClient();
+  const supabase = await createAdminClientAsync();
   await supabase.from("notifications").insert({
     student_id: params.studentId,
     type: params.type,
@@ -28,7 +28,7 @@ export async function notifyMany(
   params: Omit<Parameters<typeof notify>[0], "studentId">,
 ) {
   if (studentIds.length === 0) return;
-  const supabase = createAdminClient();
+  const supabase = await createAdminClientAsync();
   await supabase.from("notifications").insert(
     studentIds.map((studentId) => ({
       student_id: studentId,
