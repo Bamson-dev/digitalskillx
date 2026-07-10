@@ -60,7 +60,18 @@ export async function decodeCsvUpload(bytes: ArrayBuffer): Promise<string> {
   if (view.length >= 2 && view[0] === 0xfe && view[1] === 0xff) {
     return new TextDecoder("utf-16be").decode(bytes);
   }
-  return new TextDecoder("utf-8").decode(bytes);
+
+  const utf8 = new TextDecoder("utf-8").decode(bytes);
+  const sampleLen = Math.min(view.length, 400);
+  let utf16Nulls = 0;
+  for (let i = 1; i < sampleLen; i += 2) {
+    if (view[i] === 0) utf16Nulls++;
+  }
+  if (sampleLen > 20 && utf16Nulls / (sampleLen / 2) > 0.35) {
+    return new TextDecoder("utf-16le").decode(bytes);
+  }
+
+  return utf8;
 }
 
 /** Parse CSV text from a file upload or pasted form field. */
@@ -188,11 +199,19 @@ export async function runBulkStudentCsvUpload(params: {
     const courseRefRaw = row.courseRef;
 
     if (!fullName && !email) continue;
-    if (!fullName || !email) {
+    if (!email) {
       failed.push({
         row: rowNumber,
-        email: email || "(missing)",
-        reason: "full_name and email are required",
+        email: "(missing)",
+        reason: "Email is required on each row",
+      });
+      continue;
+    }
+    if (!fullName) {
+      failed.push({
+        row: rowNumber,
+        email,
+        reason: "Could not determine student name for this row",
       });
       continue;
     }

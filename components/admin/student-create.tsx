@@ -329,9 +329,10 @@ export function StudentCreate({
               className="font-mono text-xs"
             />
             <p className="mt-1 text-xs text-muted">
-              Required columns: <code>full_name</code> (or <code>name</code>) and <code>email</code>.
-              Optional <code>course</code> column overrides the default course. Comma, semicolon, and
-              tab-separated Excel exports are supported (save as CSV UTF-8, not .xlsx).
+              Required columns: <code>email</code> (required) and <code>full_name</code> or{" "}
+              <code>name</code> (optional — we derive a name from the email if missing). Optional{" "}
+              <code>course</code> column overrides the default course. Email-only lists (one address
+              per line) and Gumroad/Excel exports are supported.
             </p>
           </div>
 

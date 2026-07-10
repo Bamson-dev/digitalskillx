@@ -54,6 +54,29 @@ expectRow("Jane Akande,jane@example.com,Facebook Ad Mastery", 0, {
   courseRef: "Facebook Ad Mastery",
 });
 
+// Email-only list (one column, no header)
+expectRow("buyer1@example.com\nbuyer2@example.com", 0, {
+  fullName: "Buyer1",
+  email: "buyer1@example.com",
+  courseRef: "",
+});
+expectRow("buyer1@example.com\nbuyer2@example.com", 1, {
+  fullName: "Buyer2",
+  email: "buyer2@example.com",
+});
+
+// Gumroad-style export
+expectRow(
+  "email,full_name,product_permalink\nisaac@example.com,Isaac Newton,how-to-attract-buyers",
+  0,
+  { fullName: "Isaac Newton", email: "isaac@example.com", courseRef: "how-to-attract-buyers" },
+);
+
+// Header with email only (no name column)
+const emailOnlyHeader = parseStudentCsv("email\nstudent@example.com");
+assert.equal(emailOnlyHeader.rows[0]?.email, "student@example.com");
+assert.equal(emailOnlyHeader.rows[0]?.fullName, "Student");
+
 try {
   parseStudentCsv("PK\u0003\u0004binary");
   assert.fail("expected xlsx rejection");

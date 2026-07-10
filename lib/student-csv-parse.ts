@@ -7,6 +7,12 @@ const NAME_HEADERS = new Set([
   "student_name",
   "student",
   "studentname",
+  "buyer name",
+  "buyer_name",
+  "customer name",
+  "customer_name",
+  "purchaser name",
+  "purchaser_name",
 ]);
 
 const EMAIL_HEADERS = new Set([
@@ -16,6 +22,14 @@ const EMAIL_HEADERS = new Set([
   "mail",
   "student email",
   "student_email",
+  "buyer email",
+  "buyer_email",
+  "customer email",
+  "customer_email",
+  "purchaser email",
+  "purchaser_email",
+  "contact email",
+  "contact_email",
 ]);
 
 const COURSE_HEADERS = new Set([
@@ -24,11 +38,17 @@ const COURSE_HEADERS = new Set([
   "courses",
   "course title",
   "coursename",
+  "product",
+  "product name",
+  "product_name",
 ]);
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export function normalizeCsvHeader(cell: string) {
   return cell
     .replace(/\uFEFF/g, "")
+    .replace(/\u0000/g, "")
     .replace(/\u00A0/g, " ")
     .toLowerCase()
     .trim()
@@ -36,16 +56,29 @@ export function normalizeCsvHeader(cell: string) {
 }
 
 export function cleanCsvCell(value: string) {
-  return value.replace(/\uFEFF/g, "").replace(/\u00A0/g, " ").trim();
+  return value.replace(/\uFEFF/g, "").replace(/\u0000/g, "").replace(/\u00A0/g, " ").trim();
 }
 
 export function cleanCsvEmail(value: string) {
   return cleanCsvCell(value).toLowerCase().replace(/\s+/g, "");
 }
 
+export function isCsvEmail(value: string) {
+  return EMAIL_RE.test(cleanCsvEmail(value));
+}
+
+export function deriveStudentNameFromEmail(email: string) {
+  const local = email.split("@")[0]?.replace(/[._+-]+/g, " ").trim() ?? "";
+  if (!local) return "Student";
+  return local
+    .split(/\s+/)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
 /** Reject Excel workbooks uploaded with a .csv extension. */
 export function assertReadableStudentCsv(text: string) {
-  const sample = text.slice(0, 8);
+  const sample = text.replace(/\u0000/g, "").slice(0, 8);
   if (sample.startsWith("PK")) {
     throw new Error(
       "This file looks like Excel (.xlsx), not CSV. In Excel use File → Save As → CSV UTF-8 (Comma delimited) and upload that file.",
@@ -54,15 +87,16 @@ export function assertReadableStudentCsv(text: string) {
 }
 
 export function detectCsvDelimiter(sampleLine: string): "," | ";" | "\t" {
+  const line = sampleLine.replace(/\u0000/g, "");
   let comma = 0;
   let semi = 0;
   let tab = 0;
   let inQuotes = false;
 
-  for (let i = 0; i < sampleLine.length; i++) {
-    const char = sampleLine[i];
+  for (let i = 0; i < line.length; i++) {
+    const char = line[i];
     if (char === '"') {
-      if (inQuotes && sampleLine[i + 1] === '"') {
+      if (inQuotes && line[i + 1] === '"') {
         i++;
         continue;
       }
@@ -81,14 +115,15 @@ export function detectCsvDelimiter(sampleLine: string): "," | ";" | "\t" {
 }
 
 export function parseCsvRow(line: string, delimiter = ","): string[] {
+  const normalizedLine = line.replace(/\u0000/g, "");
   const result: string[] = [];
   let current = "";
   let inQuotes = false;
 
-  for (let i = 0; i < line.length; i++) {
-    const char = line[i];
+  for (let i = 0; i < normalizedLine.length; i++) {
+    const char = normalizedLine[i];
     if (char === '"') {
-      if (inQuotes && line[i + 1] === '"') {
+      if (inQuotes && normalizedLine[i + 1] === '"') {
         current += '"';
         i++;
       } else {
@@ -108,6 +143,14 @@ export function parseCsvRow(line: string, delimiter = ","): string[] {
   return result;
 }
 
+function splitCsvLines(text: string) {
+  return text
+    .replace(/^\uFEFF/, "")
+    .split(/\r\n|\n|\r/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+}
+
 function headerIndex(headerCells: string[], candidates: Set<string>) {
   return headerCells.findIndex((cell) => candidates.has(normalizeCsvHeader(cell)));
 }
@@ -120,7 +163,64 @@ function rowLooksLikeHeader(cells: string[]) {
   const hasEmail = normalized.some(
     (cell) => EMAIL_HEADERS.has(cell) || cell.includes("email") || cell.includes("mail"),
   );
-  return hasName && hasEmail && !cells.some((cell) => cell.includes("@"));
+  return hasName && hasEmail && !cells.some((cell) => isCsvEmail(cell));
+}
+
+function findEmailCellIndex(cells: string[]) {
+  return cells.findIndex((cell) => isCsvEmail(cell));
+}
+
+function findNameCellIndex(cells: string[], emailIdx: number) {
+  if (emailIdx < 0) return cells.findIndex((cell) => cell && !isCsvEmail(cell));
+  for (let i = 0; i < cells.length; i++) {
+    if (i === emailIdx) continue;
+    const cell = cells[i]?.trim() ?? "";
+    if (cell && !isCsvEmail(cell)) return i;
+  }
+  return -1;
+}
+
+function mapRowFromCells(cells: string[], indices: { nameIdx: number; emailIdx: number; courseIdx: number }) {
+  let email =
+    indices.emailIdx >= 0 ? cleanCsvEmail(cells[indices.emailIdx] ?? "") : "";
+  let fullName =
+    indices.nameIdx >= 0 ? cleanCsvCell(cells[indices.nameIdx] ?? "") : "";
+  const courseRef =
+    indices.courseIdx >= 0 ? cleanCsvCell(cells[indices.courseIdx] ?? "") : "";
+
+  if (!email) {
+    const emailIdx = findEmailCellIndex(cells);
+    if (emailIdx >= 0) email = cleanCsvEmail(cells[emailIdx] ?? "");
+    if (!fullName) {
+      const nameIdx = findNameCellIndex(cells, emailIdx);
+      if (nameIdx >= 0) fullName = cleanCsvCell(cells[nameIdx] ?? "");
+    }
+  }
+
+  if (email && !fullName) {
+    fullName = deriveStudentNameFromEmail(email);
+  }
+
+  let resolvedCourseRef = courseRef;
+  if (!resolvedCourseRef) {
+    const used = new Set<number>();
+    if (indices.emailIdx >= 0) used.add(indices.emailIdx);
+    if (indices.nameIdx >= 0) used.add(indices.nameIdx);
+    const emailIdx = findEmailCellIndex(cells);
+    if (emailIdx >= 0) used.add(emailIdx);
+    const nameIdx = findNameCellIndex(cells, emailIdx);
+    if (nameIdx >= 0) used.add(nameIdx);
+    for (let i = 0; i < cells.length; i++) {
+      if (used.has(i)) continue;
+      const cell = cleanCsvCell(cells[i] ?? "");
+      if (cell && !isCsvEmail(cell)) {
+        resolvedCourseRef = cell;
+        break;
+      }
+    }
+  }
+
+  return { fullName, email, courseRef: resolvedCourseRef };
 }
 
 export function parseStudentCsv(text: string): {
@@ -129,8 +229,8 @@ export function parseStudentCsv(text: string): {
 } {
   assertReadableStudentCsv(text);
 
-  const normalized = text.replace(/^\uFEFF/, "").trim();
-  const lines = normalized.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  const normalized = text.replace(/^\uFEFF/, "").replace(/\u0000/g, "").trim();
+  const lines = splitCsvLines(normalized);
   if (lines.length === 0) return { header: false, rows: [] };
 
   const delimiter = detectCsvDelimiter(lines[0]);
@@ -143,14 +243,13 @@ export function parseStudentCsv(text: string): {
 
   const hasHeader =
     (nameIdx >= 0 && emailIdx >= 0) ||
+    emailIdx >= 0 ||
     rowLooksLikeHeader(first);
 
   const resolvedNameIdx =
     nameIdx >= 0
       ? nameIdx
-      : headerCells.findIndex(
-          (cell) => cell.includes("name") || cell.includes("student"),
-        );
+      : headerCells.findIndex((cell) => cell.includes("name") || cell.includes("student"));
   const resolvedEmailIdx =
     emailIdx >= 0
       ? emailIdx
@@ -158,41 +257,28 @@ export function parseStudentCsv(text: string): {
   const resolvedCourseIdx =
     courseIdx >= 0
       ? courseIdx
-      : headerCells.findIndex((cell) => cell.includes("course"));
+      : headerCells.findIndex((cell) => cell.includes("course") || cell.includes("product"));
 
   const startIndex = hasHeader ? 1 : 0;
+  const headerIndices = {
+    nameIdx: resolvedNameIdx,
+    emailIdx: resolvedEmailIdx,
+    courseIdx: resolvedCourseIdx,
+  };
 
   const rows = lines.slice(startIndex).map((line, offset) => {
     const cells = parseCsvRow(line, delimiter);
-    let fullName = "";
-    let email = "";
-    let courseRef = "";
-
-    if (hasHeader && resolvedNameIdx >= 0 && resolvedEmailIdx >= 0) {
-      fullName = cleanCsvCell(cells[resolvedNameIdx] ?? "");
-      email = cleanCsvEmail(cells[resolvedEmailIdx] ?? "");
-      courseRef =
-        resolvedCourseIdx >= 0 ? cleanCsvCell(cells[resolvedCourseIdx] ?? "") : "";
-    } else if (cells.length >= 2 && cells[1]?.includes("@")) {
-      fullName = cleanCsvCell(cells[0] ?? "");
-      email = cleanCsvEmail(cells[1] ?? "");
-      courseRef = cleanCsvCell(cells[2] ?? "");
-    } else if (cells.length >= 2 && cells[0]?.includes("@")) {
-      email = cleanCsvEmail(cells[0] ?? "");
-      fullName = cleanCsvCell(cells[1] ?? "");
-      courseRef = cleanCsvCell(cells[2] ?? "");
-    } else {
-      fullName = cleanCsvCell(cells[0] ?? "");
-      email = cleanCsvEmail(cells[1] ?? "");
-      courseRef = cleanCsvCell(cells[2] ?? "");
-    }
+    const mapped =
+      hasHeader && resolvedEmailIdx >= 0
+        ? mapRowFromCells(cells, headerIndices)
+        : mapRowFromCells(cells, { nameIdx: -1, emailIdx: -1, courseIdx: -1 });
 
     return {
       rowNumber: startIndex + offset + 1,
       cells,
-      fullName,
-      email,
-      courseRef,
+      fullName: mapped.fullName,
+      email: mapped.email,
+      courseRef: mapped.courseRef,
     };
   });
 
