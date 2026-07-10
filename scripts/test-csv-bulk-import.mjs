@@ -108,7 +108,16 @@ function runBulkImportCsv(csvBody, courseIdValue) {
   return runBulkImport(fields);
 }
 
-function assertBulkSuccess(importRes, label) {
+function runBulkImportFile(csvPath, courseIdValue) {
+  const fields = ["-F", `csv_file=@${csvPath}`];
+  if (courseIdValue) {
+    fields.unshift("-F", `default_course_id=${courseIdValue}`);
+  }
+  return runBulkImport(fields);
+}
+
+function assertBulkSuccess(importRes, label, options = {}) {
+  const { allowSkipped = false } = options;
   let importOk = false;
   try {
     const json = JSON.parse(importRes);
@@ -116,21 +125,24 @@ function assertBulkSuccess(importRes, label) {
       typeof json.message === "string" &&
       /Bulk upload finished/i.test(json.message) &&
       json.bulkSummary?.failed?.length === 0 &&
-      (json.bulkSummary?.created >= 1 || json.bulkSummary?.enrolled >= 1);
+      (json.bulkSummary?.created >= 1 ||
+        json.bulkSummary?.enrolled >= 1 ||
+        (allowSkipped && json.bulkSummary?.skipped >= 1));
     if (!importOk) {
       console.error(`FAIL: ${label}`, importRes.slice(0, 900));
     }
-    return importOk;
+    return { ok: importOk, json };
   } catch {
     console.error(`FAIL: ${label} did not return JSON`);
     console.error(importRes.slice(0, 900));
-    return false;
+    return { ok: false, json: null };
   }
 }
 
 const commaRes = runBulkImportCsv(`full_name,email\nCSV Test User,${testEmail}`, courseId);
 
-if (!assertBulkSuccess(commaRes, "comma CSV import")) {
+const commaCheck = assertBulkSuccess(commaRes, "comma CSV import");
+if (!commaCheck.ok) {
   process.exit(1);
 }
 console.log("PASS: comma CSV bulk import succeeded for", testEmail);
@@ -140,10 +152,38 @@ const semicolonRes = runBulkImportCsv(
   courseId,
 );
 
-if (!assertBulkSuccess(semicolonRes, "semicolon CSV import")) {
+const semiCheck = assertBulkSuccess(semicolonRes, "semicolon CSV import");
+if (!semiCheck.ok) {
   process.exit(1);
 }
 console.log("PASS: semicolon CSV bulk import succeeded for", semicolonEmail);
+
+const fileCsvPath = join(mkdtempSync(join(tmpdir(), "csv-file-")), "upload.csv");
+writeFileSync(
+  fileCsvPath,
+  `full_name,email\nCSV File User,file-${Date.now()}@digitalskillx.com\n`,
+  "utf8",
+);
+const fileRes = runBulkImportFile(fileCsvPath, courseId);
+const fileCheck = assertBulkSuccess(fileRes, "file CSV import");
+if (!fileCheck.ok) {
+  process.exit(1);
+}
+console.log("PASS: file CSV bulk import succeeded");
+
+const duplicateRes = runBulkImportCsv(`full_name,email\nCSV Test User,${testEmail}`, courseId);
+const duplicateCheck = assertBulkSuccess(duplicateRes, "duplicate CSV re-upload", {
+  allowSkipped: true,
+});
+if (!duplicateCheck.ok) {
+  process.exit(1);
+}
+if ((duplicateCheck.json?.bulkSummary?.skipped ?? 0) < 1) {
+  console.error("FAIL: duplicate re-upload should count skipped rows");
+  console.error(duplicateRes.slice(0, 900));
+  process.exit(1);
+}
+console.log("PASS: duplicate re-upload skipped already-enrolled student");
 
 const updatedPage = curl(["-b", jar, `${base}/admin/students`]);
 if (!updatedPage.toLowerCase().includes(testEmail.toLowerCase())) {

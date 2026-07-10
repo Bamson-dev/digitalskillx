@@ -181,6 +181,10 @@ export function StudentCreate({
 
     const form = event.currentTarget;
     const formData = new FormData(form);
+    const fileInput = form.querySelector<HTMLInputElement>('input[name="csv_file"]');
+    if (fileInput?.files?.[0]?.size) {
+      formData.delete("csv");
+    }
 
     try {
       const res = await fetch("/api/admin/bulk-students", {
@@ -188,9 +192,19 @@ export function StudentCreate({
         body: formData,
         credentials: "include",
       });
-      const json = (await res.json()) as StudentActionState & {
-        bulkSummary?: StudentActionState["bulkSummary"];
-      };
+      const raw = await res.text();
+      let json: StudentActionState & { bulkSummary?: StudentActionState["bulkSummary"] };
+      try {
+        json = JSON.parse(raw) as typeof json;
+      } catch {
+        const snippet = raw.replace(/\s+/g, " ").trim().slice(0, 240);
+        setCsvState({
+          error: snippet
+            ? `Server error (${res.status}): ${snippet}`
+            : `Bulk upload failed (${res.status}).`,
+        });
+        return;
+      }
       if (!res.ok) {
         setCsvState({ error: json.error ?? "Bulk upload failed." });
         return;

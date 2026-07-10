@@ -7,29 +7,30 @@ import { readCsvFromFormData, runBulkStudentCsvUpload } from "@/lib/bulk-student
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
+export const maxDuration = 300;
 
 /** CSV bulk student import — admin-only JSON API (reliable file upload + fetch clients). */
 export async function POST(request: NextRequest) {
-  const limited = await rateLimitedResponse(request, "admin-bulk-students", 10);
-  if (limited) return limited;
-
-  const auth = await requireAdminApiAuth();
-  if ("error" in auth) return auth.error;
-
-  let formData: FormData;
   try {
-    formData = await request.formData();
-  } catch {
-    return NextResponse.json({ error: "Expected multipart form data." }, { status: 400 });
-  }
+    const limited = await rateLimitedResponse(request, "admin-bulk-students", 10);
+    if (limited) return limited;
 
-  const defaultCourseId = String(formData.get("default_course_id") ?? "").trim() || null;
-  const csvText = await readCsvFromFormData(formData);
-  if (!csvText?.trim()) {
-    return NextResponse.json({ error: "Upload a CSV file or paste CSV rows." }, { status: 400 });
-  }
+    const auth = await requireAdminApiAuth();
+    if ("error" in auth) return auth.error;
 
-  try {
+    let formData: FormData;
+    try {
+      formData = await request.formData();
+    } catch {
+      return NextResponse.json({ error: "Expected multipart form data." }, { status: 400 });
+    }
+
+    const defaultCourseId = String(formData.get("default_course_id") ?? "").trim() || null;
+    const csvText = await readCsvFromFormData(formData);
+    if (!csvText?.trim()) {
+      return NextResponse.json({ error: "Upload a CSV file or paste CSV rows." }, { status: 400 });
+    }
+
     const result = await runBulkStudentCsvUpload({
       admin: auth.admin,
       adminUserId: auth.user.id,
@@ -53,6 +54,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(result);
   } catch (err) {
     const message = err instanceof Error ? err.message : "Bulk upload failed.";
-    return NextResponse.json({ error: message }, { status: 400 });
+    console.error("[bulk-students]", message, err);
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

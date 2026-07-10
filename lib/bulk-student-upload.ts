@@ -40,14 +40,43 @@ function siteUrl() {
   return (process.env.NEXT_PUBLIC_SITE_URL ?? "https://digitalskillx.com").replace(/\/$/, "");
 }
 
+function isUploadedCsvFile(value: FormDataEntryValue | null): value is File {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "arrayBuffer" in value &&
+    typeof (value as File).arrayBuffer === "function" &&
+    "size" in value &&
+    value.size > 0
+  );
+}
+
+/** Decode CSV bytes — handles UTF-8/UTF-16 BOMs from Excel exports. */
+export async function decodeCsvUpload(bytes: ArrayBuffer): Promise<string> {
+  const view = new Uint8Array(bytes);
+  if (view.length >= 2 && view[0] === 0xff && view[1] === 0xfe) {
+    return new TextDecoder("utf-16le").decode(bytes);
+  }
+  if (view.length >= 2 && view[0] === 0xfe && view[1] === 0xff) {
+    return new TextDecoder("utf-16be").decode(bytes);
+  }
+  return new TextDecoder("utf-8").decode(bytes);
+}
+
 /** Parse CSV text from a file upload or pasted form field. */
 export async function readCsvFromFormData(formData: FormData): Promise<string | null> {
   const file = formData.get("csv_file");
   const pasted = String(formData.get("csv") ?? "").trim();
 
-  if (file instanceof File && file.size > 0) {
-    return file.text();
+  if (isUploadedCsvFile(file)) {
+    try {
+      return decodeCsvUpload(await file.arrayBuffer());
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Could not read CSV file.";
+      throw new Error(message);
+    }
   }
+
   return pasted || null;
 }
 
@@ -106,20 +135,35 @@ export async function runBulkStudentCsvUpload(params: {
       fullName: grantParams.fullName,
       email: grantParams.email,
       sendEnrollmentEmail: !grantParams.sendWelcome,
+      authIndex,
     });
 
-    const canonicalStudentId = await resolveCanonicalStudentId(params.admin, {
-      studentId: grantParams.studentId,
-      email: grantParams.email,
-    });
-    const { enrolledCourseIds } = await verifyStudentCourseAccess(params.admin, canonicalStudentId, [
-      grantParams.courseId,
-    ]);
-    if (enrolledCourseIds.length === 0) {
-      throw new Error("Course enrollment did not save");
+    if (newlyEnrolled.length > 0) {
+      const canonicalStudentId = await resolveCanonicalStudentId(
+        params.admin,
+        {
+          studentId: grantParams.studentId,
+          email: grantParams.email,
+        },
+        authIndex,
+      );
+      const { enrolledCourseIds } = await verifyStudentCourseAccess(params.admin, canonicalStudentId, [
+        grantParams.courseId,
+      ]);
+      if (enrolledCourseIds.length === 0) {
+        throw new Error("Course enrollment did not save");
+      }
     }
 
     if (grantParams.sendWelcome) {
+      const canonicalStudentId = await resolveCanonicalStudentId(
+        params.admin,
+        {
+          studentId: grantParams.studentId,
+          email: grantParams.email,
+        },
+        authIndex,
+      );
       await sendStudentWelcomeEmail({
         studentId: canonicalStudentId,
         fullName: grantParams.fullName,

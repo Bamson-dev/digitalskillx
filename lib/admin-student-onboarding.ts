@@ -163,14 +163,17 @@ export async function ensureImportedStudentProfile(
   if (error) throw new Error(error.message);
 }
 
+type AuthEmailIndex = Map<string, { id: string; lastSignInAt: string | null }>;
+
 /** Auth user id that will actually sign in with this profile email. */
 export async function resolveCanonicalStudentId(
   admin: SupabaseClient<Database>,
   params: { studentId: string; email: string },
+  authIndex?: AuthEmailIndex,
 ) {
   const normalizedEmail = params.email.trim().toLowerCase();
-  const authIndex = await loadAuthEmailIndex(admin);
-  const idByEmail = authIndex.get(normalizedEmail)?.id;
+  const index = authIndex ?? (await loadAuthEmailIndex(admin));
+  const idByEmail = index.get(normalizedEmail)?.id;
   if (idByEmail) return idByEmail;
 
   const { data: authUser, error } = await admin.auth.admin.getUserById(params.studentId);
@@ -241,6 +244,7 @@ export async function reconcileOrphanEnrollmentsForEmail(
 export async function syncStudentCourseAccess(
   admin: SupabaseClient<Database>,
   params: { authUserId: string; profileEmail?: string | null },
+  authIndex?: AuthEmailIndex,
 ): Promise<string> {
   const profileEmail = params.profileEmail?.trim().toLowerCase() ?? null;
 
@@ -259,12 +263,12 @@ export async function syncStudentCourseAccess(
     await reconcileOrphanEnrollmentsForEmail(admin, { authUserId: params.authUserId, email });
   }
 
-  const authIndex = await loadAuthEmailIndex(admin);
+  const index = authIndex ?? (await loadAuthEmailIndex(admin));
   const relatedIds = new Set<string>();
   for (const email of emails) {
     const { data: profiles } = await admin.from("profiles").select("id").ilike("email", email);
     for (const profile of profiles ?? []) relatedIds.add(profile.id);
-    const mappedId = authIndex.get(email)?.id;
+    const mappedId = index.get(email)?.id;
     if (mappedId) relatedIds.add(mappedId);
   }
 
@@ -328,19 +332,28 @@ export async function grantCourseAccessToStudent(
     fullName: string;
     email: string;
     sendEnrollmentEmail?: boolean;
+    authIndex?: AuthEmailIndex;
   },
 ): Promise<{ newlyEnrolled: string[] }> {
   const { sendCourseEnrollmentEmail } = await import("@/lib/system-email-triggers");
   const { notify } = await import("@/lib/notifications");
 
-  const canonicalStudentId = await resolveCanonicalStudentId(admin, {
-    studentId: params.studentId,
-    email: params.email,
-  });
-  await syncStudentCourseAccess(admin, {
-    authUserId: canonicalStudentId,
-    profileEmail: params.email,
-  });
+  const canonicalStudentId = await resolveCanonicalStudentId(
+    admin,
+    {
+      studentId: params.studentId,
+      email: params.email,
+    },
+    params.authIndex,
+  );
+  await syncStudentCourseAccess(
+    admin,
+    {
+      authUserId: canonicalStudentId,
+      profileEmail: params.email,
+    },
+    params.authIndex,
+  );
 
   const uniqueIds = [...new Set(params.courseIds.filter(Boolean))];
   const newlyEnrolled: string[] = [];
@@ -361,7 +374,10 @@ export async function grantCourseAccessToStudent(
       enrolled_by: params.enrolledBy,
       source: "admin",
     });
-    if (error) throw new Error(error.message);
+    if (error) {
+      if (error.message.toLowerCase().includes("duplicate")) continue;
+      throw new Error(error.message);
+    }
 
     newlyEnrolled.push(courseId);
     await runAutomations("course_enrolled", { studentId: canonicalStudentId, courseId });
