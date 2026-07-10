@@ -17,10 +17,11 @@ import { isSuccessfulGuestPurchase } from "@/lib/guest-checkout";
 import { ORG, siteUrl } from "@/lib/org";
 import { MarketplaceNav, MarketplaceFooter } from "@/components/marketplace/marketplace-chrome";
 import { CourseLandingView } from "@/components/marketplace/course-landing-view";
+import { CourseComingSoonView } from "@/components/course/course-coming-soon-view";
 import { PaymentReturnHandler } from "@/components/marketplace/payment-return-handler";
 
 const courseSelect =
-  "id, title, description, short_description, thumbnail_url, price_ngn, price_usd, learning_outcomes, instructor_name, instructor_bio, promo_video_url, category:course_categories(name), modules(id, title, position, lessons(id, title, position, lesson_type))";
+  "id, title, description, short_description, thumbnail_url, price_ngn, price_usd, learning_outcomes, instructor_name, instructor_bio, promo_video_url, is_coming_soon, category:course_categories(name), modules(id, title, position, lessons(id, title, position, lesson_type))";
 
 export async function generateMetadata({
   params,
@@ -116,7 +117,7 @@ export default async function CourseLandingPage({
   }
 
   const relatedAll = await fetchPublishedCourses<CatalogCourse>(
-    "id, title, description, short_description, thumbnail_url, price_ngn, price_usd, instructor_name, category:course_categories(name)",
+    "id, title, description, short_description, thumbnail_url, price_ngn, price_usd, instructor_name, is_coming_soon, category:course_categories(name)",
   );
   const relatedRaw = relatedAll
     .filter((c) => c.id !== course.id)
@@ -158,20 +159,33 @@ export default async function CourseLandingPage({
             isLoggedIn={Boolean(user)}
           />
         </Suspense>
-        <CourseLandingView
-          course={{
-            ...course,
-            learning_outcomes: course.learning_outcomes ?? [],
-            modules,
-            category_name: category?.name ?? null,
-          }}
-          isEnrolled={isEnrolled}
-          isLoggedIn={Boolean(profile?.email)}
-          related={relatedRaw ?? []}
-          lessonCount={lessonCount}
-          enrollmentCount={enrollmentCount}
-          purchaseComplete={purchaseComplete}
-        />
+        {course.is_coming_soon ? (
+          <CourseComingSoonView
+            title={course.title}
+            description={course.description}
+            shortDescription={course.short_description}
+            thumbnailUrl={course.thumbnail_url}
+            promoVideoUrl={course.promo_video_url}
+            learningOutcomes={course.learning_outcomes ?? []}
+            categoryName={category?.name ?? null}
+            instructorName={course.instructor_name}
+          />
+        ) : (
+          <CourseLandingView
+            course={{
+              ...course,
+              learning_outcomes: course.learning_outcomes ?? [],
+              modules,
+              category_name: category?.name ?? null,
+            }}
+            isEnrolled={isEnrolled}
+            isLoggedIn={Boolean(profile?.email)}
+            related={relatedRaw ?? []}
+            lessonCount={lessonCount}
+            enrollmentCount={enrollmentCount}
+            purchaseComplete={purchaseComplete}
+          />
+        )}
       </main>
 
       <div className="hidden lg:block">

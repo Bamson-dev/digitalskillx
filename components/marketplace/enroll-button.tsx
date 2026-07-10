@@ -15,6 +15,8 @@ type Props = {
   isEnrolled: boolean;
   /** True when the visitor has a usable student profile (email on file). */
   isLoggedIn: boolean;
+  /** Course is listed but lessons are not available yet. */
+  comingSoon?: boolean;
   label?: string;
   className?: string;
   size?: "default" | "bar";
@@ -22,6 +24,31 @@ type Props = {
 };
 
 const CHECKOUT_TIMEOUT_MS = 45_000;
+
+function CourseComingSoonButton({
+  className,
+  size = "default",
+}: {
+  className?: string;
+  size?: "default" | "bar";
+}) {
+  return (
+    <button
+      type="button"
+      disabled
+      aria-disabled="true"
+      className={cn(
+        "inline-flex cursor-not-allowed items-center justify-center rounded-lg border border-amber-200 bg-amber-50 font-semibold text-amber-800",
+        size === "bar"
+          ? "h-12 min-w-[140px] px-4 text-xs sm:text-sm"
+          : "h-12 w-full px-4 text-xs sm:h-14 sm:min-w-[200px] sm:px-6 sm:text-sm",
+        className,
+      )}
+    >
+      Coming soon
+    </button>
+  );
+}
 
 function UsdComingSoonButton({
   className,
@@ -135,6 +162,7 @@ export function EnrollButton({
   priceUsd,
   isEnrolled,
   isLoggedIn,
+  comingSoon = false,
   label,
   className,
   size = "default",
@@ -151,6 +179,14 @@ export function EnrollButton({
     label ?? (isEnrolled ? "Continue Learning" : isFree ? "Enroll Free" : "Enroll Now");
 
   if (hidden) return null;
+
+  if (comingSoon) {
+    return (
+      <div className={className}>
+        <CourseComingSoonButton size={size} />
+      </div>
+    );
+  }
 
   if (currency === "USD" && !isEnrolled) {
     return (

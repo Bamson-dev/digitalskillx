@@ -63,10 +63,15 @@ export async function POST(request: NextRequest) {
       price_usd: number;
       visibility: string;
       enrollment_type: string;
-    }>(body.courseId, "id, title, price_ngn, price_usd, visibility, enrollment_type");
+      is_coming_soon: boolean;
+    }>(body.courseId, "id, title, price_ngn, price_usd, visibility, enrollment_type, is_coming_soon");
 
     if (!course || course.visibility !== "published") {
       return jsonError("Course not available for enrollment.", 404);
+    }
+
+    if (course.is_coming_soon) {
+      return jsonError("This course is coming soon. Enrollment opens when content is ready.", 403);
     }
 
     if (course.enrollment_type !== "open") {

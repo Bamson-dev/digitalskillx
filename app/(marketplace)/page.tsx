@@ -64,7 +64,7 @@ export default async function HomePage() {
 
   const [courses, categories, trustStats] = await Promise.all([
     fetchPublishedCourses<CatalogCourse>(
-      "id, title, description, short_description, thumbnail_url, price_ngn, price_usd, instructor_name, created_at, category:course_categories(name)",
+      "id, title, description, short_description, thumbnail_url, price_ngn, price_usd, instructor_name, is_coming_soon, created_at, category:course_categories(name)",
     ),
     fetchCourseCategories(),
     fetchTrustStats(),
@@ -317,6 +317,7 @@ export default async function HomePage() {
                       priceUsd={featured.price_usd}
                       isEnrolled={featuredEnrolled}
                       isLoggedIn={Boolean(user)}
+                      comingSoon={Boolean(featured.is_coming_soon)}
                       className="sm:max-w-[220px]"
                     />
                   </div>

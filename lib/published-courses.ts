@@ -12,6 +12,7 @@ export type CatalogCourse = {
   price_ngn: number;
   price_usd: number;
   instructor_name: string | null;
+  is_coming_soon?: boolean;
   created_at?: string;
   category?: { name: string } | null;
 };

@@ -18,6 +18,7 @@ export type StudentCourseRow = {
     price_ngn: number;
     price_usd: number;
     instructor_name?: string | null;
+    is_coming_soon?: boolean;
   } | null;
 };
 
@@ -94,7 +95,7 @@ export async function getStudentEnrolledCourses(studentId: string): Promise<Stud
   const courseIds = [...new Set(enrollments.map((row) => row.course_id))];
   const { data: courses, error: courseError } = await admin
     .from("courses")
-    .select("id, title, description, short_description, thumbnail_url, price_ngn, price_usd, instructor_name")
+    .select("id, title, description, short_description, thumbnail_url, price_ngn, price_usd, instructor_name, is_coming_soon")
     .in("id", courseIds);
 
   if (courseError) throw new Error(courseError.message);

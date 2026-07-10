@@ -299,7 +299,15 @@ export function CourseSettingsForm({
             <input type="checkbox" name="drip_enabled" defaultChecked={course.drip_enabled} />
             Drip
           </label>
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" name="is_coming_soon" defaultChecked={course.is_coming_soon} />
+            Coming soon
+          </label>
         </div>
+        <p className="sm:col-span-2 -mt-2 text-xs text-muted">
+          Coming soon courses appear in the catalog with a badge. Students can view the sales page but
+          cannot enroll or open lessons until you turn this off.
+        </p>
 
         <div className="sm:col-span-2">
           <Label htmlFor="certificate_template_override">Certificate template</Label>

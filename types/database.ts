@@ -146,6 +146,7 @@ export type Course = Timestamps & {
   instructor_name: string | null;
   instructor_bio: string | null;
   promo_video_url: string | null;
+  is_coming_soon: boolean;
   updated_at: string;
 };
 

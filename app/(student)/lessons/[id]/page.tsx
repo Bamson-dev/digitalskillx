@@ -44,6 +44,15 @@ export default async function LessonPage({ params }: { params: { id: string } })
   const courseId = moduleRow?.course_id;
   if (!courseId) notFound();
 
+  const { data: courseAccess } = await lookup
+    .from("courses")
+    .select("is_coming_soon")
+    .eq("id", courseId)
+    .single();
+  if (courseAccess?.is_coming_soon && !isAdminPreview) {
+    redirect(`/courses/${courseId}`);
+  }
+
   const { enrolled, targetStudentId } = await checkStudentCourseEnrollment(profile.id, courseId);
   if (!enrolled && !isAdminPreview && !lessonMeta.is_free_preview) {
     redirect(`/course/${courseId}`);

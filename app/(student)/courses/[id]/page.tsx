@@ -5,7 +5,7 @@ import { ArrowLeft } from "lucide-react";
 import { requireStudent } from "@/lib/auth";
 import { getStudentViewSupabase } from "@/lib/student-view-supabase";
 import { checkStudentCourseEnrollment } from "@/lib/student-enrollments";
-import { Card } from "@/components/ui/card";
+import { CourseComingSoonView } from "@/components/course/course-coming-soon-view";
 import { CourseResources } from "@/components/student/course-resources";
 import { CourseCurriculumList } from "@/components/student/course-curriculum-list";
 import type { Lesson, Module } from "@/types/database";
@@ -35,12 +35,31 @@ export default async function CourseDetailPage({
   const { data: course } = await supabase
     .from("courses")
     .select(
-      "id, title, description, modules(id, title, position, lessons(id, title, position, duration_seconds))",
+      "id, title, description, short_description, thumbnail_url, promo_video_url, learning_outcomes, instructor_name, is_coming_soon, modules(id, title, position, lessons(id, title, position, duration_seconds))",
     )
     .eq("id", params.id)
     .single();
 
   if (!course) notFound();
+
+  if (course.is_coming_soon && !isAdminPreview) {
+    return (
+      <div className="space-y-6">
+        <CourseComingSoonView
+          variant="student"
+          title={course.title}
+          description={course.description}
+          shortDescription={course.short_description}
+          thumbnailUrl={course.thumbnail_url}
+          promoVideoUrl={course.promo_video_url}
+          learningOutcomes={course.learning_outcomes ?? []}
+          instructorName={course.instructor_name}
+          backHref="/courses"
+          backLabel="Back to courses"
+        />
+      </div>
+    );
+  }
 
   const { data: resources } = await supabase
     .from("resources")
@@ -77,10 +96,9 @@ export default async function CourseDetailPage({
       </div>
 
       {modules.length === 0 ? (
-        <Card className="text-center text-sm text-muted">
-          This course doesn&apos;t have any content yet. The course player
-          (video, progress tracking, notes) arrives in Phase 2.
-        </Card>
+        <div className="rounded-xl border border-surface-border bg-white p-8 text-center text-sm text-muted">
+          This course doesn&apos;t have any content yet.
+        </div>
       ) : (
         <CourseCurriculumList modules={modules} />
       )}

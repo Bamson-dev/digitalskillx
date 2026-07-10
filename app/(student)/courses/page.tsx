@@ -4,6 +4,7 @@ import Image from "next/image";
 import { BookOpen } from "lucide-react";
 import { requireStudent } from "@/lib/auth";
 import { getStudentEnrolledCourses } from "@/lib/student-enrollments";
+import { Badge } from "@/components/ui/badge";
 
 export const metadata: Metadata = { title: "My Courses" };
 
@@ -52,7 +53,10 @@ export default async function StudentCoursesPage() {
                     )}
                   </div>
                   <div className="p-4">
-                    <h3 className="font-semibold text-neutral-900">{course.title}</h3>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h3 className="font-semibold text-neutral-900">{course.title}</h3>
+                      {course.is_coming_soon ? <Badge tone="amber">Coming soon</Badge> : null}
+                    </div>
                     <p className="mt-1 line-clamp-2 text-sm text-neutral-500">
                       {course.description ?? "No description yet."}
                     </p>

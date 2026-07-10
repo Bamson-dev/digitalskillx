@@ -17,6 +17,7 @@ export type MarketplaceCourse = {
   price_usd: number;
   instructor_name?: string | null;
   category_name?: string | null;
+  is_coming_soon?: boolean;
   rating?: number | null;
 };
 
@@ -81,6 +82,11 @@ export function CourseCard({
         ) : (
           <CourseThumbnailPlaceholder title={course.title} />
         )}
+        {course.is_coming_soon ? (
+          <span className="absolute left-0 top-0 bg-amber-500 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-white">
+            Coming soon
+          </span>
+        ) : null}
         <span className="absolute bottom-0 left-0 bg-neutral-900/80 px-2.5 py-1 text-[10px] font-medium uppercase tracking-widest text-white">
           {category}
         </span>
@@ -92,9 +98,13 @@ export function CourseCard({
         </h3>
         <p className="mt-2.5 line-clamp-2 flex-1 text-[13px] leading-relaxed text-neutral-500">{blurb}</p>
         <div className="mt-5 flex items-end justify-between gap-3">
-          <span className="font-display text-xl font-bold tabular-nums tracking-tight text-brand">
-            {formatCoursePrice(course)}
-          </span>
+          {course.is_coming_soon ? (
+            <span className="text-sm font-semibold uppercase tracking-wider text-amber-700">Coming soon</span>
+          ) : (
+            <span className="font-display text-xl font-bold tabular-nums tracking-tight text-brand">
+              {formatCoursePrice(course)}
+            </span>
+          )}
           <span className="inline-flex items-center gap-0.5 text-xs font-semibold uppercase tracking-wider text-neutral-400 transition group-hover:text-brand">
             View
             <ArrowUpRight className="h-3.5 w-3.5" strokeWidth={2.5} />

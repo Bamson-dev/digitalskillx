@@ -138,6 +138,7 @@ export async function updateCourseSettings(
         certificate_enabled: formData.get("certificate_enabled") === "on",
         certificate_template_override: certificateTemplateOverride,
         drip_enabled: formData.get("drip_enabled") === "on",
+        is_coming_soon: formData.get("is_coming_soon") === "on",
         required_completion_pct: Number.isFinite(required) ? required : 100,
         price_ngn: Number.isFinite(priceNgn) && priceNgn >= 0 ? Math.round(priceNgn) : 0,
         price_usd: Number.isFinite(priceUsd) && priceUsd >= 0 ? Math.round(priceUsd) : 0,
@@ -157,6 +158,12 @@ export async function updateCourseSettings(
         return {
           error:
             "The price_usd column is missing on courses. Run supabase/migrations/0006_price_usd.sql in the Supabase SQL Editor, then try again.",
+        };
+      }
+      if (error.message.includes("is_coming_soon") && error.message.includes("does not exist")) {
+        return {
+          error:
+            "The is_coming_soon column is missing on courses. Run supabase/migrations/0024_course_coming_soon.sql in the Supabase SQL Editor, then try again.",
         };
       }
       return { error: error.message };
