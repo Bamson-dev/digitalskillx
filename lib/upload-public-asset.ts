@@ -8,7 +8,6 @@ const ALLOWED_IMAGE_TYPES = new Set([
   "image/jpeg",
   "image/jpg",
   "image/webp",
-  "image/svg+xml",
   "image/x-icon",
   "image/vnd.microsoft.icon",
 ]);
@@ -19,7 +18,6 @@ function extFromFile(file: File) {
     "image/jpeg": "jpg",
     "image/jpg": "jpg",
     "image/webp": "webp",
-    "image/svg+xml": "svg",
     "image/x-icon": "ico",
     "image/vnd.microsoft.icon": "ico",
   };
@@ -33,7 +31,7 @@ export async function uploadPublicAsset(file: File, folder: string) {
     throw new Error("File must be 2 MB or smaller.");
   }
   if (!ALLOWED_IMAGE_TYPES.has(file.type)) {
-    throw new Error("Upload a PNG, JPG, WebP, SVG, or ICO image.");
+    throw new Error("Upload a PNG, JPG, WebP, or ICO image.");
   }
 
   const supabase = await getAdminStorageClient();

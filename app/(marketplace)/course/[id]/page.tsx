@@ -103,10 +103,15 @@ export default async function CourseLandingPage({
   if (user) {
     await bootstrapRuntimeSecrets();
     const admin = await createAdminClientAsync(supabase);
-    const targetStudentId = await syncStudentCourseAccess(admin, {
-      authUserId: user.id,
-      profileEmail: profile?.email,
-    });
+    let targetStudentId = user.id;
+    try {
+      targetStudentId = await syncStudentCourseAccess(admin, {
+        authUserId: user.id,
+        profileEmail: profile?.email,
+      });
+    } catch (err) {
+      console.error("[CourseLandingPage] syncStudentCourseAccess failed", err);
+    }
     const { data: e } = await admin
       .from("enrollments")
       .select("id")

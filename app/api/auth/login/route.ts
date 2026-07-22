@@ -5,6 +5,7 @@ import {
   createRouteHandlerClientWithPendingCookies,
   redirectWithPendingCookies,
 } from "@/lib/supabase/route-handler";
+import { safeNextPath } from "@/lib/safe-next-path";
 
 export const dynamic = "force-dynamic";
 
@@ -13,8 +14,7 @@ export async function POST(request: NextRequest) {
   const formData = await request.formData();
   const email = String(formData.get("email") ?? "");
   const password = String(formData.get("password") ?? "");
-  const nextRaw = String(formData.get("next") ?? "/dashboard");
-  const next = nextRaw.startsWith("/") ? nextRaw : "/dashboard";
+  const next = safeNextPath(String(formData.get("next") ?? "/dashboard"));
 
   const result = await runStudentLogin({ email, password });
   if (!result.ok) {

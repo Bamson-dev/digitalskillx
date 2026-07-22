@@ -39,30 +39,62 @@ export async function runStudentLogin(params: {
       (data.user.user_metadata?.name as string | undefined) ??
       email.split("@")[0];
 
-    const { error: upsertError } = await admin.from("profiles").upsert(
-      {
+    const { data: existing, error: existingError } = await admin
+      .from("profiles")
+      .select("id, is_suspended, role")
+      .eq("id", data.user.id)
+      .maybeSingle();
+    if (existingError) throw new Error(existingError.message);
+
+    if (existing?.is_suspended) {
+      return {
+        ok: false,
+        error: "This account has been suspended. Contact support for help.",
+      };
+    }
+
+    if (!existing) {
+      const { error: insertError } = await admin.from("profiles").insert({
         id: data.user.id,
         email,
         full_name: fullName,
         role: "student",
         is_suspended: false,
-      },
-      { onConflict: "id" },
-    );
-    if (upsertError) throw new Error(upsertError.message);
+      });
+      if (insertError) throw new Error(insertError.message);
+    } else {
+      // Never overwrite role / is_suspended on login — that would unsuspend banned students.
+      const { error: updateError } = await admin
+        .from("profiles")
+        .update({
+          email,
+          full_name: fullName,
+          last_active_at: new Date().toISOString(),
+        })
+        .eq("id", data.user.id);
+      if (updateError) throw new Error(updateError.message);
+    }
 
-    await admin
-      .from("profiles")
-      .update({ last_active_at: new Date().toISOString() })
-      .eq("id", data.user.id);
+    if (!existing) {
+      await admin
+        .from("profiles")
+        .update({ last_active_at: new Date().toISOString() })
+        .eq("id", data.user.id);
+    }
 
     const { data: verified, error: verifyError } = await admin
       .from("profiles")
-      .select("id")
+      .select("id, is_suspended")
       .eq("id", data.user.id)
       .maybeSingle();
     if (verifyError) throw new Error(verifyError.message);
     if (!verified) throw new Error("Profile was not created.");
+    if (verified.is_suspended) {
+      return {
+        ok: false,
+        error: "This account has been suspended. Contact support for help.",
+      };
+    }
 
     await syncStudentCourseAccess(admin, {
       authUserId: data.user.id,

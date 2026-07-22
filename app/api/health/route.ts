@@ -1,9 +1,11 @@
-import { NextResponse } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
 import { bootstrapRuntimeSecrets } from "@/lib/bootstrap-runtime-secrets";
+import { createAdminClientAsync } from "@/lib/supabase/admin";
+import { verifyCronSecret } from "@/lib/cron-auth";
+import { requireAdminApiAuth } from "@/lib/admin-api-auth";
 import { paystackSecretKeyConfigured } from "@/lib/env-paystack";
 import { youtubeApiKeyDiagnostics } from "@/lib/env-youtube";
 import { runtimeEnvDiagnostics } from "@/lib/runtime-env";
-import { createAdminClientAsync } from "@/lib/supabase/admin";
 import { serviceRoleKeyConfigured } from "@/lib/env-service-role";
 import { integrationSecretsDiagnostics } from "@/lib/secrets-diagnostics";
 import { supabaseProjectRef } from "@/lib/supabase-project-ref";
@@ -12,8 +14,36 @@ import { configuredAdminEmail } from "@/lib/admin-email";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-export async function GET() {
+/** Public: minimal liveness only. Full diagnostics require admin session or CRON_SECRET. */
+export async function GET(request: NextRequest) {
   await bootstrapRuntimeSecrets();
+
+  const cron = verifyCronSecret(request);
+  let detailed = cron.ok;
+  if (!detailed) {
+    const adminAuth = await requireAdminApiAuth();
+    detailed = !("error" in adminAuth);
+  }
+
+  let database: "unknown" | "connected" | "error" = "unknown";
+  try {
+    const admin = await createAdminClientAsync();
+    const { error } = await admin.from("courses").select("id").limit(1);
+    database = error ? "error" : "connected";
+  } catch {
+    database = "error";
+  }
+
+  if (!detailed) {
+    return NextResponse.json(
+      {
+        status: database === "connected" ? "ok" : "degraded",
+        database,
+        timestamp: new Date().toISOString(),
+      },
+      { status: database === "connected" ? 200 : 503 },
+    );
+  }
 
   const youtube = await youtubeApiKeyDiagnostics();
   const paystackReady = await paystackSecretKeyConfigured();
@@ -21,10 +51,10 @@ export async function GET() {
   const serviceRoleReady = await serviceRoleKeyConfigured();
 
   const checks: Record<string, string> = {
-    status: "ok",
+    status: database === "connected" ? "ok" : "degraded",
     timestamp: new Date().toISOString(),
     deployment: secrets.deployment,
-    database: "unknown",
+    database,
     paystack: paystackReady ? "configured" : "unconfigured",
     youtubeApiKey: youtube.status,
     youtubeApiKeySource: youtube.source,
@@ -34,15 +64,6 @@ export async function GET() {
     adminEmail: configuredAdminEmail(),
     cronBootstrap: secrets.cronBootstrap,
   };
-
-  try {
-    const admin = await createAdminClientAsync();
-    const { error } = await admin.from("courses").select("id").limit(1);
-    checks.database = error ? "error" : "connected";
-  } catch {
-    checks.database = "error";
-    checks.status = "degraded";
-  }
 
   if (paystackReady) {
     try {

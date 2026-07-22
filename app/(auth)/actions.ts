@@ -3,12 +3,13 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClientAsync } from "@/lib/supabase/admin";
-import { sendWelcomeEmailIfNeeded } from "@/lib/system-email-triggers";
 import { sendMagicLinkEmail, sendPasswordResetEmail } from "@/lib/auth-email";
 import { serviceRoleKeyMissingMessage, serviceRoleKeyMissingMessageAsync } from "@/lib/env-service-role";
 import { formatErrorMessage } from "@/lib/format-error-message";
 import { verifyAccessToken } from "@/lib/verify-access-token";
 import { runStudentLogin } from "@/lib/auth/run-student-login";
+import { runStudentSignUp } from "@/lib/auth/run-student-signup";
+import { safeNextPath } from "@/lib/safe-next-path";
 
 export type AuthState = { error?: string; message?: string; redirectTo?: string };
 
@@ -18,7 +19,7 @@ export async function completeStudentLogin(input: {
   password: string;
   next: string;
 }): Promise<AuthState> {
-  const next = input.next.startsWith("/") ? input.next : "/dashboard";
+  const next = safeNextPath(input.next);
   const result = await runStudentLogin({ email: input.email, password: input.password });
   if (!result.ok) return { error: result.error };
   redirect(next);
@@ -40,67 +41,13 @@ export async function signUpWithPassword(
   _prev: AuthState,
   formData: FormData,
 ): Promise<AuthState> {
-  const fullName = String(formData.get("full_name") ?? "").trim();
-  const email = String(formData.get("email") ?? "").trim().toLowerCase();
-  const password = String(formData.get("password") ?? "");
-  if (!email || !password || !fullName)
-    return { error: "Name, email and password are required." };
-  if (password.length < 8)
-    return { error: "Password must be at least 8 characters." };
-
-  try {
-    const admin = await createAdminClientAsync();
-
-    const { data: existing } = await admin
-      .from("profiles")
-      .select("id")
-      .ilike("email", email)
-      .maybeSingle();
-    if (existing) {
-      return { error: "An account with this email already exists. Try logging in." };
-    }
-
-    const { data: created, error } = await admin.auth.admin.createUser({
-      email,
-      password,
-      email_confirm: true,
-      user_metadata: { full_name: fullName },
-    });
-
-    if (error) {
-      if (error.message.toLowerCase().includes("already")) {
-        return { error: "An account with this email already exists. Try logging in." };
-      }
-      return { error: error.message };
-    }
-
-    await admin.from("profiles").update({ full_name: fullName }).eq("id", created.user.id);
-
-    const welcome = await sendWelcomeEmailIfNeeded({
-      studentId: created.user.id,
-      fullName,
-      email,
-      password,
-    });
-
-    if (!welcome.sent) {
-      return {
-        message:
-          "Account created — you can log in now. Welcome email could not be sent yet; ask support if you need help.",
-      };
-    }
-
-    return {
-      message:
-        "Account created! Check your inbox for a welcome email from DigitalSkillX, then log in.",
-    };
-  } catch (err) {
-    const message = err instanceof Error ? err.message : "Could not create account.";
-    if (message.includes("service role")) {
-      return { error: await serviceRoleKeyMissingMessageAsync() };
-    }
-    return { error: message };
-  }
+  const result = await runStudentSignUp({
+    fullName: String(formData.get("full_name") ?? ""),
+    email: String(formData.get("email") ?? ""),
+    password: String(formData.get("password") ?? ""),
+  });
+  if (!result.ok) return { error: result.error };
+  return { message: result.message };
 }
 
 /** Passwordless magic-link login — link sent via ZeptoMail (not Supabase Auth). */
@@ -177,8 +124,13 @@ export async function updatePassword(
     try {
       const admin = await createAdminClientAsync();
       const email = user.email.trim().toLowerCase();
-      await admin.from("profiles").upsert(
-        {
+      const { data: existing } = await admin
+        .from("profiles")
+        .select("id")
+        .eq("id", user.id)
+        .maybeSingle();
+      if (!existing) {
+        await admin.from("profiles").insert({
           id: user.id,
           email,
           full_name:
@@ -186,9 +138,18 @@ export async function updatePassword(
             email.split("@")[0],
           role: "student",
           is_suspended: false,
-        },
-        { onConflict: "id" },
-      );
+        });
+      } else {
+        await admin
+          .from("profiles")
+          .update({
+            email,
+            full_name:
+              (user.user_metadata?.full_name as string | undefined) ??
+              email.split("@")[0],
+          })
+          .eq("id", user.id);
+      }
     } catch {
       // profile upsert is best-effort; dashboard guard will retry
     }
@@ -218,8 +179,16 @@ export async function healStudentProfileByLogin(
     }
 
     const admin = await createAdminClientAsync();
-    const { error } = await admin.from("profiles").upsert(
-      {
+    const { data: existing } = await admin
+      .from("profiles")
+      .select("id, is_suspended")
+      .eq("id", userId)
+      .maybeSingle();
+    if (existing?.is_suspended) {
+      return { healed: false, error: "This account has been suspended." };
+    }
+    if (!existing) {
+      const { error } = await admin.from("profiles").insert({
         id: userId,
         email: normalized,
         full_name:
@@ -228,10 +197,21 @@ export async function healStudentProfileByLogin(
           normalized.split("@")[0],
         role: "student",
         is_suspended: false,
-      },
-      { onConflict: "id" },
-    );
-    if (error) throw new Error(error.message);
+      });
+      if (error) throw new Error(error.message);
+    } else {
+      const { error } = await admin
+        .from("profiles")
+        .update({
+          email: normalized,
+          full_name:
+            fullName ??
+            (user.user_metadata?.full_name as string | undefined) ??
+            normalized.split("@")[0],
+        })
+        .eq("id", userId);
+      if (error) throw new Error(error.message);
+    }
     return { healed: true };
   } catch (err) {
     const message = err instanceof Error ? err.message : "Could not create profile.";

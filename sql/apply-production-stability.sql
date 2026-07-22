@@ -1,5 +1,6 @@
 -- Production stability: ensure all columns required by student/catalog/CSV paths exist.
 -- Idempotent — safe to re-run.
+-- After this file, also run sql/apply-production-security.sql in the SQL Editor.
 
 -- 0024 course coming soon
 alter table public.courses

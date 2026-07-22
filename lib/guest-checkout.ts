@@ -9,7 +9,7 @@ import {
   resolveCanonicalStudentId,
   syncStudentCourseAccess,
 } from "@/lib/admin-student-onboarding";
-import { fulfillPurchase } from "@/lib/purchase";
+import { fulfillPurchase, ensurePurchaseEnrollment } from "@/lib/purchase";
 import { verifyTransaction, type VerifiedTransaction } from "@/lib/paystack";
 import { runAutomations } from "@/lib/automation";
 import type { Database } from "@/types/database";
@@ -176,16 +176,27 @@ async function signInCheckoutUser(email: string, password: string): Promise<Chec
   };
 }
 
-/** True when a Paystack reference completed successfully for this course. */
+/** True when a Paystack reference completed successfully AND the student is enrolled. */
 export async function isSuccessfulGuestPurchase(reference: string, courseId: string) {
   const admin = await createAdminClientAsync();
   const { data: tx } = await admin
     .from("transactions")
-    .select("status, course_id")
+    .select("status, course_id, student_id")
     .eq("reference", reference)
     .maybeSingle();
 
-  return Boolean(tx && tx.status === "success" && tx.course_id === courseId);
+  if (!tx || tx.status !== "success" || tx.course_id !== courseId || !tx.student_id) {
+    return false;
+  }
+
+  const { data: enrollment } = await admin
+    .from("enrollments")
+    .select("id")
+    .eq("student_id", tx.student_id)
+    .eq("course_id", courseId)
+    .maybeSingle();
+
+  return Boolean(enrollment);
 }
 
 /** Idempotent paid checkout completion for browser confirm + Paystack webhook. */
@@ -193,7 +204,7 @@ export async function completePaidCheckout(reference: string) {
   const admin = await createAdminClientAsync();
   const { data: tx } = await admin
     .from("transactions")
-    .select("student_id, course_id, status, paystack_data")
+    .select("student_id, course_id, status, paystack_data, amount, currency")
     .eq("reference", reference)
     .maybeSingle();
 
@@ -201,12 +212,23 @@ export async function completePaidCheckout(reference: string) {
     return { ok: false as const, error: "Payment record not found.", status: 404 as const };
   }
 
+  const repairEnrollmentIfNeeded = async (studentId: string | null) => {
+    if (!studentId) return null;
+    try {
+      await ensurePurchaseEnrollment({ studentId, courseId: tx.course_id });
+    } catch (err) {
+      console.error("[completePaidCheckout] enrollment repair failed", reference, err);
+    }
+    const { data: profile } = await admin
+      .from("profiles")
+      .select("email")
+      .eq("id", studentId)
+      .maybeSingle();
+    return profile?.email ?? null;
+  };
+
   if (tx.status === "success") {
-    const email = tx.student_id
-      ? (
-          await admin.from("profiles").select("email").eq("id", tx.student_id).maybeSingle()
-        ).data?.email ?? null
-      : null;
+    const email = await repairEnrollmentIfNeeded(tx.student_id);
     return {
       ok: true as const,
       alreadyFulfilled: true,
@@ -216,12 +238,53 @@ export async function completePaidCheckout(reference: string) {
     };
   }
 
+  if (tx.status === "failed") {
+    return {
+      ok: false as const,
+      error: "This payment was not successful. Start checkout again if you still need access.",
+      status: 409 as const,
+    };
+  }
+
   const verified = await verifyTransaction(reference);
   if (!verified || verified.status !== "success") {
     return {
       ok: false as const,
       error: "Payment is still processing. Refresh in a moment or check your email for confirmation.",
       status: 409 as const,
+    };
+  }
+
+  if (
+    typeof tx.amount === "number" &&
+    (verified.amount !== tx.amount ||
+      verified.currency?.toUpperCase() !== String(tx.currency ?? "NGN").toUpperCase())
+  ) {
+    console.error("[completePaidCheckout] amount/currency mismatch", {
+      reference,
+      expectedAmount: tx.amount,
+      expectedCurrency: tx.currency,
+      verifiedAmount: verified.amount,
+      verifiedCurrency: verified.currency,
+    });
+    return {
+      ok: false as const,
+      error: "Payment amount could not be verified. Contact support with your payment reference.",
+      status: 409 as const,
+      permanent: true as const,
+    };
+  }
+
+  if (
+    verified.metadata?.course_id &&
+    verified.metadata.course_id !== tx.course_id
+  ) {
+    console.error("[completePaidCheckout] course metadata mismatch", reference);
+    return {
+      ok: false as const,
+      error: "Payment does not match this course. Contact support with your payment reference.",
+      status: 409 as const,
+      permanent: true as const,
     };
   }
 
@@ -241,6 +304,7 @@ export async function completePaidCheckout(reference: string) {
       ok: false as const,
       error: "Checkout email was not captured for this payment. Contact support with your payment reference.",
       status: 422 as const,
+      permanent: true as const,
     };
   }
 
@@ -282,7 +346,7 @@ export async function completePaidCheckout(reference: string) {
     await admin.from("transactions").update({ student_id: studentId }).eq("reference", reference);
   }
 
-  await fulfillPurchase({
+  const fulfillResult = await fulfillPurchase({
     studentId,
     courseId: tx.course_id,
     reference,
@@ -292,7 +356,8 @@ export async function completePaidCheckout(reference: string) {
   });
 
   let session: CheckoutSession | undefined;
-  if (isNewAccount && password) {
+  // Only auto-sign-in for brand-new accounts created in THIS fulfillment (not retries).
+  if (isNewAccount && password && !fulfillResult.alreadyFulfilled) {
     session = (await signInCheckoutUser(buyerEmail, password)) ?? undefined;
   }
 
@@ -302,5 +367,6 @@ export async function completePaidCheckout(reference: string) {
     buyerEmail,
     isNewAccount,
     session,
+    alreadyFulfilled: fulfillResult.alreadyFulfilled,
   };
 }

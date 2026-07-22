@@ -1,6 +1,7 @@
 import "server-only";
 import { syncStudentCourseAccess } from "@/lib/admin-student-onboarding";
 import { bootstrapRuntimeSecrets } from "@/lib/bootstrap-runtime-secrets";
+import { isMissingColumnError } from "@/lib/schema-guard";
 import { createAdminClientAsync } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
@@ -14,18 +15,47 @@ export async function resolveStudentLessonAccess(params: {
   const session = createClient();
   const admin = await createAdminClientAsync(session);
 
-  const targetStudentId = await syncStudentCourseAccess(admin, {
-    authUserId: params.authUserId,
-    profileEmail: params.profileEmail,
-  });
+  let targetStudentId = params.authUserId;
+  try {
+    targetStudentId = await syncStudentCourseAccess(admin, {
+      authUserId: params.authUserId,
+      profileEmail: params.profileEmail,
+    });
+  } catch (err) {
+    console.error("[resolveStudentLessonAccess] sync failed; using auth user id", err);
+  }
 
-  const { data: lesson, error: lessonError } = await admin
+  const fullSelect = "id, is_free_preview, is_coming_soon, module:modules!inner(course_id)";
+  const fallbackSelect = "id, is_free_preview, module:modules!inner(course_id)";
+
+  let { data: lesson, error: lessonError } = await admin
     .from("lessons")
-    .select("id, is_free_preview, is_coming_soon, module:modules!inner(course_id)")
+    .select(fullSelect)
     .eq("id", params.lessonId)
     .maybeSingle();
 
-  if (lessonError || !lesson) {
+  if (lessonError && isMissingColumnError(lessonError.message)) {
+    console.error(
+      "[resolveStudentLessonAccess] lessons.is_coming_soon missing — falling back; run sql/apply-production-stability.sql",
+      lessonError.message,
+    );
+    const fallback = await admin
+      .from("lessons")
+      .select(fallbackSelect)
+      .eq("id", params.lessonId)
+      .maybeSingle();
+    lesson = fallback.data
+      ? ({ ...fallback.data, is_coming_soon: false } as typeof lesson)
+      : null;
+    lessonError = fallback.error;
+  }
+
+  if (lessonError) {
+    console.error("[resolveStudentLessonAccess] lesson query failed", lessonError.message);
+    return { ok: false as const, reason: "Lesson not found." };
+  }
+
+  if (!lesson) {
     return { ok: false as const, reason: "Lesson not found." };
   }
 

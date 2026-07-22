@@ -45,3 +45,15 @@ export function redirectWithPendingCookies(
   }
   return response;
 }
+
+export function jsonWithPendingCookies(
+  pending: CookieToSet[],
+  body: unknown,
+  init?: ResponseInit,
+) {
+  const response = NextResponse.json(body, init);
+  for (const { name, value, options } of pending) {
+    response.cookies.set(name, value, options);
+  }
+  return response;
+}

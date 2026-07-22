@@ -9,7 +9,9 @@
     "start": "node scripts/start.mjs",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
-    "check-env": "node scripts/check-env.mjs"
+    "check-env": "node scripts/check-env.mjs",
+    "test:cert": "node scripts/certification/run-regression.mjs",
+    "test:unit": "node scripts/certification/run-unit.mjs"
   },
   "dependencies": {
     "@sentry/nextjs": "^10.63.0",

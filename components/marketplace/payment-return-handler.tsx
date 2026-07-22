@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { CheckCircle2, Loader2, Mail } from "lucide-react";
-import { syncSessionAndRedirect } from "@/lib/auth/sync-session-client";
 
 type ConfirmState =
   | { status: "idle" | "confirming" }
@@ -50,6 +49,7 @@ export function PaymentReturnHandler({
       try {
         const res = await fetch("/api/payments/confirm", {
           method: "POST",
+          credentials: "include",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ reference, courseId }),
         });
@@ -62,7 +62,7 @@ export function PaymentReturnHandler({
           buyerEmail?: string;
           isNewAccount?: boolean;
           needsLogin?: boolean;
-          session?: { access_token: string; refresh_token: string };
+          sessionEstablished?: boolean;
         };
 
         if (cancelled) return;
@@ -75,13 +75,13 @@ export function PaymentReturnHandler({
           return;
         }
 
-        if (json.session?.access_token && json.session.refresh_token) {
+        if (json.sessionEstablished) {
           setState({
             status: "success",
             courseId: json.courseId,
             autoRedirected: true,
           });
-          await syncSessionAndRedirect(json.session, `/courses/${json.courseId}`);
+          window.location.assign(`/courses/${json.courseId}`);
           return;
         }
 

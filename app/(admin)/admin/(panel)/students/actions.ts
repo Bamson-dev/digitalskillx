@@ -25,7 +25,6 @@ import {
   waitForStudentProfile,
   type CourseLookup,
 } from "@/lib/admin-student-onboarding";
-import { readCsvFromFormData, runBulkStudentCsvUpload } from "@/lib/bulk-student-upload";
 
 function siteUrl() {
   return (process.env.NEXT_PUBLIC_SITE_URL ?? "https://digitalskillx.com").replace(
@@ -257,48 +256,6 @@ export async function createStudent(
   }
 }
 
-/** CSV bulk upload: full_name, email, optional course (name or id). */
-export async function bulkUploadStudents(
-  _prev: StudentActionState,
-  formData: FormData,
-): Promise<StudentActionState> {
-  try {
-    const adminUser = await requireAdmin();
-    const defaultCourseId = String(formData.get("default_course_id") ?? "").trim() || null;
-    const csvText = await readCsvFromFormData(formData);
-    if (!csvText?.trim()) return { error: "Upload a CSV file or paste CSV rows." };
-
-    const admin = await getAdminSupabase();
-    const enrollableCourses = await loadEnrollableCourses(admin);
-    const result = await runBulkStudentCsvUpload({
-      admin,
-      adminUserId: adminUser.id,
-      csvText,
-      defaultCourseId,
-      enrollableCourses,
-    });
-
-    await logAudit({
-      action: "students_bulk_created",
-      metadata: {
-        created: result.bulkSummary.created,
-        enrolled: result.bulkSummary.enrolled,
-        skipped: result.bulkSummary.skipped,
-        failedCount: result.bulkSummary.failed.length,
-      },
-    });
-    revalidatePath("/admin/students");
-    revalidatePath("/admin/analytics");
-
-    return {
-      message: result.message,
-      bulkSummary: result.bulkSummary,
-    };
-  } catch (err) {
-    return { error: err instanceof Error ? err.message : "Bulk upload failed." };
-  }
-}
-
 export async function suspendStudent(formData: FormData) {
   await requireAdmin();
   const admin = await getAdminSupabase();
@@ -391,14 +348,34 @@ export async function resetStudentPassword(formData: FormData) {
   const id = String(formData.get("id"));
   const email = String(formData.get("email"));
   const newPassword = generateStrongPassword();
-  await admin.auth.admin.updateUserById(id, { password: newPassword });
+  const { error: authError } = await admin.auth.admin.updateUserById(id, {
+    password: newPassword,
+  });
+  if (authError) throw new Error(authError.message);
+
   const tpl = emailTemplates.welcome({
     name: String(formData.get("full_name") ?? "there"),
     email,
     password: newPassword,
     loginUrl: `${siteUrl()}/login`,
   });
-  await sendEmail({ to: email, subject: "Your password was reset", html: tpl.html });
+  const emailResult = await sendEmail({
+    to: email,
+    subject: "Your password was reset",
+    html: tpl.html,
+  });
+  if ("skipped" in emailResult && emailResult.skipped) {
+    throw new Error(
+      "Password was updated but email was skipped (email provider not configured).",
+    );
+  }
+  if ("error" in emailResult && emailResult.error) {
+    const message =
+      emailResult.error instanceof Error
+        ? emailResult.error.message
+        : "Email send failed";
+    throw new Error(`Password was updated but email failed: ${message}`);
+  }
   await logAudit({ action: "student_password_reset", targetType: "profile", targetId: id });
   revalidatePath(`/admin/students/${id}`);
 }
@@ -448,15 +425,57 @@ export async function enrollStudent(formData: FormData) {
 export async function unenrollStudent(formData: FormData) {
   await requireAdmin();
   const admin = await getAdminSupabase();
-  const studentId = String(formData.get("student_id"));
-  const courseId = String(formData.get("course_id"));
-  const { error } = await admin
-    .from("enrollments")
-    .delete()
-    .eq("student_id", studentId)
-    .eq("course_id", courseId);
-  if (error) throw new Error(error.message);
-  await logAudit({ action: "student_unenrolled", metadata: { studentId, courseId } });
+  const studentId = String(formData.get("student_id") ?? "").trim();
+  const courseId = String(formData.get("course_id") ?? "").trim();
+  const enrollmentId = String(formData.get("enrollment_id") ?? "").trim();
+
+  if (enrollmentId) {
+    const { data: deleted, error } = await admin
+      .from("enrollments")
+      .delete()
+      .eq("id", enrollmentId)
+      .select("id")
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    if (!deleted) throw new Error("Enrollment not found — it may already have been removed.");
+    await logAudit({
+      action: "student_unenrolled",
+      metadata: { studentId, courseId, enrollmentId },
+    });
+  } else {
+    if (!studentId || !courseId) throw new Error("Student and course are required to unenroll.");
+
+    const { data: profile } = await admin
+      .from("profiles")
+      .select("email")
+      .eq("id", studentId)
+      .maybeSingle();
+
+    let targetIds = [studentId];
+    if (profile?.email) {
+      const { data: siblings } = await admin
+        .from("profiles")
+        .select("id")
+        .ilike("email", profile.email.trim());
+      targetIds = [...new Set((siblings ?? []).map((s) => s.id).concat(studentId))];
+    }
+
+    const { data: deletedRows, error } = await admin
+      .from("enrollments")
+      .delete()
+      .eq("course_id", courseId)
+      .in("student_id", targetIds)
+      .select("id");
+    if (error) throw new Error(error.message);
+    if (!deletedRows?.length) {
+      throw new Error("No enrollment was removed. Refresh the page and try again.");
+    }
+    await logAudit({
+      action: "student_unenrolled",
+      metadata: { studentId, courseId, deleted: deletedRows.length },
+    });
+  }
+
   revalidatePath(`/admin/students/${studentId}`);
   revalidatePath("/admin/students");
 }

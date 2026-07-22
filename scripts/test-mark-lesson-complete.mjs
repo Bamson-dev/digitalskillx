@@ -60,16 +60,15 @@ console.log("Testing mark lesson complete on", base);
 curl([
   "-X",
   "POST",
-  `${base}/register`,
+  `${base}/api/auth/register`,
   "-H",
-  "Content-Type: application/x-www-form-urlencoded",
+  "Content-Type: application/json",
   "-d",
-  new URLSearchParams({
+  JSON.stringify({
     full_name: testName,
     email: testEmail,
     password: testPassword,
-    confirm_password: testPassword,
-  }).toString(),
+  }),
   "-o",
   "/dev/null",
 ]);

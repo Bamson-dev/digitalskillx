@@ -12,7 +12,6 @@ import { Select } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { formatDate } from "@/lib/utils";
 import { courseCompletionPct } from "@/lib/progress";
-import { loadAuthEmailIndex } from "@/lib/admin-student-overview";
 import { StudentProfileForm } from "@/components/admin/student-profile-form";
 import { StudentAdminToolbar, StudentEnrollmentList } from "@/components/admin/student-manage-panel";
 import { AdminCertificatePanel } from "@/components/admin/admin-certificate-panel";
@@ -47,12 +46,18 @@ export default async function StudentDetailPage({
     .single();
   if (!student) notFound();
 
-  const authIndex = await loadAuthEmailIndex(supabase);
-  const authMeta = authIndex.get(student.email.trim().toLowerCase());
-  const lastSignInAt = authMeta?.lastSignInAt ?? null;
+  let lastSignInAt: string | null = null;
+  let authUserId: string | null = null;
+  try {
+    const { data: authData } = await supabase.auth.admin.getUserById(params.id);
+    lastSignInAt = authData.user?.last_sign_in_at ?? null;
+    authUserId = authData.user?.id ?? null;
+  } catch (err) {
+    console.error("[StudentDetailPage] getUserById failed", err);
+  }
   const lastAccessAt = student.last_active_at ?? lastSignInAt;
   const hasLoggedIn = Boolean(lastSignInAt || student.last_active_at);
-  const enrollmentStudentIds = [...new Set([params.id, authMeta?.id].filter(Boolean))] as string[];
+  const enrollmentStudentIds = [...new Set([params.id, authUserId].filter(Boolean))] as string[];
 
   const [{ data: enrollments }, { data: allCourses }, { data: notes }, { data: certs }] =
     await Promise.all([

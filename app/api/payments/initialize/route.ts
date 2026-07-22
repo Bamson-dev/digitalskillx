@@ -10,8 +10,10 @@ import { rateLimitedResponse } from "@/lib/api-rate-limit";
 import {
   resolveOrCreateStudentForPurchase,
 } from "@/lib/guest-checkout";
-import { isValidStudentEmail, syncStudentCourseAccess } from "@/lib/admin-student-onboarding";
+import { isValidStudentEmail, syncStudentCourseAccess, findProfileByEmail } from "@/lib/admin-student-onboarding";
 import { sendWelcomeEmailIfNeeded } from "@/lib/system-email-triggers";
+import { CHECKOUT_REF_COOKIE, checkoutRefCookieOptions, hashCheckoutBinding } from "@/lib/checkout-binding";
+import { runAutomations } from "@/lib/automation";
 
 function jsonError(message: string, status: number) {
   return NextResponse.json({ error: message }, { status });
@@ -116,6 +118,15 @@ export async function POST(request: NextRequest) {
           return jsonError(enrollError.message, 500);
         }
 
+        try {
+          await runAutomations("course_enrolled", {
+            studentId: canonicalStudentId,
+            courseId: course.id,
+          });
+        } catch (err) {
+          console.error("[payments/initialize] free enroll automation", err);
+        }
+
         if (profile?.email) {
           void sendWelcomeEmailIfNeeded({
             studentId: canonicalStudentId,
@@ -157,6 +168,14 @@ export async function POST(request: NextRequest) {
         });
         if (enrollError && !enrollError.message.toLowerCase().includes("duplicate")) {
           return jsonError(enrollError.message, 500);
+        }
+        try {
+          await runAutomations("course_enrolled", {
+            studentId: resolved.studentId,
+            courseId: course.id,
+          });
+        } catch (err) {
+          console.error("[payments/initialize] free guest automation", err);
         }
       }
 
@@ -206,6 +225,31 @@ export async function POST(request: NextRequest) {
       return jsonError("Add an email address to your profile before enrolling.", 400);
     }
 
+    // Guest / email path: block double-charge when already enrolled under that email.
+    if (isValidStudentEmail(checkoutEmail)) {
+      const existingProfile = await findProfileByEmail(admin, checkoutEmail);
+      if (existingProfile) {
+        let enrollStudentId = existingProfile.id;
+        try {
+          enrollStudentId = await syncStudentCourseAccess(admin, {
+            authUserId: existingProfile.id,
+            profileEmail: checkoutEmail,
+          });
+        } catch (err) {
+          console.error("[payments/initialize] guest sync before paid", err);
+        }
+        const { data: alreadyEnrolled } = await admin
+          .from("enrollments")
+          .select("id")
+          .eq("student_id", enrollStudentId)
+          .eq("course_id", course.id)
+          .maybeSingle();
+        if (alreadyEnrolled) {
+          return NextResponse.json({ enrolled: true, buyerEmail: checkoutEmail });
+        }
+      }
+    }
+
     const reference = generateReference();
     const storeCheckoutDetails = !studentIdForEnrollment || !profile?.email;
 
@@ -246,20 +290,36 @@ export async function POST(request: NextRequest) {
       metadata.student_id = studentIdForEnrollment;
     }
 
-    const init = await initializeTransaction({
-      email: checkoutEmail,
-      amountMinor: chargeAmount,
-      currency: "NGN",
-      reference,
-      callbackUrl: `${siteUrl()}/course/${course.id}?payment=success`,
-      metadata,
-      customerName: checkoutName,
-    });
+    let init;
+    try {
+      init = await initializeTransaction({
+        email: checkoutEmail,
+        amountMinor: chargeAmount,
+        currency: "NGN",
+        reference,
+        callbackUrl: `${siteUrl()}/course/${course.id}?payment=success`,
+        metadata,
+        customerName: checkoutName,
+      });
+    } catch (err) {
+      await admin
+        .from("transactions")
+        .update({ status: "failed" })
+        .eq("reference", reference)
+        .eq("status", "pending");
+      throw err;
+    }
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       authorizationUrl: init.authorization_url,
       reference,
     });
+    response.cookies.set(
+      CHECKOUT_REF_COOKIE,
+      hashCheckoutBinding(reference, checkoutEmail),
+      checkoutRefCookieOptions(),
+    );
+    return response;
   } catch (err) {
     console.error("[payments/initialize]", err);
     return jsonError(

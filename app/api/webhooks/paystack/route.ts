@@ -4,6 +4,7 @@ import { bootstrapRuntimeSecrets } from "@/lib/bootstrap-runtime-secrets";
 import { createAdminClientAsync } from "@/lib/supabase/admin";
 import { verifyWebhookSignature } from "@/lib/paystack";
 import { completePaidCheckout, readPendingCheckoutDetails } from "@/lib/guest-checkout";
+import { ensurePurchaseEnrollment } from "@/lib/purchase";
 import { rateLimitedResponse } from "@/lib/api-rate-limit";
 import type { Json } from "@/types/database";
 
@@ -33,20 +34,45 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
   }
 
+  const reference = event.data?.reference;
+  const admin = await createAdminClientAsync();
+
+  if (event.event === "charge.failed" || event.event === "charge.abandoned") {
+    if (reference) {
+      await admin
+        .from("transactions")
+        .update({ status: "failed" })
+        .eq("reference", reference)
+        .eq("status", "pending");
+    }
+    return NextResponse.json({ received: true });
+  }
+
   if (event.event !== "charge.success") {
     return NextResponse.json({ received: true });
   }
 
-  const reference = event.data.reference;
+  if (!reference) {
+    return NextResponse.json({ received: true });
+  }
 
-  const admin = await createAdminClientAsync();
   const { data: txBefore } = await admin
     .from("transactions")
-    .select("status, paystack_data")
+    .select("status, paystack_data, student_id, course_id")
     .eq("reference", reference)
     .maybeSingle();
 
   if (txBefore?.status === "success") {
+    if (txBefore.student_id && txBefore.course_id) {
+      try {
+        await ensurePurchaseEnrollment({
+          studentId: txBefore.student_id,
+          courseId: txBefore.course_id,
+        });
+      } catch (err) {
+        console.error("[webhooks/paystack] enrollment repair", reference, err);
+      }
+    }
     return NextResponse.json({ received: true, alreadyFulfilled: true });
   }
 
@@ -71,9 +97,18 @@ export async function POST(request: NextRequest) {
   if (!result.ok) {
     Sentry.captureMessage("Paystack webhook: fulfillment failed", {
       level: "error",
-      extra: { reference, error: result.error },
+      extra: { reference, error: result.error, status: result.status },
     });
-    return NextResponse.json({ error: result.error }, { status: result.status });
+    // Permanent business failures → 200 so Paystack stops retrying forever.
+    const statusCode = Number(result.status);
+    const permanent =
+      ("permanent" in result && Boolean(result.permanent)) ||
+      statusCode === 404 ||
+      statusCode === 422;
+    if (permanent) {
+      return NextResponse.json({ received: true, error: result.error });
+    }
+    return NextResponse.json({ error: result.error }, { status: statusCode });
   }
 
   return NextResponse.json({ received: true });

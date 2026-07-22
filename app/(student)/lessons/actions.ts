@@ -62,23 +62,40 @@ export async function updateWatchProgress(lessonId: string, pct: number, require
 
 export async function saveLessonNote(formData: FormData) {
   const student = await currentStudent();
-  const supabase = createClient();
   const lessonId = String(formData.get("lesson_id"));
   const content = String(formData.get("content") ?? "");
+  const access = await resolveStudentLessonAccess({
+    authUserId: student.id,
+    lessonId,
+    profileEmail: student.email,
+  });
+  if (!access.ok) throw new Error(access.reason);
+
+  const supabase = createClient();
   await supabase
     .from("student_notes")
-    .upsert({ student_id: student.id, lesson_id: lessonId, content }, { onConflict: "student_id,lesson_id" });
+    .upsert(
+      { student_id: access.studentId, lesson_id: lessonId, content },
+      { onConflict: "student_id,lesson_id" },
+    );
   revalidatePath(`/lessons/${lessonId}`);
 }
 
 export async function addBookmark(formData: FormData) {
   const student = await currentStudent();
-  const supabase = createClient();
   const lessonId = String(formData.get("lesson_id"));
   const seconds = Number(formData.get("timestamp_seconds") ?? 0);
   const label = String(formData.get("label") ?? "") || null;
+  const access = await resolveStudentLessonAccess({
+    authUserId: student.id,
+    lessonId,
+    profileEmail: student.email,
+  });
+  if (!access.ok) throw new Error(access.reason);
+
+  const supabase = createClient();
   await supabase.from("bookmarks").insert({
-    student_id: student.id,
+    student_id: access.studentId,
     lesson_id: lessonId,
     timestamp_seconds: Number.isFinite(seconds) ? Math.round(seconds) : 0,
     label,
@@ -91,6 +108,16 @@ export async function deleteBookmark(formData: FormData) {
   const supabase = createClient();
   const id = String(formData.get("id"));
   const lessonId = String(formData.get("lesson_id"));
-  await supabase.from("bookmarks").delete().eq("id", id).eq("student_id", student.id);
+  const access = await resolveStudentLessonAccess({
+    authUserId: student.id,
+    lessonId,
+    profileEmail: student.email,
+  });
+  if (!access.ok) throw new Error(access.reason);
+  await supabase
+    .from("bookmarks")
+    .delete()
+    .eq("id", id)
+    .eq("student_id", access.studentId);
   revalidatePath(`/lessons/${lessonId}`);
 }

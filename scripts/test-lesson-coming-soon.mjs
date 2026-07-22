@@ -82,7 +82,7 @@ function findCourseWithLesson(jar) {
   }
   const courseId = courseMatch[1];
   const courseHtml = curl(["-b", jar, `${base}/admin/courses/${courseId}`]);
-  if (!/is_coming_soon/i.test(courseHtml)) {
+  if (!/is_coming_soon/i.test(courseHtml) || !/coming_soon_available_at/i.test(courseHtml)) {
     console.error("FAIL: coming soon lesson UI not deployed yet");
     process.exit(1);
   }
@@ -94,17 +94,20 @@ function findCourseWithLesson(jar) {
     process.exit(1);
   }
 
-  const titleMatch = courseHtml.match(/name="title"[^>]*defaultValue="([^"]*)"/);
-  const lessonTitleMatch = courseHtml.match(/name="title"[^>]*defaultValue="([^"]*)"[^>]*\/>/g);
-  const hiddenLessonId = courseHtml.match(/name="id" value="([0-9a-f-]{36})"/i);
-  const lessonIds = [...courseHtml.matchAll(/name="id" value="([0-9a-f-]{36})"/gi)].map((m) => m[1]);
-  const lessonId = lessonIds.find((id) => id !== courseId);
+  // Prefer real lesson ids from the student curriculum (admin preview), not module/course hidden ids.
+  const studentCourseHtml = curl(["-b", jar, `${base}/courses/${courseId}`]);
+  const lessonIds = [
+    ...new Set(
+      [...studentCourseHtml.matchAll(/href="\/lessons\/([0-9a-f-]{36})"/gi)].map((m) => m[1]),
+    ),
+  ];
+  const lessonId = lessonIds[0];
   if (!lessonId) {
-    console.error("FAIL: no lesson id on course page");
+    console.error("FAIL: no lesson id on course curriculum");
     process.exit(1);
   }
 
-  return { courseId, lessonId, actionId: actionMatch[1], courseHtml, title: titleMatch?.[1] ?? "Course" };
+  return { courseId, lessonId, actionId: actionMatch[1], courseHtml };
 }
 
 function saveLessonComingSoon(jar, { courseId, lessonId, actionId, courseHtml }) {

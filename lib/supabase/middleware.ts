@@ -108,6 +108,17 @@ export async function updateSession(request: NextRequest) {
     return response;
   } catch (err) {
     console.error("[digitalskillx] middleware session refresh failed:", err);
+    const { pathname } = request.nextUrl;
+    // Fail closed on protected routes — never skip the auth gate on errors.
+    if (!isPublic(pathname)) {
+      if (pathname.startsWith("/api/")) {
+        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      }
+      const url = request.nextUrl.clone();
+      url.pathname = pathname.startsWith("/admin") ? "/admin/login" : "/login";
+      url.searchParams.set("next", pathname);
+      return NextResponse.redirect(url);
+    }
     return NextResponse.next({ request });
   }
 }

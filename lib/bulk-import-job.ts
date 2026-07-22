@@ -267,6 +267,11 @@ export async function processBulkImportChunk(params: {
             continue;
           }
           studentId = recovered;
+          await ensureImportedStudentProfile(params.admin, {
+            studentId,
+            email,
+            fullName: name,
+          });
         } else {
           studentId = createdUser.user.id;
           isNew = true;

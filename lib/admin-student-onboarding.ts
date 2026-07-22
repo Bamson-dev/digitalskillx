@@ -128,7 +128,7 @@ export async function verifyStudentCourseAccess(
   return { enrolledCourseIds: (data ?? []).map((row) => row.course_id) };
 }
 
-/** Resolve a student id from profile or auth users (CSV / import flows). */
+/** Resolve a student id from profile or Auth (CSV / import flows). */
 export async function resolveStudentIdByEmail(
   admin: SupabaseClient<Database>,
   email: string,
@@ -138,7 +138,23 @@ export async function resolveStudentIdByEmail(
   const profile = await findProfileByEmail(admin, normalized);
   if (profile) return profile.id;
   const authMeta = authIndex?.get(normalized);
-  return authMeta?.id ?? null;
+  if (authMeta?.id) return authMeta.id;
+
+  // Targeted Auth recovery for orphan Auth users (no listUsers scan).
+  try {
+    const { data, error } = await admin.auth.admin.generateLink({
+      type: "magiclink",
+      email: normalized,
+    });
+    if (error) {
+      console.error("[resolveStudentIdByEmail] generateLink", error.message);
+      return null;
+    }
+    return data.user?.id ?? null;
+  } catch (err) {
+    console.error("[resolveStudentIdByEmail] Auth lookup failed", err);
+    return null;
+  }
 }
 
 export async function ensureImportedStudentProfile(
@@ -149,16 +165,36 @@ export async function ensureImportedStudentProfile(
     fullName: string;
   },
 ) {
-  const { error } = await admin.from("profiles").upsert(
-    {
+  const email = params.email.trim().toLowerCase();
+  const { data: existing } = await admin
+    .from("profiles")
+    .select("id, is_suspended")
+    .eq("id", params.studentId)
+    .maybeSingle();
+
+  if (existing?.is_suspended) {
+    throw new Error("Student account is suspended");
+  }
+
+  if (!existing) {
+    const { error } = await admin.from("profiles").insert({
       id: params.studentId,
-      email: params.email.trim().toLowerCase(),
+      email,
       full_name: params.fullName.trim(),
       role: "student",
       is_suspended: false,
-    },
-    { onConflict: "id" },
-  );
+    });
+    if (error) throw new Error(error.message);
+    return;
+  }
+
+  const { error } = await admin
+    .from("profiles")
+    .update({
+      email,
+      full_name: params.fullName.trim(),
+    })
+    .eq("id", params.studentId);
   if (error) throw new Error(error.message);
 }
 
@@ -207,21 +243,39 @@ async function moveEnrollmentsBetweenStudents(
 
   const { data: orphanEnrollments, error: enrollError } = await admin
     .from("enrollments")
-    .select("id, course_id")
+    .select("id, course_id, completed_at, enrolled_at")
     .eq("student_id", fromStudentId);
 
   if (enrollError) throw new Error(enrollError.message);
 
   for (const enrollment of orphanEnrollments ?? []) {
+    await mergeLessonProgressForCourse(admin, {
+      fromStudentId,
+      toStudentId,
+      courseId: enrollment.course_id,
+    });
+
     const { data: existing } = await admin
       .from("enrollments")
-      .select("id")
+      .select("id, completed_at")
       .eq("student_id", toStudentId)
       .eq("course_id", enrollment.course_id)
       .maybeSingle();
 
     if (existing) {
-      await admin.from("enrollments").delete().eq("id", enrollment.id);
+      if (enrollment.completed_at && !existing.completed_at) {
+        await admin
+          .from("enrollments")
+          .update({ completed_at: enrollment.completed_at })
+          .eq("id", existing.id);
+      }
+      const { error: deleteError } = await admin.from("enrollments").delete().eq("id", enrollment.id);
+      if (deleteError && deleteError.code !== "23505") {
+        // unique races are fine — row already gone/merged
+        if (!deleteError.message.toLowerCase().includes("duplicate")) {
+          throw new Error(deleteError.message);
+        }
+      }
       continue;
     }
 
@@ -229,8 +283,72 @@ async function moveEnrollmentsBetweenStudents(
       .from("enrollments")
       .update({ student_id: toStudentId })
       .eq("id", enrollment.id);
-    if (moveError) throw new Error(moveError.message);
+    if (moveError) {
+      if (moveError.code === "23505" || moveError.message.toLowerCase().includes("duplicate")) {
+        await admin.from("enrollments").delete().eq("id", enrollment.id);
+        continue;
+      }
+      throw new Error(moveError.message);
+    }
   }
+}
+
+async function mergeLessonProgressForCourse(
+  admin: SupabaseClient<Database>,
+  params: { fromStudentId: string; toStudentId: string; courseId: string },
+) {
+  const { data: modules } = await admin
+    .from("modules")
+    .select("id")
+    .eq("course_id", params.courseId);
+  const moduleIds = (modules ?? []).map((m) => m.id);
+  if (moduleIds.length === 0) return;
+
+  const { data: lessons } = await admin
+    .from("lessons")
+    .select("id")
+    .in("module_id", moduleIds);
+  const lessonIds = (lessons ?? []).map((l) => l.id);
+  if (lessonIds.length === 0) return;
+
+  const { data: orphanProgress } = await admin
+    .from("lesson_progress")
+    .select("lesson_id, completed, watch_percentage, completed_at")
+    .eq("student_id", params.fromStudentId)
+    .in("lesson_id", lessonIds);
+
+  for (const row of orphanProgress ?? []) {
+    const { data: existing } = await admin
+      .from("lesson_progress")
+      .select("id, completed, watch_percentage, completed_at")
+      .eq("student_id", params.toStudentId)
+      .eq("lesson_id", row.lesson_id)
+      .maybeSingle();
+
+    if (!existing) {
+      await admin.from("lesson_progress").insert({
+        student_id: params.toStudentId,
+        lesson_id: row.lesson_id,
+        completed: row.completed,
+        watch_percentage: row.watch_percentage,
+        completed_at: row.completed_at,
+      });
+    } else {
+      const completed = existing.completed || row.completed;
+      const watch_percentage = Math.max(existing.watch_percentage ?? 0, row.watch_percentage ?? 0);
+      const completed_at = existing.completed_at ?? row.completed_at;
+      await admin
+        .from("lesson_progress")
+        .update({ completed, watch_percentage, completed_at })
+        .eq("id", existing.id);
+    }
+  }
+
+  await admin
+    .from("lesson_progress")
+    .delete()
+    .eq("student_id", params.fromStudentId)
+    .in("lesson_id", lessonIds);
 }
 
 /** Move enrollments off duplicate profile rows that share the login email. */

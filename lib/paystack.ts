@@ -58,7 +58,7 @@ export async function initializeTransaction(
   };
 }
 
-/** Verify Paystack webhook HMAC signature. */
+/** Verify Paystack webhook HMAC signature (constant-time compare). */
 export async function verifyWebhookSignature(
   rawBody: string,
   signature: string | null,
@@ -67,7 +67,14 @@ export async function verifyWebhookSignature(
   if (!signature) return false;
   const secret = await getPaystackSecretKey(supabase);
   const hash = crypto.createHmac("sha512", secret).update(rawBody).digest("hex");
-  return hash === signature;
+  try {
+    const a = Buffer.from(hash, "utf8");
+    const b = Buffer.from(signature, "utf8");
+    if (a.length !== b.length) return false;
+    return crypto.timingSafeEqual(a, b);
+  } catch {
+    return false;
+  }
 }
 
 export type VerifiedTransaction = {

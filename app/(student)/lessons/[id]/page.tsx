@@ -17,6 +17,7 @@ import { CourseResources } from "@/components/student/course-resources";
 import { CourseProgressNudge } from "@/components/student/course-progress-nudge";
 import { CourseCertificateGoal } from "@/components/student/course-certificate-goal";
 import { resolveCertificateTemplateKey } from "@/lib/certificate-template-resolve";
+import { isMissingColumnError } from "@/lib/schema-guard";
 import { Card } from "@/components/ui/card";
 import type { Lesson, Module } from "@/types/database";
 
@@ -46,12 +47,24 @@ export default async function LessonPage({ params }: { params: { id: string } })
   const courseId = moduleRow?.course_id;
   if (!courseId) notFound();
 
-  const { data: courseAccess } = await lookup
+  const courseAccessQuery = await lookup
     .from("courses")
     .select("is_coming_soon")
     .eq("id", courseId)
     .single();
-  if (courseAccess?.is_coming_soon && !isAdminPreview) {
+  let courseIsComingSoon = Boolean(courseAccessQuery.data?.is_coming_soon);
+  if (courseAccessQuery.error) {
+    if (isMissingColumnError(courseAccessQuery.error.message)) {
+      console.error(
+        "[LessonPage] courses.is_coming_soon missing — run sql/apply-production-stability.sql",
+        courseAccessQuery.error.message,
+      );
+      courseIsComingSoon = false;
+    } else {
+      console.error("[LessonPage] course access query failed", courseAccessQuery.error.message);
+    }
+  }
+  if (courseIsComingSoon && !isAdminPreview) {
     redirect(`/courses/${courseId}`);
   }
 

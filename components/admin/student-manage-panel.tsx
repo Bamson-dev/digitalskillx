@@ -172,6 +172,7 @@ function EnrollmentRowItem({
       <form ref={formRef} action={unenrollAction}>
         <input type="hidden" name="student_id" value={studentId} />
         <input type="hidden" name="course_id" value={row.courseId} />
+        <input type="hidden" name="enrollment_id" value={row.enrollmentId} />
         <button
           type="button"
           className="shrink-0 rounded-md px-2 py-1 text-xs font-semibold text-red-600 hover:bg-red-50"

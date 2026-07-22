@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { runAutomations } from "@/lib/automation";
 import { processIdleReminderEmails } from "@/lib/system-email-triggers";
+import { verifyCronSecret } from "@/lib/cron-auth";
 
 export const dynamic = "force-dynamic";
 
@@ -10,9 +11,9 @@ export const dynamic = "force-dynamic";
  * Protect with CRON_SECRET via the Authorization: Bearer header.
  */
 export async function GET(request: NextRequest) {
-  const secret = process.env.CRON_SECRET;
-  if (secret && request.headers.get("authorization") !== `Bearer ${secret}`) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const auth = verifyCronSecret(request);
+  if (!auth.ok) {
+    return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
 
   const days = Number(process.env.INACTIVITY_DAYS ?? 5);

@@ -11,6 +11,10 @@ export type StudentOverviewStats = {
   hasLoggedIn: boolean;
 };
 
+/**
+ * Full Auth user index — expensive. Prefer loadAuthMetaForStudents for list pages.
+ * Kept for rare admin tools that need email→id across the whole tenant.
+ */
 export async function loadAuthEmailIndex(admin: SupabaseClient<Database>) {
   const map = new Map<string, { id: string; lastSignInAt: string | null }>();
   let page = 1;
@@ -32,6 +36,32 @@ export async function loadAuthEmailIndex(admin: SupabaseClient<Database>) {
   return map;
 }
 
+/** Targeted Auth lookups for the students currently on screen (O(page size), not O(all users)). */
+export async function loadAuthMetaForStudents(
+  admin: SupabaseClient<Database>,
+  students: Array<{ id: string; email: string }>,
+) {
+  const map = new Map<string, { id: string; lastSignInAt: string | null }>();
+
+  await Promise.all(
+    students.map(async (student) => {
+      const email = student.email.trim().toLowerCase();
+      try {
+        const { data, error } = await admin.auth.admin.getUserById(student.id);
+        if (error || !data.user) return;
+        map.set(email, {
+          id: data.user.id,
+          lastSignInAt: data.user.last_sign_in_at ?? null,
+        });
+      } catch (err) {
+        console.error("[loadAuthMetaForStudents] getUserById failed", student.id, err);
+      }
+    }),
+  );
+
+  return map;
+}
+
 export async function loadStudentOverviewStats(
   admin: SupabaseClient<Database>,
   students: Array<{ id: string; last_active_at: string | null; email: string }>,
@@ -45,7 +75,7 @@ export async function loadStudentOverviewStats(
 
   const [{ data: enrollments }, authIndex] = await Promise.all([
     admin.from("enrollments").select("student_id, course_id").in("student_id", studentIds),
-    loadAuthEmailIndex(admin),
+    loadAuthMetaForStudents(admin, students),
   ]);
 
   const courseCount = new Map<string, number>();

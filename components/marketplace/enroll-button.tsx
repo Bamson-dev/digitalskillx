@@ -252,7 +252,7 @@ export function EnrollButton({
       if (json.enrolled) {
         setShowCheckoutModal(false);
         redirecting = true;
-        window.location.assign(`/course/${courseId}?enrolled=1`);
+        window.location.assign(`/courses/${courseId}`);
         return;
       }
       if (json.authorizationUrl) {

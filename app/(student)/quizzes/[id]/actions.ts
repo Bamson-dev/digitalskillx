@@ -7,6 +7,7 @@ import { requireAdmin } from "@/lib/auth";
 import { logAudit } from "@/lib/audit";
 import { evaluateAndCompleteCourse } from "@/lib/course-completion";
 import { courseCompletionPct } from "@/lib/progress";
+import { resolveStudentLessonAccess } from "@/lib/lesson-access";
 import { sendProgressMilestoneEmailsIfNeeded } from "@/lib/system-email-triggers";
 import { runAutomations } from "@/lib/automation";
 import { notify } from "@/lib/notifications";
@@ -42,6 +43,21 @@ export async function submitQuiz(
     .eq("id", quizId)
     .single();
   if (!quiz) return { error: "Quiz not found" };
+  if (!quiz.lesson_id) return { error: "This quiz is not linked to a lesson." };
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("email")
+    .eq("id", user.id)
+    .maybeSingle();
+  const access = await resolveStudentLessonAccess({
+    authUserId: user.id,
+    lessonId: quiz.lesson_id,
+    profileEmail: profile?.email ?? user.email,
+  });
+  if (!access.ok) return { error: access.reason };
+  const studentId = access.studentId;
+  const courseId = access.courseId;
 
   const questions = (quiz.quiz_questions ?? []) as {
     id: string;
@@ -76,7 +92,7 @@ export async function submitQuiz(
   const passed = pendingManual ? null : score >= quiz.pass_score;
 
   await admin.from("quiz_attempts").insert({
-    student_id: user.id,
+    student_id: studentId,
     quiz_id: quizId,
     score,
     passed,
@@ -84,31 +100,19 @@ export async function submitQuiz(
     submitted_at: new Date().toISOString(),
   });
 
-  // Resolve course for automation context.
-  let courseId: string | undefined;
-  if (quiz.lesson_id) {
-    const { data: lesson } = await admin
-      .from("lessons")
-      .select("module:modules(course_id)")
-      .eq("id", quiz.lesson_id)
-      .single();
-    const rel = lesson?.module as { course_id: string } | { course_id: string }[] | null;
-    courseId = Array.isArray(rel) ? rel[0]?.course_id : rel?.course_id;
-  }
-
   if (passed === true) {
-    await runAutomations("quiz_passed", { studentId: user.id, courseId, quizId });
+    await runAutomations("quiz_passed", { studentId, courseId, quizId });
     if (courseId) {
-      const completion = await evaluateAndCompleteCourse(user.id, courseId);
-      const pct = completion.coursePct ?? (await courseCompletionPct(user.id, courseId));
+      const completion = await evaluateAndCompleteCourse(studentId, courseId);
+      const pct = completion.coursePct ?? (await courseCompletionPct(studentId, courseId));
       void sendProgressMilestoneEmailsIfNeeded({
-        studentId: user.id,
+        studentId,
         courseId,
         pct,
       }).catch((err) => console.error("[quiz] milestone email error:", err));
     }
   } else if (passed === false) {
-    await runAutomations("quiz_failed", { studentId: user.id, courseId, quizId });
+    await runAutomations("quiz_failed", { studentId, courseId, quizId });
   }
 
   revalidatePath(`/quizzes/${quizId}`);

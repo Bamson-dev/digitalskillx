@@ -249,7 +249,20 @@ export function StudentCreate({
           progress: { processed: 0, total: summary.totalRows },
         });
 
+        const maxChunks = Math.max(20, Math.ceil((summary.totalRows || 1) / 25) + 10);
+        let chunkGuard = 0;
+        let stalledRounds = 0;
+
         while (!summary.done) {
+          if (chunkGuard >= maxChunks) {
+            setCsvState({
+              error:
+                "Import stopped after too many chunk attempts without finishing. Refresh and check import status, or retry with a smaller file.",
+            });
+            return;
+          }
+          chunkGuard += 1;
+          const previousProcessed = summary.processedRows;
           const chunkRes = await fetch("/api/admin/bulk-students", {
             method: "POST",
             credentials: "include",
@@ -292,6 +305,22 @@ export function StudentCreate({
             failures: chunkJson.failures ?? [],
             done: chunkJson.done,
           };
+          if (
+            !summary.done &&
+            summary.processedRows <= previousProcessed &&
+            summary.totalRows > 0
+          ) {
+            stalledRounds += 1;
+            if (stalledRounds >= 3) {
+              setCsvState({
+                error:
+                  "Import progress stalled. The job may need the bulk_import tables from sql/apply-production-stability.sql, or a retry.",
+              });
+              return;
+            }
+          } else {
+            stalledRounds = 0;
+          }
           setCsvState({
             message: `Processing ${summary.processedRows} / ${summary.totalRows} rows…`,
             progress: { processed: summary.processedRows, total: summary.totalRows },

@@ -3,6 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { runAutomations } from "@/lib/automation";
 import {
   buildCourseResolver,
+  ensureImportedStudentProfile,
   findProfileByEmail,
   generateStrongPassword,
   grantCourseAccessForBulkImport,
@@ -135,13 +136,16 @@ export async function runBulkStudentCsvUpload(params: {
     );
   }
 
-  // Dedupe emails within file (first occurrence wins).
+  // Dedupe identical email+course pairs within file (first occurrence wins).
+  // Same email with different courses must all process.
   const seen = new Set<string>();
   const uniqueRows = dataRows.filter((row) => {
     const email = row.email.trim().toLowerCase();
     if (!email) return true;
-    if (seen.has(email)) return false;
-    seen.add(email);
+    const courseKey = (row.courseRef || params.defaultCourseId || "").trim().toLowerCase();
+    const key = `${email}::${courseKey}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
     return true;
   });
 
@@ -220,6 +224,11 @@ export async function runBulkStudentCsvUpload(params: {
             continue;
           }
           studentId = recovered;
+          await ensureImportedStudentProfile(params.admin, {
+            studentId,
+            email,
+            fullName,
+          });
         } else {
           studentId = createdUser.user.id;
           isNew = true;
