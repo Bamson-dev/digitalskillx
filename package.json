@@ -11,7 +11,10 @@
     "typecheck": "tsc --noEmit",
     "check-env": "node scripts/check-env.mjs",
     "test:cert": "node scripts/certification/run-regression.mjs",
-    "test:unit": "node scripts/certification/run-unit.mjs"
+    "test:unit": "node scripts/certification/run-unit.mjs",
+    "test:paystack": "node scripts/certification/run-paystack-cert.mjs",
+    "test:stress": "node scripts/certification/run-stress.mjs",
+    "test:integrity": "node scripts/certification/run-paystack-cert.mjs"
   },
   "dependencies": {
     "@sentry/nextjs": "^10.63.0",

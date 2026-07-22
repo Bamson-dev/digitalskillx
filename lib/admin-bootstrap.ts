@@ -22,7 +22,7 @@ async function syncAdminPassword(
     console.error(`[admin-bootstrap] Failed to sync admin password: ${error.message}`);
     return;
   }
-  console.log(`[admin-bootstrap] Admin password synced for: ${email}`);
+  console.log(`[admin-bootstrap] Admin password synced for configured admin email`);
 }
 
 async function findAuthUserByEmail(

@@ -439,7 +439,13 @@ export type AiConversation = Timestamps & {
 };
 
 export type BulkImportJobStatus = "pending" | "processing" | "completed" | "failed";
-export type BulkImportRowStatus = "pending" | "created" | "enrolled" | "skipped" | "failed";
+export type BulkImportRowStatus =
+  | "pending"
+  | "processing"
+  | "created"
+  | "enrolled"
+  | "skipped"
+  | "failed";
 
 export type BulkImportJob = {
   id: string;

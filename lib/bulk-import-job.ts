@@ -16,7 +16,7 @@ import { runAutomations } from "@/lib/automation";
 import { sendStudentWelcomeEmail } from "@/lib/admin-student-onboarding";
 import { getPlatformSettingsAdmin } from "@/lib/platform-settings";
 import { isMissingColumnError } from "@/lib/schema-guard";
-import type { BulkImportRowStatus, Database } from "@/types/database";
+import type { BulkImportRow, BulkImportRowStatus, Database } from "@/types/database";
 
 export const BULK_IMPORT_CHUNK_SIZE = 40;
 export const BULK_IMPORT_MAX_ROWS = 5000;
@@ -168,17 +168,47 @@ export async function processBulkImportChunk(params: {
     .update({ status: "processing", updated_at: new Date().toISOString() })
     .eq("id", params.jobId);
 
-  const { data: pendingRows, error: pendingError } = await params.admin
-    .from("bulk_import_rows")
-    .select("*")
-    .eq("job_id", params.jobId)
-    .eq("status", "pending")
-    .order("row_number", { ascending: true })
-    .limit(chunkSize);
+  // Prefer DB claim RPC (skip locked). Fallback: optimistic claim per selected row.
+  let rows: BulkImportRow[] = [];
+  const { data: claimedRpc, error: claimRpcError } = await params.admin.rpc(
+    "claim_bulk_import_rows" as never,
+    { p_job_id: params.jobId, p_limit: chunkSize } as never,
+  );
+  if (!claimRpcError && Array.isArray(claimedRpc)) {
+    rows = claimedRpc as BulkImportRow[];
+  } else {
+    if (claimRpcError) {
+      console.warn(
+        "[processBulkImportChunk] claim_bulk_import_rows unavailable; using optimistic claim",
+        claimRpcError.message,
+      );
+    }
+    const { data: pendingRows, error: pendingError } = await params.admin
+      .from("bulk_import_rows")
+      .select("*")
+      .eq("job_id", params.jobId)
+      .eq("status", "pending")
+      .order("row_number", { ascending: true })
+      .limit(chunkSize);
+    if (pendingError) throw new Error(pendingError.message);
 
-  if (pendingError) throw new Error(pendingError.message);
-
-  const rows = pendingRows ?? [];
+    for (const row of pendingRows ?? []) {
+      const { data: claimed, error: claimError } = await params.admin
+        .from("bulk_import_rows")
+        .update({ status: "processing" })
+        .eq("id", row.id)
+        .eq("status", "pending")
+        .select("*")
+        .maybeSingle();
+      if (claimError) {
+        // Schema may not allow 'processing' yet — fall back to non-claimed pending rows.
+        console.warn("[processBulkImportChunk] optimistic claim failed", claimError.message);
+        rows = (pendingRows ?? []) as BulkImportRow[];
+        break;
+      }
+      if (claimed) rows.push(claimed as BulkImportRow);
+    }
+  }
 
   if (rows.length === 0) {
     await params.admin

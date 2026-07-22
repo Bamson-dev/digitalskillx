@@ -14,6 +14,7 @@ import { isValidStudentEmail, syncStudentCourseAccess, findProfileByEmail } from
 import { sendWelcomeEmailIfNeeded } from "@/lib/system-email-triggers";
 import { CHECKOUT_REF_COOKIE, checkoutRefCookieOptions, hashCheckoutBinding } from "@/lib/checkout-binding";
 import { runAutomations } from "@/lib/automation";
+import { secureLog } from "@/lib/secure-log";
 
 function jsonError(message: string, status: number) {
   return NextResponse.json({ error: message }, { status });
@@ -321,7 +322,9 @@ export async function POST(request: NextRequest) {
     );
     return response;
   } catch (err) {
-    console.error("[payments/initialize]", err);
+    secureLog("error", "payments/initialize", "initialize failed", {
+      error: err instanceof Error ? err.message : String(err),
+    });
     return jsonError(
       err instanceof Error ? err.message : "Payment could not start. Please try again.",
       500,

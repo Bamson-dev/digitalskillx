@@ -6,6 +6,7 @@ import { verifyWebhookSignature } from "@/lib/paystack";
 import { completePaidCheckout, readPendingCheckoutDetails } from "@/lib/guest-checkout";
 import { ensurePurchaseEnrollment } from "@/lib/purchase";
 import { rateLimitedResponse } from "@/lib/api-rate-limit";
+import { secureLog } from "@/lib/secure-log";
 import type { Json } from "@/types/database";
 
 export const dynamic = "force-dynamic";
@@ -20,6 +21,7 @@ export async function POST(request: NextRequest) {
   const signature = request.headers.get("x-paystack-signature");
 
   if (!(await verifyWebhookSignature(rawBody, signature))) {
+    secureLog("warn", "webhooks/paystack", "invalid signature");
     Sentry.captureMessage("Paystack webhook: invalid signature", { level: "warning" });
     return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
   }
@@ -95,6 +97,11 @@ export async function POST(request: NextRequest) {
   const result = await completePaidCheckout(reference);
 
   if (!result.ok) {
+    secureLog("error", "webhooks/paystack", "fulfillment failed", {
+      reference,
+      status: result.status,
+      error: result.error,
+    });
     Sentry.captureMessage("Paystack webhook: fulfillment failed", {
       level: "error",
       extra: { reference, error: result.error, status: result.status },

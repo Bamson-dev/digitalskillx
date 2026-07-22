@@ -13,6 +13,7 @@ import {
   checkoutRefCookieOptions,
   hashCheckoutBinding,
 } from "@/lib/checkout-binding";
+import { secureLog } from "@/lib/secure-log";
 
 function jsonError(message: string, status: number) {
   return NextResponse.json({ error: message }, { status });
@@ -143,7 +144,9 @@ export async function POST(request: NextRequest) {
 
     return response;
   } catch (err) {
-    console.error("[payments/confirm]", err);
+    secureLog("error", "payments/confirm", "confirm failed", {
+      error: err instanceof Error ? err.message : String(err),
+    });
     return jsonError(
       err instanceof Error ? err.message : "Could not confirm payment.",
       500,
