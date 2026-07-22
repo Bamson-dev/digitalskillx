@@ -40,11 +40,25 @@ export async function fulfillPurchase(params: {
     .maybeSingle();
 
   if (!existing) {
-    await admin.from("enrollments").insert({
+    const { error: enrollError } = await admin.from("enrollments").insert({
       student_id: params.studentId,
       course_id: params.courseId,
       source: "purchase",
     });
+    if (enrollError && !enrollError.message.toLowerCase().includes("duplicate")) {
+      throw new Error(`Enrollment failed after payment: ${enrollError.message}`);
+    }
+  }
+
+  // Confirm enrollment exists before reporting success.
+  const { data: confirmed } = await admin
+    .from("enrollments")
+    .select("id")
+    .eq("student_id", params.studentId)
+    .eq("course_id", params.courseId)
+    .maybeSingle();
+  if (!confirmed) {
+    throw new Error("Enrollment did not save after payment fulfillment.");
   }
 
   const [{ data: profile }, { data: course }] = await Promise.all([

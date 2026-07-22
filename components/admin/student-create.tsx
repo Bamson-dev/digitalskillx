@@ -114,6 +114,7 @@ function Feedback({
       skipped: number;
       failed: BulkUploadFailure[];
     };
+    progress?: { processed: number; total: number };
   };
 }) {
   return (
@@ -123,6 +124,21 @@ function Feedback({
       ) : null}
       {state.message ? (
         <p className="rounded-lg bg-green-50 px-3 py-2 text-sm text-green-700">{state.message}</p>
+      ) : null}
+      {state.progress && state.progress.total > 0 ? (
+        <div className="rounded-lg border border-app bg-surface-muted/30 p-4 text-sm">
+          <p className="font-semibold text-neutral-900">
+            Processing {state.progress.processed} / {state.progress.total} rows…
+          </p>
+          <div className="mt-2 h-2 overflow-hidden rounded-full bg-neutral-200">
+            <div
+              className="h-full bg-brand transition-all"
+              style={{
+                width: `${Math.min(100, Math.round((state.progress.processed / state.progress.total) * 100))}%`,
+              }}
+            />
+          </div>
+        </div>
       ) : null}
       {state.bulkSummary ? (
         <div className="rounded-lg border border-app bg-surface-muted/30 p-4 text-sm">
@@ -193,7 +209,12 @@ export function StudentCreate({
         credentials: "include",
       });
       const raw = await res.text();
-      let json: StudentActionState & { bulkSummary?: StudentActionState["bulkSummary"] };
+      let json: StudentActionState & {
+        bulkSummary?: StudentActionState["bulkSummary"];
+        jobId?: string;
+        chunked?: boolean;
+        totalRows?: number;
+      };
       try {
         json = JSON.parse(raw) as typeof json;
       } catch {
@@ -209,6 +230,87 @@ export function StudentCreate({
         setCsvState({ error: json.error ?? "Bulk upload failed." });
         return;
       }
+
+      if (json.chunked && json.jobId) {
+        let summary = {
+          jobId: json.jobId,
+          processedRows: 0,
+          totalRows: json.totalRows ?? 0,
+          created: 0,
+          enrolled: 0,
+          skipped: 0,
+          failed: 0,
+          failures: [] as BulkUploadFailure[],
+          done: false,
+        };
+
+        setCsvState({
+          message: json.message ?? "Processing import…",
+          progress: { processed: 0, total: summary.totalRows },
+        });
+
+        while (!summary.done) {
+          const chunkRes = await fetch("/api/admin/bulk-students", {
+            method: "POST",
+            credentials: "include",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ action: "process", jobId: json.jobId }),
+          });
+          const chunkRaw = await chunkRes.text();
+          let chunkJson: {
+            error?: string;
+            processedRows: number;
+            totalRows: number;
+            created: number;
+            enrolled: number;
+            skipped: number;
+            failed: number;
+            failures: BulkUploadFailure[];
+            done: boolean;
+            message?: string;
+          };
+          try {
+            chunkJson = JSON.parse(chunkRaw) as typeof chunkJson;
+          } catch {
+            setCsvState({
+              error: `Chunk processing failed (${chunkRes.status}).`,
+            });
+            return;
+          }
+          if (!chunkRes.ok) {
+            setCsvState({ error: chunkJson.error ?? "Chunk processing failed." });
+            return;
+          }
+          summary = {
+            jobId: json.jobId,
+            processedRows: chunkJson.processedRows,
+            totalRows: chunkJson.totalRows,
+            created: chunkJson.created,
+            enrolled: chunkJson.enrolled,
+            skipped: chunkJson.skipped,
+            failed: chunkJson.failed,
+            failures: chunkJson.failures ?? [],
+            done: chunkJson.done,
+          };
+          setCsvState({
+            message: `Processing ${summary.processedRows} / ${summary.totalRows} rows…`,
+            progress: { processed: summary.processedRows, total: summary.totalRows },
+          });
+        }
+
+        setCsvState({
+          message: `Bulk upload finished: ${summary.created} created, ${summary.enrolled} existing student(s) enrolled, ${summary.skipped} skipped, ${summary.failed} failed.`,
+          bulkSummary: {
+            created: summary.created,
+            enrolled: summary.enrolled,
+            skipped: summary.skipped,
+            failed: summary.failures,
+          },
+        });
+        form.reset();
+        return;
+      }
+
       setCsvState({
         message: json.message,
         bulkSummary: json.bulkSummary,

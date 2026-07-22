@@ -2,7 +2,6 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { runAutomations } from "@/lib/automation";
 import type { Database } from "@/types/database";
-import { loadAuthEmailIndex } from "@/lib/admin-student-overview";
 import { sendWelcomeEmailIfNeeded } from "@/lib/system-email-triggers";
 import { studentFirstName } from "@/lib/student-name";
 
@@ -165,20 +164,36 @@ export async function ensureImportedStudentProfile(
 
 type AuthEmailIndex = Map<string, { id: string; lastSignInAt: string | null }>;
 
-/** Auth user id that will actually sign in with this profile email. */
+/**
+ * Resolve the auth user id that should own enrollments for this email.
+ * Prefer an optional preloaded auth index; otherwise use targeted lookups only
+ * (never page every Auth user on the hot path).
+ */
 export async function resolveCanonicalStudentId(
   admin: SupabaseClient<Database>,
   params: { studentId: string; email: string },
   authIndex?: AuthEmailIndex,
 ) {
   const normalizedEmail = params.email.trim().toLowerCase();
-  const index = authIndex ?? (await loadAuthEmailIndex(admin));
-  const idByEmail = index.get(normalizedEmail)?.id;
-  if (idByEmail) return idByEmail;
+
+  if (authIndex) {
+    const idByEmail = authIndex.get(normalizedEmail)?.id;
+    if (idByEmail) return idByEmail;
+  }
 
   const { data: authUser, error } = await admin.auth.admin.getUserById(params.studentId);
-  if (error) throw new Error(error.message);
-  if (authUser.user?.id) return authUser.user.id;
+  if (!error && authUser.user?.id) {
+    const authEmail = authUser.user.email?.trim().toLowerCase() ?? null;
+    if (!authEmail || authEmail === normalizedEmail) return authUser.user.id;
+  }
+
+  const { data: profile } = await admin
+    .from("profiles")
+    .select("id")
+    .ilike("email", normalizedEmail)
+    .eq("id", params.studentId)
+    .maybeSingle();
+  if (profile?.id) return profile.id;
 
   return params.studentId;
 }
@@ -240,6 +255,9 @@ export async function reconcileOrphanEnrollmentsForEmail(
 /**
  * Consolidate course access onto the signed-in student account.
  * Runs on login and dashboard reads so admin-granted courses appear without re-login.
+ *
+ * Hot-path safe: uses getUserById + profiles-by-email only. Never pages all Auth users.
+ * Optional authIndex is used when a caller already loaded one (admin tools / bulk jobs).
  */
 export async function syncStudentCourseAccess(
   admin: SupabaseClient<Database>,
@@ -248,12 +266,18 @@ export async function syncStudentCourseAccess(
 ): Promise<string> {
   const profileEmail = params.profileEmail?.trim().toLowerCase() ?? null;
 
-  const { data: authUserData, error: authError } = await admin.auth.admin.getUserById(
-    params.authUserId,
-  );
-  if (authError) throw new Error(authError.message);
+  let authEmail: string | null = null;
+  try {
+    const { data: authUserData, error: authError } = await admin.auth.admin.getUserById(
+      params.authUserId,
+    );
+    if (authError) throw new Error(authError.message);
+    authEmail = authUserData.user?.email?.trim().toLowerCase() ?? null;
+  } catch (err) {
+    // Auth Admin blips must not crash student course pages — fall back to profile email.
+    console.error("[syncStudentCourseAccess] getUserById failed", err);
+  }
 
-  const authEmail = authUserData.user?.email?.trim().toLowerCase() ?? null;
   if (authEmail && profileEmail && authEmail !== profileEmail) {
     await admin.from("profiles").update({ email: authEmail }).eq("id", params.authUserId);
   }
@@ -263,12 +287,11 @@ export async function syncStudentCourseAccess(
     await reconcileOrphanEnrollmentsForEmail(admin, { authUserId: params.authUserId, email });
   }
 
-  const index = authIndex ?? (await loadAuthEmailIndex(admin));
   const relatedIds = new Set<string>();
   for (const email of emails) {
     const { data: profiles } = await admin.from("profiles").select("id").ilike("email", email);
     for (const profile of profiles ?? []) relatedIds.add(profile.id);
-    const mappedId = index.get(email)?.id;
+    const mappedId = authIndex?.get(email)?.id;
     if (mappedId) relatedIds.add(mappedId);
   }
 
@@ -409,6 +432,61 @@ export async function grantCourseAccessToStudent(
   }
 
   return { newlyEnrolled };
+}
+
+/**
+ * Bulk-import enroll path: profile upsert + enrollment insert only.
+ * No Auth full-scan, no orphan reconciliation, no sync SMTP (caller defers email).
+ */
+export async function grantCourseAccessForBulkImport(
+  admin: SupabaseClient<Database>,
+  params: {
+    studentId: string;
+    courseId: string;
+    enrolledBy: string;
+    fullName: string;
+    email: string;
+  },
+): Promise<{ newlyEnrolled: boolean }> {
+  await ensureImportedStudentProfile(admin, {
+    studentId: params.studentId,
+    email: params.email,
+    fullName: params.fullName,
+  });
+
+  const { data: existing } = await admin
+    .from("enrollments")
+    .select("id")
+    .eq("student_id", params.studentId)
+    .eq("course_id", params.courseId)
+    .maybeSingle();
+
+  if (existing) return { newlyEnrolled: false };
+
+  const { error } = await admin.from("enrollments").insert({
+    student_id: params.studentId,
+    course_id: params.courseId,
+    enrolled_by: params.enrolledBy,
+    source: "admin",
+  });
+
+  if (error) {
+    if (error.message.toLowerCase().includes("duplicate")) {
+      return { newlyEnrolled: false };
+    }
+    throw new Error(error.message);
+  }
+
+  try {
+    await runAutomations("course_enrolled", {
+      studentId: params.studentId,
+      courseId: params.courseId,
+    });
+  } catch (err) {
+    console.error("[grantCourseAccessForBulkImport] automation failed", err);
+  }
+
+  return { newlyEnrolled: true };
 }
 
 export async function enrollStudentInCourses(

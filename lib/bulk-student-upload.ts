@@ -3,20 +3,16 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { runAutomations } from "@/lib/automation";
 import {
   buildCourseResolver,
-  ensureImportedStudentProfile,
   findProfileByEmail,
   generateStrongPassword,
-  grantCourseAccessToStudent,
+  grantCourseAccessForBulkImport,
   isValidStudentEmail,
   parseStudentCsv,
-  resolveCanonicalStudentId,
   resolveStudentIdByEmail,
   sendStudentWelcomeEmail,
-  verifyStudentCourseAccess,
   waitForStudentProfile,
   type CourseLookup,
 } from "@/lib/admin-student-onboarding";
-import { loadAuthEmailIndex } from "@/lib/admin-student-overview";
 import { getPlatformSettingsAdmin } from "@/lib/platform-settings";
 import type { Database } from "@/types/database";
 
@@ -35,6 +31,9 @@ export type BulkUploadResult = {
     failed: BulkUploadFailure[];
   };
 };
+
+/** Sync path row cap when job tables are unavailable. */
+export const BULK_SYNC_MAX_ROWS = 150;
 
 function siteUrl() {
   return (process.env.NEXT_PUBLIC_SITE_URL ?? "https://digitalskillx.com").replace(/\/$/, "");
@@ -80,6 +79,10 @@ export async function readCsvFromFormData(formData: FormData): Promise<string | 
   const pasted = String(formData.get("csv") ?? "").trim();
 
   if (isUploadedCsvFile(file)) {
+    const maxBytes = 5 * 1024 * 1024;
+    if (file.size > maxBytes) {
+      throw new Error("CSV file is too large (max 5 MB). Split the file and try again.");
+    }
     try {
       return decodeCsvUpload(await file.arrayBuffer());
     } catch (err) {
@@ -91,13 +94,17 @@ export async function readCsvFromFormData(formData: FormData): Promise<string | 
   return pasted || null;
 }
 
-/** Core CSV bulk enrollment used by server actions and API routes. */
+/**
+ * Synchronous CSV bulk enrollment for small files (≤150 rows).
+ * Uses slim enroll path — no Auth full-scan, deferred welcome emails via fire-and-forget.
+ */
 export async function runBulkStudentCsvUpload(params: {
   admin: SupabaseClient<Database>;
   adminUserId: string;
   csvText: string;
   defaultCourseId: string | null;
   enrollableCourses?: CourseLookup[];
+  maxRows?: number;
 }): Promise<BulkUploadResult> {
   const csvText = params.csvText.trim();
   if (!csvText) {
@@ -115,109 +122,52 @@ export async function runBulkStudentCsvUpload(params: {
   const resolveCourse = buildCourseResolver(enrollableCourses);
   const settings = await getPlatformSettingsAdmin();
   const { rows } = parseStudentCsv(csvText);
-  const authIndex = await loadAuthEmailIndex(params.admin);
+  const dataRows = rows.filter((r) => r.email || r.fullName);
 
-  if (rows.length === 0) {
+  if (dataRows.length === 0) {
     throw new Error("No data rows found in the CSV.");
   }
+
+  const maxRows = params.maxRows ?? BULK_SYNC_MAX_ROWS;
+  if (dataRows.length > maxRows) {
+    throw new Error(
+      `This upload has ${dataRows.length} rows. Use the chunked job importer for files over ${maxRows} rows (or run migration 0028).`,
+    );
+  }
+
+  // Dedupe emails within file (first occurrence wins).
+  const seen = new Set<string>();
+  const uniqueRows = dataRows.filter((row) => {
+    const email = row.email.trim().toLowerCase();
+    if (!email) return true;
+    if (seen.has(email)) return false;
+    seen.add(email);
+    return true;
+  });
 
   let created = 0;
   let enrolled = 0;
   let skipped = 0;
   const failed: BulkUploadFailure[] = [];
+  const knownIds = new Map<string, string>();
 
-  async function grantAccessToStudent(grantParams: {
-    studentId: string;
-    fullName: string;
-    email: string;
-    courseId: string;
-    sendWelcome?: { password: string; courseTitle: string | null };
-  }) {
-    await ensureImportedStudentProfile(params.admin, {
-      studentId: grantParams.studentId,
-      email: grantParams.email,
-      fullName: grantParams.fullName,
-    });
-
-    const { newlyEnrolled } = await grantCourseAccessToStudent(params.admin, {
-      studentId: grantParams.studentId,
-      courseIds: [grantParams.courseId],
-      enrolledBy: params.adminUserId,
-      fullName: grantParams.fullName,
-      email: grantParams.email,
-      sendEnrollmentEmail: !grantParams.sendWelcome,
-      authIndex,
-    });
-
-    if (newlyEnrolled.length > 0) {
-      const canonicalStudentId = await resolveCanonicalStudentId(
-        params.admin,
-        {
-          studentId: grantParams.studentId,
-          email: grantParams.email,
-        },
-        authIndex,
-      );
-      const { enrolledCourseIds } = await verifyStudentCourseAccess(params.admin, canonicalStudentId, [
-        grantParams.courseId,
-      ]);
-      if (enrolledCourseIds.length === 0) {
-        throw new Error("Course enrollment did not save");
-      }
-    }
-
-    if (grantParams.sendWelcome) {
-      const canonicalStudentId = await resolveCanonicalStudentId(
-        params.admin,
-        {
-          studentId: grantParams.studentId,
-          email: grantParams.email,
-        },
-        authIndex,
-      );
-      await sendStudentWelcomeEmail({
-        studentId: canonicalStudentId,
-        fullName: grantParams.fullName,
-        email: grantParams.email,
-        password: grantParams.sendWelcome.password,
-        courseNames: grantParams.sendWelcome.courseTitle ? [grantParams.sendWelcome.courseTitle] : [],
-        siteUrl: siteUrl(),
-        brandColor: settings.primary_color,
-      });
-      created++;
-    } else if (newlyEnrolled.length > 0) {
-      enrolled++;
-    } else {
-      skipped++;
-    }
-  }
-
-  for (const row of rows) {
+  for (const row of uniqueRows) {
     const rowNumber = row.rowNumber;
-    const fullName = row.fullName;
-    const email = row.email;
+    let fullName = row.fullName.trim();
+    const email = row.email.trim().toLowerCase();
     const courseRefRaw = row.courseRef;
 
     if (!fullName && !email) continue;
     if (!email) {
-      failed.push({
-        row: rowNumber,
-        email: "(missing)",
-        reason: "Email is required on each row",
-      });
-      continue;
-    }
-    if (!fullName) {
-      failed.push({
-        row: rowNumber,
-        email,
-        reason: "Could not determine student name for this row",
-      });
+      failed.push({ row: rowNumber, email: "(missing)", reason: "Email is required on each row" });
       continue;
     }
     if (!isValidStudentEmail(email)) {
       failed.push({ row: rowNumber, email, reason: "Invalid email format" });
       continue;
+    }
+    if (!fullName) {
+      fullName = email.split("@")[0] || "Student";
     }
 
     const resolved = resolveCourse(courseRefRaw, params.defaultCourseId);
@@ -234,95 +184,86 @@ export async function runBulkStudentCsvUpload(params: {
       continue;
     }
 
-    const existing = await findProfileByEmail(params.admin, email);
-    if (existing) {
-      if (existing.is_suspended) {
-        failed.push({ row: rowNumber, email, reason: "Student account is suspended" });
-        continue;
-      }
-      try {
-        await grantAccessToStudent({
-          studentId: existing.id,
-          fullName: existing.full_name ?? fullName,
-          email: existing.email,
-          courseId: resolved.courseId,
-        });
-      } catch (rowError) {
-        failed.push({
-          row: rowNumber,
-          email,
-          reason: rowError instanceof Error ? rowError.message : "Enrollment failed",
-        });
-      }
-      continue;
-    }
-
-    const existingAuthId = await resolveStudentIdByEmail(params.admin, email, authIndex);
-    if (existingAuthId) {
-      try {
-        await grantAccessToStudent({
-          studentId: existingAuthId,
-          fullName,
-          email,
-          courseId: resolved.courseId,
-        });
-      } catch (rowError) {
-        failed.push({
-          row: rowNumber,
-          email,
-          reason: rowError instanceof Error ? rowError.message : "Enrollment failed",
-        });
-      }
-      continue;
-    }
-
-    const password = generateStrongPassword();
-    const { data: createdUser, error } = await params.admin.auth.admin.createUser({
-      email,
-      password,
-      email_confirm: true,
-      user_metadata: { full_name: fullName },
-    });
-
-    if (error) {
-      const authId = await resolveStudentIdByEmail(params.admin, email, authIndex);
-      if (authId) {
-        try {
-          await grantAccessToStudent({
-            studentId: authId,
-            fullName,
-            email,
-            courseId: resolved.courseId,
-          });
-        } catch (rowError) {
-          failed.push({
-            row: rowNumber,
-            email,
-            reason: rowError instanceof Error ? rowError.message : "Enrollment failed",
-          });
-        }
-        continue;
-      }
-      failed.push({ row: rowNumber, email, reason: error.message });
-      continue;
-    }
-
     try {
-      await params.admin.from("profiles").update({ full_name: fullName }).eq("id", createdUser.user.id);
-      await waitForStudentProfile(params.admin, createdUser.user.id);
-      await runAutomations("account_created", { studentId: createdUser.user.id });
-      await grantAccessToStudent({
-        studentId: createdUser.user.id,
+      let studentId = knownIds.get(email) ?? null;
+      let isNew = false;
+      let password: string | null = null;
+
+      if (!studentId) {
+        const existing = await findProfileByEmail(params.admin, email);
+        if (existing) {
+          if (existing.is_suspended) {
+            failed.push({ row: rowNumber, email, reason: "Student account is suspended" });
+            continue;
+          }
+          studentId = existing.id;
+          fullName = existing.full_name?.trim() || fullName;
+        }
+      }
+
+      if (!studentId) {
+        studentId = await resolveStudentIdByEmail(params.admin, email);
+      }
+
+      if (!studentId) {
+        password = generateStrongPassword();
+        const { data: createdUser, error } = await params.admin.auth.admin.createUser({
+          email,
+          password,
+          email_confirm: true,
+          user_metadata: { full_name: fullName },
+        });
+        if (error) {
+          const recovered = await resolveStudentIdByEmail(params.admin, email);
+          if (!recovered) {
+            failed.push({ row: rowNumber, email, reason: error.message });
+            continue;
+          }
+          studentId = recovered;
+        } else {
+          studentId = createdUser.user.id;
+          isNew = true;
+          await params.admin.from("profiles").update({ full_name: fullName }).eq("id", studentId);
+          await waitForStudentProfile(params.admin, studentId);
+          try {
+            await runAutomations("account_created", { studentId });
+          } catch (err) {
+            console.error("[runBulkStudentCsvUpload] automation", err);
+          }
+        }
+      }
+
+      knownIds.set(email, studentId);
+
+      const { newlyEnrolled } = await grantCourseAccessForBulkImport(params.admin, {
+        studentId,
+        courseId: resolved.courseId,
+        enrolledBy: params.adminUserId,
         fullName,
         email,
-        courseId: resolved.courseId,
-        sendWelcome: { password, courseTitle: resolved.courseTitle },
       });
+
+      if (isNew && password) {
+        void sendStudentWelcomeEmail({
+          studentId,
+          fullName,
+          email,
+          password,
+          courseNames: resolved.courseTitle ? [resolved.courseTitle] : [],
+          siteUrl: siteUrl(),
+          brandColor: settings.primary_color,
+        }).catch((err) => console.error("[runBulkStudentCsvUpload] welcome email", err));
+        created++;
+      } else if (newlyEnrolled) {
+        enrolled++;
+      } else {
+        skipped++;
+      }
     } catch (rowError) {
       failed.push({
         row: rowNumber,
         email,
-        reason: rowError instanceof Error ? rowError.message : "Enrollment or email failed",
+        reason: rowError instanceof Error ? rowError.message : "Enrollment failed",
       });
     }
   }

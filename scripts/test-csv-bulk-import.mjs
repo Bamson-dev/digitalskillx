@@ -121,6 +121,44 @@ function assertBulkSuccess(importRes, label, options = {}) {
   let importOk = false;
   try {
     const json = JSON.parse(importRes);
+    if (json.chunked && json.jobId) {
+      let summary = json;
+      let guard = 0;
+      while (!summary.done && guard < 200) {
+        const chunkRes = curl([
+          "-b",
+          jar,
+          "-X",
+          "POST",
+          `${base}/api/admin/bulk-students`,
+          "-H",
+          "Content-Type: application/json",
+          "-d",
+          JSON.stringify({ action: "process", jobId: json.jobId }),
+        ]);
+        summary = JSON.parse(chunkRes);
+        guard += 1;
+      }
+      importOk =
+        summary.done &&
+        summary.failed === 0 &&
+        (summary.created >= 1 || summary.enrolled >= 1 || (allowSkipped && summary.skipped >= 1));
+      if (!importOk) {
+        console.error(`FAIL: ${label} (chunked)`, JSON.stringify(summary).slice(0, 900));
+      }
+      return {
+        ok: importOk,
+        json: {
+          message: `Bulk upload finished: ${summary.created} created, ${summary.enrolled} enrolled, ${summary.skipped} skipped, ${summary.failed} failed.`,
+          bulkSummary: {
+            created: summary.created,
+            enrolled: summary.enrolled,
+            skipped: summary.skipped,
+            failed: summary.failures ?? [],
+          },
+        },
+      };
+    }
     importOk =
       typeof json.message === "string" &&
       /Bulk upload finished/i.test(json.message) &&
@@ -132,8 +170,8 @@ function assertBulkSuccess(importRes, label, options = {}) {
       console.error(`FAIL: ${label}`, importRes.slice(0, 900));
     }
     return { ok: importOk, json };
-  } catch {
-    console.error(`FAIL: ${label} did not return JSON`);
+  } catch (err) {
+    console.error(`FAIL: ${label} did not return JSON`, err instanceof Error ? err.message : err);
     console.error(importRes.slice(0, 900));
     return { ok: false, json: null };
   }

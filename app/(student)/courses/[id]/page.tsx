@@ -10,9 +10,16 @@ import { CourseCommunitySection } from "@/components/course/course-community-sec
 import { courseCommunityFromRow } from "@/lib/course-community";
 import { CourseResources } from "@/components/student/course-resources";
 import { CourseCurriculumList } from "@/components/student/course-curriculum-list";
+import { isMissingColumnError } from "@/lib/schema-guard";
 import type { Lesson, Module } from "@/types/database";
 
 export const metadata: Metadata = { title: "Course" };
+
+const FULL_COURSE_SELECT =
+  "id, title, description, short_description, thumbnail_url, promo_video_url, learning_outcomes, instructor_name, is_coming_soon, community_telegram_url, community_whatsapp_url, modules(id, title, position, lessons(id, title, position, duration_seconds, is_coming_soon, coming_soon_available_at))";
+
+const FALLBACK_COURSE_SELECT =
+  "id, title, description, short_description, thumbnail_url, promo_video_url, learning_outcomes, instructor_name, modules(id, title, position, lessons(id, title, position, duration_seconds))";
 
 export default async function CourseDetailPage({
   params,
@@ -34,13 +41,34 @@ export default async function CourseDetailPage({
     enrolled,
   });
 
-  const { data: course } = await supabase
+  let { data: course, error: courseError } = await supabase
     .from("courses")
-    .select(
-      "id, title, description, short_description, thumbnail_url, promo_video_url, learning_outcomes, instructor_name, is_coming_soon, community_telegram_url, community_whatsapp_url, modules(id, title, position, lessons(id, title, position, duration_seconds, is_coming_soon, coming_soon_available_at))",
-    )
+    .select(FULL_COURSE_SELECT)
     .eq("id", params.id)
     .single();
+
+  if (courseError && isMissingColumnError(courseError.message)) {
+    console.error("[CourseDetailPage] schema drift; falling back select", courseError.message);
+    const fallback = await supabase
+      .from("courses")
+      .select(FALLBACK_COURSE_SELECT)
+      .eq("id", params.id)
+      .single();
+    course = fallback.data
+      ? ({
+          ...fallback.data,
+          is_coming_soon: false,
+          community_telegram_url: null,
+          community_whatsapp_url: null,
+        } as typeof course)
+      : null;
+    courseError = fallback.error;
+  }
+
+  if (courseError) {
+    console.error("[CourseDetailPage] course query failed", courseError.message);
+    throw new Error("Could not load this course. Please try again.");
+  }
 
   if (!course) notFound();
 

@@ -4,6 +4,7 @@ import { syncStudentCourseAccess } from "@/lib/admin-student-onboarding";
 import { createAdminClientAsync } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { getCourseProgressSummary } from "@/lib/progress";
+import { isMissingColumnError } from "@/lib/schema-guard";
 
 export type StudentCourseRow = {
   enrollmentId: string;
@@ -32,6 +33,22 @@ async function assertOwnStudentAccess(studentId: string) {
   if (user.id !== studentId) throw new Error("Forbidden.");
 }
 
+async function safeSyncStudentAccess(
+  admin: Awaited<ReturnType<typeof createAdminClientAsync>>,
+  studentId: string,
+  profileEmail?: string | null,
+) {
+  try {
+    return await syncStudentCourseAccess(admin, {
+      authUserId: studentId,
+      profileEmail,
+    });
+  } catch (err) {
+    console.error("[checkStudentCourseEnrollment] sync failed; using auth user id", err);
+    return studentId;
+  }
+}
+
 /** Sync orphan enrollments, then check access to one course (service role after auth check). */
 export async function checkStudentCourseEnrollment(
   studentId: string,
@@ -47,10 +64,7 @@ export async function checkStudentCourseEnrollment(
     .eq("id", studentId)
     .maybeSingle();
 
-  const targetStudentId = await syncStudentCourseAccess(admin, {
-    authUserId: studentId,
-    profileEmail: profile?.email,
-  });
+  const targetStudentId = await safeSyncStudentAccess(admin, studentId, profile?.email);
 
   const { data: enrollment } = await admin
     .from("enrollments")
@@ -78,10 +92,7 @@ export async function getStudentEnrolledCourses(studentId: string): Promise<Stud
     .eq("id", studentId)
     .maybeSingle();
 
-  const targetStudentId = await syncStudentCourseAccess(admin, {
-    authUserId: studentId,
-    profileEmail: profile?.email,
-  });
+  const targetStudentId = await safeSyncStudentAccess(admin, studentId, profile?.email);
 
   const { data: enrollments, error: enrollError } = await admin
     .from("enrollments")
@@ -93,10 +104,24 @@ export async function getStudentEnrolledCourses(studentId: string): Promise<Stud
   if (!enrollments?.length) return [];
 
   const courseIds = [...new Set(enrollments.map((row) => row.course_id))];
-  const { data: courses, error: courseError } = await admin
+  let { data: courses, error: courseError } = await admin
     .from("courses")
-    .select("id, title, description, short_description, thumbnail_url, price_ngn, price_usd, instructor_name, is_coming_soon")
+    .select(
+      "id, title, description, short_description, thumbnail_url, price_ngn, price_usd, instructor_name, is_coming_soon",
+    )
     .in("id", courseIds);
+
+  if (courseError && isMissingColumnError(courseError.message)) {
+    console.error("[getStudentEnrolledCourses] is_coming_soon missing; falling back", courseError.message);
+    const fallback = await admin
+      .from("courses")
+      .select(
+        "id, title, description, short_description, thumbnail_url, price_ngn, price_usd, instructor_name",
+      )
+      .in("id", courseIds);
+    courses = (fallback.data ?? []).map((c) => ({ ...c, is_coming_soon: false }));
+    courseError = fallback.error;
+  }
 
   if (courseError) throw new Error(courseError.message);
 
@@ -118,12 +143,7 @@ export async function getStudentEnrolledCoursesWithProgress(studentId: string) {
         return { ...row, pct: 0, totalLessons: 0, lessonsLeft: 0 };
       }
       const summary = await getCourseProgressSummary(studentId, row.course.id);
-      return {
-        ...row,
-        pct: summary.pct,
-        totalLessons: summary.totalLessons,
-        lessonsLeft: summary.lessonsLeft,
-      };
+      return { ...row, ...summary };
     }),
   );
 }

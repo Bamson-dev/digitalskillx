@@ -10,7 +10,7 @@ import { rateLimitedResponse } from "@/lib/api-rate-limit";
 import {
   resolveOrCreateStudentForPurchase,
 } from "@/lib/guest-checkout";
-import { isValidStudentEmail } from "@/lib/admin-student-onboarding";
+import { isValidStudentEmail, syncStudentCourseAccess } from "@/lib/admin-student-onboarding";
 import { sendWelcomeEmailIfNeeded } from "@/lib/system-email-triggers";
 
 function jsonError(message: string, status: number) {
@@ -79,12 +79,23 @@ export async function POST(request: NextRequest) {
     }
 
     const studentIdForEnrollment = user?.id ?? null;
+    let canonicalStudentId = studentIdForEnrollment;
 
     if (studentIdForEnrollment) {
+      try {
+        canonicalStudentId = await syncStudentCourseAccess(admin, {
+          authUserId: studentIdForEnrollment,
+          profileEmail: profile?.email,
+        });
+      } catch (err) {
+        console.error("[payments/initialize] syncStudentCourseAccess failed", err);
+        canonicalStudentId = studentIdForEnrollment;
+      }
+
       const { data: enrollment } = await admin
         .from("enrollments")
         .select("id")
-        .eq("student_id", studentIdForEnrollment)
+        .eq("student_id", canonicalStudentId)
         .eq("course_id", course.id)
         .maybeSingle();
 
@@ -94,9 +105,9 @@ export async function POST(request: NextRequest) {
     }
 
     if (isCourseFree(course, "NGN")) {
-      if (studentIdForEnrollment) {
+      if (canonicalStudentId) {
         const { error: enrollError } = await admin.from("enrollments").insert({
-          student_id: studentIdForEnrollment,
+          student_id: canonicalStudentId,
           course_id: course.id,
           source: "self",
         });
@@ -107,7 +118,7 @@ export async function POST(request: NextRequest) {
 
         if (profile?.email) {
           void sendWelcomeEmailIfNeeded({
-            studentId: studentIdForEnrollment,
+            studentId: canonicalStudentId,
             fullName: profile.full_name ?? "there",
             email: profile.email,
             checkoutCourseId: course.id,

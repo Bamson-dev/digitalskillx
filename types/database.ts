@@ -438,6 +438,38 @@ export type AiConversation = Timestamps & {
   updated_at: string;
 };
 
+export type BulkImportJobStatus = "pending" | "processing" | "completed" | "failed";
+export type BulkImportRowStatus = "pending" | "created" | "enrolled" | "skipped" | "failed";
+
+export type BulkImportJob = {
+  id: string;
+  admin_id: string;
+  default_course_id: string | null;
+  status: BulkImportJobStatus;
+  total_rows: number;
+  processed_rows: number;
+  created_count: number;
+  enrolled_count: number;
+  skipped_count: number;
+  failed_count: number;
+  error_message: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type BulkImportRow = {
+  id: string;
+  job_id: string;
+  row_number: number;
+  full_name: string;
+  email: string;
+  course_ref: string;
+  status: BulkImportRowStatus;
+  reason: string | null;
+  password_plain: string | null;
+  processed_at: string | null;
+};
+
 export type Database = {
   public: {
     Tables: {
@@ -578,6 +610,17 @@ export type Database = {
         ]
       >;
       system_email_failures: Table<SystemEmailFailure, []>;
+      bulk_import_jobs: Table<
+        BulkImportJob,
+        [
+          Rel<"bulk_import_jobs_admin_id_fkey", "admin_id", "profiles", "id">,
+          Rel<"bulk_import_jobs_default_course_id_fkey", "default_course_id", "courses", "id">,
+        ]
+      >;
+      bulk_import_rows: Table<
+        BulkImportRow,
+        [Rel<"bulk_import_rows_job_id_fkey", "job_id", "bulk_import_jobs", "id">]
+      >;
     };
     Views: Record<string, never>;
     Functions: {

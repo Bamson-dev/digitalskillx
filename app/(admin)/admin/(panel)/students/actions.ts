@@ -43,6 +43,7 @@ export type BulkUploadFailure = {
 export type StudentActionState = {
   error?: string;
   message?: string;
+  progress?: { processed: number; total: number };
   bulkSummary?: {
     created: number;
     enrolled: number;
