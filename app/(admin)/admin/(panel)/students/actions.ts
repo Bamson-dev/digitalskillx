@@ -43,6 +43,7 @@ export type StudentActionState = {
   error?: string;
   message?: string;
   progress?: { processed: number; total: number };
+  bulkJobId?: string;
   bulkSummary?: {
     created: number;
     enrolled: number;

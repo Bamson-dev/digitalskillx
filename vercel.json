@@ -3,6 +3,14 @@
     {
       "path": "/api/cron/inactivity",
       "schedule": "0 9 * * *"
+    },
+    {
+      "path": "/api/cron/bulk-import",
+      "schedule": "* * * * *"
+    },
+    {
+      "path": "/api/cron/email-outbox",
+      "schedule": "* * * * *"
     }
   ]
 }

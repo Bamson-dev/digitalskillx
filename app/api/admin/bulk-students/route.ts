@@ -5,9 +5,14 @@ import { logAudit } from "@/lib/audit";
 import { rateLimitedResponse } from "@/lib/api-rate-limit";
 import {
   createBulkImportJob,
+  exportFailedBulkImportRowsCsv,
   getBulkImportJobSummary,
   processBulkImportChunk,
+  processBulkImportUntilBudget,
+  retryFailedBulkImportRows,
 } from "@/lib/bulk-import-job";
+import { resendFailedOutboxForJob } from "@/lib/bulk-import-email-outbox";
+import { bulkImportStage } from "@/lib/bulk-import-telemetry";
 import {
   BULK_SYNC_MAX_ROWS,
   readCsvFromFormData,
@@ -21,20 +26,16 @@ export const maxDuration = 300;
 
 /**
  * CSV bulk student import.
- * - Large files: create a job and return jobId (client processes chunks).
- * - Small files / missing job tables: synchronous slim import.
+ * Upload creates a job and returns jobId. Background cron (+ optional kick) processes rows.
+ * UI should poll action=status only — never drive the full chunk loop.
  */
 export async function POST(request: NextRequest) {
   try {
-    const limited = await rateLimitedResponse(request, "admin-bulk-students", 20);
-    if (limited) return limited;
-
     const auth = await requireAdminApiAuth();
     if ("error" in auth) return auth.error;
 
     const contentType = request.headers.get("content-type") ?? "";
 
-    // Chunk processing / status (JSON)
     if (contentType.includes("application/json")) {
       const body = (await request.json()) as {
         action?: string;
@@ -42,15 +43,21 @@ export async function POST(request: NextRequest) {
       };
 
       if (body.action === "status" && body.jobId) {
+        // Status polls are frequent — do not share the create/process rate bucket.
         const summary = await getBulkImportJobSummary(auth.admin, body.jobId);
         return NextResponse.json(summary);
       }
 
       if (body.action === "process" && body.jobId) {
-        const summary = await processBulkImportChunk({
+        // Optional admin kick (not required). Separate generous limit.
+        const limited = await rateLimitedResponse(request, "admin-bulk-students-kick", 120);
+        if (limited) return limited;
+
+        const summary = await processBulkImportUntilBudget({
           admin: auth.admin,
           adminUserId: auth.user.id,
           jobId: body.jobId,
+          budgetMs: 45_000,
         });
         if (summary.done) {
           await logAudit({
@@ -69,8 +76,51 @@ export async function POST(request: NextRequest) {
         return NextResponse.json(summary);
       }
 
+      if (body.action === "retry_failed" && body.jobId) {
+        const summary = await retryFailedBulkImportRows(
+          auth.admin,
+          body.jobId,
+          auth.user.id,
+        );
+        return NextResponse.json(summary);
+      }
+
+      if (body.action === "resend_emails" && body.jobId) {
+        await resendFailedOutboxForJob(auth.admin, body.jobId);
+        return NextResponse.json({ ok: true });
+      }
+
+      if (body.action === "export_failed" && body.jobId) {
+        const csv = await exportFailedBulkImportRowsCsv(
+          auth.admin,
+          body.jobId,
+          auth.user.id,
+        );
+        return new NextResponse(csv, {
+          status: 200,
+          headers: {
+            "Content-Type": "text/csv; charset=utf-8",
+            "Content-Disposition": `attachment; filename="bulk-import-failed-${body.jobId}.csv"`,
+          },
+        });
+      }
+
+      // Legacy single-chunk process still available
+      if (body.action === "process_one" && body.jobId) {
+        const summary = await processBulkImportChunk({
+          admin: auth.admin,
+          adminUserId: auth.user.id,
+          jobId: body.jobId,
+        });
+        return NextResponse.json(summary);
+      }
+
       return NextResponse.json({ error: "Invalid JSON action." }, { status: 400 });
     }
+
+    // Job creation only — tight limit (prevents abuse, not chunk loops)
+    const limited = await rateLimitedResponse(request, "admin-bulk-students-create", 15);
+    if (limited) return limited;
 
     let formData: FormData;
     try {
@@ -85,11 +135,23 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Upload a CSV file or paste CSV rows." }, { status: 400 });
     }
 
+    bulkImportStage("csv_received", {
+      ok: true,
+      bytes: csvText.length,
+      hasDefaultCourse: Boolean(defaultCourseId),
+    });
+
     const { rows } = parseStudentCsv(csvText);
     const dataRowCount = rows.filter((r) => r.email || r.fullName).length;
     const forceSync = String(formData.get("force_sync") ?? "") === "1";
 
-    if (!forceSync && dataRowCount > BULK_SYNC_MAX_ROWS) {
+    bulkImportStage("validation_finished", {
+      ok: true,
+      rowCount: dataRowCount,
+    });
+
+    // Prefer durable job path for anything above tiny pastes
+    if (!forceSync && dataRowCount > 10) {
       const created = await createBulkImportJob({
         admin: auth.admin,
         adminUserId: auth.user.id,
@@ -98,36 +160,35 @@ export async function POST(request: NextRequest) {
       });
 
       if ("fallbackRequired" in created) {
-        return NextResponse.json(
-          {
-            error: `${created.reason} For now, split into files of ≤${BULK_SYNC_MAX_ROWS} rows.`,
-          },
-          { status: 400 },
-        );
-      }
+        if (dataRowCount > BULK_SYNC_MAX_ROWS) {
+          return NextResponse.json(
+            {
+              error: `${created.reason} For now, split into files of ≤${BULK_SYNC_MAX_ROWS} rows.`,
+            },
+            { status: 400 },
+          );
+        }
+      } else {
+        // Kick processing immediately so UI doesn't wait solely on cron
+        void processBulkImportUntilBudget({
+          admin: auth.admin,
+          adminUserId: auth.user.id,
+          jobId: created.jobId,
+          budgetMs: 40_000,
+          asWorker: true,
+        }).catch((err) => {
+          bulkImportStage("inline_kick_failed", {
+            jobId: created.jobId,
+            ok: false,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        });
 
-      return NextResponse.json({
-        jobId: created.jobId,
-        totalRows: created.totalRows,
-        chunked: true,
-        message: `Import job created for ${created.totalRows} rows. Processing…`,
-      });
-    }
-
-    // Prefer job path for medium files when tables exist
-    if (!forceSync && dataRowCount > 40) {
-      const created = await createBulkImportJob({
-        admin: auth.admin,
-        adminUserId: auth.user.id,
-        csvText,
-        defaultCourseId,
-      });
-      if (!("fallbackRequired" in created)) {
         return NextResponse.json({
           jobId: created.jobId,
           totalRows: created.totalRows,
           chunked: true,
-          message: `Import job created for ${created.totalRows} rows. Processing…`,
+          message: `Import job created for ${created.totalRows} rows. Processing in the background…`,
         });
       }
     }
@@ -155,6 +216,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(result);
   } catch (err) {
     const message = err instanceof Error ? err.message : "Bulk upload failed.";
+    bulkImportStage("upload_failed", { ok: false, error: message });
     console.error("[bulk-students]", message, err);
     return NextResponse.json({ error: message }, { status: 500 });
   }

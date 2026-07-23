@@ -107,16 +107,36 @@ function CourseCheckboxList({ courses }: { courses: PublishedCourse[] }) {
 function Feedback({
   state,
 }: {
-  state: StudentActionState & {
-    bulkSummary?: {
-      created: number;
-      enrolled: number;
-      skipped: number;
-      failed: BulkUploadFailure[];
-    };
-    progress?: { processed: number; total: number };
-  };
+  state: StudentActionState;
 }) {
+  async function runJobAction(action: string) {
+    if (!state.bulkJobId) return;
+    const res = await fetch("/api/admin/bulk-students", {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action, jobId: state.bulkJobId }),
+    });
+    if (action === "export_failed") {
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `bulk-import-failed-${state.bulkJobId}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+      return;
+    }
+    if (!res.ok) {
+      const json = (await res.json().catch(() => ({}))) as { error?: string };
+      alert(json.error ?? "Action failed");
+    } else if (action === "resend_emails") {
+      alert("Failed emails re-queued for sending.");
+    } else if (action === "retry_failed") {
+      alert("Failed rows re-queued. Background processing will retry them.");
+    }
+  }
+
   return (
     <>
       {state.error ? (
@@ -124,6 +144,9 @@ function Feedback({
       ) : null}
       {state.message ? (
         <p className="rounded-lg bg-green-50 px-3 py-2 text-sm text-green-700">{state.message}</p>
+      ) : null}
+      {state.bulkJobId ? (
+        <p className="text-xs text-muted">Job ID: {state.bulkJobId}</p>
       ) : null}
       {state.progress && state.progress.total > 0 ? (
         <div className="rounded-lg border border-app bg-surface-muted/30 p-4 text-sm">
@@ -156,6 +179,35 @@ function Feedback({
                 : ""}
             </li>
           </ul>
+          {state.bulkJobId &&
+          (state.bulkSummary.failedCount ?? state.bulkSummary.failed.length) > 0 ? (
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => void runJobAction("export_failed")}
+              >
+                Download failed rows
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => void runJobAction("retry_failed")}
+              >
+                Retry failed rows
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => void runJobAction("resend_emails")}
+              >
+                Resend failed emails
+              </Button>
+            </div>
+          ) : null}
           {state.bulkSummary.failed.length > 0 ? (
             <div className="mt-3 max-h-40 overflow-y-auto rounded border border-app bg-white">
               <table className="w-full text-xs">
@@ -239,45 +291,52 @@ export function StudentCreate({
       }
 
       if (json.chunked && json.jobId) {
-        let summary = {
-          jobId: json.jobId,
-          processedRows: 0,
-          totalRows: json.totalRows ?? 0,
-          created: 0,
-          enrolled: 0,
-          skipped: 0,
-          failed: 0,
-          failures: [] as BulkUploadFailure[],
-          done: false,
-        };
-
+        const jobId = json.jobId;
+        const totalRows = json.totalRows ?? 0;
         setCsvState({
-          message: json.message ?? "Processing import…",
-          progress: { processed: 0, total: summary.totalRows },
+          message: `Job ${jobId.slice(0, 8)}… queued. You can leave this page — processing continues in the background.`,
+          progress: { processed: 0, total: totalRows },
         });
 
-        const maxChunks = Math.max(20, Math.ceil((summary.totalRows || 1) / 25) + 10);
-        let chunkGuard = 0;
+        const pollStarted = Date.now();
+        const maxWaitMs = Math.max(10 * 60_000, totalRows * 800);
         let stalledRounds = 0;
+        let previousProcessed = 0;
+        let lastSummary: {
+          processedRows: number;
+          totalRows: number;
+          created: number;
+          enrolled: number;
+          skipped: number;
+          failed: number;
+          failures: BulkUploadFailure[];
+          done: boolean;
+          phase?: string;
+          emailsSent?: number;
+          emailsFailed?: number;
+          emailsQueued?: number;
+        } | null = null;
 
-        while (!summary.done) {
-          if (chunkGuard >= maxChunks) {
-            setCsvState({
-              error:
-                "Import stopped after too many chunk attempts without finishing. Refresh and check import status, or retry with a smaller file.",
+        while (Date.now() - pollStarted < maxWaitMs) {
+          // Occasional kick accelerates without making the browser the only worker
+          if ((Date.now() - pollStarted) % 15_000 < 2500) {
+            void fetch("/api/admin/bulk-students", {
+              method: "POST",
+              credentials: "include",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ action: "process", jobId }),
             });
-            return;
           }
-          chunkGuard += 1;
-          const previousProcessed = summary.processedRows;
-          const chunkRes = await fetch("/api/admin/bulk-students", {
+
+          await new Promise((r) => setTimeout(r, 2500));
+          const statusRes = await fetch("/api/admin/bulk-students", {
             method: "POST",
             credentials: "include",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ action: "process", jobId: json.jobId }),
+            body: JSON.stringify({ action: "status", jobId }),
           });
-          const chunkRaw = await chunkRes.text();
-          let chunkJson: {
+          const statusRaw = await statusRes.text();
+          let statusJson: {
             error?: string;
             processedRows: number;
             totalRows: number;
@@ -285,64 +344,97 @@ export function StudentCreate({
             enrolled: number;
             skipped: number;
             failed: number;
-            failures: BulkUploadFailure[];
+            failures?: BulkUploadFailure[];
             done: boolean;
-            message?: string;
+            phase?: string;
+            emailsSent?: number;
+            emailsFailed?: number;
+            emailsQueued?: number;
           };
           try {
-            chunkJson = JSON.parse(chunkRaw) as typeof chunkJson;
+            statusJson = JSON.parse(statusRaw) as typeof statusJson;
           } catch {
             setCsvState({
-              error: `Chunk processing failed (${chunkRes.status}).`,
+              error: `Could not read import status (${statusRes.status}). Job ID: ${jobId}`,
             });
             return;
           }
-          if (!chunkRes.ok) {
-            setCsvState({ error: chunkJson.error ?? "Chunk processing failed." });
+          if (!statusRes.ok) {
+            setCsvState({
+              error: statusJson.error ?? `Status failed (${statusRes.status}). Job ID: ${jobId}`,
+            });
             return;
           }
-          summary = {
-            jobId: json.jobId,
-            processedRows: chunkJson.processedRows,
-            totalRows: chunkJson.totalRows,
-            created: chunkJson.created,
-            enrolled: chunkJson.enrolled,
-            skipped: chunkJson.skipped,
-            failed: chunkJson.failed,
-            failures: chunkJson.failures ?? [],
-            done: chunkJson.done,
+
+          lastSummary = {
+            processedRows: statusJson.processedRows,
+            totalRows: statusJson.totalRows,
+            created: statusJson.created,
+            enrolled: statusJson.enrolled,
+            skipped: statusJson.skipped,
+            failed: statusJson.failed,
+            failures: statusJson.failures ?? [],
+            done: statusJson.done,
+            phase: statusJson.phase,
+            emailsSent: statusJson.emailsSent,
+            emailsFailed: statusJson.emailsFailed,
+            emailsQueued: statusJson.emailsQueued,
           };
-          if (
-            !summary.done &&
-            summary.processedRows <= previousProcessed &&
-            summary.totalRows > 0
-          ) {
+
+          const phaseLabel = statusJson.phase?.replace(/_/g, " ") ?? "processing";
+          setCsvState({
+            message: `Job ${jobId.slice(0, 8)}… ${phaseLabel}: ${statusJson.processedRows} / ${statusJson.totalRows} rows`,
+            progress: {
+              processed: statusJson.processedRows,
+              total: statusJson.totalRows,
+            },
+            bulkJobId: jobId,
+          });
+
+          if (statusJson.done) break;
+
+          if (statusJson.processedRows <= previousProcessed) {
             stalledRounds += 1;
-            if (stalledRounds >= 3) {
-              setCsvState({
-                error:
-                  "Import progress stalled. The job may need the bulk_import tables from sql/apply-production-stability.sql, or a retry.",
-              });
-              return;
-            }
           } else {
             stalledRounds = 0;
+            previousProcessed = statusJson.processedRows;
           }
+          // Soft stall warning only — cron may still be working
+          if (stalledRounds >= 40) {
+            setCsvState({
+              error: `Import still running slowly (Job ${jobId}). Leave this open or come back later — background workers continue processing.`,
+              bulkJobId: jobId,
+              progress: {
+                processed: statusJson.processedRows,
+                total: statusJson.totalRows,
+              },
+            });
+            return;
+          }
+        }
+
+        if (!lastSummary?.done) {
           setCsvState({
-            message: `Processing ${summary.processedRows} / ${summary.totalRows} rows…`,
-            progress: { processed: summary.processedRows, total: summary.totalRows },
+            error: `Timed out waiting for job ${jobId}. Background processing may still finish — refresh this page later.`,
+            bulkJobId: jobId,
           });
+          return;
         }
 
         setCsvState({
-          message: `Bulk upload finished: ${summary.created} created, ${summary.enrolled} existing student(s) enrolled, ${summary.skipped} skipped, ${summary.failed} failed.`,
+          message: `Bulk upload finished: ${lastSummary.created} created, ${lastSummary.enrolled} existing student(s) enrolled, ${lastSummary.skipped} skipped, ${lastSummary.failed} failed.${
+            lastSummary.emailsQueued != null
+              ? ` Emails: ${lastSummary.emailsSent ?? 0} sent, ${lastSummary.emailsFailed ?? 0} failed (${lastSummary.emailsQueued} queued).`
+              : ""
+          }`,
           bulkSummary: {
-            created: summary.created,
-            enrolled: summary.enrolled,
-            skipped: summary.skipped,
-            failed: summary.failures,
-            failedCount: summary.failed,
+            created: lastSummary.created,
+            enrolled: lastSummary.enrolled,
+            skipped: lastSummary.skipped,
+            failed: lastSummary.failures,
+            failedCount: lastSummary.failed,
           },
+          bulkJobId: jobId,
         });
         form.reset();
         return;
