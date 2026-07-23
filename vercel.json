@@ -6,11 +6,11 @@
     },
     {
       "path": "/api/cron/bulk-import",
-      "schedule": "* * * * *"
+      "schedule": "15 9 * * *"
     },
     {
       "path": "/api/cron/email-outbox",
-      "schedule": "* * * * *"
+      "schedule": "45 9 * * *"
     }
   ]
 }

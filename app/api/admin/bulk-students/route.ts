@@ -169,20 +169,53 @@ export async function POST(request: NextRequest) {
           );
         }
       } else {
-        // Kick processing immediately so UI doesn't wait solely on cron
+        // Kick processing immediately, then self-chain via cron worker if more remains.
+        const origin = new URL(request.url).origin;
         void processBulkImportUntilBudget({
           admin: auth.admin,
           adminUserId: auth.user.id,
           jobId: created.jobId,
           budgetMs: 40_000,
           asWorker: true,
-        }).catch((err) => {
-          bulkImportStage("inline_kick_failed", {
-            jobId: created.jobId,
-            ok: false,
-            error: err instanceof Error ? err.message : String(err),
+        })
+          .then(async (summary) => {
+            if (!summary.done) {
+              const { scheduleBulkWorkerContinuation } = await import(
+                "@/lib/bulk-import-continue"
+              );
+              scheduleBulkWorkerContinuation({
+                origin,
+                path: "/api/cron/bulk-import",
+                depth: 0,
+                reason: "post_upload_kick",
+              });
+            } else {
+              const { scheduleBulkWorkerContinuation } = await import(
+                "@/lib/bulk-import-continue"
+              );
+              scheduleBulkWorkerContinuation({
+                origin,
+                path: "/api/cron/email-outbox",
+                depth: 0,
+                reason: "post_upload_emails",
+              });
+            }
+          })
+          .catch((err) => {
+            bulkImportStage("inline_kick_failed", {
+              jobId: created.jobId,
+              ok: false,
+              error: err instanceof Error ? err.message : String(err),
+            });
+            void import("@/lib/bulk-import-continue").then(({ scheduleBulkWorkerContinuation }) => {
+              scheduleBulkWorkerContinuation({
+                origin,
+                path: "/api/cron/bulk-import",
+                depth: 0,
+                reason: "kick_error_recovery",
+              });
+            });
           });
-        });
 
         return NextResponse.json({
           jobId: created.jobId,
