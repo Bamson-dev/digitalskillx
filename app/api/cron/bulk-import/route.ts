@@ -45,7 +45,7 @@ export async function POST(request: NextRequest) {
     const stillWorking = jobs.some(
       (j) => !j.done || (j.pendingRows ?? 0) > 0 || (j.processingRows ?? 0) > 0,
     );
-    const emailsPending = email.claimed > 0 || email.sent > 0;
+    const emailsTouched = email.sent + email.failed > 0;
 
     if (stillWorking) {
       scheduleBulkWorkerContinuation({
@@ -54,8 +54,8 @@ export async function POST(request: NextRequest) {
         depth,
         reason: "rows_remaining",
       });
-    } else if (emailsPending || (email.failed ?? 0) >= 0) {
-      // Always nudge email drain after row work
+    } else if (jobs.length > 0 || emailsTouched) {
+      // After row work finishes (or when outbox was touched), drain emails
       scheduleBulkWorkerContinuation({
         origin,
         path: "/api/cron/email-outbox",
