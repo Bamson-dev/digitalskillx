@@ -4,12 +4,12 @@ import { runAutomations } from "@/lib/automation";
 import type { Database } from "@/types/database";
 import { sendWelcomeEmailIfNeeded } from "@/lib/system-email-triggers";
 import { studentFirstName } from "@/lib/student-name";
+import { buildCourseResolver, type CourseLookup } from "@/lib/course-resolver";
 
 export { studentFirstName };
+export { buildCourseResolver, type CourseLookup };
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const UUID_RE =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 export function isValidStudentEmail(email: string) {
   return EMAIL_RE.test(email.trim());
@@ -31,57 +31,6 @@ export function generateStrongPassword() {
     [required[i], required[j]] = [required[j], required[i]];
   }
   return required.join("");
-}
-
-export type CourseLookup = { id: string; title: string };
-
-export function buildCourseResolver(courses: CourseLookup[]) {
-  const byId = new Map(courses.map((c) => [c.id, c]));
-  const byTitle = new Map(courses.map((c) => [c.title.trim().toLowerCase(), c]));
-
-  function fuzzyMatchTitle(ref: string) {
-    const lower = ref.trim().toLowerCase();
-    const exact = byTitle.get(lower);
-    if (exact) return exact;
-
-    const partial = courses.filter(
-      (course) =>
-        course.title.toLowerCase().includes(lower) || lower.includes(course.title.toLowerCase()),
-    );
-    if (partial.length === 1) return partial[0];
-    if (partial.length > 1) {
-      const startsWith = partial.filter((course) => course.title.toLowerCase().startsWith(lower));
-      if (startsWith.length === 1) return startsWith[0];
-      return partial.sort((a, b) => a.title.length - b.title.length)[0];
-    }
-    return null;
-  }
-
-  return function resolveCourseRef(
-    ref: string | null | undefined,
-    fallbackCourseId: string | null,
-  ): { courseId: string | null; courseTitle: string | null; error?: string } {
-    const trimmed = ref?.trim() ?? "";
-    if (!trimmed) {
-      if (!fallbackCourseId) return { courseId: null, courseTitle: null };
-      const course = byId.get(fallbackCourseId);
-      return course
-        ? { courseId: course.id, courseTitle: course.title }
-        : { courseId: null, courseTitle: null, error: "Default course not found." };
-    }
-
-    if (UUID_RE.test(trimmed)) {
-      const course = byId.get(trimmed);
-      return course
-        ? { courseId: course.id, courseTitle: course.title }
-        : { courseId: null, courseTitle: null, error: `Unknown course id: ${trimmed}` };
-    }
-
-    const course = fuzzyMatchTitle(trimmed);
-    return course
-      ? { courseId: course.id, courseTitle: course.title }
-      : { courseId: null, courseTitle: null, error: `Unknown course: ${trimmed}` };
-  };
 }
 
 export { parseCsvRow, parseStudentCsv } from "@/lib/student-csv-parse";

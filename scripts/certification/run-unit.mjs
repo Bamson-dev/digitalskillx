@@ -40,17 +40,36 @@ assert.equal(
 );
 assert.notEqual(hashCheckoutBinding("dsx_1", "a@b.com"), hashCheckoutBinding("dsx_2", "a@b.com"));
 
-// CSV parse if available via existing mjs path
-try {
-  const { parseStudentCsvText } = await import(
+console.log("PASS: offline unit checks (safeNextPath, checkout binding)");
+
+{
+  const { parseStudentCsv, isNonCourseCsvValue } = await import(
     pathToFileURL(join(root, "lib/student-csv-parse.ts")).href
-  ).catch(() => ({}));
-  if (typeof parseStudentCsvText === "function") {
-    const parsed = parseStudentCsvText("email,full_name\na@b.com,Ada\n");
-    assert.ok(parsed);
-  }
-} catch {
-  // TS direct import may fail without loader — ignore
+  );
+  const gumroad = parseStudentCsv(
+    "email,full_name,purchase_date,price\nada@example.com,Ada Lovelace,20-03-2026,5000",
+  );
+  assert.equal(gumroad.rows[0]?.courseRef, "");
+  assert.equal(gumroad.rows[0]?.email, "ada@example.com");
+  assert.equal(isNonCourseCsvValue("20-03-2026"), true);
+
+  const product = parseStudentCsv(
+    "Buyer Email,Buyer Name,Product Name,Sale Date\nbeast@example.com,Beast Buyer,Beast Dropz,20-03-2026",
+  );
+  assert.equal(product.rows[0]?.courseRef, "Beast Dropz");
+  assert.equal(product.rows[0]?.email, "beast@example.com");
+
+  const { buildCourseResolver } = await import(
+    pathToFileURL(join(root, "lib/course-resolver.ts")).href
+  );
+  const resolve = buildCourseResolver([
+    { id: "11111111-1111-4111-8111-111111111111", title: "Facebook Ad Mastery" },
+  ]);
+  assert.equal(
+    resolve("Beast", "11111111-1111-4111-8111-111111111111").courseId,
+    "11111111-1111-4111-8111-111111111111",
+  );
+  assert.match(resolve("Beast", null).error ?? "", /Unknown course/);
 }
 
-console.log("PASS: offline unit checks (safeNextPath, checkout binding)");
+console.log("PASS: CSV parse + course resolver fallback");

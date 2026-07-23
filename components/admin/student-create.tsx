@@ -147,7 +147,14 @@ function Feedback({
             <li>Created: {state.bulkSummary.created}</li>
             <li>Existing students enrolled: {state.bulkSummary.enrolled}</li>
             <li>Skipped: {state.bulkSummary.skipped}</li>
-            <li>Failed: {state.bulkSummary.failed.length}</li>
+            <li>
+              Failed:{" "}
+              {state.bulkSummary.failedCount ?? state.bulkSummary.failed.length}
+              {state.bulkSummary.failedCount != null &&
+              state.bulkSummary.failedCount > state.bulkSummary.failed.length
+                ? ` (showing first ${state.bulkSummary.failed.length})`
+                : ""}
+            </li>
           </ul>
           {state.bulkSummary.failed.length > 0 ? (
             <div className="mt-3 max-h-40 overflow-y-auto rounded border border-app bg-white">
@@ -334,6 +341,7 @@ export function StudentCreate({
             enrolled: summary.enrolled,
             skipped: summary.skipped,
             failed: summary.failures,
+            failedCount: summary.failed,
           },
         });
         form.reset();
@@ -342,7 +350,13 @@ export function StudentCreate({
 
       setCsvState({
         message: json.message,
-        bulkSummary: json.bulkSummary,
+        bulkSummary: json.bulkSummary
+          ? {
+              ...json.bulkSummary,
+              failedCount:
+                json.bulkSummary.failedCount ?? json.bulkSummary.failed.length,
+            }
+          : undefined,
       });
       form.reset();
     } catch (err) {
@@ -442,8 +456,8 @@ export function StudentCreate({
                 ))}
               </Select>
               <p className="mt-1 text-xs text-muted">
-                Applied to every row without a course column. New students receive a welcome email
-                with login password and course access.
+                Required for Gumroad/export uploads. Applied when a row has no course column, or
+                when the product/course name does not match an LMS course title.
               </p>
             </div>
           </div>
@@ -460,10 +474,10 @@ export function StudentCreate({
               className="font-mono text-xs"
             />
             <p className="mt-1 text-xs text-muted">
-              Required columns: <code>email</code> (required) and <code>full_name</code> or{" "}
-              <code>name</code> (optional — we derive a name from the email if missing). Optional{" "}
-              <code>course</code> column overrides the default course. Email-only lists (one address
-              per line) and Gumroad/Excel exports are supported.
+              Required: <code>email</code>. Optional: <code>full_name</code>/<code>name</code>,{" "}
+              <code>course</code>/<code>product</code>. Dates, prices, and other export columns are
+              ignored. Email-only lists and Gumroad/Excel CSV exports are supported — select a
+              default course above for those.
             </p>
           </div>
 

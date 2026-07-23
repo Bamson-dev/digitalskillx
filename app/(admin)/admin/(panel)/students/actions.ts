@@ -48,6 +48,8 @@ export type StudentActionState = {
     enrolled: number;
     skipped: number;
     failed: BulkUploadFailure[];
+    /** Total failed rows (may exceed failed.length when list is capped). */
+    failedCount?: number;
   };
 };
 

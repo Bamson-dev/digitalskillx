@@ -223,6 +223,29 @@ if ((duplicateCheck.json?.bulkSummary?.skipped ?? 0) < 1) {
 }
 console.log("PASS: duplicate re-upload skipped already-enrolled student");
 
+// Gumroad-style: unknown product + sale date must use default course (not fail as Unknown course)
+const gumroadEmail = `csv-gumroad+${Date.now()}@digitalskillx.com`;
+const gumroadRes = runBulkImportCsv(
+  `Buyer Email,Buyer Name,Product Name,Sale Date\n${gumroadEmail},Beast Buyer,Beast,20-03-2026`,
+  courseId,
+);
+const gumroadCheck = assertBulkSuccess(gumroadRes, "Gumroad-style unknown product + date");
+if (!gumroadCheck.ok) {
+  process.exit(1);
+}
+console.log("PASS: Gumroad-style CSV used default course for", gumroadEmail);
+
+const dateAsCourseEmail = `csv-datecourse+${Date.now()}@digitalskillx.com`;
+const dateAsCourseRes = runBulkImportCsv(
+  `full_name,email,course\nDate Victim,${dateAsCourseEmail},20-03-2026`,
+  courseId,
+);
+const dateAsCourseCheck = assertBulkSuccess(dateAsCourseRes, "date-in-course-column ignored");
+if (!dateAsCourseCheck.ok) {
+  process.exit(1);
+}
+console.log("PASS: date-in-course-column fell back to default course");
+
 const updatedPage = curl(["-b", jar, `${base}/admin/students`]);
 if (!updatedPage.toLowerCase().includes(testEmail.toLowerCase())) {
   console.error("FAIL: imported student not visible in list");

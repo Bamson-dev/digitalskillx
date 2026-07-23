@@ -41,9 +41,43 @@ const COURSE_HEADERS = new Set([
   "product",
   "product name",
   "product_name",
+  "product permalink",
+  "product_permalink",
+]);
+
+/** Columns that look like “product/course” but are never course titles. */
+const COURSE_HEADER_BLOCKLIST = new Set([
+  "product id",
+  "product_id",
+  "product uuid",
+  "sku",
+  "sku id",
+  "sku_id",
+  "price",
+  "amount",
+  "currency",
+  "quantity",
+  "purchase date",
+  "purchase_date",
+  "sale date",
+  "sale_date",
+  "created at",
+  "created_at",
+  "updated at",
+  "updated_at",
+  "paid at",
+  "paid_at",
+  "date",
+  "timestamp",
+  "reference timestamp",
+  "reference_timestamp",
 ]);
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const DATE_LIKE_RE =
+  /^(?:\d{1,4}[-/.]\d{1,2}[-/.]\d{1,4}|\d{4}-\d{2}-\d{2}(?:[t\s]\d{2}:\d{2}(?::\d{2})?(?:\.\d+)?z?)?)$/i;
+const MONEY_LIKE_RE = /^(?:₦|ngn|usd|\$|€|£)?\s*\d+(?:[.,]\d{1,2})?\s*(?:₦|ngn|usd|\$|€|£)?$/i;
+const BOOL_LIKE_RE = /^(?:true|false|yes|no|y|n|0|1)$/i;
 
 export function normalizeCsvHeader(cell: string) {
   return cell
@@ -171,22 +205,49 @@ function findEmailCellIndex(cells: string[]) {
 }
 
 function findNameCellIndex(cells: string[], emailIdx: number) {
-  if (emailIdx < 0) return cells.findIndex((cell) => cell && !isCsvEmail(cell));
+  if (emailIdx < 0) {
+    return cells.findIndex((cell) => cell && !isCsvEmail(cell) && !isNonCourseCsvValue(cell));
+  }
   for (let i = 0; i < cells.length; i++) {
     if (i === emailIdx) continue;
     const cell = cells[i]?.trim() ?? "";
-    if (cell && !isCsvEmail(cell)) return i;
+    if (cell && !isCsvEmail(cell) && !isNonCourseCsvValue(cell)) return i;
   }
   return -1;
 }
 
-function mapRowFromCells(cells: string[], indices: { nameIdx: number; emailIdx: number; courseIdx: number }) {
+/** Dates, prices, flags, and IDs must never become course refs (Gumroad/Excel extras). */
+export function isNonCourseCsvValue(value: string) {
+  const cell = cleanCsvCell(value);
+  if (!cell) return true;
+  if (isCsvEmail(cell)) return true;
+  if (DATE_LIKE_RE.test(cell)) return true;
+  if (MONEY_LIKE_RE.test(cell)) return true;
+  if (BOOL_LIKE_RE.test(cell)) return true;
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(cell)) {
+    return false; // UUID may be a course id — allow through
+  }
+  if (/^\d+$/.test(cell)) return true;
+  return false;
+}
+
+function sanitizeCourseRef(value: string) {
+  const cell = cleanCsvCell(value);
+  if (!cell || isNonCourseCsvValue(cell)) return "";
+  return cell;
+}
+
+function mapRowFromCells(
+  cells: string[],
+  indices: { nameIdx: number; emailIdx: number; courseIdx: number },
+  options?: { allowLeftoverCourseGuess?: boolean },
+) {
   let email =
     indices.emailIdx >= 0 ? cleanCsvEmail(cells[indices.emailIdx] ?? "") : "";
   let fullName =
     indices.nameIdx >= 0 ? cleanCsvCell(cells[indices.nameIdx] ?? "") : "";
-  const courseRef =
-    indices.courseIdx >= 0 ? cleanCsvCell(cells[indices.courseIdx] ?? "") : "";
+  let courseRef =
+    indices.courseIdx >= 0 ? sanitizeCourseRef(cells[indices.courseIdx] ?? "") : "";
 
   if (!email) {
     const emailIdx = findEmailCellIndex(cells);
@@ -201,8 +262,9 @@ function mapRowFromCells(cells: string[], indices: { nameIdx: number; emailIdx: 
     fullName = deriveStudentNameFromEmail(email);
   }
 
-  let resolvedCourseRef = courseRef;
-  if (!resolvedCourseRef) {
+  // Only guess course from leftover cells for simple no-header rows (name,email,course).
+  // With headers, unmatched / empty course columns must stay empty so the default course applies.
+  if (!courseRef && options?.allowLeftoverCourseGuess) {
     const used = new Set<number>();
     if (indices.emailIdx >= 0) used.add(indices.emailIdx);
     if (indices.nameIdx >= 0) used.add(indices.nameIdx);
@@ -212,15 +274,15 @@ function mapRowFromCells(cells: string[], indices: { nameIdx: number; emailIdx: 
     if (nameIdx >= 0) used.add(nameIdx);
     for (let i = 0; i < cells.length; i++) {
       if (used.has(i)) continue;
-      const cell = cleanCsvCell(cells[i] ?? "");
-      if (cell && !isCsvEmail(cell)) {
-        resolvedCourseRef = cell;
+      const cell = sanitizeCourseRef(cells[i] ?? "");
+      if (cell) {
+        courseRef = cell;
         break;
       }
     }
   }
 
-  return { fullName, email, courseRef: resolvedCourseRef };
+  return { fullName, email, courseRef };
 }
 
 export function parseStudentCsv(text: string): {
@@ -257,7 +319,14 @@ export function parseStudentCsv(text: string): {
   const resolvedCourseIdx =
     courseIdx >= 0
       ? courseIdx
-      : headerCells.findIndex((cell) => cell.includes("course") || cell.includes("product"));
+      : headerCells.findIndex((cell) => {
+          if (COURSE_HEADER_BLOCKLIST.has(cell)) return false;
+          if (cell.includes("product_id") || cell.includes("product id")) return false;
+          if (cell.includes("date") || cell.includes("price") || cell.includes("amount")) {
+            return false;
+          }
+          return cell.includes("course") || cell === "product" || cell.startsWith("product ");
+        });
 
   const startIndex = hasHeader ? 1 : 0;
   const headerIndices = {
@@ -270,8 +339,10 @@ export function parseStudentCsv(text: string): {
     const cells = parseCsvRow(line, delimiter);
     const mapped =
       hasHeader && resolvedEmailIdx >= 0
-        ? mapRowFromCells(cells, headerIndices)
-        : mapRowFromCells(cells, { nameIdx: -1, emailIdx: -1, courseIdx: -1 });
+        ? mapRowFromCells(cells, headerIndices, { allowLeftoverCourseGuess: false })
+        : mapRowFromCells(cells, { nameIdx: -1, emailIdx: -1, courseIdx: -1 }, {
+            allowLeftoverCourseGuess: true,
+          });
 
     return {
       rowNumber: startIndex + offset + 1,

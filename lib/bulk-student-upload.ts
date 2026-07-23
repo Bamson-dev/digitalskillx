@@ -30,6 +30,7 @@ export type BulkUploadResult = {
     enrolled: number;
     skipped: number;
     failed: BulkUploadFailure[];
+    failedCount?: number;
   };
 };
 
@@ -279,6 +280,12 @@ export async function runBulkStudentCsvUpload(params: {
 
   return {
     message: `Bulk upload finished: ${created} created, ${enrolled} existing student(s) enrolled, ${skipped} skipped, ${failed.length} failed.`,
-    bulkSummary: { created, enrolled, skipped, failed },
+    bulkSummary: {
+      created,
+      enrolled,
+      skipped,
+      failed,
+      failedCount: failed.length,
+    },
   };
 }
