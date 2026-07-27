@@ -8,11 +8,9 @@ export async function middleware(request: NextRequest) {
 export const config = {
   matcher: [
     /*
-     * Match all request paths except static assets and image optimizer:
-     * - _next/static, _next/image
-     * - favicon, manifest, icons, robots
-     * - common static file extensions
+     * Session refresh for pages only — API routes enforce their own auth.
+     * Skipping /api avoids MIDDLEWARE_INVOCATION_TIMEOUT during bulk-import polling.
      */
-    "/((?!_next/static|_next/image|favicon.ico|manifest.webmanifest|sw.js|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|manifest.webmanifest|sw.js|api/|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)",
   ],
 };

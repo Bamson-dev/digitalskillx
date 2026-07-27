@@ -22,7 +22,10 @@ type AdminApiAuth =
  * Admin auth for JSON API routes — never redirects (redirect breaks fetch clients).
  * Uses service-role fallbacks when RLS blocks profile reads.
  */
-export async function requireAdminApiAuth(): Promise<AdminApiAuth> {
+export async function requireAdminApiAuth(options?: {
+  /** Skip storage bootstrap — use for lightweight read-only handlers (e.g. import status). */
+  lite?: boolean;
+}): Promise<AdminApiAuth> {
   const session = createClient();
   await session.auth.getSession();
   const {
@@ -44,9 +47,19 @@ export async function requireAdminApiAuth(): Promise<AdminApiAuth> {
     };
   }
 
-  await bootstrapRuntimeSecrets();
-  await ensureStorageBuckets();
-  const admin = await createAdminClientAsync(session);
+  let admin: SupabaseClient<Database>;
+  if (options?.lite) {
+    const { createAdminClient, createAdminClientAsync } = await import("@/lib/supabase/admin");
+    try {
+      admin = createAdminClient();
+    } catch {
+      admin = await createAdminClientAsync(session);
+    }
+  } else {
+    await bootstrapRuntimeSecrets();
+    await ensureStorageBuckets();
+    admin = await createAdminClientAsync(session);
+  }
 
   return { user, profile, admin, session };
 }

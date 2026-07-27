@@ -31,9 +31,6 @@ export const maxDuration = 300;
  */
 export async function POST(request: NextRequest) {
   try {
-    const auth = await requireAdminApiAuth();
-    if ("error" in auth) return auth.error;
-
     const contentType = request.headers.get("content-type") ?? "";
 
     if (contentType.includes("application/json")) {
@@ -43,10 +40,14 @@ export async function POST(request: NextRequest) {
       };
 
       if (body.action === "status" && body.jobId) {
-        // Status polls are frequent — lightweight read, no row counts.
+        const auth = await requireAdminApiAuth({ lite: true });
+        if ("error" in auth) return auth.error;
         const summary = await getBulkImportJobSummary(auth.admin, body.jobId, { lite: true });
         return NextResponse.json(summary);
       }
+
+      const auth = await requireAdminApiAuth();
+      if ("error" in auth) return auth.error;
 
       if (body.action === "process" && body.jobId) {
         // Optional admin kick (not required). Separate generous limit.
@@ -117,6 +118,9 @@ export async function POST(request: NextRequest) {
 
       return NextResponse.json({ error: "Invalid JSON action." }, { status: 400 });
     }
+
+    const auth = await requireAdminApiAuth();
+    if ("error" in auth) return auth.error;
 
     // Job creation only — tight limit (prevents abuse, not chunk loops)
     const limited = await rateLimitedResponse(request, "admin-bulk-students-create", 15);

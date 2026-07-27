@@ -127,7 +127,7 @@ export async function pollBulkImportJob(
   let statusFailRounds = 0;
 
   while (Date.now() - pollStarted < maxWaitMs) {
-    await new Promise((r) => setTimeout(r, 2500));
+    await new Promise((r) => setTimeout(r, 4000));
 
     const fetched = await fetchBulkJobStatus(jobId);
     if (!fetched) {
