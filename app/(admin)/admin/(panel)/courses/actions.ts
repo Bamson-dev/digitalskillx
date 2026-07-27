@@ -18,6 +18,7 @@ import {
   normalizeTelegramCommunityUrl,
   normalizeWhatsAppCommunityUrl,
 } from "@/lib/course-community";
+import { notifyProgramStudentsOfNewCourse } from "@/lib/course-program-notify";
 import type { CourseVisibility, EnrollmentType, LessonType } from "@/types/database";
 
 export type LessonAttachmentState = { error?: string; message?: string };
@@ -85,7 +86,7 @@ export async function updateCourseSettings(
 
     const { data: before, error: beforeError } = await supabase
       .from("courses")
-      .select("price_ngn, price_usd")
+      .select("price_ngn, price_usd, visibility, category_id, title, short_description, description, is_coming_soon")
       .eq("id", id)
       .single();
 
@@ -147,21 +148,28 @@ export async function updateCourseSettings(
       };
     }
 
+    const visibility = String(formData.get("visibility") ?? "draft") as CourseVisibility;
+    const categoryId = String(formData.get("category_id") ?? "") || null;
+    const title = String(formData.get("title") ?? "").trim();
+    const isComingSoon = formData.get("is_coming_soon") === "on";
+    const shortDescription = String(formData.get("short_description") ?? "") || null;
+    const description = String(formData.get("description") ?? "") || null;
+
     const { error } = await supabase
       .from("courses")
       .update({
-        title: String(formData.get("title") ?? "").trim(),
-        description: String(formData.get("description") ?? ""),
-        short_description: String(formData.get("short_description") ?? "") || null,
+        title,
+        description,
+        short_description: shortDescription,
         thumbnail_url: thumbnailUrl,
         promo_video_url: String(formData.get("promo_video_url") ?? "") || null,
-        category_id: String(formData.get("category_id") ?? "") || null,
-        visibility: String(formData.get("visibility") ?? "draft") as CourseVisibility,
+        category_id: categoryId,
+        visibility,
         enrollment_type: String(formData.get("enrollment_type") ?? "open") as EnrollmentType,
         certificate_enabled: formData.get("certificate_enabled") === "on",
         certificate_template_override: certificateTemplateOverride,
         drip_enabled: formData.get("drip_enabled") === "on",
-        is_coming_soon: formData.get("is_coming_soon") === "on",
+        is_coming_soon: isComingSoon,
         community_telegram_url: communityTelegramUrl,
         community_whatsapp_url: communityWhatsappUrl,
         required_completion_pct: Number.isFinite(required) ? required : 100,
@@ -219,6 +227,21 @@ export async function updateCourseSettings(
     }
 
     await logAudit({ action: "course_edited", targetType: "course", targetId: id });
+
+    const wasPublished = before.visibility === "published";
+    const nowPublished = visibility === "published";
+    if (!wasPublished && nowPublished && categoryId && !isComingSoon) {
+      void notifyProgramStudentsOfNewCourse({
+        id,
+        title,
+        category_id: categoryId,
+        short_description: shortDescription,
+        description,
+      }).catch((err) => {
+        console.error("[course-program-notify] failed after publish:", err);
+      });
+    }
+
     revalidatePath(`/admin/courses/${id}`);
     revalidatePath(`/course/${id}`);
     revalidatePath(`/courses/${id}`);

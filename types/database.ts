@@ -48,6 +48,7 @@ export type NotificationType =
   | "quiz_graded"
   | "assignment_feedback"
   | "assignment_published"
+  | "program_course_added"
   | "certificate_issued"
   | "announcement"
   | "enrollment";
@@ -350,6 +351,12 @@ export type AssignmentPublishDelivery = {
   notified_at: string;
 };
 
+export type ProgramCoursePublishDelivery = {
+  course_id: string;
+  student_id: string;
+  created_at: string;
+};
+
 export type AssignmentSubmission = {
   id: string;
   assignment_id: string;
@@ -561,6 +568,23 @@ export type Database = {
           >,
           Rel<
             "assignment_publish_deliveries_student_id_fkey",
+            "student_id",
+            "profiles",
+            "id"
+          >,
+        ]
+      >;
+      program_course_publish_deliveries: Table<
+        ProgramCoursePublishDelivery,
+        [
+          Rel<
+            "program_course_publish_deliveries_course_id_fkey",
+            "course_id",
+            "courses",
+            "id"
+          >,
+          Rel<
+            "program_course_publish_deliveries_student_id_fkey",
             "student_id",
             "profiles",
             "id"

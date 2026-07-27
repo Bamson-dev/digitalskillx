@@ -264,6 +264,10 @@ export function CourseSettingsForm({
               </option>
             ))}
           </Select>
+          <p className="mt-1 text-xs text-muted">
+            Students enrolled in other courses in this category are notified by email and in-app
+            alert when you publish a new course here.
+          </p>
         </div>
         <div>
           <Label>Visibility</Label>

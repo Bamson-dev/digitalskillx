@@ -98,6 +98,23 @@ export const emailTemplates = {
     ),
   }),
 
+  programCourseAdded: (p: {
+    firstName: string;
+    programName: string;
+    courseTitle: string;
+    description: string;
+    url: string;
+  }) => ({
+    subject: `New course in ${p.programName}: ${p.courseTitle}`,
+    html: shell(
+      `New course in ${p.programName}`,
+      `Hi ${p.firstName}, a new course <b>${p.courseTitle}</b> has been added to <b>${p.programName}</b>.${
+        p.description ? `<br/><br/>${p.description}` : ""
+      }`,
+      { label: "View course", url: p.url },
+    ),
+  }),
+
   inactivity: (p: { name: string; url: string }) => ({
     subject: "We miss you at DigitalSkillX",
     html: shell(
