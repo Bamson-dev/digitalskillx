@@ -317,25 +317,54 @@ export function StudentCreate({
           emailsQueued?: number;
         } | null = null;
 
+        let statusFailRounds = 0;
+
         while (Date.now() - pollStarted < maxWaitMs) {
-          // Occasional kick accelerates without making the browser the only worker
-          if ((Date.now() - pollStarted) % 15_000 < 2500) {
-            void fetch("/api/admin/bulk-students", {
-              method: "POST",
-              credentials: "include",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ action: "process", jobId }),
-            });
+          await new Promise((r) => setTimeout(r, 2500));
+
+          let statusRes: Response | null = null;
+          let statusRaw = "";
+          for (let attempt = 0; attempt < 4; attempt++) {
+            try {
+              statusRes = await fetch("/api/admin/bulk-students", {
+                method: "POST",
+                credentials: "include",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ action: "status", jobId }),
+              });
+              statusRaw = await statusRes.text();
+              if (
+                statusRes.ok ||
+                (statusRes.status >= 400 && statusRes.status < 500 && statusRes.status !== 408)
+              ) {
+                break;
+              }
+            } catch {
+              statusRes = null;
+              statusRaw = "";
+            }
+            await new Promise((r) => setTimeout(r, 1500 * (attempt + 1)));
           }
 
-          await new Promise((r) => setTimeout(r, 2500));
-          const statusRes = await fetch("/api/admin/bulk-students", {
-            method: "POST",
-            credentials: "include",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ action: "status", jobId }),
-          });
-          const statusRaw = await statusRes.text();
+          if (!statusRes) {
+            statusFailRounds += 1;
+            setCsvState({
+              message: `Job ${jobId.slice(0, 8)}… connection issue — retrying status (${statusFailRounds})…`,
+              progress: lastSummary
+                ? { processed: lastSummary.processedRows, total: lastSummary.totalRows }
+                : { processed: 0, total: totalRows },
+              bulkJobId: jobId,
+            });
+            if (statusFailRounds >= 12) {
+              setCsvState({
+                error: `Could not reach the server for job status. Job ID: ${jobId}. Processing may still continue in the background — refresh later.`,
+                bulkJobId: jobId,
+              });
+              return;
+            }
+            continue;
+          }
+
           let statusJson: {
             error?: string;
             processedRows: number;
@@ -354,17 +383,36 @@ export function StudentCreate({
           try {
             statusJson = JSON.parse(statusRaw) as typeof statusJson;
           } catch {
+            statusFailRounds += 1;
+            if (statusFailRounds >= 12) {
+              setCsvState({
+                error: `Could not read import status (${statusRes.status}). Job ID: ${jobId}. Processing may still continue in the background.`,
+                bulkJobId: jobId,
+              });
+              return;
+            }
             setCsvState({
-              error: `Could not read import status (${statusRes.status}). Job ID: ${jobId}`,
+              message: `Job ${jobId.slice(0, 8)}… waiting for server (${statusRes.status}) — retrying…`,
+              progress: lastSummary
+                ? { processed: lastSummary.processedRows, total: lastSummary.totalRows }
+                : { processed: 0, total: totalRows },
+              bulkJobId: jobId,
             });
-            return;
+            continue;
           }
           if (!statusRes.ok) {
-            setCsvState({
-              error: statusJson.error ?? `Status failed (${statusRes.status}). Job ID: ${jobId}`,
-            });
-            return;
+            statusFailRounds += 1;
+            if (statusFailRounds >= 8) {
+              setCsvState({
+                error: statusJson.error ?? `Status failed (${statusRes.status}). Job ID: ${jobId}`,
+                bulkJobId: jobId,
+              });
+              return;
+            }
+            continue;
           }
+
+          statusFailRounds = 0;
 
           lastSummary = {
             processedRows: statusJson.processedRows,

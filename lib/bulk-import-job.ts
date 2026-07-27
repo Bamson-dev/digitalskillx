@@ -710,6 +710,7 @@ async function markRow(
 export async function getBulkImportJobSummary(
   admin: SupabaseClient<Database>,
   jobId: string,
+  options?: { lite?: boolean },
 ): Promise<BulkImportJobSummary> {
   const { data: job, error } = await admin.from("bulk_import_jobs").select("*").eq("id", jobId).single();
   if (error) throw new Error(error.message);
@@ -730,18 +731,76 @@ export async function getBulkImportJobSummary(
     emails_failed?: number;
   };
 
-  const { data: failedRows } = await admin
-    .from("bulk_import_rows")
-    .select("row_number, email, reason")
-    .eq("job_id", jobId)
-    .eq("status", "failed")
-    .order("row_number", { ascending: true })
-    .limit(100);
-
-  const pendingRows = await countRowsByStatus(admin, jobId, "pending");
-  const processingRows = await countRowsByStatus(admin, jobId, "processing");
-  const rowsDone = pendingRows === 0 && processingRows === 0;
   const statusDone = jobRow.status === "completed" || jobRow.status === "failed";
+  let pendingRows = 0;
+  let processingRows = 0;
+  let rowsDone = statusDone || jobRow.processed_rows >= jobRow.total_rows;
+
+  if (!options?.lite) {
+    const { data: failedRows } = await admin
+      .from("bulk_import_rows")
+      .select("row_number, email, reason")
+      .eq("job_id", jobId)
+      .eq("status", "failed")
+      .order("row_number", { ascending: true })
+      .limit(100);
+
+    pendingRows = await countRowsByStatus(admin, jobId, "pending");
+    processingRows = await countRowsByStatus(admin, jobId, "processing");
+    rowsDone = pendingRows === 0 && processingRows === 0;
+
+    return {
+      jobId: jobRow.id,
+      status: jobRow.status,
+      phase: jobRow.phase ?? (statusDone ? "completed" : "processing_rows"),
+      totalRows: jobRow.total_rows,
+      processedRows: jobRow.processed_rows,
+      created: jobRow.created_count,
+      enrolled: jobRow.enrolled_count,
+      skipped: jobRow.skipped_count,
+      failed: jobRow.failed_count,
+      emailsQueued: jobRow.emails_queued,
+      emailsSent: jobRow.emails_sent,
+      emailsFailed: jobRow.emails_failed,
+      errorMessage: jobRow.error_message,
+      failures: (failedRows ?? []).map((r) => ({
+        row: r.row_number,
+        email: r.email || "(missing)",
+        reason: r.reason || "Failed",
+      })),
+      pendingRows,
+      processingRows,
+      done: statusDone && rowsDone,
+    };
+  }
+
+  const failures: BulkImportJobSummary["failures"] = [];
+  if (statusDone && jobRow.failed_count > 0) {
+    const { data: failedRows } = await admin
+      .from("bulk_import_rows")
+      .select("row_number, email, reason")
+      .eq("job_id", jobId)
+      .eq("status", "failed")
+      .order("row_number", { ascending: true })
+      .limit(100);
+    for (const r of failedRows ?? []) {
+      failures.push({
+        row: r.row_number,
+        email: r.email || "(missing)",
+        reason: r.reason || "Failed",
+      });
+    }
+  }
+
+  if (!rowsDone && jobRow.status === "processing") {
+    processingRows = Math.min(
+      BULK_IMPORT_CHUNK_SIZE,
+      Math.max(0, jobRow.total_rows - jobRow.processed_rows),
+    );
+    pendingRows = Math.max(0, jobRow.total_rows - jobRow.processed_rows - processingRows);
+  } else if (!rowsDone) {
+    pendingRows = Math.max(0, jobRow.total_rows - jobRow.processed_rows);
+  }
 
   return {
     jobId: jobRow.id,
@@ -757,11 +816,7 @@ export async function getBulkImportJobSummary(
     emailsSent: jobRow.emails_sent,
     emailsFailed: jobRow.emails_failed,
     errorMessage: jobRow.error_message,
-    failures: (failedRows ?? []).map((r) => ({
-      row: r.row_number,
-      email: r.email || "(missing)",
-      reason: r.reason || "Failed",
-    })),
+    failures,
     pendingRows,
     processingRows,
     done: statusDone && rowsDone,

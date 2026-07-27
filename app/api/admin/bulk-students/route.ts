@@ -43,8 +43,8 @@ export async function POST(request: NextRequest) {
       };
 
       if (body.action === "status" && body.jobId) {
-        // Status polls are frequent — do not share the create/process rate bucket.
-        const summary = await getBulkImportJobSummary(auth.admin, body.jobId);
+        // Status polls are frequent — lightweight read, no row counts.
+        const summary = await getBulkImportJobSummary(auth.admin, body.jobId, { lite: true });
         return NextResponse.json(summary);
       }
 
