@@ -46,8 +46,25 @@ function curl(args) {
   return execFileSync("curl", ["-sL", ...args], { encoding: "utf8", maxBuffer: 20 * 1024 * 1024 });
 }
 
-function actionIdsFrom(html) {
-  return [...new Set([...html.matchAll(/"\$ACTION_ID_([0-9a-f]+)"/gi)].map((m) => m[1]))];
+function enrollViaApi(adminJar, studentId, courseId) {
+  const res = curl([
+    "-b",
+    adminJar,
+    "-X",
+    "POST",
+    `${base}/api/admin/enroll`,
+    "-H",
+    "Content-Type: application/json",
+    "-d",
+    JSON.stringify({ studentId, courseId }),
+  ]);
+  let json;
+  try {
+    json = JSON.parse(res);
+  } catch {
+    json = {};
+  }
+  return Boolean(json.enrolled);
 }
 
 const testEmail = `course-access+${Date.now()}@digitalskillx.com`;
@@ -105,28 +122,7 @@ if (courseOptions.length === 0) {
 const courseId = courseOptions[0][1];
 console.log("Granting course:", courseOptions[0][2], courseId);
 
-let grantOk = false;
-for (const actionId of actionIdsFrom(detailPage)) {
-  const grantRes = curl([
-    "-b",
-    adminJar,
-    "-X",
-    "POST",
-    `${base}/admin/students/${studentId}`,
-    "-H",
-    "Accept: text/x-component",
-    "-H",
-    `Next-Action: ${actionId}`,
-    "-F",
-    `student_id=${studentId}`,
-    "-F",
-    `course_id=${courseId}`,
-  ]);
-  if (/enrolled=1|already_enrolled|Course enrolled/i.test(grantRes)) {
-    grantOk = true;
-    break;
-  }
-}
+const grantOk = enrollViaApi(adminJar, studentId, courseId);
 
 if (!grantOk) {
   console.error("FAIL: admin grant server action did not succeed");

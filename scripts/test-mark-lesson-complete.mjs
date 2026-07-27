@@ -51,6 +51,27 @@ function actionIdsFrom(html) {
   return [...new Set([...html.matchAll(/"\$ACTION_ID_([0-9a-f]+)"/gi)].map((m) => m[1]))];
 }
 
+function enrollViaApi(adminJar, studentId, courseId) {
+  const res = curl([
+    "-b",
+    adminJar,
+    "-X",
+    "POST",
+    `${base}/api/admin/enroll`,
+    "-H",
+    "Content-Type: application/json",
+    "-d",
+    JSON.stringify({ studentId, courseId }),
+  ]);
+  let json;
+  try {
+    json = JSON.parse(res);
+  } catch {
+    json = {};
+  }
+  return Boolean(json.enrolled);
+}
+
 const testEmail = `mark-complete+${Date.now()}@digitalskillx.com`;
 const testPassword = `Test-${crypto.randomBytes(4).toString("hex")}!9`;
 const testName = "Mark Complete Test";
@@ -96,28 +117,17 @@ if (!studentId) {
 }
 
 const detailPage = curl(["-b", adminJar, `${base}/admin/students/${studentId}`]);
-let grantOk = false;
-for (const actionId of actionIdsFrom(detailPage)) {
-  const grantRes = curl([
-    "-b",
-    adminJar,
-    "-X",
-    "POST",
-    `${base}/admin/students/${studentId}`,
-    "-H",
-    "Accept: text/x-component",
-    "-H",
-    `Next-Action: ${actionId}`,
-    "-F",
-    `student_id=${studentId}`,
-    "-F",
-    `course_id=${preferredCourseId}`,
-  ]);
-  if (/enrolled=1|already_enrolled|Course enrolled/i.test(grantRes)) {
-    grantOk = true;
-    break;
-  }
+const courseOptions = [
+  ...detailPage.matchAll(/<option value="([0-9a-f-]{36})">([^<]+)<\/option>/gi),
+].filter((m) => !m[2].includes("Select a course"));
+const courseId = courseOptions.some((m) => m[1] === preferredCourseId)
+  ? preferredCourseId
+  : courseOptions[0]?.[1];
+if (!courseId) {
+  console.error("FAIL: no grantable courses on student detail page");
+  process.exit(1);
 }
+const grantOk = enrollViaApi(adminJar, studentId, courseId);
 if (!grantOk) {
   console.error("FAIL: could not grant course");
   process.exit(1);
@@ -139,7 +149,7 @@ curl([
   "/dev/null",
 ]);
 
-const coursePage = curl(["-b", studentJar, `${base}/courses/${preferredCourseId}`]);
+const coursePage = curl(["-b", studentJar, `${base}/courses/${courseId}`]);
 const lessonId = coursePage.match(/\/lessons\/([0-9a-f-]{36})/i)?.[1];
 if (!lessonId) {
   console.error("FAIL: no lesson link on course page");
