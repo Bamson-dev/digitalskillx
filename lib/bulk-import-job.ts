@@ -45,6 +45,48 @@ function jobsTableMissing(message: string) {
   return isMissingColumnError(message) || /bulk_import_jobs|relation .* does not exist/i.test(message);
 }
 
+function isTransientUpstreamError(message: string) {
+  const m = message.toLowerCase();
+  return (
+    m.includes("522") ||
+    m.includes("connection timed out") ||
+    m.includes("connection timeout") ||
+    m.includes("upstream connect error") ||
+    m.includes("econnreset") ||
+    m.includes("etimedout") ||
+    m.includes("fetch failed") ||
+    m.includes("socket hang up") ||
+    m.includes("network") ||
+    m.includes("<!doctype html>")
+  );
+}
+
+async function withTransientRetry<T>(
+  label: string,
+  jobId: string,
+  fn: () => Promise<T>,
+  attempts = 3,
+): Promise<T> {
+  let lastErr: unknown;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      return await fn();
+    } catch (err) {
+      lastErr = err;
+      const message = err instanceof Error ? err.message : String(err);
+      if (!isTransientUpstreamError(message) || i === attempts - 1) throw err;
+      bulkImportStage("transient_retry", {
+        jobId,
+        ok: false,
+        error: `${label}: ${message.slice(0, 160)}`,
+        attempt: i + 1,
+      });
+      await new Promise((r) => setTimeout(r, 750 * (i + 1)));
+    }
+  }
+  throw lastErr instanceof Error ? lastErr : new Error(String(lastErr));
+}
+
 export async function createBulkImportJob(params: {
   admin: SupabaseClient<Database>;
   adminUserId: string;
@@ -468,16 +510,42 @@ export async function processBulkImportChunk(params: {
         if (!studentId) {
           password = generateStrongPassword();
           bulkImportStage("student_creation", { jobId, ok: true, email });
-          const { data: createdUser, error } = await params.admin.auth.admin.createUser({
-            email,
-            password,
-            email_confirm: true,
-            user_metadata: { full_name: name },
-          });
-          if (error) {
+          let createError: { message: string } | null = null;
+          let createdUserId: string | null = null;
+
+          for (let attempt = 0; attempt < 3; attempt++) {
+            const { data: createdUser, error } = await params.admin.auth.admin.createUser({
+              email,
+              password,
+              email_confirm: true,
+              user_metadata: { full_name: name },
+            });
+            if (!error && createdUser.user?.id) {
+              createdUserId = createdUser.user.id;
+              createError = null;
+              break;
+            }
+            createError = error ? { message: error.message } : { message: "User create failed" };
+            if (!isTransientUpstreamError(createError.message) || attempt === 2) break;
+            bulkImportStage("transient_retry", {
+              jobId,
+              ok: false,
+              error: `createUser: ${createError.message.slice(0, 160)}`,
+              attempt: attempt + 1,
+            });
+            await new Promise((r) => setTimeout(r, 750 * (attempt + 1)));
+          }
+
+          if (!createdUserId) {
             const recovered = await resolveStudentIdByEmail(params.admin, email);
             if (!recovered) {
-              await markRow(params.admin, row.id, "failed", error.message, email);
+              await markRow(
+                params.admin,
+                row.id,
+                "failed",
+                createError?.message ?? "User create failed",
+                email,
+              );
               failed++;
               continue;
             }
@@ -488,7 +556,7 @@ export async function processBulkImportChunk(params: {
               fullName: name,
             });
           } else {
-            studentId = createdUser.user.id;
+            studentId = createdUserId;
             isNew = true;
             await params.admin.from("profiles").update({ full_name: name }).eq("id", studentId);
             await waitForStudentProfile(params.admin, studentId);
@@ -517,13 +585,15 @@ export async function processBulkImportChunk(params: {
           is_suspended: false,
         });
 
-        const { newlyEnrolled } = await grantCourseAccessForBulkImport(params.admin, {
-          studentId,
-          courseId: resolved.courseId,
-          enrolledBy: params.adminUserId || jobRow.admin_id,
-          fullName: name,
-          email,
-        });
+        const { newlyEnrolled } = await withTransientRetry("enroll", jobId, () =>
+          grantCourseAccessForBulkImport(params.admin, {
+            studentId: studentId!,
+            courseId: resolved.courseId!,
+            enrolledBy: params.adminUserId || jobRow.admin_id,
+            fullName: name,
+            email,
+          }),
+        );
         bulkImportStage("enrollment", {
           jobId,
           ok: true,
