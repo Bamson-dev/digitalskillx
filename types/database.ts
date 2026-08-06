@@ -487,6 +487,29 @@ export type BulkImportRow = {
   reason: string | null;
   password_plain: string | null;
   processed_at: string | null;
+  claimed_at?: string | null;
+};
+
+export type BulkImportEmailOutboxStatus = "pending" | "sending" | "sent" | "failed";
+export type BulkImportEmailOutboxKind = "welcome" | "enrollment_notice";
+
+export type BulkImportEmailOutbox = {
+  id: string;
+  job_id: string;
+  row_id: string | null;
+  student_id: string;
+  email: string;
+  full_name: string;
+  course_title: string | null;
+  password_plain: string | null;
+  kind: BulkImportEmailOutboxKind;
+  status: BulkImportEmailOutboxStatus;
+  attempts: number;
+  last_error: string | null;
+  scheduled_at: string;
+  sent_at: string | null;
+  created_at: string;
+  updated_at: string;
 };
 
 export type Database = {
@@ -657,6 +680,14 @@ export type Database = {
         BulkImportRow,
         [Rel<"bulk_import_rows_job_id_fkey", "job_id", "bulk_import_jobs", "id">]
       >;
+      bulk_import_email_outbox: Table<
+        BulkImportEmailOutbox,
+        [
+          Rel<"bulk_import_email_outbox_job_id_fkey", "job_id", "bulk_import_jobs", "id">,
+          Rel<"bulk_import_email_outbox_row_id_fkey", "row_id", "bulk_import_rows", "id">,
+          Rel<"bulk_import_email_outbox_student_id_fkey", "student_id", "profiles", "id">,
+        ]
+      >;
     };
     Views: Record<string, never>;
     Functions: {
@@ -664,6 +695,18 @@ export type Database = {
       is_enrolled: { Args: { p_course_id: string }; Returns: boolean };
       lesson_course_id: { Args: { p_lesson_id: string }; Returns: string };
       admin_get_service_role_key: { Args: Record<string, never>; Returns: string };
+      reclaim_stale_bulk_import_rows: {
+        Args: { p_older_than_minutes?: number };
+        Returns: number;
+      };
+      claim_bulk_import_rows: {
+        Args: { p_job_id: string; p_limit: number };
+        Returns: BulkImportRow[];
+      };
+      claim_bulk_import_email_outbox: {
+        Args: { p_limit?: number };
+        Returns: BulkImportEmailOutbox[];
+      };
     };
     Enums: {
       user_role: UserRole;

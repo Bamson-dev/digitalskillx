@@ -1,16 +1,16 @@
 #!/usr/bin/env node
 /**
- * Reproduce the REAL admin browser bulk-upload flow (not internal helpers).
+ * Stress the durable bulk CSV import path (production overhaul).
  *
- * Exact client behavior from components/admin/student-create.tsx:
- *  1) POST multipart FormData to /api/admin/bulk-students
- *  2) If chunked: loop POST JSON { action:"process", jobId } until done
- *     with the same maxChunks / stall guards as the UI
+ * Browser-equivalent flow (matches components/admin/student-create.tsx):
+ *  1) POST multipart FormData → jobId (chunked for >10 rows)
+ *  2) Poll action:"status" only — never drive process chunks
+ *  3) Kick /api/cron/bulk-import with CRON_SECRET so Hobby/daily cron is not required
  *
  * Usage:
  *   node scripts/certification/stress-bulk-import.mjs [baseUrl] [sizes]
- *   sizes default: 10,50,100,250,500
- *   Example: node scripts/certification/stress-bulk-import.mjs https://www.digitalskillx.com 10,50,100,250
+ *   sizes default: 10,50,100,250,500,1000
+ *   Example: node scripts/certification/stress-bulk-import.mjs https://www.digitalskillx.com 10,50,100,500,1000,5000,10000
  *
  * Writes evidence JSON to .tmp-bulk-stress-evidence.json
  */
@@ -23,7 +23,7 @@ import crypto from "node:crypto";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const base = (process.argv[2] ?? "https://www.digitalskillx.com").replace(/\/$/, "");
-const sizes = (process.argv[3] ?? "10,50,100,250,500")
+const sizes = (process.argv[3] ?? "10,50,100,250,500,1000")
   .split(",")
   .map((s) => Number(s.trim()))
   .filter((n) => n > 0);
@@ -48,11 +48,17 @@ function loadEnvFile(name) {
   }
 }
 loadEnvFile(".env.test");
+loadEnvFile(".env.local");
 
 const adminEmail = process.env.TEST_ADMIN_EMAIL ?? "admin@digitalskillx.com";
 const adminPassword = process.env.TEST_ADMIN_PASSWORD;
+const cronSecret = process.env.CRON_SECRET?.trim();
 if (!adminPassword) {
   console.error("Set TEST_ADMIN_PASSWORD in .env.test");
+  process.exit(1);
+}
+if (!cronSecret) {
+  console.error("Set CRON_SECRET in .env.local (needed to kick cron workers)");
   process.exit(1);
 }
 
@@ -78,18 +84,92 @@ function curl(args, opts = {}) {
   }
 }
 
+function parseJson(text) {
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
+}
+
 function buildCsv(n, stamp) {
   const lines = ["full_name,email,course"];
   for (let i = 0; i < n; i++) {
-    lines.push(
-      `Stress User ${i},stress+${stamp}-${i}@digitalskillx.com,`,
-    );
+    lines.push(`Stress User ${i},stress+${stamp}-${i}@digitalskillx.com,`);
   }
   return lines.join("\n");
 }
 
-console.log(`Browser-flow stress → ${base}`);
-console.log(`Sizes: ${sizes.join(", ")}`);
+async function fetchCron(path, { attempts = 3 } = {}) {
+  let lastErr;
+  for (let i = 0; i < attempts; i++) {
+    const started = Date.now();
+    try {
+      const res = await fetch(`${base}${path}`, {
+        headers: { Authorization: `Bearer ${cronSecret}` },
+        signal: AbortSignal.timeout(280_000),
+      });
+      const text = await res.text();
+      return { status: res.status, json: parseJson(text), text, ms: Date.now() - started };
+    } catch (err) {
+      lastErr = err;
+      await new Promise((r) => setTimeout(r, 1500 * (i + 1)));
+    }
+  }
+  return {
+    status: 0,
+    json: null,
+    text: lastErr instanceof Error ? lastErr.message : String(lastErr),
+    ms: 0,
+    error: true,
+  };
+}
+
+function statusPoll(jar, jobId) {
+  const res = curl([
+    "-b",
+    jar,
+    "-X",
+    "POST",
+    `${base}/api/admin/bulk-students`,
+    "-H",
+    "Content-Type: application/json",
+    "-d",
+    JSON.stringify({ action: "status", jobId }),
+  ]);
+  return { ...res, json: parseJson(res.text) };
+}
+
+async function waitForJob(jar, jobId, { maxMs } = {}) {
+  const started = Date.now();
+  let last = null;
+  let ticks = 0;
+  let hit429 = false;
+  while (Date.now() - started < maxMs) {
+    ticks += 1;
+    if (ticks % 2 === 1) {
+      await fetchCron("/api/cron/bulk-import");
+    }
+    last = statusPoll(jar, jobId);
+    if (last.status === 429) {
+      hit429 = true;
+      return { last, elapsedMs: Date.now() - started, ticks, hit429, timedOut: false };
+    }
+    const st = last.json;
+    const rowsFinished =
+      st &&
+      (st.done === true || st.phase === "completed" || st.phase === "failed") &&
+      (st.processedRows ?? 0) >= (st.totalRows ?? 1);
+    if (rowsFinished) {
+      return { last, elapsedMs: Date.now() - started, ticks, hit429, timedOut: false };
+    }
+    await new Promise((r) => setTimeout(r, 2500));
+  }
+  return { last, elapsedMs: Date.now() - started, ticks, hit429, timedOut: true };
+}
+
+console.log(`Durable bulk stress → ${base}`);
+console.log(`Sizes: ${sizes.join(", ")} (status poll + cron kick; no browser process loop)`);
 
 const jar = join(mkdtempSync(join(tmpdir(), "bulk-stress-")), "admin.txt");
 const login = curl([
@@ -112,7 +192,7 @@ if (!/location:.*\/admin/i.test(login.text)) {
   console.error(login.text.slice(0, 400));
   process.exit(1);
 }
-console.log("PASS: admin login (browser cookie jar)");
+console.log("PASS: admin login");
 
 const studentsPage = curl(["-b", jar, `${base}/admin/students`]);
 const courseMatch = [
@@ -131,9 +211,11 @@ console.log("PASS: default course", courseId);
 
 const evidence = {
   base,
+  architecture: "upload_job_status_poll_cron",
   startedAt: new Date().toISOString(),
   courseId,
   runs: [],
+  concurrent: null,
 };
 
 for (const size of sizes) {
@@ -149,7 +231,7 @@ for (const size of sizes) {
     ok: false,
     rootCauseHint: null,
   };
-  console.log(`\n=== SIZE ${size} (browser multipart + process loop) ===`);
+  console.log(`\n=== SIZE ${size} (upload + status poll + cron) ===`);
 
   const uploadStarted = Date.now();
   const upload = curl([
@@ -171,10 +253,8 @@ for (const size of sizes) {
   });
   console.log(`  upload HTTP ${upload.status} in ${upload.ms}ms`);
 
-  let json;
-  try {
-    json = JSON.parse(upload.text);
-  } catch {
+  const json = parseJson(upload.text);
+  if (!json) {
     run.rootCauseHint = "upload_non_json";
     run.error = upload.text.slice(0, 500);
     evidence.runs.push(run);
@@ -198,7 +278,7 @@ for (const size of sizes) {
     continue;
   }
 
-  // Sync path (small files)
+  // Sync path (≤10 rows)
   if (!json.chunked) {
     run.mode = "sync";
     run.summary = json.bulkSummary;
@@ -211,144 +291,139 @@ for (const size of sizes) {
     continue;
   }
 
-  // Exact UI loop
-  run.mode = "chunked_browser_loop";
+  run.mode = "chunked_status_cron";
   run.jobId = json.jobId;
-  const totalRows = json.totalRows ?? size;
-  const maxChunks = Math.max(20, Math.ceil((totalRows || 1) / 25) + 10);
-  let summary = {
-    processedRows: 0,
-    totalRows,
-    created: 0,
-    enrolled: 0,
-    skipped: 0,
-    failed: 0,
-    done: false,
-    failures: [],
-  };
-  let chunkGuard = 0;
-  let stalledRounds = 0;
-  let hit429 = false;
+  const maxMs = Math.max(10 * 60_000, size * 2500);
 
-  while (!summary.done) {
-    if (chunkGuard >= maxChunks) {
-      run.rootCauseHint = "client_maxChunks_guard";
-      run.error = `Stopped after ${maxChunks} chunk attempts (UI guard)`;
-      break;
-    }
-    chunkGuard += 1;
-    const previousProcessed = summary.processedRows;
-    const chunk = curl([
+  const wait = await waitForJob(jar, json.jobId, { maxMs });
+  const st = wait.last?.json ?? {};
+  run.summary = {
+    processedRows: st.processedRows,
+    totalRows: st.totalRows,
+    created: st.created,
+    enrolled: st.enrolled,
+    skipped: st.skipped,
+    failed: st.failed,
+    emailsQueued: st.emailsQueued,
+    emailsSent: st.emailsSent,
+    emailsFailed: st.emailsFailed,
+    phase: st.phase,
+    failureSample: (st.failures ?? []).slice(0, 5),
+    pollTicks: wait.ticks,
+    hit429: wait.hit429,
+    timedOut: wait.timedOut,
+  };
+  run.totalMs = Date.now() - uploadStarted;
+
+  if (wait.hit429) {
+    run.rootCauseHint = "rate_limit_on_status";
+    run.error = wait.last?.text?.slice(0, 400);
+  } else if (wait.timedOut) {
+    run.rootCauseHint = "timeout_waiting_status";
+    run.error = `Timed out after ${wait.elapsedMs}ms phase=${st.phase}`;
+  } else if ((st.failed ?? 1) > 0) {
+    run.rootCauseHint = "row_failures";
+    run.error = JSON.stringify((st.failures ?? []).slice(0, 3)).slice(0, 300);
+  }
+
+  run.ok =
+    !wait.timedOut &&
+    !wait.hit429 &&
+    (st.done === true || st.phase === "completed") &&
+    (st.failed ?? 1) === 0 &&
+    (st.processedRows ?? 0) >= (st.totalRows ?? size);
+
+  if (run.ok) {
+    console.log(
+      `  PASS size=${size} in ${run.totalMs}ms processed=${st.processedRows}/${st.totalRows} emailsQueued=${st.emailsQueued ?? "?"}`,
+    );
+  } else {
+    console.log(`  FAIL size=${size} cause=${run.rootCauseHint} phase=${st.phase}`);
+  }
+
+  evidence.runs.push(run);
+  await new Promise((r) => setTimeout(r, 800));
+}
+
+// Concurrent two jobs (plan requirement)
+{
+  console.log("\n=== CONCURRENT two 30-row jobs ===");
+  const stamp = `${Date.now()}-conc`;
+  const uploads = [30, 30].map((n, i) => {
+    const csvPath = join(mkdtempSync(join(tmpdir(), "bulk-conc-")), `c-${i}.csv`);
+    writeFileSync(csvPath, buildCsv(n, `${stamp}-${i}`), "utf8");
+    return curl([
       "-b",
       jar,
       "-X",
       "POST",
       `${base}/api/admin/bulk-students`,
-      "-H",
-      "Content-Type: application/json",
-      "-d",
-      JSON.stringify({ action: "process", jobId: json.jobId }),
+      "-F",
+      `default_course_id=${courseId}`,
+      "-F",
+      `csv_file=@${csvPath};type=text/csv`,
     ]);
-    run.steps.push({
-      stage: `process_chunk_${chunkGuard}`,
-      status: chunk.status,
-      ms: chunk.ms,
-      bodyPreview: chunk.text.slice(0, 240),
-    });
-
-    if (chunk.status === 429) {
-      hit429 = true;
-      run.rootCauseHint = "rate_limit_on_process_chunk";
-      run.error = chunk.text.slice(0, 400);
-      console.log(`  FAIL: 429 on process chunk #${chunkGuard} after ${chunkGuard - 1} ok chunks`);
-      break;
-    }
-
-    let chunkJson;
-    try {
-      chunkJson = JSON.parse(chunk.text);
-    } catch {
-      run.rootCauseHint = "process_non_json";
-      run.error = chunk.text.slice(0, 400);
-      break;
-    }
-    if (chunk.status >= 400 || chunkJson.error) {
-      run.rootCauseHint = "process_http_error";
-      run.error = chunkJson.error ?? `HTTP ${chunk.status}`;
-      console.log("  FAIL process:", run.error);
-      break;
-    }
-
-    summary = {
-      processedRows: chunkJson.processedRows,
-      totalRows: chunkJson.totalRows,
-      created: chunkJson.created,
-      enrolled: chunkJson.enrolled,
-      skipped: chunkJson.skipped,
-      failed: chunkJson.failed,
-      failures: chunkJson.failures ?? [],
-      done: chunkJson.done,
-    };
-
-    if (
-      !summary.done &&
-      summary.processedRows <= previousProcessed &&
-      summary.totalRows > 0
-    ) {
-      stalledRounds += 1;
-      if (stalledRounds >= 3) {
-        run.rootCauseHint = "client_stall_guard";
-        run.error = "Import progress stalled (UI 3-round guard)";
-        console.log("  FAIL: stalled");
-        break;
-      }
-    } else {
-      stalledRounds = 0;
-    }
-
-    if (chunkGuard % 5 === 0 || summary.done) {
-      console.log(
-        `  chunk ${chunkGuard}: processed ${summary.processedRows}/${summary.totalRows} failed=${summary.failed} (${chunk.ms}ms)`,
-      );
-    }
+  });
+  const ids = uploads.map((u) => parseJson(u.text)?.jobId).filter(Boolean);
+  const results = [];
+  for (const id of ids) {
+    results.push(await waitForJob(jar, id, { maxMs: 12 * 60_000 }));
   }
-
-  run.summary = {
-    processedRows: summary.processedRows,
-    totalRows: summary.totalRows,
-    created: summary.created,
-    enrolled: summary.enrolled,
-    skipped: summary.skipped,
-    failed: summary.failed,
-    failureSample: (summary.failures ?? []).slice(0, 5),
-    chunks: chunkGuard,
-    hit429,
+  const ok =
+    ids.length === 2 &&
+    results.every(
+      (r) =>
+        !r.timedOut &&
+        !r.hit429 &&
+        (r.last?.json?.done === true || r.last?.json?.phase === "completed") &&
+        (r.last?.json?.failed ?? 1) === 0,
+    );
+  evidence.concurrent = {
+    ok,
+    jobIds: ids,
+    summaries: results.map((r) => ({
+      processedRows: r.last?.json?.processedRows,
+      failed: r.last?.json?.failed,
+      phase: r.last?.json?.phase,
+      elapsedMs: r.elapsedMs,
+    })),
   };
-  run.totalMs = Date.now() - uploadStarted;
-  run.ok =
-    summary.done &&
-    summary.failed === 0 &&
-    !hit429 &&
-    !run.rootCauseHint &&
-    summary.processedRows >= summary.totalRows;
+  console.log(ok ? "PASS: concurrent jobs" : "FAIL: concurrent jobs", JSON.stringify(evidence.concurrent).slice(0, 300));
+}
 
-  if (run.ok) console.log(`  PASS size=${size} in ${run.totalMs}ms chunks=${chunkGuard}`);
-  else console.log(`  FAIL size=${size} cause=${run.rootCauseHint}`);
-
-  evidence.runs.push(run);
-
-  // Brief pause between sizes (still back-to-back enough to trip rate limit)
-  await new Promise((r) => setTimeout(r, 500));
+// Final email outbox drain
+{
+  const drain = await fetchCron("/api/cron/email-outbox");
+  evidence.emailOutboxDrain = {
+    ok: drain.status === 200 && !drain.error,
+    status: drain.status,
+    body: drain.json ?? drain.text?.slice(0, 200),
+  };
+  console.log(
+    evidence.emailOutboxDrain.ok ? "PASS: email_outbox_drain" : "FAIL: email_outbox_drain",
+    JSON.stringify(evidence.emailOutboxDrain.body).slice(0, 200),
+  );
 }
 
 evidence.finishedAt = new Date().toISOString();
+evidence.passed = evidence.runs.filter((r) => r.ok).length;
+evidence.failed = evidence.runs.filter((r) => !r.ok).length;
+evidence.concurrentOk = evidence.concurrent?.ok === true;
+evidence.maxSuccessfulSize = Math.max(
+  0,
+  ...evidence.runs.filter((r) => r.ok).map((r) => r.size),
+);
+
 const outPath = join(root, ".tmp-bulk-stress-evidence.json");
 writeFileSync(outPath, JSON.stringify(evidence, null, 2));
 console.log(`\nEvidence written: ${outPath}`);
-
-const failed = evidence.runs.filter((r) => !r.ok);
-console.log(`\n=== RESULT: ${evidence.runs.length - failed.length}/${evidence.runs.length} sizes passed ===`);
-for (const r of failed) {
+console.log(
+  `\n=== RESULT: ${evidence.passed}/${evidence.runs.length} sizes passed; concurrent=${evidence.concurrentOk}; maxOk=${evidence.maxSuccessfulSize} ===`,
+);
+for (const r of evidence.runs.filter((x) => !x.ok)) {
   console.log(`  FAIL size=${r.size} cause=${r.rootCauseHint} err=${String(r.error ?? "").slice(0, 120)}`);
 }
-process.exit(failed.length ? 1 : 0);
+
+const exitFail =
+  evidence.failed > 0 || evidence.concurrentOk === false || evidence.emailOutboxDrain?.ok === false;
+process.exit(exitFail ? 1 : 0);

@@ -501,9 +501,35 @@ export async function grantCourseAccessToStudent(
   return { newlyEnrolled };
 }
 
+async function isStudentAlreadyEnrolledInCourse(
+  admin: SupabaseClient<Database>,
+  params: { email: string; courseId: string; studentId: string },
+) {
+  const normalizedEmail = params.email.trim().toLowerCase();
+
+  const { data: profiles } = await admin
+    .from("profiles")
+    .select("id")
+    .ilike("email", normalizedEmail);
+  const profileIds = [...new Set((profiles ?? []).map((row) => row.id).concat(params.studentId))];
+
+  if (profileIds.length === 0) return false;
+
+  const { data: existing } = await admin
+    .from("enrollments")
+    .select("id")
+    .eq("course_id", params.courseId)
+    .in("student_id", profileIds)
+    .limit(1)
+    .maybeSingle();
+
+  return Boolean(existing);
+}
+
 /**
  * Bulk-import enroll path: profile upsert + enrollment insert only.
  * No Auth full-scan, no orphan reconciliation, no sync SMTP (caller defers email).
+ * Skips insert when the student is already enrolled in the course (any profile for that email).
  */
 export async function grantCourseAccessForBulkImport(
   admin: SupabaseClient<Database>,
@@ -515,30 +541,36 @@ export async function grantCourseAccessForBulkImport(
     email: string;
   },
 ): Promise<{ newlyEnrolled: boolean }> {
-  await ensureImportedStudentProfile(admin, {
+  const canonicalStudentId = await resolveCanonicalStudentId(admin, {
     studentId: params.studentId,
+    email: params.email,
+  });
+
+  await ensureImportedStudentProfile(admin, {
+    studentId: canonicalStudentId,
     email: params.email,
     fullName: params.fullName,
   });
 
-  const { data: existing } = await admin
-    .from("enrollments")
-    .select("id")
-    .eq("student_id", params.studentId)
-    .eq("course_id", params.courseId)
-    .maybeSingle();
-
-  if (existing) return { newlyEnrolled: false };
+  if (
+    await isStudentAlreadyEnrolledInCourse(admin, {
+      email: params.email,
+      courseId: params.courseId,
+      studentId: canonicalStudentId,
+    })
+  ) {
+    return { newlyEnrolled: false };
+  }
 
   const { error } = await admin.from("enrollments").insert({
-    student_id: params.studentId,
+    student_id: canonicalStudentId,
     course_id: params.courseId,
     enrolled_by: params.enrolledBy,
     source: "admin",
   });
 
   if (error) {
-    if (error.message.toLowerCase().includes("duplicate")) {
+    if (error.message.toLowerCase().includes("duplicate") || error.code === "23505") {
       return { newlyEnrolled: false };
     }
     throw new Error(error.message);
@@ -546,7 +578,7 @@ export async function grantCourseAccessForBulkImport(
 
   try {
     await runAutomations("course_enrolled", {
-      studentId: params.studentId,
+      studentId: canonicalStudentId,
       courseId: params.courseId,
     });
   } catch (err) {

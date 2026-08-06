@@ -218,6 +218,40 @@ async function countRowsByStatus(
   return count ?? 0;
 }
 
+/** Recount job counters from row statuses — race-safe under concurrent workers. */
+async function recountAndPersistJobCounters(
+  admin: SupabaseClient<Database>,
+  jobId: string,
+) {
+  const [pending, processing, created, enrolled, skipped, failed] = await Promise.all([
+    countRowsByStatus(admin, jobId, "pending"),
+    countRowsByStatus(admin, jobId, "processing"),
+    countRowsByStatus(admin, jobId, "created"),
+    countRowsByStatus(admin, jobId, "enrolled"),
+    countRowsByStatus(admin, jobId, "skipped"),
+    countRowsByStatus(admin, jobId, "failed"),
+  ]);
+  const processed = created + enrolled + skipped + failed;
+  const rowsDone = pending === 0 && processing === 0;
+
+  await admin
+    .from("bulk_import_jobs")
+    .update({
+      processed_rows: processed,
+      created_count: created,
+      enrolled_count: enrolled,
+      skipped_count: skipped,
+      failed_count: failed,
+      status: rowsDone ? "completed" : "processing",
+      phase: rowsDone ? "sending_emails" : "processing_rows",
+      finished_at: rowsDone ? new Date().toISOString() : null,
+      updated_at: new Date().toISOString(),
+    } as never)
+    .eq("id", jobId);
+
+  return { pending, processing, processed, created, enrolled, skipped, failed, rowsDone };
+}
+
 export async function reclaimStaleBulkImportClaims(
   admin: SupabaseClient<Database>,
   olderThanMinutes = 15,
@@ -354,19 +388,15 @@ export async function processBulkImportChunk(params: {
         return getBulkImportJobSummary(params.admin, jobId);
       }
 
-      await params.admin
-        .from("bulk_import_jobs")
-        .update({
-          status: "completed",
-          phase: "sending_emails",
-          processed_rows: jobRow.total_rows,
-          finished_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        } as never)
-        .eq("id", jobId);
-
-      // If no outbox pending, mark fully completed
-      await maybeFinalizeJobPhase(params.admin, jobId);
+      const recounted = await recountAndPersistJobCounters(params.admin, jobId);
+      if (recounted.rowsDone) {
+        await maybeFinalizeJobPhase(params.admin, jobId);
+      }
+      bulkImportStage("chunk_empty_complete", {
+        jobId,
+        ok: true,
+        processed: recounted.processed,
+      });
       return getBulkImportJobSummary(params.admin, jobId);
     }
 
@@ -546,36 +576,9 @@ export async function processBulkImportChunk(params: {
       }
     }
 
-    const processedDelta = rows.length;
-    const { data: refreshed } = await params.admin
-      .from("bulk_import_jobs")
-      .select(
-        "processed_rows, created_count, enrolled_count, skipped_count, failed_count, total_rows",
-      )
-      .eq("id", jobId)
-      .single();
+    const recounted = await recountAndPersistJobCounters(params.admin, jobId);
 
-    const nextProcessed = (refreshed?.processed_rows ?? jobRow.processed_rows) + processedDelta;
-    const pending = await countRowsByStatus(params.admin, jobId, "pending");
-    const processing = await countRowsByStatus(params.admin, jobId, "processing");
-    const rowsDone = pending === 0 && processing === 0;
-
-    await params.admin
-      .from("bulk_import_jobs")
-      .update({
-        processed_rows: nextProcessed,
-        created_count: (refreshed?.created_count ?? jobRow.created_count) + created,
-        enrolled_count: (refreshed?.enrolled_count ?? jobRow.enrolled_count) + enrolled,
-        skipped_count: (refreshed?.skipped_count ?? jobRow.skipped_count) + skipped,
-        failed_count: (refreshed?.failed_count ?? jobRow.failed_count) + failed,
-        status: rowsDone ? "completed" : "processing",
-        phase: rowsDone ? "sending_emails" : "processing_rows",
-        finished_at: rowsDone ? new Date().toISOString() : null,
-        updated_at: new Date().toISOString(),
-      } as never)
-      .eq("id", jobId);
-
-    if (rowsDone) {
+    if (recounted.rowsDone) {
       await maybeFinalizeJobPhase(params.admin, jobId);
     }
 
@@ -586,9 +589,10 @@ export async function processBulkImportChunk(params: {
       enrolled,
       skipped,
       failed,
-      pending,
-      processing,
-      rowsDone,
+      pending: recounted.pending,
+      processing: recounted.processing,
+      processed: recounted.processed,
+      rowsDone: recounted.rowsDone,
     });
 
     return getBulkImportJobSummary(params.admin, jobId);
