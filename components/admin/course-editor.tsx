@@ -70,13 +70,30 @@ export function CourseEditor({
 }) {
   return (
     <div className="space-y-6">
+      {/* Primary: identity, pricing, status, save */}
       <CourseSettingsForm
         course={course}
         categories={categories}
         globalDefaultTemplateKey={globalDefaultTemplateKey}
       />
-      <CourseResourcesPanel courseId={course.id} resources={courseResources} />
+      {/* Curriculum is the next primary workflow */}
       <CurriculumCard courseId={course.id} modules={modules} lessonAttachments={lessonAttachments} />
+      {/* Secondary: downloads / attachments */}
+      <details className="group rounded-xl border border-dashed border-app bg-white open:shadow-sm">
+        <summary className="cursor-pointer list-none px-5 py-4 font-semibold marker:content-none">
+          <span className="flex items-center justify-between gap-2">
+            Course resources
+            <span className="text-sm font-normal text-muted group-open:hidden">Show</span>
+            <span className="hidden text-sm font-normal text-muted group-open:inline">Hide</span>
+          </span>
+          <p className="mt-0.5 text-sm font-normal text-muted">
+            Optional downloads and files for the whole course.
+          </p>
+        </summary>
+        <div className="border-t border-app px-5 pb-5 pt-4">
+          <CourseResourcesPanel courseId={course.id} resources={courseResources} />
+        </div>
+      </details>
       <DangerZone courseId={course.id} />
     </div>
   );

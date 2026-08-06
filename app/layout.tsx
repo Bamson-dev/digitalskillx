@@ -3,6 +3,7 @@ import { Space_Grotesk, Inter } from "next/font/google";
 import "./globals.css";
 import { RegisterSW } from "@/components/register-sw";
 import { CurrencyProvider } from "@/components/providers/currency-provider";
+import { ToastProvider } from "@/components/ui/toast";
 import { ORG, siteUrl } from "@/lib/org";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-sans" });
@@ -49,7 +50,9 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body className={`${inter.variable} ${display.variable} font-sans antialiased`}>
-        <CurrencyProvider>{children}</CurrencyProvider>
+        <CurrencyProvider>
+          <ToastProvider>{children}</ToastProvider>
+        </CurrencyProvider>
         <RegisterSW />
       </body>
     </html>

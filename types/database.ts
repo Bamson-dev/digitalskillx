@@ -21,7 +21,14 @@ export type Json =
 export type UserRole = "admin" | "student";
 export type CourseVisibility = "draft" | "published" | "archived";
 export type EnrollmentType = "open" | "manual";
-export type EnrollmentSource = "self" | "admin" | "purchase";
+export type EnrollmentSource = "self" | "admin" | "purchase" | "enrollment_link";
+export type EnrollmentLinkStatus = "draft" | "active" | "disabled" | "expired" | "deleted";
+export type EnrollmentLinkAccess = "public" | "imported_students";
+export type EnrollmentLinkRedirect =
+  | "success_page"
+  | "first_course"
+  | "dashboard"
+  | "specific_course";
 export type TransactionStatus = "pending" | "success" | "failed";
 export type PaymentProvider = "paystack";
 export type LessonType =
@@ -512,6 +519,77 @@ export type BulkImportEmailOutbox = {
   updated_at: string;
 };
 
+export type EnrollmentLink = {
+  id: string;
+  token_hash: string;
+  token_prefix: string;
+  name: string;
+  description: string;
+  status: EnrollmentLinkStatus;
+  access_type: EnrollmentLinkAccess;
+  max_redemptions: number | null;
+  current_redemptions: number;
+  expires_at: string | null;
+  redirect_type: EnrollmentLinkRedirect;
+  redirect_course_id: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+};
+
+export type EnrollmentLinkCourse = {
+  id: string;
+  enrollment_link_id: string;
+  course_id: string;
+  created_at: string;
+};
+
+export type EnrollmentLinkRedemption = {
+  id: string;
+  enrollment_link_id: string;
+  user_id: string;
+  email: string;
+  ip_address: string | null;
+  user_agent: string | null;
+  browser: string | null;
+  device: string | null;
+  country: string | null;
+  city: string | null;
+  redeemed_at: string;
+};
+
+export type EnrollmentEvent = {
+  id: string;
+  enrollment_link_id: string | null;
+  user_id: string | null;
+  event: string;
+  metadata: Json;
+  request_id: string | null;
+  correlation_id: string | null;
+  created_at: string;
+};
+
+export type AccountSession = {
+  id: string;
+  user_id: string;
+  session_token_hash: string;
+  browser: string | null;
+  os: string | null;
+  device: string | null;
+  country: string | null;
+  city: string | null;
+  ip_address: string | null;
+  user_agent: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  is_current: boolean;
+  flagged_impossible_travel: boolean;
+  last_active_at: string;
+  created_at: string;
+  revoked_at: string | null;
+};
+
 export type Database = {
   public: {
     Tables: {
@@ -688,6 +766,38 @@ export type Database = {
           Rel<"bulk_import_email_outbox_student_id_fkey", "student_id", "profiles", "id">,
         ]
       >;
+      enrollment_links: Table<
+        EnrollmentLink,
+        [
+          Rel<"enrollment_links_created_by_fkey", "created_by", "profiles", "id">,
+          Rel<"enrollment_links_redirect_course_id_fkey", "redirect_course_id", "courses", "id">,
+        ]
+      >;
+      enrollment_link_courses: Table<
+        EnrollmentLinkCourse,
+        [
+          Rel<"enrollment_link_courses_enrollment_link_id_fkey", "enrollment_link_id", "enrollment_links", "id">,
+          Rel<"enrollment_link_courses_course_id_fkey", "course_id", "courses", "id">,
+        ]
+      >;
+      enrollment_link_redemptions: Table<
+        EnrollmentLinkRedemption,
+        [
+          Rel<"enrollment_link_redemptions_enrollment_link_id_fkey", "enrollment_link_id", "enrollment_links", "id">,
+          Rel<"enrollment_link_redemptions_user_id_fkey", "user_id", "profiles", "id">,
+        ]
+      >;
+      enrollment_events: Table<
+        EnrollmentEvent,
+        [
+          Rel<"enrollment_events_enrollment_link_id_fkey", "enrollment_link_id", "enrollment_links", "id">,
+          Rel<"enrollment_events_user_id_fkey", "user_id", "profiles", "id">,
+        ]
+      >;
+      account_sessions: Table<
+        AccountSession,
+        [Rel<"account_sessions_user_id_fkey", "user_id", "profiles", "id">]
+      >;
     };
     Views: Record<string, never>;
     Functions: {
@@ -707,12 +817,29 @@ export type Database = {
         Args: { p_limit?: number };
         Returns: BulkImportEmailOutbox[];
       };
+      claim_enrollment_link_redemption: {
+        Args: {
+          p_link_id: string;
+          p_user_id: string;
+          p_email: string;
+          p_ip?: string | null;
+          p_user_agent?: string | null;
+          p_browser?: string | null;
+          p_device?: string | null;
+          p_country?: string | null;
+          p_city?: string | null;
+        };
+        Returns: Json;
+      };
     };
     Enums: {
       user_role: UserRole;
       course_visibility: CourseVisibility;
       enrollment_type: EnrollmentType;
       enrollment_source: EnrollmentSource;
+      enrollment_link_status: EnrollmentLinkStatus;
+      enrollment_link_access: EnrollmentLinkAccess;
+      enrollment_link_redirect: EnrollmentLinkRedirect;
       lesson_type: LessonType;
       quiz_scope: QuizScope;
       question_type: QuestionType;

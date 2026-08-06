@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useFormState } from "react-dom";
 import { Save, Sparkles, Users } from "lucide-react";
 import { Card, CardHeader } from "@/components/ui/card";
@@ -9,6 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { SubmitButton } from "@/components/auth/submit-button";
+import { useToast } from "@/components/ui/toast";
 import type { Course, CourseCategory } from "@/types/database";
 import {
   updateCourseSettings,
@@ -68,7 +69,26 @@ export function CourseSettingsForm({
   categories: Pick<CourseCategory, "id" | "name" | "template_key">[];
   globalDefaultTemplateKey: CertificateTemplateKey;
 }) {
+  const { toast } = useToast();
   const [state, action] = useFormState(updateCourseSettings, courseSettingsInitial);
+  const [saveLabel, setSaveLabel] = useState<"Save Changes" | "Saved">("Save Changes");
+
+  useEffect(() => {
+    if (state.message) {
+      toast("Course saved successfully.");
+      setSaveLabel("Saved");
+      const t = window.setTimeout(() => setSaveLabel("Save Changes"), 2000);
+      return () => window.clearTimeout(t);
+    }
+    if (state.error) {
+      toast(state.error, "error");
+      const firstInvalid = document.querySelector<HTMLElement>(
+        "input:invalid, textarea:invalid, select:invalid",
+      );
+      firstInvalid?.scrollIntoView({ behavior: "smooth", block: "center" });
+      firstInvalid?.focus();
+    }
+  }, [state.message, state.error, toast]);
 
   const [title, setTitle] = useState(course.title);
   const [shortDescription, setShortDescription] = useState(course.short_description ?? "");
@@ -385,7 +405,7 @@ export function CourseSettingsForm({
 
         <div className="sm:col-span-2">
           <SubmitButton pendingText="Saving…">
-            <Save className="h-4 w-4" /> Save settings
+            <Save className="h-4 w-4" /> {saveLabel}
           </SubmitButton>
           {state.error ? (
             <p className="mt-2 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{state.error}</p>

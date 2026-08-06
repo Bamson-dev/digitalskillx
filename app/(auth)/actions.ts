@@ -57,9 +57,10 @@ export async function signInWithMagicLink(
 ): Promise<AuthState> {
   const email = String(formData.get("email") ?? "").trim();
   if (!email) return { error: "Enter your email address." };
+  const next = safeNextPath(String(formData.get("next") ?? "/dashboard"));
 
   try {
-    const result = await sendMagicLinkEmail(email);
+    const result = await sendMagicLinkEmail(email, next);
     if (!result.sent && !result.skipped) {
       const message = formatErrorMessage(result.error, "Could not send sign-in link.");
       if (message.includes("service role")) {

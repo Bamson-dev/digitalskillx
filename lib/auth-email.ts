@@ -118,6 +118,6 @@ export async function sendPasswordResetEmail(email: string) {
 }
 
 /** Magic-link sign-in via ZeptoMail (no Supabase Auth email). */
-export async function sendMagicLinkEmail(email: string) {
-  return sendAuthLinkEmail({ email, type: "magiclink", nextPath: "/dashboard" });
+export async function sendMagicLinkEmail(email: string, nextPath = "/dashboard") {
+  return sendAuthLinkEmail({ email, type: "magiclink", nextPath });
 }

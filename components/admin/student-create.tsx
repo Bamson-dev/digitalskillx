@@ -11,6 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { SubmitButton } from "@/components/auth/submit-button";
+import { useToast } from "@/components/ui/toast";
 import {
   createStudent,
   type StudentActionState,
@@ -115,6 +116,8 @@ function Feedback({
 }: {
   state: StudentActionState;
 }) {
+  const { toast } = useToast();
+
   async function runJobAction(action: string) {
     if (!state.bulkJobId) return;
     const res = await fetch("/api/admin/bulk-students", {
@@ -135,11 +138,11 @@ function Feedback({
     }
     if (!res.ok) {
       const json = (await res.json().catch(() => ({}))) as { error?: string };
-      alert(json.error ?? "Action failed");
+      toast(json.error ?? "Action failed", "error");
     } else if (action === "resend_emails") {
-      alert("Failed emails re-queued for sending.");
+      toast("Failed emails re-queued for sending.");
     } else if (action === "retry_failed") {
-      alert("Failed rows re-queued. Background processing will retry them.");
+      toast("Failed rows re-queued. Background processing will retry them.");
     }
   }
 

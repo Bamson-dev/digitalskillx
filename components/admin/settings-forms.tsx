@@ -5,7 +5,11 @@ import { useFormState } from "react-dom";
 import { Card, CardHeader } from "@/components/ui/card";
 import { Input, Label } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
-import { SubmitButton } from "@/components/auth/submit-button";
+import {
+  AdminInlineFeedback,
+  AdminSaveButton,
+  useFormStateSaveUx,
+} from "@/components/admin/admin-save-ux";
 import {
   saveEmailSettings,
   saveIntegrationSettings,
@@ -29,22 +33,12 @@ type CategoryMapping = {
   template_key: string | null;
 };
 
-function Feedback({ state }: { state: SettingsState }) {
-  if (state.error) {
-    return (
-      <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{state.error}</p>
-    );
-  }
-  if (state.message) {
-    return (
-      <p className="rounded-lg bg-green-50 px-3 py-2 text-sm text-green-700">{state.message}</p>
-    );
-  }
-  return null;
-}
-
 function PlatformSettingsForm({ settings }: { settings: PlatformSettingsValues }) {
   const [state, action] = useFormState(savePlatformSettings, initial);
+  const { label } = useFormStateSaveUx(state, {
+    successToast: "Platform settings saved successfully.",
+    idleLabel: "Save Changes",
+  });
 
   return (
     <Card>
@@ -133,8 +127,8 @@ function PlatformSettingsForm({ settings }: { settings: PlatformSettingsValues }
           </div>
         </div>
 
-        <SubmitButton pendingText="Saving…">Save platform settings</SubmitButton>
-        <Feedback state={state} />
+        <AdminSaveButton label={label}>{label}</AdminSaveButton>
+        <AdminInlineFeedback state={state} />
       </form>
     </Card>
   );
@@ -142,6 +136,10 @@ function PlatformSettingsForm({ settings }: { settings: PlatformSettingsValues }
 
 function EmailSettingsForm({ settings }: { settings: PlatformSettingsValues }) {
   const [state, action] = useFormState(saveEmailSettings, initial);
+  const { label } = useFormStateSaveUx(state, {
+    successToast: "Email settings saved successfully.",
+    idleLabel: "Save Changes",
+  });
 
   return (
     <Card>
@@ -169,8 +167,8 @@ function EmailSettingsForm({ settings }: { settings: PlatformSettingsValues }) {
             placeholder="support@digitalskillx.com"
           />
         </div>
-        <SubmitButton pendingText="Saving…">Save email settings</SubmitButton>
-        <Feedback state={state} />
+        <AdminSaveButton label={label}>{label}</AdminSaveButton>
+        <AdminInlineFeedback state={state} />
       </form>
     </Card>
   );
@@ -190,6 +188,10 @@ function IntegrationSettingsForm({
   emailConfigured: boolean;
 }) {
   const [state, action] = useFormState(saveIntegrationSettings, initial);
+  const { label } = useFormStateSaveUx(state, {
+    successToast: "Integration settings saved successfully.",
+    idleLabel: "Save Changes",
+  });
 
   return (
     <Card>
@@ -273,8 +275,8 @@ function IntegrationSettingsForm({
               : "Required for student welcome and enrollment emails. Coolify env vars often do not reach Next.js — saving here is recommended."}
           </p>
         </div>
-        <SubmitButton pendingText="Saving…">Save integration settings</SubmitButton>
-        <Feedback state={state} />
+        <AdminSaveButton label={label}>{label}</AdminSaveButton>
+        <AdminInlineFeedback state={state} />
       </form>
     </Card>
   );

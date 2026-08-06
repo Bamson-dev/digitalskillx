@@ -4,7 +4,11 @@ import { useFormState } from "react-dom";
 import { Card, CardHeader } from "@/components/ui/card";
 import { Label } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
-import { SubmitButton } from "@/components/auth/submit-button";
+import {
+  AdminInlineFeedback,
+  AdminSaveButton,
+  useFormStateSaveUx,
+} from "@/components/admin/admin-save-ux";
 import {
   saveCertificateTemplateSettings,
   type SettingsState,
@@ -24,20 +28,6 @@ type CategoryRow = {
   name: string;
   template_key: string | null;
 };
-
-function Feedback({ state }: { state: SettingsState }) {
-  if (state.error) {
-    return (
-      <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{state.error}</p>
-    );
-  }
-  if (state.message) {
-    return (
-      <p className="rounded-lg bg-green-50 px-3 py-2 text-sm text-green-700">{state.message}</p>
-    );
-  }
-  return null;
-}
 
 function TemplateOptions() {
   return (
@@ -59,6 +49,10 @@ export function CertificateTemplateSettings({
   globalDefaultTemplateKey: CertificateTemplateKey;
 }) {
   const [state, action] = useFormState(saveCertificateTemplateSettings, initial);
+  const { label } = useFormStateSaveUx(state, {
+    successToast: "Certificate settings saved successfully.",
+    idleLabel: "Save Changes",
+  });
 
   return (
     <div className="space-y-6">
@@ -152,8 +146,8 @@ export function CertificateTemplateSettings({
           </div>
 
           <div className="flex flex-col gap-3 border-t border-app pt-4 sm:flex-row sm:items-center sm:justify-between">
-            <SubmitButton pendingText="Saving…">Save certificate settings</SubmitButton>
-            <Feedback state={state} />
+            <AdminSaveButton label={label}>{label}</AdminSaveButton>
+            <AdminInlineFeedback state={state} />
           </div>
         </form>
       </Card>

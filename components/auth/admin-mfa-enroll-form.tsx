@@ -43,6 +43,7 @@ export function AdminMfaEnrollForm() {
       <input type="hidden" name="factor_id" value={enroll.factorId} />
       <div className="flex justify-center rounded-lg bg-white p-4">
         {/* Supabase returns a data: URI — next/image rejects those and crashes the page */}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={enroll.qrCode}
           alt="Authenticator QR code"

@@ -43,5 +43,34 @@ export async function POST(request: NextRequest) {
     return NextResponse.redirect(errorUrl, 303);
   }
 
+  // Best-effort device tracking — never block login if table/migration missing.
+  try {
+    const { createAdminClientAsync } = await import("@/lib/supabase/admin");
+    const { trackAccountSession } = await import("@/lib/account-sessions");
+    const admin = await createAdminClientAsync(supabase);
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (user) {
+      const ua = request.headers.get("user-agent");
+      const forwarded = request.headers.get("x-forwarded-for");
+      const ip = forwarded?.split(",")[0]?.trim() || request.headers.get("x-real-ip");
+      await trackAccountSession(admin, {
+        userId: user.id,
+        accessToken: result.session.access_token,
+        meta: {
+          userAgent: ua,
+          ipAddress: ip,
+          country: request.headers.get("x-vercel-ip-country"),
+          city: request.headers.get("x-vercel-ip-city"),
+          latitude: Number(request.headers.get("x-vercel-ip-latitude")) || null,
+          longitude: Number(request.headers.get("x-vercel-ip-longitude")) || null,
+        },
+      });
+    }
+  } catch (err) {
+    console.error("[auth/login] session track", err);
+  }
+
   return redirectWithPendingCookies(request, pending, next);
 }

@@ -27,6 +27,7 @@ export function LoginForm({ next, authError }: { next: string; authError?: strin
         <StudentPasswordLoginForm next={next} authError={authError} />
       ) : (
         <form action={magicAction} className="space-y-4">
+          <input type="hidden" name="next" value={next} />
           <div>
             <Label htmlFor="magic-email">Email</Label>
             <Input id="magic-email" name="email" type="email" required autoComplete="email" />
@@ -59,7 +60,14 @@ export function LoginForm({ next, authError }: { next: string; authError?: strin
 
       <p className="text-center text-sm text-muted">
         New here?{" "}
-        <Link href="/register" className="font-medium text-brand hover:underline">
+        <Link
+          href={
+            next && next !== "/dashboard"
+              ? `/register?next=${encodeURIComponent(next)}`
+              : "/register"
+          }
+          className="font-medium text-brand hover:underline"
+        >
           Create an account
         </Link>
       </p>

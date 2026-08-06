@@ -3,7 +3,11 @@
 import { useFormState } from "react-dom";
 import { Save } from "lucide-react";
 import { Input, Label } from "@/components/ui/input";
-import { SubmitButton } from "@/components/auth/submit-button";
+import {
+  AdminInlineFeedback,
+  AdminSaveButton,
+  useFormStateSaveUx,
+} from "@/components/admin/admin-save-ux";
 import {
   updateStudentProfile,
   type StudentActionState,
@@ -21,6 +25,10 @@ export function StudentProfileForm({
   email: string;
 }) {
   const [state, action] = useFormState(updateStudentProfile, initial);
+  const { label } = useFormStateSaveUx(state, {
+    successToast: "Profile saved successfully.",
+    idleLabel: "Save Changes",
+  });
 
   return (
     <form action={action} className="space-y-4">
@@ -35,15 +43,10 @@ export function StudentProfileForm({
           <Input id="email" name="email" type="email" defaultValue={email} required />
         </div>
       </div>
-      {state.error ? (
-        <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{state.error}</p>
-      ) : null}
-      {state.message ? (
-        <p className="rounded-lg bg-green-50 px-3 py-2 text-sm text-green-700">{state.message}</p>
-      ) : null}
-      <SubmitButton pendingText="Saving…" size="sm">
-        <Save className="h-4 w-4" /> Save profile
-      </SubmitButton>
+      <AdminInlineFeedback state={state} />
+      <AdminSaveButton label={label} size="sm">
+        <Save className="h-4 w-4" /> {label}
+      </AdminSaveButton>
     </form>
   );
 }

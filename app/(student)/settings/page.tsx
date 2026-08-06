@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { requireStudent } from "@/lib/auth";
 import { DeleteAccountButton } from "@/components/student/delete-account-button";
+import { AccountSecurityPanel } from "@/components/student/account-security-panel";
 
 export const metadata: Metadata = { title: "Account & Privacy" };
 
@@ -12,8 +13,10 @@ export default async function StudentSettingsPage() {
     <div className="mx-auto max-w-lg space-y-8">
       <div>
         <h1 className="font-display text-2xl font-bold text-neutral-900">Account &amp; privacy</h1>
-        <p className="mt-2 text-sm text-neutral-600">Manage your data and account preferences.</p>
+        <p className="mt-2 text-sm text-neutral-600">Manage your data, devices, and account preferences.</p>
       </div>
+
+      <AccountSecurityPanel />
 
       <section className="rounded-xl border border-surface-border bg-white p-6 shadow-card">
         <h2 className="font-semibold text-neutral-900">Export your data</h2>

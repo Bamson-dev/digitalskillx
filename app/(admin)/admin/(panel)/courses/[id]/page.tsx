@@ -10,7 +10,7 @@ import {
   normalizeCertificateTemplateKey,
 } from "@/lib/certificate-templates";
 import { CourseEditor } from "@/components/admin/course-editor";
-import { YoutubeImport } from "@/components/admin/youtube-import";
+import { CourseAdvancedTools } from "@/components/admin/course-advanced-tools";
 import type { AttachmentDisplay } from "@/lib/lesson-attachments-shared";
 
 export const metadata: Metadata = { title: "Edit course" };
@@ -99,7 +99,7 @@ export default async function AdminCourseEditorPage({
         courseResources={(courseResources ?? []) as AttachmentDisplay[]}
       />
 
-      <YoutubeImport
+      <CourseAdvancedTools
         courseId={course.id}
         modules={modules.map((m) => ({
           id: m.id,

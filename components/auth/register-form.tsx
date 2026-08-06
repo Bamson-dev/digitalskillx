@@ -10,6 +10,7 @@ import { SubmitButton } from "@/components/auth/submit-button";
 function RegisterFormInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const next = searchParams.get("next") ?? "";
   const [error, setError] = useState(searchParams.get("auth_error") ?? "");
   const [message, setMessage] = useState("");
   const [pending, startTransition] = useTransition();
@@ -39,7 +40,10 @@ function RegisterFormInner() {
         return;
       }
       setMessage(json.message ?? "Account created. You can log in now.");
-      router.push("/login?registered=1");
+      const loginUrl = new URL("/login", window.location.origin);
+      loginUrl.searchParams.set("registered", "1");
+      if (next.startsWith("/")) loginUrl.searchParams.set("next", next);
+      router.push(`${loginUrl.pathname}${loginUrl.search}`);
     });
   }
 
@@ -84,7 +88,10 @@ function RegisterFormInner() {
 
       <p className="text-center text-sm text-muted">
         Already have an account?{" "}
-        <Link href="/login" className="font-medium text-brand hover:underline">
+        <Link
+          href={next.startsWith("/") ? `/login?next=${encodeURIComponent(next)}` : "/login"}
+          className="font-medium text-brand hover:underline"
+        >
           Log in
         </Link>
       </p>
