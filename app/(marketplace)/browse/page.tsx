@@ -50,7 +50,7 @@ export default async function BrowsePage({
 
       <main className="flex-1 px-4 py-12 sm:px-8 sm:py-16">
         <div className="mx-auto max-w-[1200px] overflow-x-hidden">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-neutral-400">Catalog</p>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-neutral-600">Catalog</p>
           <h1 className="mt-2 font-display text-3xl font-bold text-neutral-950 sm:text-4xl">
             Browse courses
           </h1>

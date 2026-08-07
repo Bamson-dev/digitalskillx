@@ -52,7 +52,7 @@ export function CourseCard({
           )}
         </div>
         <div className="min-w-0 flex-1">
-          <p className="text-[11px] font-medium uppercase tracking-wider text-neutral-400">{instructor}</p>
+          <p className="text-[11px] font-medium uppercase tracking-wider text-neutral-600">{instructor}</p>
           <p className="mt-0.5 line-clamp-2 font-display text-[15px] font-semibold leading-snug text-neutral-900">
             {course.title}
           </p>
@@ -92,7 +92,7 @@ export function CourseCard({
         </span>
       </div>
       <div className="flex flex-1 flex-col border border-t-0 border-neutral-200 px-4 pb-5 pt-4">
-        <p className="text-[11px] font-medium uppercase tracking-wider text-neutral-400">{instructor}</p>
+        <p className="text-[11px] font-medium uppercase tracking-wider text-neutral-600">{instructor}</p>
         <h3 className="mt-1.5 line-clamp-2 font-display text-[17px] font-bold leading-[1.25] text-neutral-950 sm:text-lg">
           {course.title}
         </h3>
@@ -105,7 +105,7 @@ export function CourseCard({
               {formatCoursePrice(course)}
             </span>
           )}
-          <span className="inline-flex items-center gap-0.5 text-xs font-semibold uppercase tracking-wider text-neutral-400 transition group-hover:text-brand">
+          <span className="inline-flex items-center gap-0.5 text-xs font-semibold uppercase tracking-wider text-neutral-600 transition group-hover:text-brand">
             View
             <ArrowUpRight className="h-3.5 w-3.5" strokeWidth={2.5} />
           </span>

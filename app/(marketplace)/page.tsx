@@ -334,7 +334,7 @@ export default async function HomePage() {
 
             <div className="mt-6 flex items-end justify-between gap-6">
               <div>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-neutral-400">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-neutral-600">
                   Catalog
                 </p>
                 <h2 className="mt-2 font-display text-2xl font-bold text-neutral-950 sm:text-3xl">
