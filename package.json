@@ -34,6 +34,7 @@
     "tailwind-merge": "^2.5.4"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.12.1",
     "@playwright/test": "^1.49.1",
     "@types/node": "^20.16.11",
     "@types/nodemailer": "^6.4.17",

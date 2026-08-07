@@ -25,7 +25,7 @@ export function HomepageCurrencyBar({
       {!compact ? (
         <p className="shrink-0 text-xs text-neutral-500">Prices shown in</p>
       ) : null}
-      <CurrencyToggle className="shrink-0" />
+      <CurrencyToggle className="shrink-0" tone={compact ? "dark" : "light"} />
     </div>
   );
 }

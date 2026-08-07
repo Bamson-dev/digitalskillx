@@ -56,17 +56,17 @@ export default async function AdminLoginPage({
       </Link>
       <div className="w-full max-w-md rounded-2xl border border-slate-800 bg-slate-900 p-8 shadow-xl">
         <div className="mb-6">
-          <span className="text-xs font-semibold uppercase tracking-wide text-brand">
+          <span className="text-xs font-semibold uppercase tracking-wide text-red-400">
             Admin Control Center
           </span>
           <h1 className="mt-1 text-xl font-bold">Sign in to manage</h1>
-          <p className="mt-1 text-sm text-slate-400">
+          <p className="mt-1 text-sm text-slate-300">
             Restricted access. Admin credentials only.
           </p>
         </div>
         <AdminLoginForm authError={authError} />
       </div>
-      <p className="mt-6 text-xs text-slate-500">
+      <p className="mt-6 text-xs text-slate-400">
         Protected area · activity is audited
       </p>
     </div>

@@ -216,11 +216,11 @@ export function MarketplaceFooter() {
               DigitalSkill<span className="text-brand">X</span>
             </p>
             <p className="mt-3 max-w-xs text-sm leading-relaxed text-neutral-500">{ORG.tagline}</p>
-            <p className="mt-6 text-xs leading-relaxed text-neutral-400">{ORG.footer}</p>
-            <p className="mt-1 text-xs text-neutral-400">{ORG.rc}</p>
+            <p className="mt-6 text-xs leading-relaxed text-neutral-600">{ORG.footer}</p>
+            <p className="mt-1 text-xs text-neutral-600">{ORG.rc}</p>
           </div>
           <div className="lg:col-span-2 lg:col-start-7">
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-neutral-400">Platform</p>
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-neutral-600">Platform</p>
             <ul className="mt-4 space-y-2.5 text-sm text-neutral-600">
               <li>
                 <Link href="/" className="hover:text-brand">
@@ -240,7 +240,7 @@ export function MarketplaceFooter() {
             </ul>
           </div>
           <div className="lg:col-span-2">
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-neutral-400">Legal</p>
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-neutral-600">Legal</p>
             <ul className="mt-4 space-y-2.5 text-sm text-neutral-600">
               <li>
                 <Link href="/privacy" className="hover:text-brand">
@@ -260,7 +260,7 @@ export function MarketplaceFooter() {
             </ul>
           </div>
           <div className="lg:col-span-2">
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-neutral-400">Support</p>
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-neutral-600">Support</p>
             <ul className="mt-4 space-y-2.5 text-sm text-neutral-600">
               <li>
                 <Link href="/login?next=/support" className="hover:text-brand">
@@ -275,7 +275,7 @@ export function MarketplaceFooter() {
             </ul>
           </div>
         </div>
-        <p className="mt-12 border-t border-neutral-200 pt-6 text-left text-xs text-neutral-400">
+        <p className="mt-12 border-t border-neutral-200 pt-6 text-left text-xs text-neutral-600">
           © {new Date().getFullYear()} {ORG.name}. All rights reserved.
         </p>
       </div>

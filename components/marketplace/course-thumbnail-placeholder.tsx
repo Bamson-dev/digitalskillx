@@ -33,14 +33,14 @@ export function CourseThumbnailPlaceholder({
         {size !== "compact" ? (
           <p
             className={cn(
-              "font-display font-bold leading-none text-neutral-300",
+              "font-display font-bold leading-none text-neutral-500",
               size === "hero" ? "text-6xl sm:text-7xl" : "text-4xl",
             )}
           >
             {initials || "DS"}
           </p>
         ) : (
-          <p className="font-display text-sm font-bold text-neutral-400">{initials || "DS"}</p>
+          <p className="font-display text-sm font-bold text-neutral-600">{initials || "DS"}</p>
         )}
         {size !== "compact" ? (
           <>
@@ -52,7 +52,7 @@ export function CourseThumbnailPlaceholder({
             >
               {title}
             </p>
-            <p className="mt-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-neutral-400">
+            <p className="mt-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-neutral-600">
               DigitalSkillX
             </p>
           </>

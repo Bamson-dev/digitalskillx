@@ -17,7 +17,7 @@ export default function AuthLayout({
       <div className="w-full max-w-md rounded-2xl border border-surface-border bg-white p-8 shadow-card">
         {children}
       </div>
-      <p className="mt-6 text-xs text-neutral-400">
+      <p className="mt-6 text-xs text-neutral-600">
         {ORG.footer} · {ORG.rc}
       </p>
     </div>

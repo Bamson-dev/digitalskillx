@@ -233,7 +233,7 @@ export default async function HomePage() {
           <div className={CONTAINER}>
             <div className="flex items-end justify-between gap-6">
               <div>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-neutral-400">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-neutral-600">
                   Categories
                 </p>
                 <h2 className="mt-2 font-display text-2xl font-bold text-neutral-950 sm:text-3xl">
@@ -255,14 +255,14 @@ export default async function HomePage() {
                     className="group flex min-h-[56px] items-center justify-between py-4 transition hover:pl-1 sm:min-h-[64px] sm:py-5"
                   >
                     <span className="flex min-w-0 items-baseline gap-4">
-                      <span className="shrink-0 font-display text-sm tabular-nums text-neutral-300">
+                      <span className="shrink-0 font-display text-sm tabular-nums text-neutral-500">
                         {String(i + 1).padStart(2, "0")}
                       </span>
                       <span className="font-display text-lg font-semibold text-neutral-900 group-hover:text-brand sm:text-xl">
                         {cat.name}
                       </span>
                     </span>
-                    <ArrowUpRight className="h-4 w-4 shrink-0 text-neutral-300 transition group-hover:text-brand" />
+                    <ArrowUpRight className="h-4 w-4 shrink-0 text-neutral-500 transition group-hover:text-brand" />
                   </Link>
                 </li>
               ))}
@@ -277,7 +277,7 @@ export default async function HomePage() {
         {featured ? (
           <section className={`bg-neutral-950 text-white ${SECTION}`}>
             <div className={CONTAINER}>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-neutral-500">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-neutral-300">
                 Flagship program
               </p>
               <div className="mt-8 grid min-w-0 gap-10 lg:grid-cols-2 lg:items-end lg:gap-12">
@@ -298,10 +298,10 @@ export default async function HomePage() {
                   <h2 className="font-display text-3xl font-bold leading-tight sm:text-4xl lg:text-[2.5rem]">
                     {featured.title}
                   </h2>
-                  <p className="mt-3 text-sm text-neutral-400">
+                  <p className="mt-3 text-sm text-neutral-300">
                     {featured.instructor_name ?? ORG.instructor}
                   </p>
-                  <p className="mt-5 max-w-md text-[15px] leading-relaxed text-neutral-400">
+                  <p className="mt-5 max-w-md text-[15px] leading-relaxed text-neutral-300">
                     {featured.short_description ?? featured.description}
                   </p>
                   <div className="mt-8 flex flex-col gap-5 border-t border-neutral-800 pt-8">

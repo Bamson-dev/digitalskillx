@@ -65,9 +65,13 @@ export function detectDefaultCurrency(): CurrencyCode {
 export const CURRENCY_STORAGE_KEY = "dsx_currency";
 
 /** Segmented toggle pill classes. */
-export function currencyToggleClass(active: boolean) {
+export function currencyToggleClass(active: boolean, tone: "light" | "dark" = "light") {
   return cn(
     "min-h-[36px] min-w-[44px] rounded-md px-3 py-1.5 text-xs font-semibold transition",
-    active ? "bg-brand text-white shadow-sm" : "text-neutral-500 hover:text-neutral-800",
+    active
+      ? "bg-brand text-white shadow-sm"
+      : tone === "dark"
+        ? "text-neutral-300 hover:text-white"
+        : "text-neutral-700 hover:text-neutral-950",
   );
 }
