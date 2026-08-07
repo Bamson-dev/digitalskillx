@@ -156,8 +156,16 @@ console.log(`DigitalSkillX RC verification → ${base}\n`);
   const coursesPage = pageOk(adminJar, "/admin/courses");
   record("ADMIN", "Courses list / Create Course form", coursesPage.ok && /Create|title|course/i.test(coursesPage.html), `HTTP ${coursesPage.code}`);
 
-  // Create a course by posting to the create form if possible — Next.js server actions are hard; use existing course for edit
-  let courseId = coursesPage.html.match(/\/admin\/courses\/([0-9a-f-]{36})/i)?.[1];
+  const courseIds = [...coursesPage.html.matchAll(/\/admin\/courses\/([0-9a-f-]{36})/gi)].map((m) => m[1]);
+  const uniqueCourseIds = [...new Set(courseIds)];
+  let courseId = uniqueCourseIds[0];
+  for (const id of uniqueCourseIds) {
+    const editor = curl(["-b", adminJar, `${base}/admin/courses/${id}`]);
+    if (/Manage quiz|Add lesson|lesson_type/i.test(editor) && !/RC Course \d+/i.test(editor)) {
+      courseId = id;
+      break;
+    }
+  }
 
   // Try creating via server action isn't easy with curl; create through supabase isn't available.
   // Use admin create form multipart isn't SA. We'll create via duplicating title through page check and use courseId.
@@ -693,13 +701,13 @@ console.log(`DigitalSkillX RC verification → ${base}\n`);
           `${base}/api/enroll/${encodeURIComponent(createImp.plaintextToken)}`,
         ]),
       );
-      // Should fail for non-imported student OR succeed if policy allows — accept either correct rejection or ok
+      // Non-imported student must be rejected with IMPORTED_ONLY.
       const impOk =
-        redeemImp.ok === true ||
-        /imported|not eligible|access|forbidden|denied/i.test(String(redeemImp.error ?? redeemImp.code ?? ""));
+        redeemImp.code === "IMPORTED_ONLY" ||
+        /invited students|imported/i.test(String(redeemImp.error ?? ""));
       record(
         "ENROLLMENT LINKS",
-        "Imported Student Link gate",
+        "Imported Student Link gate (non-imported blocked)",
         impOk,
         JSON.stringify(redeemImp).slice(0, 160),
       );

@@ -100,7 +100,7 @@ function registerAndLogin(prefix) {
     throw new Error(`login failed for ${email}: ${loginUrl}`);
   }
   const me = JSON.parse(curl(["-b", jar, `${base}/api/auth/me`]));
-  if (!me?.user?.id) {
+  if (!me?.authenticated || !me?.userId) {
     throw new Error(`session missing after login for ${email}`);
   }
   return { jar, email, password };

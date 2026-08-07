@@ -134,7 +134,16 @@ pageOk(adminJar, "/admin/analytics", "Admin analytics");
 pageOk(adminJar, "/admin/settings", "Admin settings");
 
 const coursesHtml = curl(["-b", adminJar, `${base}/admin/courses`]);
-const courseId = coursesHtml.match(/\/admin\/courses\/([0-9a-f-]{36})/i)?.[1];
+const courseIds = [...coursesHtml.matchAll(/\/admin\/courses\/([0-9a-f-]{36})/gi)].map((m) => m[1]);
+const uniqueCourseIds = [...new Set(courseIds)];
+let courseId = uniqueCourseIds[0];
+for (const id of uniqueCourseIds) {
+  const editor = curl(["-b", adminJar, `${base}/admin/courses/${id}`]);
+  if (/Manage quiz|Add lesson|lesson_type/i.test(editor) && !/RC Course \d+/i.test(editor)) {
+    courseId = id;
+    break;
+  }
+}
 record("Course editor reachable", Boolean(courseId), courseId ?? "");
 if (courseId) pageOk(adminJar, `/admin/courses/${courseId}`, "Admin course editor");
 
