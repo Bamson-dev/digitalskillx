@@ -109,7 +109,7 @@ export function EnrollInviteClient({ token }: { token: string }) {
           <Link href="/">
             <Button variant="outline">Back to home</Button>
           </Link>
-          <Link href="/support">
+          <Link href="/login?next=/support">
             <Button variant="ghost">Contact support</Button>
           </Link>
         </div>

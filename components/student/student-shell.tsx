@@ -14,7 +14,6 @@ import {
   X,
 } from "lucide-react";
 import { signOut } from "@/app/(auth)/actions";
-import { CurrencyToggle } from "@/components/marketplace/currency-toggle";
 import { NotificationBell } from "@/components/student/notification-bell";
 import { cn } from "@/lib/utils";
 
@@ -22,7 +21,7 @@ const nav = [
   { href: "/dashboard", label: "Overview", icon: LayoutDashboard },
   { href: "/courses", label: "My Courses", icon: BookOpen },
   { href: "/certificates", label: "Certificates", icon: Award },
-  { href: "/support", label: "Need help?", icon: HelpCircle },
+  { href: "/support", label: "Support", icon: HelpCircle },
   { href: "/settings", label: "Account", icon: Settings },
 ];
 
@@ -58,20 +57,6 @@ export function StudentShell({
           </Link>
         );
       })}
-      <Link
-        href="/support"
-        onClick={() => setOpen(false)}
-        className="flex min-h-[44px] items-center gap-3 rounded-lg px-3 text-sm font-medium text-neutral-600 hover:bg-neutral-100"
-      >
-        Need help?
-      </Link>
-      <Link
-        href="/settings"
-        onClick={() => setOpen(false)}
-        className="flex min-h-[44px] items-center gap-3 rounded-lg px-3 text-sm font-medium text-neutral-600 hover:bg-neutral-100"
-      >
-        Account &amp; privacy
-      </Link>
       <div className="my-3 border-t border-surface-border" />
       <Link
         href="/"
@@ -107,7 +92,6 @@ export function StudentShell({
           </button>
           <p className="font-display text-base font-bold">{firstName}</p>
           <div className="flex items-center gap-1">
-            <CurrencyToggle />
             <NotificationBell />
             <div className="flex h-9 w-9 items-center justify-center rounded-full bg-brand/10 text-sm font-bold text-brand">
               {firstName.charAt(0).toUpperCase()}
@@ -151,7 +135,6 @@ export function StudentShell({
           <div className="hidden items-center justify-between border-b border-surface-border bg-white px-6 py-4 lg:flex">
             <div />
             <div className="flex items-center gap-3">
-              <CurrencyToggle />
               <NotificationBell />
               <span className="text-sm text-neutral-600">{name}</span>
               <div className="flex h-9 w-9 items-center justify-center rounded-full bg-brand/10 text-sm font-bold text-brand">

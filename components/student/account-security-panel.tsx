@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/toast";
-import { AdminLoadingBanner } from "@/components/admin/admin-skeleton";
 
 type SessionView = {
   id: string;
@@ -69,7 +68,11 @@ export function AccountSecurityPanel() {
         Active devices signed into your account. Sign out anything you do not recognize.
       </p>
 
-      {loading ? <div className="mt-4"><AdminLoadingBanner message="Loading sessions…" /></div> : null}
+      {loading ? (
+        <p className="mt-4 text-sm text-muted" role="status">
+          Loading sessions…
+        </p>
+      ) : null}
 
       {!loading && sessions.length === 0 ? (
         <p className="mt-4 text-sm text-muted">

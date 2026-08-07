@@ -95,6 +95,17 @@ function resolvePostRedeemPath(result) {
   );
   assert.equal(deriveStatus({ status: "active", deleted_at: new Date().toISOString() }), "DISABLED");
   assert.match(FRIENDLY.IMPORTED_ONLY, /invited/i);
+
+  const validationSrc = readFileSync(
+    join(root, "lib/enrollment-links/validation-service.ts"),
+    "utf8",
+  );
+  assert.match(validationSrc, /bulk_import_rows/);
+  assert.equal(
+    /if \(profile\) return true/.test(validationSrc),
+    false,
+    "imported_students must not treat every profile as eligible",
+  );
   console.log("PASS: enrollment validation matrix");
 }
 

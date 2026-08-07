@@ -84,9 +84,10 @@ export function EnrollmentSuccessClient() {
 
         <div className="mt-8 flex flex-wrap justify-center gap-3 text-sm text-muted">
           <span className="rounded-full bg-white px-3 py-1 ring-1 ring-app">
-            {courses.length || "—"} course{courses.length === 1 ? "" : "s"}
+            {loading
+              ? "Loading…"
+              : `${courses.length || "—"} course${courses.length === 1 ? "" : "s"} ready`}
           </span>
-          <span className="rounded-full bg-white px-3 py-1 ring-1 ring-app">0% started</span>
         </div>
 
         <div className="mt-10 space-y-3 text-left">

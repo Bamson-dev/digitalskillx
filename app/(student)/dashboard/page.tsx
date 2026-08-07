@@ -113,7 +113,7 @@ export default async function StudentDashboardPage() {
 
         {myCourses.length === 0 ? (
           <div className="rounded-xl border border-dashed border-surface-border bg-white py-14 text-center">
-            <p className="text-neutral-500">You haven&apos;t purchased a course yet.</p>
+            <p className="text-neutral-500">You haven&apos;t enrolled in a course yet.</p>
             <Link
               href="/#courses"
               className="mt-4 inline-block text-sm font-semibold text-brand hover:text-brand-700"

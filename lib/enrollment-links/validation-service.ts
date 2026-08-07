@@ -165,21 +165,13 @@ export async function buildPublicLinkView(
   };
 }
 
-/** IMPORTED_STUDENTS: profiles ∪ bulk_import_rows */
+/** IMPORTED_STUDENTS: email must appear in bulk_import_rows (not every registered profile). */
 export async function isImportedStudentEligible(
   admin: SupabaseClient<Database>,
   email: string,
 ): Promise<boolean> {
   const normalized = email.trim().toLowerCase();
   if (!normalized) return false;
-
-  const { data: profile } = await admin
-    .from("profiles")
-    .select("id")
-    .ilike("email", normalized)
-    .limit(1)
-    .maybeSingle();
-  if (profile) return true;
 
   try {
     const { data: imported } = await admin

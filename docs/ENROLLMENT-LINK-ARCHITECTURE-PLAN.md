@@ -87,7 +87,7 @@ enrollment_link_redirect:'success_page' | 'first_course' | 'dashboard' | 'specif
 User must already be authenticated → PG `FOR UPDATE` on link → re-validate → engine enroll → insert redemption → increment → events → COMMIT → emails/notify/automations only for newlyEnrolled.
 
 ### IMPORTED_STUDENTS
-Email in **profiles ∪ bulk_import_rows**. Friendly Part 3 copy on reject.
+Email must exist in **bulk_import_rows** only (CSV/bulk import). Friendly Part 3 copy on reject. Registered-but-not-imported accounts are denied.
 
 ---
 

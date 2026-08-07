@@ -90,7 +90,7 @@ Public  → /enroll/[token]
 ## Access types
 
 - **public** — anyone with the link  
-- **imported_students** — email in `profiles` ∪ `bulk_import_rows`
+- **imported_students** — email must exist in `bulk_import_rows` (CSV/bulk import only)
 
 ## Redirects
 

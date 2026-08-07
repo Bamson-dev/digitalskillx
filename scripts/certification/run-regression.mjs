@@ -128,7 +128,16 @@ if (adminOk) {
   record("Admin students page", students.trim().endsWith("200"));
 
   const courses = curl(["-b", adminJar, `${base}/admin/courses`]);
-  const courseId = courses.match(/\/admin\/courses\/([0-9a-f-]{36})/i)?.[1];
+  const courseIds = [...courses.matchAll(/\/admin\/courses\/([0-9a-f-]{36})/gi)].map((m) => m[1]);
+  const uniqueCourseIds = [...new Set(courseIds)];
+  let courseId = uniqueCourseIds[0];
+  for (const id of uniqueCourseIds) {
+    const editor = curl(["-b", adminJar, `${base}/admin/courses/${id}`]);
+    if (/Manage quiz|Add lesson|lesson_type/i.test(editor) && !/RC Course \d+/i.test(editor)) {
+      courseId = id;
+      break;
+    }
+  }
   record("Admin courses list has course", Boolean(courseId), courseId ?? "");
 
   // 3) Student registration + login

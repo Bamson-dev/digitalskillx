@@ -240,8 +240,8 @@ export function YoutubeImport({
   return (
     <Card>
       <CardHeader
-        title="Import lessons"
-        description="Import videos from YouTube, Vimeo, Wistia, or Loom. For playlists, preview first and uncheck videos you do not want."
+        title="Bulk lesson import"
+        description="Paste a YouTube playlist or single video URL (Vimeo, Wistia, and Loom also work). Preview playlists before importing."
       />
       <div className="flex flex-col gap-2 lg:flex-row lg:flex-wrap">
         <Select
@@ -346,13 +346,18 @@ export function YoutubeImport({
       ) : null}
 
       {youtubeLessons.length > 0 ? (
-        <div className="mt-5 rounded-lg border border-app bg-surface-muted/20">
-          <div className="border-b border-app px-3 py-3">
-            <p className="text-sm font-semibold text-neutral-900">Manage imported YouTube videos</p>
-            <p className="mt-1 text-xs text-muted">
-              Delete individual playlist videos after import without scrolling through the full curriculum.
+        <details className="mt-5 rounded-lg border border-dashed border-app bg-surface-muted/10">
+          <summary className="cursor-pointer list-none border-b border-app px-3 py-3 marker:content-none">
+            <p className="text-sm font-semibold text-neutral-900">
+              Cleanup: manage imported YouTube videos
             </p>
-            <div className="mt-3 flex flex-wrap items-center gap-2">
+            <p className="mt-1 text-xs text-muted">
+              Optional — curriculum already lets you delete lessons. Expand only for a YouTube-only
+              filter list.
+            </p>
+          </summary>
+          <div className="border-b border-app px-3 py-3">
+            <div className="flex flex-wrap items-center gap-2">
               <Select
                 value={manageModuleId}
                 onChange={(e) => {
@@ -427,7 +432,7 @@ export function YoutubeImport({
               </li>
             ))}
           </ul>
-        </div>
+        </details>
       ) : null}
 
       {result ? <p className="mt-3 rounded-lg bg-green-50 px-3 py-2 text-sm text-green-700">{result}</p> : null}

@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
+import { useFormStatus } from "react-dom";
 import { useRouter } from "next/navigation";
 import { CourseSettingsForm } from "@/components/admin/course-settings-form";
 import Link from "next/link";
@@ -11,6 +12,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { SubmitButton } from "@/components/auth/submit-button";
+import { useToast } from "@/components/ui/toast";
 import { LessonAttachmentsPanel } from "@/components/admin/lesson-attachments-panel";
 import { CourseResourcesPanel } from "@/components/admin/course-resources-panel";
 import type { AttachmentDisplay } from "@/lib/lesson-attachments-shared";
@@ -27,6 +29,30 @@ import {
   updateLesson,
   reorderLessons,
 } from "@/app/(admin)/admin/(panel)/courses/actions";
+
+function LessonSaveButton() {
+  const { pending } = useFormStatus();
+  const { toast } = useToast();
+  const wasPending = useRef(false);
+  const [label, setLabel] = useState("Save lesson");
+
+  useEffect(() => {
+    if (wasPending.current && !pending) {
+      toast("Lesson saved successfully.", "success");
+      setLabel("Saved");
+      const t = window.setTimeout(() => setLabel("Save lesson"), 2000);
+      wasPending.current = false;
+      return () => window.clearTimeout(t);
+    }
+    wasPending.current = pending;
+  }, [pending, toast]);
+
+  return (
+    <Button type="submit" size="sm" disabled={pending}>
+      <Save className="h-4 w-4" /> {pending ? "Saving…" : label}
+    </Button>
+  );
+}
 
 async function deleteLessonsViaApi(courseId: string, lessonIds: string[]) {
   const response = await fetch("/api/admin/lessons", {
@@ -112,7 +138,7 @@ function CurriculumCard({
     <Card id="course-curriculum">
       <CardHeader
         title="Curriculum"
-        description="Remove imported videos with the trash icon, or select several and use Delete selected."
+        description="Add modules and lessons. Drag to reorder. Use the trash icon or multi-select to remove lessons."
       />
       <div className="space-y-4">
         {modules.map((m) => (
@@ -531,9 +557,7 @@ function LessonRow({
 
           <div className="flex flex-wrap items-center justify-between gap-3 sm:col-span-2">
             <div className="flex flex-wrap items-center gap-3">
-              <SubmitButton size="sm" pendingText="Saving…">
-                <Save className="h-4 w-4" /> Save lesson
-              </SubmitButton>
+              <LessonSaveButton />
               <Link
                 href={`/admin/quizzes/${lesson.id}`}
                 className="inline-flex items-center gap-1 text-sm font-medium text-brand hover:underline"
@@ -656,14 +680,38 @@ function DeleteLessonButton({
 
 function DangerZone({ courseId }: { courseId: string }) {
   return (
-    <Card className="border-red-200">
-      <CardHeader title="Danger zone" description="Deleting a course removes all its modules, lessons and progress." />
-      <form action={deleteCourse}>
-        <input type="hidden" name="id" value={courseId} />
-        <Button variant="danger" type="submit">
-          <Trash2 className="h-4 w-4" /> Delete course
-        </Button>
-      </form>
-    </Card>
+    <details className="group rounded-xl border border-red-200 bg-red-50/30 open:bg-white">
+      <summary className="cursor-pointer list-none px-5 py-4 marker:content-none">
+        <span className="flex items-center justify-between gap-2">
+          <span>
+            <span className="font-semibold text-red-800">Danger zone</span>
+            <span className="mt-0.5 block text-sm font-normal text-muted">
+              Permanently delete this course and all related progress.
+            </span>
+          </span>
+          <span className="text-sm font-normal text-muted group-open:hidden">Show</span>
+          <span className="hidden text-sm font-normal text-muted group-open:inline">Hide</span>
+        </span>
+      </summary>
+      <div className="border-t border-red-100 px-5 pb-5 pt-4">
+        <form
+          action={deleteCourse}
+          onSubmit={(e) => {
+            if (
+              !confirm(
+                "Delete this course permanently? Modules, lessons, and student progress will be removed. This cannot be undone.",
+              )
+            ) {
+              e.preventDefault();
+            }
+          }}
+        >
+          <input type="hidden" name="id" value={courseId} />
+          <Button variant="danger" type="submit">
+            <Trash2 className="h-4 w-4" /> Delete course
+          </Button>
+        </form>
+      </div>
+    </details>
   );
 }

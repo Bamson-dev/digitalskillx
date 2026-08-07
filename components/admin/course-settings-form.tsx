@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useFormState } from "react-dom";
 import { Save, Sparkles, Users } from "lucide-react";
 import { Card, CardHeader } from "@/components/ui/card";
@@ -8,8 +8,11 @@ import { Input, Label } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Select } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { SubmitButton } from "@/components/auth/submit-button";
-import { useToast } from "@/components/ui/toast";
+import {
+  AdminInlineFeedback,
+  AdminSaveButton,
+  useFormStateSaveUx,
+} from "@/components/admin/admin-save-ux";
 import type { Course, CourseCategory } from "@/types/database";
 import {
   updateCourseSettings,
@@ -69,26 +72,11 @@ export function CourseSettingsForm({
   categories: Pick<CourseCategory, "id" | "name" | "template_key">[];
   globalDefaultTemplateKey: CertificateTemplateKey;
 }) {
-  const { toast } = useToast();
   const [state, action] = useFormState(updateCourseSettings, courseSettingsInitial);
-  const [saveLabel, setSaveLabel] = useState<"Save Changes" | "Saved">("Save Changes");
-
-  useEffect(() => {
-    if (state.message) {
-      toast("Course saved successfully.");
-      setSaveLabel("Saved");
-      const t = window.setTimeout(() => setSaveLabel("Save Changes"), 2000);
-      return () => window.clearTimeout(t);
-    }
-    if (state.error) {
-      toast(state.error, "error");
-      const firstInvalid = document.querySelector<HTMLElement>(
-        "input:invalid, textarea:invalid, select:invalid",
-      );
-      firstInvalid?.scrollIntoView({ behavior: "smooth", block: "center" });
-      firstInvalid?.focus();
-    }
-  }, [state.message, state.error, toast]);
+  const { label: saveLabel } = useFormStateSaveUx(state, {
+    successToast: "Course saved successfully.",
+    idleLabel: "Save Changes",
+  });
 
   const [title, setTitle] = useState(course.title);
   const [shortDescription, setShortDescription] = useState(course.short_description ?? "");
@@ -333,86 +321,87 @@ export function CourseSettingsForm({
           cannot enroll or open lessons until you turn this off.
         </p>
 
-        <div className="sm:col-span-2 rounded-2xl border-2 border-brand/20 bg-gradient-to-br from-brand-50/80 via-white to-sky-50/50 p-5 sm:p-6">
-          <div className="flex items-start gap-3">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand text-white">
-              <Users className="h-5 w-5" aria-hidden />
+        <details className="sm:col-span-2 group rounded-xl border border-dashed border-app bg-surface-muted/10 open:bg-white">
+          <summary className="cursor-pointer list-none px-4 py-3 marker:content-none">
+            <span className="flex items-center justify-between gap-2">
+              <span>
+                <span className="font-semibold">Advanced settings</span>
+                <span className="mt-0.5 block text-sm font-normal text-muted">
+                  Community links and certificate template override — optional.
+                </span>
+              </span>
+              <span className="text-sm font-normal text-muted group-open:hidden">Show</span>
+              <span className="hidden text-sm font-normal text-muted group-open:inline">Hide</span>
+            </span>
+          </summary>
+          <div className="space-y-5 border-t border-app px-4 pb-4 pt-4">
+            <div className="rounded-xl border border-app bg-white p-4">
+              <div className="flex items-start gap-3">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand/10 text-brand">
+                  <Users className="h-4 w-4" aria-hidden />
+                </div>
+                <div>
+                  <p className="font-medium">Student community links</p>
+                  <p className="mt-0.5 text-sm text-muted">
+                    Optional Telegram or WhatsApp invite shown to enrolled students.
+                  </p>
+                </div>
+              </div>
+              <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                <div>
+                  <Label htmlFor="community_telegram_url">Telegram invite link</Label>
+                  <Input
+                    id="community_telegram_url"
+                    name="community_telegram_url"
+                    type="url"
+                    defaultValue={course.community_telegram_url ?? ""}
+                    placeholder="https://t.me/your_group"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="community_whatsapp_url">WhatsApp invite link</Label>
+                  <Input
+                    id="community_whatsapp_url"
+                    name="community_whatsapp_url"
+                    type="url"
+                    defaultValue={course.community_whatsapp_url ?? ""}
+                    placeholder="https://chat.whatsapp.com/…"
+                  />
+                </div>
+              </div>
             </div>
-            <div>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-brand">
-                Community
-              </p>
-              <h3 className="mt-1 font-display text-lg font-bold text-neutral-950">
-                Student community links
-              </h3>
-              <p className="mt-1 text-sm text-neutral-600">
-                Add Telegram and/or WhatsApp invite links. Enrolled students see a prominent
-                Community section on their course page to join your group.
-              </p>
-            </div>
-          </div>
 
-          <div className="mt-5 grid gap-4 sm:grid-cols-2">
             <div>
-              <Label htmlFor="community_telegram_url">Telegram invite link</Label>
-              <Input
-                id="community_telegram_url"
-                name="community_telegram_url"
-                type="url"
-                defaultValue={course.community_telegram_url ?? ""}
-                placeholder="https://t.me/your_group"
-              />
-              <p className="mt-1 text-xs text-muted">Public t.me or telegram.me group/channel link.</p>
-            </div>
-            <div>
-              <Label htmlFor="community_whatsapp_url">WhatsApp invite link</Label>
-              <Input
-                id="community_whatsapp_url"
-                name="community_whatsapp_url"
-                type="url"
-                defaultValue={course.community_whatsapp_url ?? ""}
-                placeholder="https://chat.whatsapp.com/…"
-              />
-              <p className="mt-1 text-xs text-muted">WhatsApp community or group invite link.</p>
+              <Label htmlFor="certificate_template_override">Certificate template</Label>
+              <Select
+                id="certificate_template_override"
+                name="certificate_template_override"
+                value={certificateTemplateOverride}
+                onChange={(event) => setCertificateTemplateOverride(event.target.value)}
+              >
+                <option value="">Use category default</option>
+                {CERTIFICATE_TEMPLATE_KEYS.map((key) => (
+                  <option key={key} value={key}>
+                    {CERTIFICATE_TEMPLATE_LABELS[key]}
+                  </option>
+                ))}
+              </Select>
+              <p className="mt-1 text-xs text-muted">
+                Category default: {CERTIFICATE_TEMPLATE_LABELS[categoryDefaultKey]}
+              </p>
+              <div className="mt-3 overflow-hidden rounded-xl border border-app bg-surface-muted/20 p-3">
+                <p className="mb-2 text-sm font-medium text-neutral-800">Template preview</p>
+                <CertificatePreview templateKey={previewTemplateKey} />
+              </div>
             </div>
           </div>
-        </div>
+        </details>
 
         <div className="sm:col-span-2">
-          <Label htmlFor="certificate_template_override">Certificate template</Label>
-          <Select
-            id="certificate_template_override"
-            name="certificate_template_override"
-            value={certificateTemplateOverride}
-            onChange={(event) => setCertificateTemplateOverride(event.target.value)}
-          >
-            <option value="">Use category default</option>
-            {CERTIFICATE_TEMPLATE_KEYS.map((key) => (
-              <option key={key} value={key}>
-                {CERTIFICATE_TEMPLATE_LABELS[key]}
-              </option>
-            ))}
-          </Select>
-          <p className="mt-1 text-xs text-muted">
-            Category default: {CERTIFICATE_TEMPLATE_LABELS[categoryDefaultKey]}
-            {certificateTemplateOverride ? "" : " (active when saved with no override)"}
-          </p>
-          <div className="mt-4 overflow-hidden rounded-xl border border-app bg-surface-muted/20 p-4">
-            <p className="mb-3 text-sm font-medium text-neutral-800">Template preview</p>
-            <CertificatePreview templateKey={previewTemplateKey} />
-          </div>
-        </div>
-
-        <div className="sm:col-span-2">
-          <SubmitButton pendingText="Saving…">
+          <AdminSaveButton label={saveLabel}>
             <Save className="h-4 w-4" /> {saveLabel}
-          </SubmitButton>
-          {state.error ? (
-            <p className="mt-2 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{state.error}</p>
-          ) : null}
-          {state.message ? (
-            <p className="mt-2 rounded-lg bg-green-50 px-3 py-2 text-sm text-green-700">{state.message}</p>
-          ) : null}
+          </AdminSaveButton>
+          <AdminInlineFeedback state={{ error: state.error }} />
         </div>
       </form>
     </Card>
