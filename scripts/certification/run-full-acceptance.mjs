@@ -251,7 +251,7 @@ if (regOk && courseId) {
       "-H",
       "Content-Type: application/json",
       "-d",
-      JSON.stringify({ studentId, courseId }),
+      JSON.stringify({ action: "issue", studentId, courseId }),
     ]);
     let certJson;
     try {
@@ -261,8 +261,12 @@ if (regOk && courseId) {
     }
     record(
       "Certificates API",
-      Boolean(certJson.id || certJson.certificate || certJson.error),
-      certJson.error ? `handled: ${String(certJson.error).slice(0, 60)}` : "issued/ok",
+      Boolean(certJson.ok || certJson.certificateId || certJson.error),
+      certJson.ok
+        ? `issued ${String(certJson.certificateId ?? "").slice(0, 36)}`.trim()
+        : certJson.error
+          ? `handled: ${String(certJson.error).slice(0, 80)}`
+          : "unexpected",
     );
   }
 }

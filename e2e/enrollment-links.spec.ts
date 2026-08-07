@@ -22,26 +22,37 @@ test.describe("Enrollment links — public surfaces", () => {
   });
 });
 
-for (const name of ["Desktop Chrome", "iPhone 12", "iPad (gen 7)"] as const) {
-  const device =
-    name === "Desktop Chrome"
-      ? devices["Desktop Chrome"]
-      : name === "iPhone 12"
-        ? devices["iPhone 12"]
-        : devices["iPad (gen 7)"];
+const viewports = [
+  { name: "Desktop Chrome", ...devices["Desktop Chrome"] },
+  { name: "iPhone 12", ...devices["iPhone 12"] },
+  { name: "iPad (gen 7)", ...devices["iPad (gen 7)"] },
+] as const;
 
-  test.describe(`Responsive — ${name}`, () => {
-    test.use({ ...device });
-
-    test("login page usable", async ({ page }) => {
-      await page.goto("/login");
-      await expect(page.getByText(/Welcome back|Log in|DigitalSkillX/i).first()).toBeVisible();
-      await expect(page.locator('input[type="email"], input[name="email"]').first()).toBeVisible();
+for (const device of viewports) {
+  test(`login page usable — ${device.name}`, async ({ browser }) => {
+    const context = await browser.newContext({
+      viewport: device.viewport,
+      userAgent: device.userAgent,
+      isMobile: device.isMobile,
+      hasTouch: device.hasTouch,
     });
+    const page = await context.newPage();
+    await page.goto("/login");
+    await expect(page.getByText(/Welcome back|Log in|DigitalSkillX/i).first()).toBeVisible();
+    await expect(page.locator('input[type="email"], input[name="email"]').first()).toBeVisible();
+    await context.close();
+  });
 
-    test("register page usable", async ({ page }) => {
-      await page.goto("/register");
-      await expect(page.getByText(/Create|account|DigitalSkillX/i).first()).toBeVisible();
+  test(`register page usable — ${device.name}`, async ({ browser }) => {
+    const context = await browser.newContext({
+      viewport: device.viewport,
+      userAgent: device.userAgent,
+      isMobile: device.isMobile,
+      hasTouch: device.hasTouch,
     });
+    const page = await context.newPage();
+    await page.goto("/register");
+    await expect(page.getByText(/Create|account|DigitalSkillX/i).first()).toBeVisible();
+    await context.close();
   });
 }
