@@ -98,9 +98,10 @@ export async function enforceRateLimit(
   request: Request,
   routeKey: string,
   limit = DEFAULT_LIMIT,
+  windowMs = WINDOW_MS,
 ): Promise<RateLimitResult> {
   const ip = clientIp(request);
-  return rateLimit(`${routeKey}:${ip}`, limit);
+  return rateLimit(`${routeKey}:${ip}`, limit, windowMs);
 }
 
 /** Admin login: block check without consuming a slot. */

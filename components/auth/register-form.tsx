@@ -34,8 +34,20 @@ function RegisterFormInner() {
       const json = (await res.json().catch(() => ({}))) as {
         error?: string;
         message?: string;
+        retryAfterSec?: number;
+        code?: string;
       };
       if (!res.ok) {
+        if (res.status === 429) {
+          const secs = Number(json.retryAfterSec ?? res.headers.get("Retry-After") ?? 0);
+          const minutes = secs > 0 ? Math.max(1, Math.ceil(secs / 60)) : null;
+          setError(
+            minutes
+              ? `Too many sign-up attempts from this network. Please wait about ${minutes} minute${minutes === 1 ? "" : "s"} and try again.`
+              : (json.error ?? "Too many sign-up attempts. Please try again in a few minutes."),
+          );
+          return;
+        }
         setError(json.error ?? "Could not create account.");
         return;
       }

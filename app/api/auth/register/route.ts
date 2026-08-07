@@ -6,7 +6,8 @@ export const dynamic = "force-dynamic";
 
 /** Student self-registration — mirrors login route for reliable form / test clients. */
 export async function POST(request: NextRequest) {
-  const limited = await rateLimitedResponse(request, "auth-register", 10);
+  // 40 attempts / 10 minutes per IP — enrollment-link signups must not trip after a few retries.
+  const limited = await rateLimitedResponse(request, "auth-register", 40, 10 * 60 * 1000);
   if (limited) return limited;
 
   const contentType = request.headers.get("content-type") ?? "";
