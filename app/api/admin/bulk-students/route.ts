@@ -154,103 +154,158 @@ export async function POST(request: NextRequest) {
       rowCount: dataRowCount,
     });
 
-    // Prefer durable job path for anything above tiny pastes
-    if (!forceSync && dataRowCount > 10) {
-      const created = await createBulkImportJob({
-        admin: auth.admin,
-        adminUserId: auth.user.id,
-        csvText,
-        defaultCourseId,
-      });
-
-      if ("fallbackRequired" in created) {
-        if (dataRowCount > BULK_SYNC_MAX_ROWS) {
-          return NextResponse.json(
-            {
-              error: `${created.reason} For now, split into files of ≤${BULK_SYNC_MAX_ROWS} rows.`,
-            },
-            { status: 400 },
-          );
-        }
-      } else {
-        // Kick processing immediately, then self-chain via cron worker if more remains.
-        const origin = new URL(request.url).origin;
-        void processBulkImportUntilBudget({
-          admin: auth.admin,
-          adminUserId: auth.user.id,
-          jobId: created.jobId,
-          budgetMs: 40_000,
-          asWorker: true,
-        })
-          .then(async (summary) => {
-            if (!summary.done) {
-              const { scheduleBulkWorkerContinuation } = await import(
-                "@/lib/bulk-import-continue"
-              );
-              scheduleBulkWorkerContinuation({
-                origin,
-                path: "/api/cron/bulk-import",
-                depth: 0,
-                reason: "post_upload_kick",
-              });
-            } else {
-              const { scheduleBulkWorkerContinuation } = await import(
-                "@/lib/bulk-import-continue"
-              );
-              scheduleBulkWorkerContinuation({
-                origin,
-                path: "/api/cron/email-outbox",
-                depth: 0,
-                reason: "post_upload_emails",
-              });
-            }
-          })
-          .catch((err) => {
-            bulkImportStage("inline_kick_failed", {
-              jobId: created.jobId,
-              ok: false,
-              error: err instanceof Error ? err.message : String(err),
-            });
-            void import("@/lib/bulk-import-continue").then(({ scheduleBulkWorkerContinuation }) => {
-              scheduleBulkWorkerContinuation({
-                origin,
-                path: "/api/cron/bulk-import",
-                depth: 0,
-                reason: "kick_error_recovery",
-              });
-            });
-          });
-
-        return NextResponse.json({
-          jobId: created.jobId,
-          totalRows: created.totalRows,
-          chunked: true,
-          message: `Import job created for ${created.totalRows} rows. Processing in the background…`,
-        });
-      }
-    }
-
-    const result = await runBulkStudentCsvUpload({
+    const created = await createBulkImportJob({
       admin: auth.admin,
       adminUserId: auth.user.id,
       csvText,
       defaultCourseId,
     });
 
-    await logAudit({
-      action: "students_bulk_created",
-      metadata: {
-        created: result.bulkSummary.created,
-        enrolled: result.bulkSummary.enrolled,
-        skipped: result.bulkSummary.skipped,
-        failedCount: result.bulkSummary.failed.length,
+    if ("fallbackRequired" in created) {
+      if (dataRowCount > BULK_SYNC_MAX_ROWS) {
+        return NextResponse.json(
+          {
+            error: `${created.reason} For now, split into files of ≤${BULK_SYNC_MAX_ROWS} rows.`,
+          },
+          { status: 400 },
+        );
+      }
+
+      const result = await runBulkStudentCsvUpload({
+        admin: auth.admin,
+        adminUserId: auth.user.id,
+        csvText,
+        defaultCourseId,
+      });
+
+      await logAudit({
+        action: "students_bulk_created",
+        metadata: {
+          created: result.bulkSummary.created,
+          enrolled: result.bulkSummary.enrolled,
+          skipped: result.bulkSummary.skipped,
+          failedCount: result.bulkSummary.failed.length,
+        },
+      });
+
+      revalidatePath("/admin/students");
+      revalidatePath("/admin/analytics");
+
+      return NextResponse.json(result);
+    }
+
+    const jobResponse = (summary: Awaited<ReturnType<typeof processBulkImportUntilBudget>>) => ({
+      jobId: created.jobId,
+      totalRows: created.totalRows,
+      message: `Bulk upload finished: ${summary.created} created, ${summary.enrolled} existing student(s) enrolled, ${summary.skipped} skipped, ${summary.failed} failed.`,
+      bulkSummary: {
+        created: summary.created,
+        enrolled: summary.enrolled,
+        skipped: summary.skipped,
+        failed: summary.failures,
+        failedCount: summary.failed,
       },
+      done: summary.done,
     });
 
-    revalidatePath("/admin/students");
-    revalidatePath("/admin/analytics");
+    // Small uploads and force_sync wait for completion so bulk_import_rows exist for imported-student links.
+    if (forceSync || dataRowCount <= 10) {
+      let summary = await processBulkImportUntilBudget({
+        admin: auth.admin,
+        adminUserId: auth.user.id,
+        jobId: created.jobId,
+        budgetMs: 120_000,
+        asWorker: true,
+      });
 
-    return NextResponse.json(result);
+      for (let attempt = 0; !summary.done && attempt < 24; attempt++) {
+        summary = await processBulkImportUntilBudget({
+          admin: auth.admin,
+          adminUserId: auth.user.id,
+          jobId: created.jobId,
+          budgetMs: 120_000,
+          asWorker: true,
+        });
+      }
+
+      if (summary.done) {
+        await logAudit({
+          action: "students_bulk_created",
+          metadata: {
+            jobId: summary.jobId,
+            created: summary.created,
+            enrolled: summary.enrolled,
+            skipped: summary.skipped,
+            failedCount: summary.failed,
+          },
+        });
+        revalidatePath("/admin/students");
+        revalidatePath("/admin/analytics");
+      }
+
+      return NextResponse.json(
+        summary.done
+          ? jobResponse(summary)
+          : {
+              ...summary,
+              jobId: created.jobId,
+              totalRows: created.totalRows,
+              chunked: true,
+              message: `Import still processing (${summary.processedRows}/${summary.totalRows}). Poll action=status.`,
+            },
+      );
+    }
+
+    // Large uploads: kick processing immediately, then self-chain via cron worker if more remains.
+    const origin = new URL(request.url).origin;
+    void processBulkImportUntilBudget({
+      admin: auth.admin,
+      adminUserId: auth.user.id,
+      jobId: created.jobId,
+      budgetMs: 40_000,
+      asWorker: true,
+    })
+      .then(async (summary) => {
+        if (!summary.done) {
+          const { scheduleBulkWorkerContinuation } = await import("@/lib/bulk-import-continue");
+          scheduleBulkWorkerContinuation({
+            origin,
+            path: "/api/cron/bulk-import",
+            depth: 0,
+            reason: "post_upload_kick",
+          });
+        } else {
+          const { scheduleBulkWorkerContinuation } = await import("@/lib/bulk-import-continue");
+          scheduleBulkWorkerContinuation({
+            origin,
+            path: "/api/cron/email-outbox",
+            depth: 0,
+            reason: "post_upload_emails",
+          });
+        }
+      })
+      .catch((err) => {
+        bulkImportStage("inline_kick_failed", {
+          jobId: created.jobId,
+          ok: false,
+          error: err instanceof Error ? err.message : String(err),
+        });
+        void import("@/lib/bulk-import-continue").then(({ scheduleBulkWorkerContinuation }) => {
+          scheduleBulkWorkerContinuation({
+            origin,
+            path: "/api/cron/bulk-import",
+            depth: 0,
+            reason: "kick_error_recovery",
+          });
+        });
+      });
+
+    return NextResponse.json({
+      jobId: created.jobId,
+      totalRows: created.totalRows,
+      chunked: true,
+      message: `Import job created for ${created.totalRows} rows. Processing in the background…`,
+    });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Bulk upload failed.";
     bulkImportStage("upload_failed", { ok: false, error: message });

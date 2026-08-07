@@ -82,19 +82,27 @@ function registerAndLogin(prefix) {
     throw new Error(`register failed: ${reg.error}`);
   }
   const jar = join(mkdtempSync(join(tmpdir(), `gate-${prefix}-`)), "c.txt");
-  curl([
+  const loginBody = curl([
     "-c",
     jar,
     "-b",
     jar,
+    "-w",
+    "\n__HTTP__%{url_effective}",
     "-X",
     "POST",
     `${base}/api/auth/login`,
     "-d",
     new URLSearchParams({ email, password, next: "/dashboard" }).toString(),
-    "-o",
-    "/dev/null",
   ]);
+  const loginUrl = loginBody.split("\n__HTTP__").pop() ?? "";
+  if (!/\/dashboard/.test(loginUrl)) {
+    throw new Error(`login failed for ${email}: ${loginUrl}`);
+  }
+  const me = JSON.parse(curl(["-b", jar, `${base}/api/auth/me`]));
+  if (!me?.user?.id) {
+    throw new Error(`session missing after login for ${email}`);
+  }
   return { jar, email, password };
 }
 
@@ -176,11 +184,28 @@ function record(name, ok, detail) {
   }
 }
 
-// 2) Bulk-imported user → PASS (create row via small CSV import)
+// 2) Bulk-imported user → PASS (register first, then admin CSV import records bulk_import_rows)
 {
   const importEmail = `gate-imported+${stamp}@digitalskillx.com`;
+  const password = `Gate-${crypto.randomBytes(4).toString("hex")}!9A`;
+  const reg = JSON.parse(
+    curl([
+      "-X",
+      "POST",
+      "-H",
+      "Content-Type: application/json",
+      "-d",
+      JSON.stringify({ full_name: "Gate Imported", email: importEmail, password }),
+      `${base}/api/auth/register`,
+    ]),
+  );
+  record(
+    "Register imported student before bulk import",
+    !reg.error || /already exists/i.test(String(reg.error)),
+    reg.error ?? importEmail,
+  );
+
   const csvPath = join(mkdtempSync(join(tmpdir(), "gate-csv-")), "students.csv");
-  const { writeFileSync } = await import("node:fs");
   writeFileSync(csvPath, `full_name,email\nGate Imported,${importEmail}\n`);
   const csvRes = JSON.parse(
     curl([
@@ -197,7 +222,10 @@ function record(name, ok, detail) {
       "force_sync=1",
     ]),
   );
-  const bulkOk = Boolean(csvRes.bulkSummary || csvRes.jobId || csvRes.message) && !csvRes.error;
+  const bulkOk =
+    Boolean(csvRes.bulkSummary || csvRes.jobId || csvRes.message) &&
+    !csvRes.error &&
+    (csvRes.done !== false || csvRes.bulkSummary);
   record("Bulk import row for gate test", bulkOk, csvRes.message ?? csvRes.error ?? "");
 
   const create = createImportedLink(adminJar, courseId, `Gate imported ${stamp}`);
@@ -205,33 +233,24 @@ function record(name, ok, detail) {
   if (!token) {
     record("Imported student redeem PASS", false, create.error ?? "no token");
   } else {
-    const email = importEmail;
-    const password = `Gate-${crypto.randomBytes(4).toString("hex")}!9A`;
-    JSON.parse(
-      curl([
-        "-X",
-        "POST",
-        "-H",
-        "Content-Type: application/json",
-        "-d",
-        JSON.stringify({ full_name: "Gate Imported", email, password }),
-        `${base}/api/auth/register`,
-      ]),
-    );
     const jar = join(mkdtempSync(join(tmpdir(), "gate-imp-")), "c.txt");
-    curl([
+    const loginBody = curl([
       "-c",
       jar,
       "-b",
       jar,
+      "-w",
+      "\n__HTTP__%{url_effective}",
       "-X",
       "POST",
       `${base}/api/auth/login`,
       "-d",
-      new URLSearchParams({ email, password, next: "/dashboard" }).toString(),
-      "-o",
-      "/dev/null",
+      new URLSearchParams({ email: importEmail, password, next: "/dashboard" }).toString(),
     ]);
+    const loginUrl = loginBody.split("\n__HTTP__").pop() ?? "";
+    const loginOk = /\/dashboard/.test(loginUrl);
+    record("Imported student login", loginOk, loginUrl.slice(0, 120));
+
     const r = redeem(jar, token);
     record("Imported student redeem PASS", r.ok === true, JSON.stringify(r).slice(0, 180));
   }
