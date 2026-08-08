@@ -12,6 +12,7 @@ import {
   type CatalogCourse,
   type LandingCourse,
 } from "@/lib/published-courses";
+import { recommendCourses } from "@/lib/recommendations";
 import { isCourseFree } from "@/lib/currency";
 import { isSuccessfulGuestPurchase } from "@/lib/guest-checkout";
 import { ORG, siteUrl } from "@/lib/org";
@@ -21,7 +22,7 @@ import { CourseComingSoonView } from "@/components/course/course-coming-soon-vie
 import { PaymentReturnHandler } from "@/components/marketplace/payment-return-handler";
 
 const courseSelect =
-  "id, title, description, short_description, thumbnail_url, price_ngn, price_usd, learning_outcomes, instructor_name, instructor_bio, promo_video_url, is_coming_soon, category:course_categories(name), modules(id, title, position, lessons(id, title, position, lesson_type))";
+  "id, title, description, short_description, thumbnail_url, price_ngn, price_usd, learning_outcomes, instructor_name, instructor_bio, promo_video_url, is_coming_soon, certificate_enabled, category:course_categories(name), modules(id, title, position, lessons(id, title, position, lesson_type))";
 
 export async function generateMetadata({
   params,
@@ -122,11 +123,20 @@ export default async function CourseLandingPage({
   }
 
   const relatedAll = await fetchPublishedCourses<CatalogCourse>(
-    "id, title, description, short_description, thumbnail_url, price_ngn, price_usd, instructor_name, is_coming_soon, category:course_categories(name)",
+    "id, title, description, short_description, thumbnail_url, price_ngn, price_usd, instructor_name, is_coming_soon, created_at, category:course_categories(name)",
   );
-  const relatedRaw = relatedAll
-    .filter((c) => c.id !== course.id)
-    .map((c) => ({ ...c, category_name: c.category?.name ?? null }));
+  const categoryName = (() => {
+    const cat = Array.isArray(course.category) ? course.category[0] : course.category;
+    return cat?.name ?? null;
+  })();
+  const related = recommendCourses({
+    catalog: relatedAll.map((c) => ({
+      ...c,
+      category_name: c.category?.name ?? null,
+    })),
+    seed: { id: course.id, title: course.title, category_name: categoryName },
+    limit: 3,
+  });
 
   let enrollmentCount: number | null = null;
   try {
@@ -182,10 +192,11 @@ export default async function CourseLandingPage({
               learning_outcomes: course.learning_outcomes ?? [],
               modules,
               category_name: category?.name ?? null,
+              certificate_enabled: course.certificate_enabled ?? false,
             }}
             isEnrolled={isEnrolled}
             isLoggedIn={Boolean(profile?.email)}
-            related={relatedRaw ?? []}
+            related={related}
             lessonCount={lessonCount}
             enrollmentCount={enrollmentCount}
             purchaseComplete={purchaseComplete}

@@ -1,15 +1,12 @@
-@import url("https://api.fontshare.com/v2/css?f[]=cabinet-grotesk@500,700,800&f[]=general-sans@400,500,600&display=swap");
-
+/* Experience 2.0: marketplace uses the same Inter / Space Grotesk stack as the app. */
 .marketplace {
-  --mp-display: "Cabinet Grotesk", var(--font-display), system-ui, sans-serif;
-  --mp-sans: "General Sans", var(--font-sans), system-ui, sans-serif;
-  font-family: var(--mp-sans);
+  font-family: var(--font-sans), system-ui, sans-serif;
 }
 
 .marketplace .font-display,
 .marketplace h1,
 .marketplace h2,
 .marketplace h3 {
-  font-family: var(--mp-display);
+  font-family: var(--font-display), var(--font-sans), system-ui, sans-serif;
   letter-spacing: -0.02em;
 }

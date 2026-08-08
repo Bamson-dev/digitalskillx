@@ -3,6 +3,7 @@ import { bootstrapRuntimeSecrets } from "@/lib/bootstrap-runtime-secrets";
 import { createAdminClientAsync } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { isMissingColumnError } from "@/lib/schema-guard";
+import { filterStorefrontCourses } from "@/lib/storefront-visibility";
 
 export type CatalogCourse = {
   id: string;
@@ -22,6 +23,7 @@ export type LandingCourse = CatalogCourse & {
   learning_outcomes: string[] | null;
   instructor_bio: string | null;
   promo_video_url: string | null;
+  certificate_enabled?: boolean | null;
   modules: {
     id: string;
     title: string;
@@ -30,13 +32,22 @@ export type LandingCourse = CatalogCourse & {
   }[];
 };
 
+export {
+  filterStorefrontCourses,
+  pickFeaturedCourse,
+  isStorefrontHiddenTitle,
+} from "@/lib/storefront-visibility";
+
 async function catalogClient() {
   await bootstrapRuntimeSecrets();
   return createAdminClientAsync(createClient());
 }
 
 /** Public storefront catalog — bypasses RLS (published course marketing data). */
-export async function fetchPublishedCourses<T = CatalogCourse>(select: string): Promise<T[]> {
+export async function fetchPublishedCourses<T extends { title?: string | null } = CatalogCourse>(
+  select: string,
+  options?: { includeHiddenDevCourses?: boolean },
+): Promise<T[]> {
   const admin = await catalogClient();
   const { data, error } = await admin
     .from("courses")
@@ -53,14 +64,16 @@ export async function fetchPublishedCourses<T = CatalogCourse>(select: string): 
       .eq("visibility", "published")
       .order("created_at", { ascending: false });
     if (fallback.error) throw new Error(fallback.error.message);
-    return ((fallback.data ?? []) as unknown as T[]).map((row) => ({
+    const rows = ((fallback.data ?? []) as unknown as T[]).map((row) => ({
       ...(row as object),
       is_coming_soon: false,
-    })) as T[];
+    })) as unknown as T[];
+    return options?.includeHiddenDevCourses ? rows : filterStorefrontCourses(rows);
   }
 
   if (error) throw new Error(error.message);
-  return (data ?? []) as T[];
+  const rows = (data ?? []) as unknown as T[];
+  return options?.includeHiddenDevCourses ? rows : filterStorefrontCourses(rows);
 }
 
 /** Single published course for landing pages / metadata. */

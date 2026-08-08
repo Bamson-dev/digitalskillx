@@ -50,12 +50,14 @@ export default async function BrowsePage({
 
       <main className="flex-1 px-4 py-12 sm:px-8 sm:py-16">
         <div className="mx-auto max-w-[1200px] overflow-x-hidden">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-neutral-600">Catalog</p>
-          <h1 className="mt-2 font-display text-3xl font-bold text-neutral-950 sm:text-4xl">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-neutral-500">
+            Catalog
+          </p>
+          <h1 className="mt-2 font-display text-3xl font-bold tracking-tight text-neutral-950 sm:text-4xl">
             Browse courses
           </h1>
           <p className="mt-3 max-w-lg text-[15px] leading-relaxed text-neutral-500">
-            Filter by category or search by title.
+            Search and filter published programs.
           </p>
 
           <div className="mt-10">

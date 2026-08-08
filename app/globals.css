@@ -49,6 +49,13 @@ body {
   .ring-accent {
     --tw-ring-color: rgb(var(--accent));
   }
+  /* Experience 2.0 spacing rhythm helpers */
+  .section-y {
+    @apply py-12 sm:py-14;
+  }
+  .container-app {
+    @apply mx-auto w-full min-w-0 max-w-[1200px] px-4 sm:px-8;
+  }
 }
 
 @keyframes fade-up {

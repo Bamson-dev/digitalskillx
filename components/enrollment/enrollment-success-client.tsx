@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { Button } from "@/components/ui/button";
 import { createClient } from "@/lib/supabase/client";
 
 type CourseCard = {
@@ -29,10 +28,6 @@ export function EnrollmentSuccessClient() {
         if (!user) {
           if (!cancelled) setLoading(false);
           return;
-        }
-
-        if (linkId) {
-          // Best-effort event — admin client not available; skip silently on client
         }
 
         const { data: enrollments } = await supabase
@@ -64,53 +59,45 @@ export function EnrollmentSuccessClient() {
   }, [courses]);
 
   return (
-    <div className="relative mx-auto max-w-3xl overflow-hidden px-4 py-16 text-center">
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-0 opacity-40"
-        style={{
-          background:
-            "radial-gradient(circle at 20% 20%, rgba(16,185,129,0.25), transparent 40%), radial-gradient(circle at 80% 10%, rgba(59,130,246,0.2), transparent 35%)",
-        }}
-      />
-      <div className="relative">
-        <p className="text-sm font-medium text-brand">You&apos;re in</p>
-        <h1 className="mt-2 font-display text-3xl font-bold tracking-tight">
-          Welcome to DigitalSkillX
-        </h1>
-        <p className="mx-auto mt-3 max-w-lg text-muted">
-          Your courses are ready. Pick up where you left off anytime from your dashboard.
-        </p>
+    <div className="mx-auto max-w-2xl px-4 py-14 sm:py-16">
+      <p className="text-sm font-semibold text-brand">You&apos;re enrolled</p>
+      <h1 className="mt-2 font-display text-3xl font-bold tracking-tight text-neutral-950">
+        Welcome to DigitalSkillX
+      </h1>
+      <p className="mt-3 max-w-lg text-sm leading-relaxed text-neutral-600">
+        Your courses are ready. Resume anytime from your dashboard.
+      </p>
 
-        <div className="mt-8 flex flex-wrap justify-center gap-3 text-sm text-muted">
-          <span className="rounded-full bg-white px-3 py-1 ring-1 ring-app">
-            {loading
-              ? "Loading…"
-              : `${courses.length || "—"} course${courses.length === 1 ? "" : "s"} ready`}
-          </span>
-        </div>
+      <div className="mt-10">
+        {loading ? (
+          <p className="text-sm text-neutral-500">Loading your courses…</p>
+        ) : courses.length === 0 ? (
+          <p className="text-sm text-neutral-500">
+            Sign in to see your enrolled courses, or open your dashboard.
+          </p>
+        ) : (
+          <ul className="divide-y divide-neutral-200 border-y border-neutral-200">
+            {courses.slice(0, 6).map((c) => (
+              <li key={c.id}>
+                <Link
+                  href={`/courses/${c.id}`}
+                  className="flex min-h-[52px] items-center py-3.5 text-left font-medium text-neutral-900 hover:text-brand"
+                >
+                  {c.title}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
 
-        <div className="mt-10 space-y-3 text-left">
-          {loading ? (
-            <p className="text-center text-sm text-muted">Loading your courses…</p>
-          ) : (
-            courses.slice(0, 6).map((c) => (
-              <Link
-                key={c.id}
-                href={`/courses/${c.id}`}
-                className="block rounded-xl border border-app bg-white px-4 py-3 font-medium hover:border-brand"
-              >
-                {c.title}
-              </Link>
-            ))
-          )}
-        </div>
-
-        <div className="mt-10">
-          <Link href={continueHref}>
-            <Button size="lg">Continue learning</Button>
-          </Link>
-        </div>
+      <div className="mt-10">
+        <Link
+          href={continueHref}
+          className="inline-flex h-12 min-h-[48px] items-center justify-center bg-brand px-6 text-sm font-semibold text-white hover:bg-brand-700"
+        >
+          Continue learning
+        </Link>
       </div>
     </div>
   );

@@ -6,6 +6,7 @@ import { CourseCard, type MarketplaceCourse } from "@/components/marketplace/cou
 import { cn } from "@/lib/utils";
 
 type Category = { id: string; name: string; slug: string | null };
+type SortKey = "newest" | "price-asc" | "price-desc" | "title";
 
 export function BrowseCatalog({
   courses,
@@ -20,10 +21,11 @@ export function BrowseCatalog({
 }) {
   const [query, setQuery] = useState(initialQuery);
   const [category, setCategory] = useState(initialCategory);
+  const [sort, setSort] = useState<SortKey>("newest");
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return courses.filter((c) => {
+    const list = courses.filter((c) => {
       const matchesCategory =
         !category ||
         c.category_name?.toLowerCase() === category.toLowerCase() ||
@@ -37,7 +39,23 @@ export function BrowseCatalog({
         .toLowerCase();
       return haystack.includes(q);
     });
-  }, [courses, query, category, categories]);
+
+    const sorted = [...list];
+    sorted.sort((a, b) => {
+      switch (sort) {
+        case "price-asc":
+          return (a.price_ngn ?? 0) - (b.price_ngn ?? 0);
+        case "price-desc":
+          return (b.price_ngn ?? 0) - (a.price_ngn ?? 0);
+        case "title":
+          return a.title.localeCompare(b.title);
+        case "newest":
+        default:
+          return 0;
+      }
+    });
+    return sorted;
+  }, [courses, query, category, categories, sort]);
 
   return (
     <div className="overflow-x-hidden">
@@ -53,9 +71,25 @@ export function BrowseCatalog({
             aria-label="Search courses"
           />
         </div>
-        <p className="shrink-0 text-sm tabular-nums text-neutral-400">
-          {filtered.length} course{filtered.length === 1 ? "" : "s"}
-        </p>
+        <div className="flex flex-wrap items-center gap-3">
+          <label className="flex items-center gap-2 text-sm text-neutral-500">
+            <span className="sr-only sm:not-sr-only">Sort</span>
+            <select
+              value={sort}
+              onChange={(e) => setSort(e.target.value as SortKey)}
+              className="h-11 border border-neutral-200 bg-white px-3 text-sm text-neutral-800 focus:border-neutral-400 focus:outline-none"
+              aria-label="Sort courses"
+            >
+              <option value="newest">Newest</option>
+              <option value="title">Title A–Z</option>
+              <option value="price-asc">Price: low to high</option>
+              <option value="price-desc">Price: high to low</option>
+            </select>
+          </label>
+          <p className="shrink-0 text-sm tabular-nums text-neutral-500">
+            {filtered.length} course{filtered.length === 1 ? "" : "s"}
+          </p>
+        </div>
       </div>
 
       {categories.length > 0 ? (

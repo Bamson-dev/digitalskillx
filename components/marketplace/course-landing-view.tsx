@@ -9,7 +9,8 @@ import { EnrollButton } from "@/components/marketplace/enroll-button";
 import { PriceDisplay } from "@/components/marketplace/price-display";
 import { CurriculumAccordion } from "@/components/marketplace/curriculum-accordion";
 import { CourseHeroMedia } from "@/components/marketplace/course-hero-media";
-import { CourseCard, type MarketplaceCourse } from "@/components/marketplace/course-card";
+import { RecommendationRail } from "@/components/marketplace/recommendation-rail";
+import type { CourseRecommendation } from "@/lib/recommendations";
 import { cn } from "@/lib/utils";
 
 type Lesson = { id: string; title: string; position: number; lesson_type: string };
@@ -30,9 +31,10 @@ type CourseData = {
   modules: Module[];
   category_name?: string | null;
   rating?: number | null;
+  certificate_enabled?: boolean | null;
 };
 
-const TABS = ["About", "Curriculum", "Instructor", "Reviews"] as const;
+const TABS = ["About", "Curriculum", "Instructor"] as const;
 
 function instructorInitials(name: string) {
   return name
@@ -54,7 +56,7 @@ export function CourseLandingView({
   course: CourseData;
   isEnrolled: boolean;
   isLoggedIn: boolean;
-  related: MarketplaceCourse[];
+  related: CourseRecommendation[];
   lessonCount: number;
   enrollmentCount?: number | null;
   purchaseComplete?: boolean;
@@ -67,6 +69,7 @@ export function CourseLandingView({
   const hasRating = typeof course.rating === "number" && course.rating > 0;
   const showEnrollmentCount = typeof enrollmentCount === "number" && enrollmentCount > 0;
   const hasCourseAccess = isEnrolled || purchaseComplete;
+  const showCertificate = Boolean(course.certificate_enabled);
 
   const purchaseCard = (
     <div className="border border-neutral-200 bg-white p-6">
@@ -106,10 +109,12 @@ export function CourseLandingView({
           <CheckCircle2 className="h-4 w-4 shrink-0 text-brand" />
           {lessonCount} on-demand lessons
         </li>
-        <li className="flex items-center gap-2">
-          <CheckCircle2 className="h-4 w-4 shrink-0 text-brand" />
-          Certificate of completion
-        </li>
+        {showCertificate ? (
+          <li className="flex items-center gap-2">
+            <CheckCircle2 className="h-4 w-4 shrink-0 text-brand" />
+            Certificate of completion
+          </li>
+        ) : null}
       </ul>
     </div>
   );
@@ -249,20 +254,7 @@ export function CourseLandingView({
                     <p className="mt-5 text-sm leading-relaxed text-neutral-600">
                       {course.instructor_bio}
                     </p>
-                  ) : (
-                    <p className="mt-5 text-sm text-neutral-500">
-                      Experienced industry practitioner.
-                    </p>
-                  )}
-                </div>
-              ) : null}
-
-              {tab === "Reviews" ? (
-                <div className="border border-dashed border-neutral-300 px-6 py-16">
-                  <p className="font-display text-lg font-semibold text-neutral-800">No reviews yet</p>
-                  <p className="mt-2 text-sm text-neutral-500">
-                    Be the first to share your experience after completing this course.
-                  </p>
+                  ) : null}
                 </div>
               ) : null}
             </div>
@@ -273,17 +265,20 @@ export function CourseLandingView({
           </aside>
         </div>
 
-        {related.length > 0 ? (
-          <section className="mt-8 border-t border-neutral-200 pt-12 pb-24 lg:pb-12">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-neutral-400">
-              You may also like
-            </p>
-            <h2 className="mt-2 font-display text-2xl font-bold text-neutral-950">Related courses</h2>
-            <div className="mt-8 grid grid-cols-1 gap-x-6 gap-y-10 sm:grid-cols-2 lg:grid-cols-3">
-              {related.map((c) => (
-                <CourseCard key={c.id} course={c} />
-              ))}
-            </div>
+        {purchaseComplete || related.length > 0 ? (
+          <section className="mt-8 space-y-10 border-t border-neutral-200 pt-12 pb-24 lg:pb-12">
+            {purchaseComplete ? (
+              <RecommendationRail
+                title="Explore more"
+                subtitle="Other programs from the catalog."
+                items={related}
+              />
+            ) : related.length > 0 ? (
+              <RecommendationRail
+                title="Related courses"
+                items={related}
+              />
+            ) : null}
           </section>
         ) : (
           <div className="pb-24 lg:pb-0" />

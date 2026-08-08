@@ -5,7 +5,12 @@ import { ArrowUpRight } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { bootstrapRuntimeSecrets } from "@/lib/bootstrap-runtime-secrets";
 import { createAdminClientAsync } from "@/lib/supabase/admin";
-import { fetchCourseCategories, fetchPublishedCourses, type CatalogCourse } from "@/lib/published-courses";
+import {
+  fetchCourseCategories,
+  fetchPublishedCourses,
+  pickFeaturedCourse,
+  type CatalogCourse,
+} from "@/lib/published-courses";
 import { ORG } from "@/lib/org";
 import { MarketplaceNav, MarketplaceFooter } from "@/components/marketplace/marketplace-chrome";
 import { CourseCard } from "@/components/marketplace/course-card";
@@ -21,28 +26,17 @@ export const metadata: Metadata = {
 
 export const dynamic = "force-dynamic";
 
-const SECTION = "px-4 py-16 sm:px-8";
-const CONTAINER = "mx-auto w-full min-w-0 max-w-[1200px]";
+const SECTION = "px-4 py-14 sm:px-8 sm:py-16";
+const CONTAINER = "mx-auto w-full min-w-0 max-w-[1120px]";
 
 async function fetchTrustStats() {
   try {
     await bootstrapRuntimeSecrets();
     const admin = await createAdminClientAsync();
-    const [coursesRes, enrollmentsRes, certsRes] = await Promise.all([
-      admin
-        .from("courses")
-        .select("id", { count: "exact", head: true })
-        .eq("visibility", "published"),
-      admin.from("enrollments").select("id", { count: "exact", head: true }),
-      admin.from("certificates").select("id", { count: "exact", head: true }),
-    ]);
-    return {
-      courses: coursesRes.count ?? 0,
-      students: enrollmentsRes.count ?? 0,
-      certificates: certsRes.count ?? 0,
-    };
+    const { count } = await admin.from("certificates").select("id", { count: "exact", head: true });
+    return { certificates: count ?? 0 };
   } catch {
-    return { courses: 0, students: 0, certificates: 0 };
+    return { certificates: 0 };
   }
 }
 
@@ -74,7 +68,8 @@ export default async function HomePage() {
     ...c,
     category_name: c.category?.name ?? null,
   }));
-  const featured = catalog[0] ?? null;
+  const featured = pickFeaturedCourse(catalog);
+  const realCategories = (categories ?? []).slice(0, 6);
 
   let featuredEnrolled = false;
   if (user && featured) {
@@ -87,25 +82,9 @@ export default async function HomePage() {
     featuredEnrolled = Boolean(fe);
   }
 
-  const displayCategories =
-    (categories ?? []).length > 0
-      ? (categories ?? []).slice(0, 4)
-      : [
-          { id: "1", name: "Paid Ads", slug: "paid-ads" },
-          { id: "2", name: "Sales & Funnels", slug: "sales" },
-          { id: "3", name: "E-Commerce", slug: "ecommerce" },
-          { id: "4", name: "Copywriting", slug: "copywriting" },
-        ];
-
-  const categoryTags =
-    (categories ?? []).length > 0
-      ? (categories ?? []).slice(0, 3).map((c) => c.name)
-      : ["Marketing", "Sales", "Ads"];
-
   const trustItems = [
-    { label: "Courses", value: trustStats.courses },
-    { label: "Students", value: trustStats.students },
-    { label: "Certificates", value: trustStats.certificates },
+    { label: "Programs", value: catalog.length },
+    { label: "Certificates issued", value: trustStats.certificates },
   ].filter((item) => item.value > 0);
 
   return (
@@ -113,175 +92,159 @@ export default async function HomePage() {
       <MarketplaceNav user={profile} hideCurrencyToggle />
 
       <main className="flex-1 overflow-x-hidden">
-        {/* Hero */}
-        <section className={`bg-white ${SECTION}`}>
-          <div className={CONTAINER}>
-            <div className="grid min-w-0 items-start gap-10 lg:grid-cols-[1fr_400px] lg:gap-12 xl:grid-cols-[1fr_420px]">
-              <div className="min-w-0 max-w-xl lg:max-w-none">
-                <h1 className="font-display text-[2.25rem] font-bold leading-[1.05] text-neutral-950 sm:text-5xl lg:text-[3.25rem] xl:text-[3.75rem]">
-                  Master profitable digital skills
-                </h1>
-                <p className="mt-5 max-w-md text-base leading-relaxed text-neutral-500 sm:text-[17px]">
-                  Learn from practitioners who&apos;ve built real businesses. Practical programs you can
-                  apply immediately.
-                </p>
-                <div className="mt-6 flex flex-wrap gap-2">
-                  {categoryTags.map((tag) => (
-                    <Link
-                      key={tag}
-                      href={`/browse?category=${encodeURIComponent(tag)}`}
-                      className="inline-flex min-h-[36px] items-center border border-neutral-200 px-3 py-1.5 text-xs font-medium text-neutral-600 transition hover:border-neutral-950 hover:text-neutral-950"
-                    >
-                      {tag}
-                    </Link>
-                  ))}
-                </div>
-                <div className="mt-10 flex flex-col gap-3 sm:flex-row sm:items-center">
-                  <Link
-                    href="/browse"
-                    className="inline-flex h-12 min-h-[48px] items-center justify-center bg-brand px-8 text-sm font-semibold text-white transition hover:bg-brand-700"
-                  >
-                    Explore courses
-                  </Link>
-                  {!user ? (
-                    <Link
-                      href="/register"
-                      className="inline-flex h-12 min-h-[48px] items-center justify-center px-2 text-sm font-medium text-neutral-600 underline-offset-4 hover:text-neutral-950 hover:underline"
-                    >
-                      Create free account
-                    </Link>
-                  ) : (
-                    <Link
-                      href="/dashboard"
-                      className="inline-flex h-12 min-h-[48px] items-center justify-center px-2 text-sm font-medium text-neutral-600 underline-offset-4 hover:text-neutral-950 hover:underline"
-                    >
-                      Go to dashboard
-                    </Link>
-                  )}
-                </div>
-              </div>
-
-              {featured ? (
+        {/* Hero — brand first, one job */}
+        <section className="border-b border-neutral-200">
+          <div className={SECTION}>
+            <div className={CONTAINER}>
+              <p className="font-display text-sm font-semibold tracking-tight text-brand sm:text-base">
+                DigitalSkillX
+              </p>
+              <h1 className="mt-4 max-w-3xl font-display text-[2.35rem] font-bold leading-[1.05] tracking-tight text-neutral-950 sm:text-5xl lg:text-[3.5rem]">
+                Master profitable digital skills
+              </h1>
+              <p className="mt-5 max-w-xl text-base leading-relaxed text-neutral-600 sm:text-lg">
+                Practical programs from people who build and sell online. Learn at your pace. Apply
+                what you learn.
+              </p>
+              <div className="mt-10 flex flex-col gap-3 sm:flex-row sm:items-center">
                 <Link
-                  href={`/course/${featured.id}`}
-                  className="group block w-full min-w-0 overflow-hidden rounded-xl border border-neutral-200 bg-white"
+                  href="/browse"
+                  className="inline-flex h-12 min-h-[48px] items-center justify-center bg-brand px-8 text-sm font-semibold text-white transition hover:bg-brand-700"
                 >
-                  <div className="relative aspect-[4/3] w-full overflow-hidden rounded-t-xl bg-neutral-100">
-                    {featured.thumbnail_url ? (
-                      <Image
-                        src={featured.thumbnail_url}
-                        alt={featured.title}
-                        fill
-                        className="object-cover"
-                        priority
-                        sizes="(max-width: 1024px) 100vw, 420px"
-                      />
-                    ) : (
-                      <CourseThumbnailPlaceholder title={featured.title} size="hero" />
-                    )}
-                  </div>
-                  <div className="rounded-b-xl border-t border-neutral-200 bg-neutral-950 px-4 py-4 text-white sm:px-5">
-                    <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-neutral-400">
-                      Featured
-                    </p>
-                    <p className="mt-1 line-clamp-2 font-display text-lg font-bold leading-snug">
-                      {featured.title}
-                    </p>
-                    <div className="mt-3 flex min-w-0 items-center justify-between gap-3">
-                      <span className="min-w-0 truncate font-display text-xl font-bold tabular-nums text-brand">
-                        <PriceDisplay course={featured} />
-                      </span>
-                      <ArrowUpRight className="h-4 w-4 shrink-0 text-neutral-400 transition group-hover:text-white" />
-                    </div>
-                    <div className="mt-3 border-t border-neutral-800 pt-3">
-                      <HomepageCurrencyBar compact />
-                    </div>
-                  </div>
+                  Explore courses
                 </Link>
-              ) : (
-                <div className="w-full min-w-0 overflow-hidden rounded-xl border border-neutral-200 bg-neutral-100">
-                  <div className="relative aspect-[4/3] w-full">
-                    <CourseThumbnailPlaceholder title="Digital Skills Training" size="hero" />
-                  </div>
-                </div>
-              )}
+                {!user ? (
+                  <Link
+                    href="/register"
+                    className="inline-flex h-12 min-h-[48px] items-center justify-center px-1 text-sm font-medium text-neutral-600 underline-offset-4 hover:text-neutral-950 hover:underline"
+                  >
+                    Create free account
+                  </Link>
+                ) : (
+                  <Link
+                    href="/dashboard"
+                    className="inline-flex h-12 min-h-[48px] items-center justify-center px-1 text-sm font-medium text-neutral-600 underline-offset-4 hover:text-neutral-950 hover:underline"
+                  >
+                    Continue learning
+                  </Link>
+                )}
+              </div>
             </div>
           </div>
+
+          {featured ? (
+            <div className="border-t border-neutral-200">
+              <Link href={`/course/${featured.id}`} className="group block w-full">
+                <div className="relative aspect-[21/9] min-h-[200px] w-full bg-neutral-100 sm:min-h-[260px] lg:aspect-[2.4/1] lg:min-h-[320px]">
+                  {featured.thumbnail_url ? (
+                    <Image
+                      src={featured.thumbnail_url}
+                      alt={featured.title}
+                      fill
+                      className="object-cover"
+                      priority
+                      sizes="100vw"
+                    />
+                  ) : (
+                    <CourseThumbnailPlaceholder title={featured.title} size="hero" />
+                  )}
+                </div>
+              </Link>
+              <div className={`${CONTAINER} flex flex-wrap items-end justify-between gap-4 px-4 py-5 sm:px-8`}>
+                <div className="min-w-0">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-neutral-500">
+                    Featured program
+                  </p>
+                  <Link
+                    href={`/course/${featured.id}`}
+                    className="mt-1 block font-display text-lg font-bold text-neutral-950 hover:text-brand sm:text-xl"
+                  >
+                    {featured.title}
+                  </Link>
+                </div>
+                <div className="flex items-center gap-4">
+                  <span className="font-display text-lg font-bold tabular-nums text-brand">
+                    <PriceDisplay course={featured} />
+                  </span>
+                  <Link
+                    href={`/course/${featured.id}`}
+                    className="inline-flex items-center gap-1 text-sm font-semibold text-neutral-800 hover:text-brand"
+                  >
+                    View
+                    <ArrowUpRight className="h-4 w-4" />
+                  </Link>
+                </div>
+              </div>
+            </div>
+          ) : null}
         </section>
 
-        {/* Trust stats */}
         {trustItems.length > 0 ? (
-          <section className={`border-y border-neutral-200 bg-neutral-50 ${SECTION}`}>
-            <div className={CONTAINER}>
-              <p className="text-sm text-neutral-500">DigitalSkillX so far</p>
-              <div className="mt-5 flex flex-wrap items-baseline gap-x-8 gap-y-4 sm:gap-x-12">
-                {trustItems.map(({ label, value }) => (
-                  <div key={label} className="flex items-baseline gap-2.5">
-                    <span className="font-display text-2xl font-bold tabular-nums text-neutral-950 sm:text-3xl">
-                      {value.toLocaleString()}
-                    </span>
-                    <span className="text-sm text-neutral-500">{label}</span>
-                  </div>
-                ))}
-              </div>
+          <section className="border-b border-neutral-200">
+            <div className={`${CONTAINER} flex flex-wrap items-baseline gap-x-10 gap-y-3 px-4 py-8 sm:px-8`}>
+              {trustItems.map(({ label, value }) => (
+                <p key={label} className="text-sm text-neutral-600">
+                  <span className="font-display text-xl font-bold tabular-nums text-neutral-950">
+                    {value.toLocaleString()}
+                  </span>{" "}
+                  {label}
+                </p>
+              ))}
             </div>
           </section>
         ) : null}
 
-        {/* Categories */}
-        <section className={`bg-white ${SECTION}`}>
-          <div className={CONTAINER}>
-            <div className="flex items-end justify-between gap-6">
-              <div>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-neutral-600">
-                  Categories
-                </p>
-                <h2 className="mt-2 font-display text-2xl font-bold text-neutral-950 sm:text-3xl">
-                  Explore by topic
-                </h2>
-              </div>
-              <Link
-                href="/browse"
-                className="hidden shrink-0 text-sm font-medium text-neutral-500 hover:text-brand sm:inline-flex"
-              >
-                View all
-              </Link>
-            </div>
-            <ul className="mt-10 divide-y divide-neutral-200 border-y border-neutral-200">
-              {displayCategories.map((cat, i) => (
-                <li key={cat.id}>
-                  <Link
-                    href={`/browse?category=${encodeURIComponent(cat.name)}`}
-                    className="group flex min-h-[56px] items-center justify-between py-4 transition hover:pl-1 sm:min-h-[64px] sm:py-5"
-                  >
-                    <span className="flex min-w-0 items-baseline gap-4">
-                      <span className="shrink-0 font-display text-sm tabular-nums text-neutral-500">
-                        {String(i + 1).padStart(2, "0")}
-                      </span>
-                      <span className="font-display text-lg font-semibold text-neutral-900 group-hover:text-brand sm:text-xl">
-                        {cat.name}
-                      </span>
-                    </span>
-                    <ArrowUpRight className="h-4 w-4 shrink-0 text-neutral-500 transition group-hover:text-brand" />
-                  </Link>
-                </li>
-              ))}
-            </ul>
-            <Link href="/browse" className="mt-6 inline-flex text-sm font-medium text-brand sm:hidden">
-              View all categories →
-            </Link>
-          </div>
-        </section>
-
-        {/* Flagship */}
-        {featured ? (
-          <section className={`bg-neutral-950 text-white ${SECTION}`}>
+        {realCategories.length > 0 ? (
+          <section className={`bg-white ${SECTION}`}>
             <div className={CONTAINER}>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-neutral-300">
-                Flagship program
+              <div className="flex items-end justify-between gap-6">
+                <div>
+                  <h2 className="font-display text-2xl font-bold text-neutral-950 sm:text-3xl">
+                    Browse by topic
+                  </h2>
+                  <p className="mt-2 text-sm text-neutral-500">
+                    Jump straight into the skill you want to build.
+                  </p>
+                </div>
+                <Link
+                  href="/browse"
+                  className="hidden shrink-0 text-sm font-medium text-neutral-600 hover:text-brand sm:inline-flex"
+                >
+                  All courses
+                </Link>
+              </div>
+              <ul className="mt-10 divide-y divide-neutral-200 border-y border-neutral-200">
+                {realCategories.map((cat, i) => (
+                  <li key={cat.id}>
+                    <Link
+                      href={`/browse?category=${encodeURIComponent(cat.name)}`}
+                      className="group flex min-h-[56px] items-center justify-between py-4 sm:min-h-[60px]"
+                    >
+                      <span className="flex min-w-0 items-baseline gap-4">
+                        <span className="shrink-0 font-display text-sm tabular-nums text-neutral-400">
+                          {String(i + 1).padStart(2, "0")}
+                        </span>
+                        <span className="font-display text-lg font-semibold text-neutral-900 group-hover:text-brand sm:text-xl">
+                          {cat.name}
+                        </span>
+                      </span>
+                      <ArrowUpRight className="h-4 w-4 shrink-0 text-neutral-400 transition group-hover:text-brand" />
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </section>
+        ) : null}
+
+        {featured ? (
+          <section className="bg-neutral-950 text-white">
+            <div className={`${SECTION} ${CONTAINER}`}>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-neutral-400">
+                Start here
               </p>
-              <div className="mt-8 grid min-w-0 gap-10 lg:grid-cols-2 lg:items-end lg:gap-12">
-                <div className="relative min-h-[220px] w-full min-w-0 overflow-hidden rounded-xl bg-neutral-800 sm:min-h-[280px] lg:min-h-[360px]">
+              <div className="mt-8 grid min-w-0 gap-10 lg:grid-cols-2 lg:items-center lg:gap-14">
+                <div className="relative aspect-[4/3] w-full min-w-0 overflow-hidden bg-neutral-800">
                   {featured.thumbnail_url ? (
                     <Image
                       src={featured.thumbnail_url}
@@ -294,16 +257,18 @@ export default async function HomePage() {
                     <CourseThumbnailPlaceholder title={featured.title} size="hero" />
                   )}
                 </div>
-                <div className="min-w-0 lg:pb-2">
-                  <h2 className="font-display text-3xl font-bold leading-tight sm:text-4xl lg:text-[2.5rem]">
+                <div className="min-w-0">
+                  <h2 className="font-display text-3xl font-bold leading-tight sm:text-4xl">
                     {featured.title}
                   </h2>
-                  <p className="mt-3 text-sm text-neutral-300">
-                    {featured.instructor_name ?? ORG.instructor}
-                  </p>
-                  <p className="mt-5 max-w-md text-[15px] leading-relaxed text-neutral-300">
-                    {featured.short_description ?? featured.description}
-                  </p>
+                  {featured.instructor_name ? (
+                    <p className="mt-3 text-sm text-neutral-400">{featured.instructor_name}</p>
+                  ) : null}
+                  {(featured.short_description ?? featured.description) ? (
+                    <p className="mt-5 max-w-md text-[15px] leading-relaxed text-neutral-300">
+                      {featured.short_description ?? featured.description}
+                    </p>
+                  ) : null}
                   <div className="mt-8 flex flex-col gap-5 border-t border-neutral-800 pt-8">
                     <div className="flex flex-wrap items-center justify-between gap-4">
                       <p className="font-display text-3xl font-bold tabular-nums text-brand">
@@ -327,34 +292,33 @@ export default async function HomePage() {
           </section>
         ) : null}
 
-        {/* Course grid */}
-        <section id="courses" className={`bg-neutral-50 ${SECTION}`}>
+        <section id="courses" className={`bg-white ${SECTION}`}>
           <div className={CONTAINER}>
             <HomepageCurrencyBar sticky />
 
             <div className="mt-6 flex items-end justify-between gap-6">
               <div>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-neutral-600">
-                  Catalog
-                </p>
-                <h2 className="mt-2 font-display text-2xl font-bold text-neutral-950 sm:text-3xl">
-                  All courses
+                <h2 className="font-display text-2xl font-bold text-neutral-950 sm:text-3xl">
+                  Course catalog
                 </h2>
+                <p className="mt-2 text-sm text-neutral-500">
+                  {catalog.length > 0
+                    ? `${catalog.length} published program${catalog.length === 1 ? "" : "s"}.`
+                    : "New programs launching soon."}
+                </p>
               </div>
               <Link
                 href="/browse"
-                className="shrink-0 text-sm font-medium text-neutral-500 hover:text-brand"
+                className="shrink-0 text-sm font-medium text-neutral-600 hover:text-brand"
               >
-                Browse →
+                Browse all
               </Link>
             </div>
 
             {catalog.length === 0 ? (
-              <div className="mt-12 border border-dashed border-neutral-300 px-6 py-16 text-neutral-500">
-                New courses launching soon.
-              </div>
+              <p className="mt-12 text-sm text-neutral-500">Check back shortly for new courses.</p>
             ) : (
-              <div className="mt-10 grid min-w-0 grid-cols-1 gap-x-6 gap-y-10 sm:grid-cols-2 lg:grid-cols-3">
+              <div className="mt-10 grid min-w-0 grid-cols-1 gap-x-8 gap-y-12 sm:grid-cols-2 lg:grid-cols-3">
                 {catalog.map((course) => (
                   <CourseCard key={course.id} course={course} />
                 ))}

@@ -229,3 +229,65 @@ console.log("PASS: production enroll paths isolated from EnrollmentEngine");
 }
 
 console.log("PASS: device security heuristics + video architecture + course editor layout");
+
+{
+  const { readFileSync } = await import("node:fs");
+  const { join } = await import("node:path");
+
+  const STOREFRONT_HIDDEN_TITLE =
+    /^(RC Course\s+\d+|E2E test course|Automated test course|Test course\s+\d+)/i;
+  function isStorefrontHiddenTitle(title) {
+    if (!title) return false;
+    return STOREFRONT_HIDDEN_TITLE.test(String(title).trim());
+  }
+  function filterStorefrontCourses(courses) {
+    return courses.filter((c) => !isStorefrontHiddenTitle(c.title));
+  }
+  function pickFeaturedCourse(courses) {
+    const visible = filterStorefrontCourses(courses);
+    if (visible.length === 0) return null;
+    return visible.find((c) => Boolean(c.thumbnail_url?.trim())) ?? visible[0] ?? null;
+  }
+
+  assert.equal(isStorefrontHiddenTitle("RC Course 1786090370885"), true);
+  assert.equal(isStorefrontHiddenTitle("E2E test course"), true);
+  assert.equal(isStorefrontHiddenTitle("Automated test course"), true);
+  assert.equal(isStorefrontHiddenTitle("Test course 42"), true);
+  assert.equal(isStorefrontHiddenTitle("Facebook Ad Mastery"), false);
+  assert.equal(isStorefrontHiddenTitle("RC Course Review Guide"), false);
+
+  assert.deepEqual(
+    filterStorefrontCourses([
+      { id: "1", title: "RC Course 1", thumbnail_url: "https://x/a.jpg" },
+      { id: "2", title: "Real Skills", thumbnail_url: null },
+      { id: "3", title: "Sales Funnels", thumbnail_url: "https://x/b.jpg" },
+    ]).map((c) => c.id),
+    ["2", "3"],
+  );
+
+  assert.equal(
+    pickFeaturedCourse([
+      { id: "1", title: "RC Course 9", thumbnail_url: "https://x/rc.jpg" },
+      { id: "2", title: "No Thumb", thumbnail_url: null },
+      { id: "3", title: "With Thumb", thumbnail_url: "https://x/ok.jpg" },
+    ])?.id,
+    "3",
+  );
+
+  // Keep unit mirror aligned with source modules.
+  const visibilitySrc = readFileSync(join(root, "lib/storefront-visibility.ts"), "utf8");
+  assert.match(visibilitySrc, /RC Course\\s\+\\d\+/);
+  assert.match(visibilitySrc, /filterStorefrontCourses/);
+  assert.match(visibilitySrc, /pickFeaturedCourse/);
+  const recSrc = readFileSync(join(root, "lib/recommendations.ts"), "utf8");
+  assert.match(recSrc, /recommendCourses/);
+  assert.match(recSrc, /filterStorefrontCourses/);
+  assert.match(recSrc, /ownedIds/);
+  assert.equal(recSrc.includes("Popular with students"), false);
+  assert.equal(/RecommendationReason = "[^"]*popular/.test(recSrc), false);
+  const publishedSrc = readFileSync(join(root, "lib/published-courses.ts"), "utf8");
+  assert.match(publishedSrc, /filterStorefrontCourses/);
+  assert.match(publishedSrc, /includeHiddenDevCourses/);
+}
+
+console.log("PASS: storefront visibility + heuristic recommendations");

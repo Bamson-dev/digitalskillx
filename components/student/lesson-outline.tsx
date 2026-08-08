@@ -50,7 +50,7 @@ export function LessonOutline({
         {courseTitle}
       </Link>
 
-      <div ref={listRef} className="max-h-[min(36vh,16rem)] overflow-y-auto overscroll-contain sm:max-h-[min(42vh,22rem)] lg:max-h-[calc(100vh-7rem)]">
+      <div ref={listRef} className="max-h-[calc(100vh-7rem)] overflow-y-auto overscroll-contain">
         {displayModules.map((mod) => {
           const lessons = [...(mod.lessons ?? [])].sort((a, b) => a.position - b.position);
           if (lessons.length === 0) return null;
@@ -86,9 +86,10 @@ export function LessonOutline({
                       className={cn(
                         "flex items-center gap-2 rounded-md px-1 py-0.5 text-sm leading-tight",
                         isCurrent
-                          ? "bg-brand-50 font-medium text-brand-700"
-                          : "text-foreground hover:bg-brand-50/50",
-                        locked && "text-muted",
+                          ? "bg-brand-50 font-semibold text-brand-700"
+                          : "text-foreground hover:bg-neutral-50",
+                        done && !isCurrent && "text-neutral-700",
+                        locked && "text-muted opacity-70",
                         comingSoon && !isCurrent && "text-amber-900/80",
                       )}
                     >

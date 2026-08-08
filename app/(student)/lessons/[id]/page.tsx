@@ -8,7 +8,7 @@ import { bootstrapRuntimeSecrets } from "@/lib/bootstrap-runtime-secrets";
 import { requireStudent } from "@/lib/auth";
 import { checkStudentCourseEnrollment } from "@/lib/student-enrollments";
 import { getStudentViewSupabase } from "@/lib/student-view-supabase";
-import { LessonOutline } from "@/components/student/lesson-outline";
+import { LessonLearningLayout } from "@/components/student/lesson-learning-layout";
 import { LessonPlayer } from "@/components/student/lesson-player";
 import { LessonComingSoonView } from "@/components/student/lesson-coming-soon-view";
 import { isLessonComingSoon } from "@/lib/lesson-coming-soon";
@@ -155,83 +155,77 @@ export default async function LessonPage({ params }: { params: { id: string } })
       : null;
 
   return (
-    <div className="grid gap-4 lg:grid-cols-[240px_1fr] lg:gap-6">
-      <aside className="order-2 lg:order-1 lg:sticky lg:top-20 lg:self-start">
-        <LessonOutline
-          courseId={courseId}
+    <LessonLearningLayout
+      courseId={courseId}
+      courseTitle={course?.title ?? "Course"}
+      modules={sortedModules}
+      currentLessonId={lesson.id}
+      completedIds={[...completedIds]}
+      lockedIds={[...lockedIds]}
+    >
+      {isComingSoon ? (
+        <LessonComingSoonView
+          lessonTitle={lesson.title}
           courseTitle={course?.title ?? "Course"}
-          modules={sortedModules}
-          currentLessonId={lesson.id}
-          completedIds={completedIds}
-          lockedIds={lockedIds}
+          courseId={courseId}
+          description={lesson.description}
+          availableAt={lesson.coming_soon_available_at}
         />
-      </aside>
-
-      <div className="order-1 lg:order-2">
-        {isComingSoon ? (
-          <LessonComingSoonView
-            lessonTitle={lesson.title}
-            courseTitle={course?.title ?? "Course"}
-            courseId={courseId}
-            description={lesson.description}
-            availableAt={lesson.coming_soon_available_at}
-          />
-        ) : isLocked ? (
-          <Card className="flex flex-col items-center gap-3 py-16 text-center">
-            <Lock className="h-8 w-8 text-muted" />
-            <h2 className="text-lg font-semibold">This lesson is locked</h2>
-            <p className="max-w-sm text-sm text-muted">
-              Complete the previous lesson or wait for it to unlock on its scheduled drip date.
-            </p>
-          </Card>
-        ) : (
-          <div className="space-y-5">
-            {enrolled ? (
-              <Card className="p-4 sm:p-5">
-                <CourseProgressNudge
-                  pct={progressPct}
-                  lessonsLeft={lessonsLeft}
-                  totalLessons={totalLessons}
-                />
-              </Card>
-            ) : null}
-            <LessonPlayer
-              lesson={lesson}
-              studentEmail={profile.email}
-              completed={completedIds.has(lesson.id)}
-              note={note?.content ?? ""}
-              bookmarks={bookmarks ?? []}
-            />
-            <LessonAttachments attachments={attachments ?? []} />
-            {quiz ? (
-              <Card className="flex items-center justify-between">
-                <div>
-                  <h3 className="font-semibold">{quiz.title}</h3>
-                  <p className="text-sm text-muted">Test your understanding of this lesson.</p>
-                </div>
-                <Link
-                  href={`/quizzes/${quiz.id}`}
-                  className="rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700"
-                >
-                  Take quiz
-                </Link>
-              </Card>
-            ) : null}
-            {course?.certificate_enabled && enrolled ? (
-              <CourseCertificateGoal
-                unlocked={courseComplete || Boolean(certificate)}
-                certificateId={certificate?.id}
-                templateKey={certificateTemplateKey}
+      ) : isLocked ? (
+        <Card className="flex flex-col items-center gap-3 py-16 text-center">
+          <Lock className="h-8 w-8 text-muted" />
+          <h2 className="text-lg font-semibold">This lesson is locked</h2>
+          <p className="max-w-sm text-sm text-muted">
+            Complete the previous lesson or wait for it to unlock on its scheduled drip date.
+          </p>
+        </Card>
+      ) : (
+        <div className="space-y-5">
+          {enrolled ? (
+            <Card className="p-4 sm:p-5">
+              <CourseProgressNudge
+                pct={progressPct}
+                lessonsLeft={lessonsLeft}
+                totalLessons={totalLessons}
               />
-            ) : null}
-          </div>
-        )}
-
-        <div className="mt-5">
-          <CourseResources resources={courseResources ?? []} />
+            </Card>
+          ) : null}
+          <LessonPlayer
+            lesson={lesson}
+            studentEmail={profile.email}
+            completed={completedIds.has(lesson.id)}
+            note={note?.content ?? ""}
+            bookmarks={bookmarks ?? []}
+          />
+          <LessonAttachments attachments={attachments ?? []} />
+          {quiz ? (
+            <Card className="flex items-center justify-between">
+              <div>
+                <h3 className="font-semibold">{quiz.title}</h3>
+                <p className="text-sm text-muted">Test your understanding of this lesson.</p>
+              </div>
+              <Link
+                href={`/quizzes/${quiz.id}`}
+                className="rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700"
+              >
+                Take quiz
+              </Link>
+            </Card>
+          ) : null}
+          {course?.certificate_enabled && enrolled ? (
+            <CourseCertificateGoal
+              unlocked={courseComplete || Boolean(certificate)}
+              certificateId={certificate?.id}
+              templateKey={certificateTemplateKey}
+            />
+          ) : null}
         </div>
+      )}
+
+      <div className="mt-5">
+        <CourseResources resources={courseResources ?? []} />
       </div>
-    </div>
+    </LessonLearningLayout>
   );
 }
 
