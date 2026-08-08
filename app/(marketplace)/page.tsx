@@ -33,10 +33,16 @@ async function fetchTrustStats() {
   try {
     await bootstrapRuntimeSecrets();
     const admin = await createAdminClientAsync();
-    const { count } = await admin.from("certificates").select("id", { count: "exact", head: true });
-    return { certificates: count ?? 0 };
+    const [enrollmentsRes, certsRes] = await Promise.all([
+      admin.from("enrollments").select("id", { count: "exact", head: true }),
+      admin.from("certificates").select("id", { count: "exact", head: true }),
+    ]);
+    return {
+      students: enrollmentsRes.count ?? 0,
+      certificates: certsRes.count ?? 0,
+    };
   } catch {
-    return { certificates: 0 };
+    return { students: 0, certificates: 0 };
   }
 }
 
@@ -84,6 +90,7 @@ export default async function HomePage() {
 
   const trustItems = [
     { label: "Programs", value: catalog.length },
+    { label: "Students", value: trustStats.students },
     { label: "Certificates issued", value: trustStats.certificates },
   ].filter((item) => item.value > 0);
 
