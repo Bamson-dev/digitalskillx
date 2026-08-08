@@ -168,6 +168,44 @@ export async function softDeleteEnrollmentLink(
   });
 }
 
+/** Soft-delete many enrollment links in one update (skips already-deleted). */
+export async function softDeleteEnrollmentLinks(
+  admin: SupabaseClient<Database>,
+  linkIds: string[],
+  adminUserId: string,
+): Promise<{ deleted: number }> {
+  const ids = [...new Set(linkIds.map((id) => id.trim()).filter(Boolean))];
+  if (ids.length === 0) return { deleted: 0 };
+  if (ids.length > 500) {
+    throw new Error("You can delete at most 500 enrollment links at a time.");
+  }
+
+  const now = new Date().toISOString();
+  const { data, error } = await admin
+    .from("enrollment_links")
+    .update({
+      status: "deleted",
+      deleted_at: now,
+      updated_at: now,
+    })
+    .in("id", ids)
+    .is("deleted_at", null)
+    .select("id");
+  if (error) throw new Error(error.message);
+
+  const deletedIds = (data ?? []).map((row) => row.id);
+  for (const linkId of deletedIds) {
+    await recordEnrollmentEvent(admin, {
+      event: "link_deleted",
+      enrollmentLinkId: linkId,
+      userId: adminUserId,
+      metadata: { bulk: true },
+    });
+  }
+
+  return { deleted: deletedIds.length };
+}
+
 export async function setEnrollmentLinkEnabled(
   admin: SupabaseClient<Database>,
   linkId: string,

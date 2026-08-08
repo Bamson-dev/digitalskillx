@@ -177,4 +177,19 @@ function resolvePostRedeemPath(result) {
   console.log("PASS: required enrollment-link artifacts present");
 }
 
+// --- Bulk delete support ---
+{
+  const listUi = readFileSync(join(root, "components/admin/enrollment-links-list.tsx"), "utf8");
+  const api = readFileSync(join(root, "app/api/admin/enrollment-links/route.ts"), "utf8");
+  const service = readFileSync(join(root, "lib/enrollment-links/link-service.ts"), "utf8");
+  assert.match(listUi, /Delete selected/);
+  assert.match(listUi, /Select all shown/);
+  assert.match(listUi, /Select all enrollment links shown/);
+  assert.match(api, /softDeleteEnrollmentLinks/);
+  assert.match(api, /enrollment_links_bulk_deleted/);
+  assert.match(service, /softDeleteEnrollmentLinks/);
+  assert.match(service, /at most 500/);
+  console.log("PASS: bulk select/delete enrollment links");
+}
+
 console.log("\nAll enrollment-link certification checks passed.");

@@ -6,6 +6,7 @@ import { enrollmentLinksEnabled } from "@/lib/enrollment-links/feature-flag";
 import {
   createEnrollmentLink,
   listEnrollmentLinks,
+  softDeleteEnrollmentLinks,
 } from "@/lib/enrollment-links/link-service";
 import type {
   EnrollmentLinkAccess,
@@ -105,6 +106,46 @@ export async function POST(request: NextRequest) {
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "Could not create link." },
+      { status: 400 },
+    );
+  }
+}
+
+/** Bulk soft-delete enrollment links. Body: { ids: string[] } */
+export async function DELETE(request: NextRequest) {
+  if (!enrollmentLinksEnabled()) return featureDisabled();
+
+  const limited = await rateLimitedResponse(request, "admin-enrollment-links-bulk-delete", 20);
+  if (limited) return limited;
+
+  const auth = await requireAdminApiAuth();
+  if ("error" in auth) return auth.error;
+
+  let body: { ids?: unknown };
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
+  }
+
+  const ids = Array.isArray(body.ids)
+    ? body.ids.filter((id): id is string => typeof id === "string" && id.trim().length > 0)
+    : [];
+  if (ids.length === 0) {
+    return NextResponse.json({ error: "Select at least one enrollment link." }, { status: 400 });
+  }
+
+  try {
+    const result = await softDeleteEnrollmentLinks(auth.admin, ids, auth.user.id);
+    await logAudit({
+      action: "enrollment_links_bulk_deleted",
+      targetType: "enrollment_link",
+      metadata: { requested: ids.length, deleted: result.deleted },
+    });
+    return NextResponse.json({ ok: true, deleted: result.deleted, requested: ids.length });
+  } catch (err) {
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : "Bulk delete failed." },
       { status: 400 },
     );
   }
