@@ -73,7 +73,6 @@ export async function POST(request: NextRequest) {
         title: `__pipeline_verify_${stamp}__`,
         description: "Temporary Contabo sales-page pipeline verification course. Safe to delete.",
         visibility: "draft",
-        is_published: false,
         price_ngn: 0,
         price_usd: 0,
         enrollment_type: "manual",
