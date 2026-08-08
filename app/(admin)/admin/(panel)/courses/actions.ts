@@ -172,6 +172,8 @@ export async function updateCourseSettings(
         is_coming_soon: isComingSoon,
         community_telegram_url: communityTelegramUrl,
         community_whatsapp_url: communityWhatsappUrl,
+        companion_enabled: formData.get("companion_enabled") === "on",
+        celebrations_enabled: formData.get("celebrations_enabled") === "on",
         required_completion_pct: Number.isFinite(required) ? required : 100,
         price_ngn: Number.isFinite(priceNgn) && priceNgn >= 0 ? Math.round(priceNgn) : 0,
         price_usd: Number.isFinite(priceUsd) && priceUsd >= 0 ? Math.round(priceUsd) : 0,
@@ -207,6 +209,16 @@ export async function updateCourseSettings(
         return {
           error:
             "Community link columns are missing on courses. Run supabase/migrations/0025_course_community_links.sql in the Supabase SQL Editor, then try again.",
+        };
+      }
+      if (
+        (error.message.includes("companion_enabled") ||
+          error.message.includes("celebrations_enabled")) &&
+        error.message.includes("does not exist")
+      ) {
+        return {
+          error:
+            "Classroom engagement columns are missing. Run supabase/migrations/0035_classroom_engagement.sql in the Supabase SQL Editor, then try again.",
         };
       }
       return { error: error.message };

@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import {
   Bookmark,
   CheckCircle2,
@@ -21,13 +22,20 @@ import { displayStudentLessonTitle } from "@/lib/lesson-display";
 import { siteUrl } from "@/lib/org";
 import { cn } from "@/lib/utils";
 import type { Lesson, Bookmark as BookmarkType } from "@/types/database";
+import { MarkLessonCompleteButton } from "@/components/student/mark-lesson-complete-button";
 import {
-  markLessonComplete,
   saveLessonNote,
   addBookmark,
   deleteBookmark,
   updateWatchProgress,
 } from "@/app/(student)/lessons/actions";
+
+function parseSeekSeconds(raw: string | null): number {
+  if (!raw) return 0;
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n < 0) return 0;
+  return Math.floor(n);
+}
 
 export function LessonPlayer({
   lesson,
@@ -77,13 +85,7 @@ export function LessonPlayer({
               Completed
             </span>
           ) : (
-            <form action={markLessonComplete}>
-              <input type="hidden" name="lesson_id" value={lesson.id} />
-              <Button type="submit" className="h-11 rounded-none px-5">
-                <CheckCircle2 className="h-4 w-4" />
-                Mark complete
-              </Button>
-            </form>
+            <MarkLessonCompleteButton lessonId={lesson.id} />
           )}
           {nextLessonId ? (
             <Link
@@ -149,16 +151,9 @@ export function LessonPlayer({
               </span>
             )
           ) : (
-            <form action={markLessonComplete} className="flex-1">
-              <input type="hidden" name="lesson_id" value={lesson.id} />
-              <button
-                type="submit"
-                className="inline-flex h-12 w-full items-center justify-center gap-2 bg-brand text-sm font-bold text-white"
-              >
-                <CheckCircle2 className="h-4 w-4" />
-                Mark complete
-              </button>
-            </form>
+            <div className="flex-1">
+              <MarkLessonCompleteButton lessonId={lesson.id} variant="mobile" />
+            </div>
           )}
 
           {nextLessonId && !completed ? (
@@ -185,12 +180,18 @@ function LessonContent({ lesson, studentEmail }: { lesson: Lesson; studentEmail:
   switch (lesson.lesson_type) {
     case "video":
       return (
-        <VideoContent
-          url={lesson.content_url}
-          requiredPct={lesson.required_watch_pct}
-          lessonId={lesson.id}
-          studentEmail={studentEmail}
-        />
+        <Suspense
+          fallback={
+            <div className="aspect-video border-y border-neutral-200 bg-neutral-950 sm:border" />
+          }
+        >
+          <VideoContent
+            url={lesson.content_url}
+            requiredPct={lesson.required_watch_pct}
+            lessonId={lesson.id}
+            studentEmail={studentEmail}
+          />
+        </Suspense>
       );
     case "pdf":
       return (
@@ -287,6 +288,8 @@ function VideoContent({
   const video = resolveVideo(url);
   const fileRef = useRef<HTMLVideoElement>(null);
   const reported = useRef(false);
+  const searchParams = useSearchParams();
+  const seekSeconds = parseSeekSeconds(searchParams.get("t"));
 
   useEffect(() => {
     const el = fileRef.current;
@@ -302,6 +305,20 @@ function VideoContent({
     el.addEventListener("timeupdate", onTime);
     return () => el.removeEventListener("timeupdate", onTime);
   }, [lessonId, requiredPct]);
+
+  useEffect(() => {
+    const el = fileRef.current;
+    if (!el || seekSeconds <= 0) return;
+    const seek = () => {
+      try {
+        el.currentTime = seekSeconds;
+      } catch {
+        /* ignore seek errors before metadata */
+      }
+    };
+    if (el.readyState >= 1) seek();
+    else el.addEventListener("loadedmetadata", seek, { once: true });
+  }, [seekSeconds, url]);
 
   if (!video) {
     return (
@@ -333,7 +350,8 @@ function VideoContent({
         <div className="relative aspect-video">
           <div className="pointer-events-auto absolute left-0 top-0 z-[5] h-12 w-28" aria-hidden />
           <iframe
-            src={youtubeLessonEmbedUrl(video.id, siteUrl())}
+            key={`yt-${seekSeconds}`}
+            src={youtubeLessonEmbedUrl(video.id, siteUrl(), seekSeconds)}
             className="aspect-video w-full"
             title="Lesson video"
             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
@@ -341,6 +359,15 @@ function VideoContent({
             referrerPolicy="strict-origin-when-cross-origin"
           />
         </div>
+      ) : video.provider === "vimeo" ? (
+        <iframe
+          key={`vm-${seekSeconds}`}
+          src={seekSeconds > 0 ? `${video.embedUrl.split("#")[0]}#t=${seekSeconds}s` : video.embedUrl}
+          className="aspect-video w-full"
+          title="Lesson video"
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+          allowFullScreen
+        />
       ) : (
         <iframe
           src={video.embedUrl}
@@ -420,6 +447,7 @@ function ToolsDisclosure({
 function NotesPanel({ lessonId, note }: { lessonId: string; note: string }) {
   return (
     <ToolsDisclosure title="My notes" defaultOpen={Boolean(note)}>
+      <p className="mb-3 text-xs text-neutral-500">Private to you — only visible on this lesson.</p>
       <form action={saveLessonNote} className="space-y-3">
         <input type="hidden" name="lesson_id" value={lessonId} />
         <Textarea
@@ -428,6 +456,7 @@ function NotesPanel({ lessonId, note }: { lessonId: string; note: string }) {
           defaultValue={note}
           placeholder="Capture what you want to remember…"
           className="rounded-none border-neutral-200"
+          aria-label="Lesson notes"
         />
         <Button type="submit" size="sm" className="rounded-none">
           Save notes
@@ -435,6 +464,12 @@ function NotesPanel({ lessonId, note }: { lessonId: string; note: string }) {
       </form>
     </ToolsDisclosure>
   );
+}
+
+function formatBookmarkTime(seconds: number) {
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return `${m}:${String(s).padStart(2, "0")}`;
 }
 
 function BookmarksPanel({ lessonId, bookmarks }: { lessonId: string; bookmarks: BookmarkType[] }) {
@@ -470,12 +505,14 @@ function BookmarksPanel({ lessonId, bookmarks }: { lessonId: string; bookmarks: 
       <ul className="divide-y divide-neutral-100">
         {bookmarks.map((b) => (
           <li key={b.id} className="flex items-center justify-between gap-3 py-2.5 text-sm">
-            <span>
-              <span className="font-medium tabular-nums">
-                {Math.floor(b.timestamp_seconds / 60)}:{String(b.timestamp_seconds % 60).padStart(2, "0")}
-              </span>
+            <Link
+              href={`/lessons/${lessonId}?t=${b.timestamp_seconds}`}
+              className="min-w-0 font-medium text-neutral-900 hover:text-brand"
+              title="Jump to this moment"
+            >
+              <span className="tabular-nums">{formatBookmarkTime(b.timestamp_seconds)}</span>
               {b.label ? <span className="text-neutral-500"> · {b.label}</span> : null}
-            </span>
+            </Link>
             <form action={deleteBookmark}>
               <input type="hidden" name="id" value={b.id} />
               <input type="hidden" name="lesson_id" value={lessonId} />

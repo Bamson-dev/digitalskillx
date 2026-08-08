@@ -1,14 +1,33 @@
+"use client";
+
+import { useEffect } from "react";
 import Link from "next/link";
 import { Award, Lock } from "lucide-react";
+import { dispatchClassroomMoment } from "@/lib/classroom-engagement";
 
 export function CourseCertificateGoal({
   unlocked,
   certificateId,
+  courseId,
 }: {
   unlocked: boolean;
   certificateId?: string | null;
   templateKey?: string | null;
+  courseId?: string | null;
 }) {
+  useEffect(() => {
+    if (!unlocked) return;
+    if (certificateId) {
+      dispatchClassroomMoment("certificate_unlock", {
+        dedupeKey: `cert:${certificateId}`,
+      });
+      return;
+    }
+    dispatchClassroomMoment("course_complete", {
+      dedupeKey: `course-complete:${courseId ?? "unknown"}`,
+    });
+  }, [unlocked, certificateId, courseId]);
+
   if (unlocked) {
     return (
       <section className="border-y border-neutral-200 px-4 py-5 sm:px-0">

@@ -291,3 +291,178 @@ console.log("PASS: device security heuristics + video architecture + course edit
 }
 
 console.log("PASS: storefront visibility + heuristic recommendations");
+
+{
+  const { resolveNextBestAction } = await import(
+    pathToFileURL(join(root, "lib/classroom-next-action.ts")).href
+  );
+  assert.equal(
+    resolveNextBestAction({
+      lessonCompleted: false,
+      courseId: "c1",
+      quizId: "q1",
+    }),
+    null,
+  );
+  assert.equal(
+    resolveNextBestAction({
+      lessonCompleted: true,
+      courseId: "c1",
+      quizId: "q1",
+      quizPassed: false,
+      nextLessonId: "l2",
+    })?.kind,
+    "take_quiz",
+  );
+  assert.equal(
+    resolveNextBestAction({
+      lessonCompleted: true,
+      courseId: "c1",
+      quizId: "q1",
+      quizPassed: true,
+      nextLessonId: "l2",
+    })?.href,
+    "/lessons/l2",
+  );
+  assert.equal(
+    resolveNextBestAction({
+      lessonCompleted: true,
+      courseId: "c1",
+      courseComplete: true,
+      certificateId: "cert1",
+    })?.kind,
+    "view_certificate",
+  );
+
+  const { youtubeLessonEmbedUrl } = await import(
+    pathToFileURL(join(root, "lib/video.ts")).href
+  );
+  assert.match(youtubeLessonEmbedUrl("abcdefghijk", undefined, 95), /start=95/);
+  assert.equal(youtubeLessonEmbedUrl("abcdefghijk").includes("start="), false);
+}
+
+console.log("PASS: classroom next-action + bookmark seek helpers");
+
+{
+  // Mirror recommendCourses heuristics (Node cannot resolve @/ imports from .ts).
+  const { readFileSync } = await import("node:fs");
+  const { join } = await import("node:path");
+  const STOREFRONT_HIDDEN_TITLE =
+    /^(RC Course\s+\d+|E2E test course|Automated test course|Test course\s+\d+)/i;
+  function filterStorefrontCourses(courses) {
+    return courses.filter((c) => !STOREFRONT_HIDDEN_TITLE.test(String(c.title ?? "").trim()));
+  }
+  function recommendCourses(params) {
+    const owned = new Set(params.ownedIds ?? []);
+    const limit = Math.max(1, Math.min(params.limit ?? 4, 8));
+    const seedId = params.seed?.id;
+    const seedCategory = params.seed?.category_name?.trim().toLowerCase() ?? "";
+    const pool = filterStorefrontCourses(params.catalog).filter(
+      (c) => c.id !== seedId && !owned.has(c.id) && !c.is_coming_soon,
+    );
+    const scored = pool.map((course) => {
+      let score = 0;
+      let reason;
+      const cat = course.category_name?.trim().toLowerCase() ?? "";
+      if (seedCategory && cat && cat === seedCategory) {
+        score += 50;
+        reason = params.preferContinue ? "continue" : "related";
+      }
+      if (course.thumbnail_url) score += 5;
+      if (course.created_at) {
+        const age = Date.now() - new Date(course.created_at).getTime();
+        if (Number.isFinite(age) && age < 1000 * 60 * 60 * 24 * 45) {
+          score += 8;
+          if (!reason) reason = "new";
+        }
+      }
+      return { course, score, reason };
+    });
+    scored.sort((a, b) => b.score - a.score || a.course.title.localeCompare(b.course.title));
+    return scored.slice(0, limit).map(({ course, reason }) => ({
+      course,
+      ...(reason ? { reason } : {}),
+    }));
+  }
+
+  const catalog = [
+    {
+      id: "a",
+      title: "Facebook Ads",
+      category_name: "Ads",
+      thumbnail_url: "https://x/a.jpg",
+      created_at: new Date().toISOString(),
+    },
+    {
+      id: "b",
+      title: "RC Course 99",
+      category_name: "Ads",
+      thumbnail_url: "https://x/b.jpg",
+    },
+    {
+      id: "c",
+      title: "Copywriting",
+      category_name: "Writing",
+      thumbnail_url: null,
+    },
+    {
+      id: "d",
+      title: "Owned Course",
+      category_name: "Ads",
+      thumbnail_url: "https://x/d.jpg",
+    },
+  ];
+  const recs = recommendCourses({
+    catalog,
+    ownedIds: ["d"],
+    seed: { id: "seed", title: "Seed", category_name: "Ads" },
+    limit: 4,
+  });
+  assert.equal(recs.some((r) => r.course.id === "b"), false);
+  assert.equal(recs.some((r) => r.course.id === "d"), false);
+  assert.equal(recs[0]?.course.id, "a");
+  assert.equal(recs[0]?.reason, "related");
+  const continued = recommendCourses({
+    catalog,
+    seed: { id: "seed", title: "Seed", category_name: "Ads" },
+    preferContinue: true,
+    limit: 1,
+  });
+  assert.equal(continued[0]?.reason, "continue");
+
+  const recSrc = readFileSync(join(root, "lib/recommendations.ts"), "utf8");
+  assert.match(recSrc, /ownedIds/);
+  assert.equal(recSrc.includes("Popular with students"), false);
+  assert.equal(/RecommendationReason = "[^"]*popular/.test(recSrc), false);
+}
+
+console.log("PASS: heuristic recommendations scoring + ownership filter");
+
+{
+  const { readFileSync } = await import("node:fs");
+  const { join } = await import("node:path");
+  const {
+    buildClassroomMoment,
+    momentAllowsDance,
+    crossedProgressMilestone,
+  } = await import(pathToFileURL(join(root, "lib/classroom-engagement.ts")).href);
+
+  assert.equal(momentAllowsDance("lesson_complete"), false);
+  assert.equal(momentAllowsDance("quiz_passed"), false);
+  assert.equal(momentAllowsDance("course_complete"), true);
+  assert.equal(momentAllowsDance("certificate_unlock"), true);
+  assert.equal(buildClassroomMoment("correct").allowDance, false);
+  assert.equal(buildClassroomMoment("course_complete").allowDance, true);
+  assert.equal(crossedProgressMilestone(49, 50), 50);
+  assert.equal(crossedProgressMilestone(50, 51), null);
+
+  const companionSrc = readFileSync(
+    join(root, "components/student/classroom-moment-host.tsx"),
+    "utf8",
+  );
+  assert.match(companionSrc, /allowDance/);
+  assert.match(companionSrc, /prefers-reduced-motion/);
+  assert.match(companionSrc, /Dismiss/);
+}
+
+console.log("PASS: classroom companion rarity + reduced-motion guards");

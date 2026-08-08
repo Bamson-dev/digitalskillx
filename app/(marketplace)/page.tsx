@@ -333,6 +333,40 @@ export default async function HomePage() {
             )}
           </div>
         </section>
+
+        <section className="border-t border-neutral-200 bg-neutral-50">
+          <div className={`${SECTION} ${CONTAINER} text-center`}>
+            <h2 className="font-display text-2xl font-bold text-neutral-950 sm:text-3xl">
+              Ready to start learning?
+            </h2>
+            <p className="mx-auto mt-3 max-w-md text-sm text-neutral-600">
+              Browse the full catalog or create a free account to save progress and earn certificates.
+            </p>
+            <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
+              <Link
+                href="/browse"
+                className="inline-flex h-12 min-h-[48px] w-full items-center justify-center bg-brand px-8 text-sm font-semibold text-white hover:bg-brand-700 sm:w-auto"
+              >
+                Browse all courses
+              </Link>
+              {!user ? (
+                <Link
+                  href="/register"
+                  className="inline-flex h-12 min-h-[48px] w-full items-center justify-center border border-neutral-300 bg-white px-8 text-sm font-semibold text-neutral-900 hover:border-neutral-500 sm:w-auto"
+                >
+                  Create free account
+                </Link>
+              ) : (
+                <Link
+                  href="/dashboard"
+                  className="inline-flex h-12 min-h-[48px] w-full items-center justify-center border border-neutral-300 bg-white px-8 text-sm font-semibold text-neutral-900 hover:border-neutral-500 sm:w-auto"
+                >
+                  Go to dashboard
+                </Link>
+              )}
+            </div>
+          </div>
+        </section>
       </main>
 
       <MarketplaceFooter />

@@ -11,7 +11,16 @@ import { resolveStudentLessonAccess } from "@/lib/lesson-access";
 import { sendProgressMilestoneEmailsIfNeeded } from "@/lib/system-email-triggers";
 import { runAutomations } from "@/lib/automation";
 import { notify } from "@/lib/notifications";
-import type { Json } from "@/types/database";
+import type { Json, ShowAnswersMode } from "@/types/database";
+
+export type QuizReviewItem = {
+  questionId: string;
+  questionText: string;
+  correct: boolean | null;
+  selectedLabels: string[];
+  correctLabels: string[];
+  manual: boolean;
+};
 
 export type QuizResultState = {
   error?: string;
@@ -19,9 +28,20 @@ export type QuizResultState = {
   score?: number;
   passed?: boolean | null;
   pendingManual?: boolean;
+  showReview?: boolean;
+  review?: QuizReviewItem[];
+  lessonId?: string | null;
+  canRetake?: boolean;
 };
 
 const AUTO_TYPES = ["mcq_single", "mcq_multiple", "true_false"];
+
+function shouldShowAnswers(mode: ShowAnswersMode | null | undefined, passed: boolean | null): boolean {
+  if (mode === "never") return false;
+  if (mode === "always") return true;
+  // on_pass (default)
+  return passed === true;
+}
 
 export async function submitQuiz(
   _prev: QuizResultState,
@@ -39,7 +59,9 @@ export async function submitQuiz(
   const admin = createAdminClient();
   const { data: quiz } = await admin
     .from("quizzes")
-    .select("id, pass_score, lesson_id, negative_marking, quiz_questions(*, quiz_answers(*))")
+    .select(
+      "id, pass_score, lesson_id, negative_marking, show_answers_on, retake_rule, retake_limit, quiz_questions(*, quiz_answers(*))",
+    )
     .eq("id", quizId)
     .single();
   if (!quiz) return { error: "Quiz not found" };
@@ -59,32 +81,63 @@ export async function submitQuiz(
   const studentId = access.studentId;
   const courseId = access.courseId;
 
+  const { count: priorAttempts } = await admin
+    .from("quiz_attempts")
+    .select("id", { count: "exact", head: true })
+    .eq("student_id", studentId)
+    .eq("quiz_id", quizId);
+  const attemptCount = (priorAttempts ?? 0) + 1; // including this submission
+
   const questions = (quiz.quiz_questions ?? []) as {
     id: string;
+    question_text: string;
     question_type: string;
     points: number;
-    quiz_answers: { id: string; is_correct: boolean }[];
+    quiz_answers: { id: string; answer_text: string; is_correct: boolean }[];
   }[];
 
   let earned = 0;
   let autoTotal = 0;
   let pendingManual = false;
   const responses: Record<string, Json> = {};
+  const review: QuizReviewItem[] = [];
 
   for (const q of questions) {
     if (AUTO_TYPES.includes(q.question_type)) {
       autoTotal += q.points;
       const selected = formData.getAll(`q_${q.id}`).map(String);
       responses[q.id] = selected;
-      const correctIds = q.quiz_answers.filter((a) => a.is_correct).map((a) => a.id);
+      const correctAnswers = q.quiz_answers.filter((a) => a.is_correct);
+      const correctIds = correctAnswers.map((a) => a.id);
       const isCorrect =
         selected.length === correctIds.length &&
         selected.every((id) => correctIds.includes(id));
       if (isCorrect) earned += q.points;
       else if (quiz.negative_marking) earned -= q.points;
+
+      const selectedLabels = q.quiz_answers
+        .filter((a) => selected.includes(a.id))
+        .map((a) => a.answer_text);
+      review.push({
+        questionId: q.id,
+        questionText: q.question_text,
+        correct: isCorrect,
+        selectedLabels,
+        correctLabels: correctAnswers.map((a) => a.answer_text),
+        manual: false,
+      });
     } else {
       pendingManual = true;
-      responses[q.id] = String(formData.get(`q_${q.id}`) ?? "");
+      const raw = String(formData.get(`q_${q.id}`) ?? "");
+      responses[q.id] = raw;
+      review.push({
+        questionId: q.id,
+        questionText: q.question_text,
+        correct: null,
+        selectedLabels: raw ? [raw] : [],
+        correctLabels: [],
+        manual: true,
+      });
     }
   }
 
@@ -115,8 +168,24 @@ export async function submitQuiz(
     await runAutomations("quiz_failed", { studentId, courseId, quizId });
   }
 
+  const showReview = shouldShowAnswers(quiz.show_answers_on as ShowAnswersMode, passed);
+
   revalidatePath(`/quizzes/${quizId}`);
-  return { submitted: true, score, passed, pendingManual };
+  if (quiz.lesson_id) revalidatePath(`/lessons/${quiz.lesson_id}`);
+
+  return {
+    submitted: true,
+    score,
+    passed,
+    pendingManual,
+    showReview,
+    review: showReview ? review : undefined,
+    lessonId: quiz.lesson_id,
+    canRetake: quiz.retake_rule === "unlimited" ||
+      (quiz.retake_rule === "limited" &&
+        quiz.retake_limit != null &&
+        attemptCount < quiz.retake_limit),
+  };
 }
 
 /** Admin manual grading of an attempt (PRD §9.3). */

@@ -5,6 +5,7 @@ import Image from "next/image";
 import { ArrowRight } from "lucide-react";
 import { PriceDisplay } from "@/components/marketplace/price-display";
 import { reasonLabel, type CourseRecommendation, type RecommendableCourse } from "@/lib/recommendations";
+import { trackProductEvent } from "@/lib/product-analytics";
 import { cn } from "@/lib/utils";
 
 export function RecommendationRail({
@@ -50,6 +51,13 @@ function RecommendationRow({
   return (
     <Link
       href={`/course/${course.id}`}
+      onClick={() => {
+        void trackProductEvent({
+          event: "recommendation_click",
+          courseId: course.id,
+          metadata: { reason: reason ?? null },
+        });
+      }}
       className="group flex min-h-[64px] items-center gap-4 py-4"
     >
       <div className="relative h-14 w-20 shrink-0 overflow-hidden bg-neutral-100 sm:h-16 sm:w-24">

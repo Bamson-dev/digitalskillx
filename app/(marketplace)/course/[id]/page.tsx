@@ -20,6 +20,7 @@ import { MarketplaceNav, MarketplaceFooter } from "@/components/marketplace/mark
 import { CourseLandingView } from "@/components/marketplace/course-landing-view";
 import { CourseComingSoonView } from "@/components/course/course-coming-soon-view";
 import { PaymentReturnHandler } from "@/components/marketplace/payment-return-handler";
+import { CourseViewTracker } from "@/components/marketplace/course-view-tracker";
 
 const courseSelect =
   "id, title, description, short_description, thumbnail_url, price_ngn, price_usd, learning_outcomes, instructor_name, instructor_bio, promo_video_url, is_coming_soon, certificate_enabled, category:course_categories(name), modules(id, title, position, lessons(id, title, position, lesson_type))";
@@ -100,6 +101,7 @@ export default async function CourseLandingPage({
   const paidPurchaseComplete =
     Boolean(paymentRef) && (await isSuccessfulGuestPurchase(paymentRef, course.id));
 
+  let ownedIds = new Set<string>();
   let isEnrolled = paidPurchaseComplete;
   if (user) {
     await bootstrapRuntimeSecrets();
@@ -115,12 +117,13 @@ export default async function CourseLandingPage({
     }
     const { data: e } = await admin
       .from("enrollments")
-      .select("id")
-      .eq("student_id", targetStudentId)
-      .eq("course_id", course.id)
-      .maybeSingle();
-    isEnrolled = Boolean(e) || paidPurchaseComplete;
+      .select("id, course_id")
+      .eq("student_id", targetStudentId);
+    const rows = e ?? [];
+    ownedIds = new Set(rows.map((row) => row.course_id));
+    isEnrolled = ownedIds.has(course.id) || paidPurchaseComplete;
   }
+  if (paidPurchaseComplete) ownedIds.add(course.id);
 
   const relatedAll = await fetchPublishedCourses<CatalogCourse>(
     "id, title, description, short_description, thumbnail_url, price_ngn, price_usd, instructor_name, is_coming_soon, created_at, category:course_categories(name)",
@@ -134,6 +137,7 @@ export default async function CourseLandingPage({
       ...c,
       category_name: c.category?.name ?? null,
     })),
+    ownedIds,
     seed: { id: course.id, title: course.title, category_name: categoryName },
     limit: 3,
   });
@@ -166,6 +170,7 @@ export default async function CourseLandingPage({
       <MarketplaceNav user={profile} />
 
       <main className="flex-1">
+        <CourseViewTracker courseId={course.id} />
         <Suspense fallback={null}>
           <PaymentReturnHandler
             courseId={course.id}

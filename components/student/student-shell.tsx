@@ -25,6 +25,13 @@ const nav = [
   { href: "/settings", label: "Account", icon: Settings },
 ];
 
+const bottomTabs = [
+  { href: "/dashboard", label: "Home", icon: LayoutDashboard },
+  { href: "/courses", label: "Courses", icon: BookOpen },
+  { href: "/certificates", label: "Certs", icon: Award },
+  { href: "/settings", label: "Account", icon: Settings },
+];
+
 export function StudentShell({
   name,
   children,
@@ -35,7 +42,7 @@ export function StudentShell({
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const firstName = name.split(" ")[0];
-  const classroom = pathname.startsWith("/lessons/");
+  const classroom = pathname.startsWith("/lessons/") || pathname.startsWith("/quizzes/");
 
   const sidebar = (
     <nav className="flex flex-col gap-1 p-3">
@@ -80,7 +87,6 @@ export function StudentShell({
 
   return (
     <div className={cn("min-h-screen text-neutral-900", classroom ? "bg-white" : "bg-neutral-50")}>
-      {/* Mobile header — compact in classroom */}
       <header
         className={cn(
           "sticky top-0 z-30 border-b border-neutral-200 bg-white lg:hidden",
@@ -174,13 +180,42 @@ export function StudentShell({
             className={cn(
               classroom
                 ? "px-0 pb-24 pt-0 sm:px-4 sm:pb-10 sm:pt-4 lg:px-6 lg:py-6"
-                : "px-4 py-6 sm:px-6 sm:py-8",
+                : "px-4 py-6 pb-24 sm:px-6 sm:py-8 lg:pb-8",
             )}
           >
             {children}
           </main>
         </div>
       </div>
+
+      {/* Phase H — mobile bottom tabs (hidden in classroom to protect lesson controls) */}
+      {!classroom ? (
+        <nav
+          className="fixed inset-x-0 bottom-0 z-30 border-t border-neutral-200 bg-white lg:hidden"
+          aria-label="Primary"
+        >
+          <ul className="mx-auto flex max-w-lg items-stretch">
+            {bottomTabs.map(({ href, label, icon: Icon }) => {
+              const active =
+                pathname === href || (href !== "/dashboard" && pathname.startsWith(`${href}/`));
+              return (
+                <li key={href} className="flex-1">
+                  <Link
+                    href={href}
+                    className={cn(
+                      "flex min-h-[56px] flex-col items-center justify-center gap-0.5 text-[10px] font-semibold uppercase tracking-wide",
+                      active ? "text-brand" : "text-neutral-500",
+                    )}
+                  >
+                    <Icon className="h-5 w-5" />
+                    {label}
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        </nav>
+      ) : null}
     </div>
   );
 }

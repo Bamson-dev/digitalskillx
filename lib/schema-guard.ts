@@ -10,3 +10,15 @@ export function isMissingColumnError(message: string | null | undefined) {
     (lower.includes("column") || lower.includes("could not find"))
   );
 }
+
+/** Detect missing table / relation errors for optional product features. */
+export function isMissingRelationError(message: string | null | undefined) {
+  if (!message) return false;
+  const lower = message.toLowerCase();
+  return (
+    (lower.includes("does not exist") &&
+      (lower.includes("relation") || lower.includes("table"))) ||
+    lower.includes("could not find the table") ||
+    lower.includes("schema cache")
+  );
+}

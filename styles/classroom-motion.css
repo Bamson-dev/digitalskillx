@@ -1,0 +1,113 @@
+/* Classroom motion — lightweight, opt-in via companion host. Respect prefers-reduced-motion. */
+
+@keyframes dsx-companion-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes dsx-companion-nod {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  40% {
+    transform: translateY(-2px);
+  }
+}
+
+@keyframes dsx-companion-soft {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  50% {
+    transform: translateX(-1px);
+  }
+}
+
+/* Rare achievement only — never loop forever */
+@keyframes dsx-companion-dance {
+  0%,
+  100% {
+    transform: rotate(0deg) translateY(0);
+  }
+  25% {
+    transform: rotate(-6deg) translateY(-2px);
+  }
+  50% {
+    transform: rotate(0deg) translateY(0);
+  }
+  75% {
+    transform: rotate(6deg) translateY(-2px);
+  }
+}
+
+@keyframes dsx-companion-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+
+@keyframes dsx-particle {
+  0% {
+    opacity: 0.9;
+    transform: translate(0, 0) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(calc((var(--i) - 3.5) * 10px), -28px) scale(0.4);
+  }
+}
+
+.dsx-companion-enter {
+  animation: dsx-companion-enter 280ms ease-out;
+}
+
+.dsx-companion-nod {
+  animation: dsx-companion-nod 600ms ease-in-out 1;
+}
+
+.dsx-companion-soft {
+  animation: dsx-companion-soft 500ms ease-in-out 1;
+}
+
+.dsx-companion-dance {
+  animation: dsx-companion-dance 700ms ease-in-out 2;
+}
+
+.dsx-companion-pulse {
+  animation: dsx-companion-pulse 900ms ease-in-out 2;
+}
+
+.dsx-particle {
+  position: absolute;
+  left: 50%;
+  top: 40%;
+  width: 4px;
+  height: 4px;
+  background: #dc2626;
+  border-radius: 1px;
+  animation: dsx-particle 900ms ease-out forwards;
+  animation-delay: calc(var(--i) * 40ms);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dsx-companion-enter,
+  .dsx-companion-nod,
+  .dsx-companion-soft,
+  .dsx-companion-dance,
+  .dsx-companion-pulse,
+  .dsx-particle {
+    animation: none !important;
+  }
+}

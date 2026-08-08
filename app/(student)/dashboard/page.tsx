@@ -9,6 +9,7 @@ import { getStudentCertificates } from "@/lib/student-certificates";
 import { DashboardAnnouncements } from "@/components/student/dashboard-announcements";
 import { CourseProgressNudge } from "@/components/student/course-progress-nudge";
 import { RecommendationRail } from "@/components/marketplace/recommendation-rail";
+import { CourseThumbnailPlaceholder } from "@/components/marketplace/course-thumbnail-placeholder";
 import { resumeLessonPath } from "@/lib/system-email-triggers";
 import { recommendCourses } from "@/lib/recommendations";
 import { toPercent } from "@/lib/utils";
@@ -31,37 +32,42 @@ export default async function StudentDashboardPage() {
     category_name: c.category?.name ?? null,
   }));
 
-  const seed =
+  const continueCourse =
+    myCourses
+      .filter(({ pct, course }) => course && pct < 100)
+      .sort((a, b) => b.pct - a.pct)[0] ?? null;
+
+  const seedCourse =
+    continueCourse?.course ??
     myCourses.find((row) => row.course && row.pct >= 100)?.course ??
     myCourses.find((row) => row.course)?.course ??
     null;
 
   const seedCategory =
-    seed != null
-      ? (recommendable.find((c) => c.id === seed.id)?.category_name ?? null)
+    seedCourse != null
+      ? (recommendable.find((c) => c.id === seedCourse.id)?.category_name ?? null)
       : null;
 
   const recommendations = recommendCourses({
     catalog: recommendable,
     ownedIds: enrolledIds,
-    seed: seed
+    seed: seedCourse
       ? {
-          id: seed.id,
-          title: seed.title,
+          id: seedCourse.id,
+          title: seedCourse.title,
           category_name: seedCategory,
         }
       : null,
+    preferContinue: Boolean(continueCourse?.course),
     limit: 3,
   });
-
-  const continueCourse =
-    myCourses
-      .filter(({ pct, course }) => course && pct < 100)
-      .sort((a, b) => b.pct - a.pct)[0] ?? myCourses.find((row) => row.course);
 
   const continueResumePath = continueCourse?.course
     ? await resumeLessonPath(profile.id, continueCourse.course.id)
     : null;
+
+  const activeCourses = myCourses.filter(({ course, pct }) => course && pct < 100);
+  const completedCourses = myCourses.filter(({ course, pct }) => course && pct >= 100);
 
   const firstName = (profile.full_name ?? "there").split(" ")[0];
 
@@ -83,9 +89,9 @@ export default async function StudentDashboardPage() {
           <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-neutral-500">
             Continue learning
           </p>
-          <div className="mt-4 flex gap-5">
-            {continueCourse.course.thumbnail_url ? (
-              <div className="relative hidden h-28 w-40 shrink-0 overflow-hidden bg-neutral-100 sm:block">
+          <div className="mt-4 flex gap-4 sm:gap-5">
+            <div className="relative h-20 w-28 shrink-0 overflow-hidden bg-neutral-100 sm:h-28 sm:w-40">
+              {continueCourse.course.thumbnail_url ? (
                 <Image
                   src={continueCourse.course.thumbnail_url}
                   alt=""
@@ -93,8 +99,10 @@ export default async function StudentDashboardPage() {
                   className="object-cover"
                   sizes="160px"
                 />
-              </div>
-            ) : null}
+              ) : (
+                <CourseThumbnailPlaceholder title={continueCourse.course.title} size="compact" />
+              )}
+            </div>
             <div className="min-w-0 flex-1">
               <h2 className="font-display text-xl font-bold text-neutral-900 sm:text-2xl">
                 {continueCourse.course.title}
@@ -120,7 +128,7 @@ export default async function StudentDashboardPage() {
 
       <section>
         <div className="mb-4 flex items-baseline justify-between gap-4">
-          <h2 className="font-display text-lg font-bold text-neutral-900">My courses</h2>
+          <h2 className="font-display text-lg font-bold text-neutral-900">Active courses</h2>
           {myCourses.length > 0 ? (
             <Link href="/courses" className="text-sm font-medium text-neutral-600 hover:text-brand">
               View all
@@ -138,55 +146,60 @@ export default async function StudentDashboardPage() {
               Browse the catalog
             </Link>
           </div>
+        ) : activeCourses.length === 0 ? (
+          <div className="border-y border-neutral-200 py-8">
+            <p className="text-sm text-neutral-600">
+              No active courses — you&apos;ve completed everything you&apos;re enrolled in.
+            </p>
+            <Link
+              href="/browse"
+              className="mt-3 inline-flex text-sm font-semibold text-brand hover:text-brand-700"
+            >
+              Find your next program
+            </Link>
+          </div>
         ) : (
-          <ul className="divide-y divide-neutral-200 border-y border-neutral-200">
-            {myCourses.map(({ courseId, course, pct, lessonsLeft, totalLessons }) => {
-              if (!course) {
-                return (
-                  <li key={courseId}>
-                    <Link
-                      href={`/courses/${courseId}`}
-                      className="flex min-h-[56px] items-center justify-between gap-4 py-4"
-                    >
-                      <span className="font-medium text-neutral-900">Open enrolled course</span>
-                      <ArrowRight className="h-4 w-4 shrink-0 text-neutral-400" />
-                    </Link>
-                  </li>
-                );
-              }
+          <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            {activeCourses.map(({ courseId, course, pct, lessonsLeft, totalLessons }) => {
+              if (!course) return null;
               return (
-                <li key={course.id}>
+                <li key={courseId}>
                   <Link
                     href={`/courses/${course.id}`}
-                    className="flex min-h-[64px] items-center gap-4 py-4 transition hover:bg-neutral-50/80"
+                    className="flex h-full min-h-[44px] flex-col border border-neutral-200 bg-white transition hover:border-neutral-400"
                   >
-                    <div className="relative h-12 w-16 shrink-0 overflow-hidden bg-neutral-100 sm:h-14 sm:w-20">
+                    <div className="relative aspect-[16/10] w-full bg-neutral-100">
                       {course.thumbnail_url ? (
                         <Image
                           src={course.thumbnail_url}
                           alt=""
                           fill
                           className="object-cover"
-                          sizes="80px"
+                          sizes="(max-width: 640px) 100vw, 50vw"
                         />
-                      ) : null}
+                      ) : (
+                        <CourseThumbnailPlaceholder title={course.title} />
+                      )}
                     </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate font-medium text-neutral-900">{course.title}</p>
-                      <p className="mt-0.5 text-xs text-neutral-500">
+                    <div className="flex flex-1 flex-col p-4">
+                      <p className="line-clamp-2 font-display text-[15px] font-semibold text-neutral-900">
+                        {course.title}
+                      </p>
+                      <p className="mt-1 text-xs text-neutral-500">
                         {pct}% complete
-                        {typeof lessonsLeft === "number" && typeof totalLessons === "number" && totalLessons > 0
-                          ? ` · ${lessonsLeft} lesson${lessonsLeft === 1 ? "" : "s"} left`
+                        {typeof lessonsLeft === "number" &&
+                        typeof totalLessons === "number" &&
+                        totalLessons > 0
+                          ? ` · ${lessonsLeft} left`
                           : null}
                       </p>
-                      <div className="mt-2 h-1 max-w-xs overflow-hidden bg-neutral-100">
+                      <div className="mt-3 h-1 overflow-hidden bg-neutral-100">
                         <div
                           className="h-full bg-brand"
                           style={{ width: `${toPercent(pct)}%` }}
                         />
                       </div>
                     </div>
-                    <ArrowRight className="h-4 w-4 shrink-0 text-neutral-400" />
                   </Link>
                 </li>
               );
@@ -194,6 +207,28 @@ export default async function StudentDashboardPage() {
           </ul>
         )}
       </section>
+
+      {completedCourses.length > 0 ? (
+        <section>
+          <h2 className="mb-4 font-display text-lg font-bold text-neutral-900">Completed</h2>
+          <ul className="divide-y divide-neutral-200 border-y border-neutral-200">
+            {completedCourses.map(({ courseId, course }) => {
+              if (!course) return null;
+              return (
+                <li key={courseId}>
+                  <Link
+                    href={`/courses/${course.id}`}
+                    className="flex min-h-[56px] items-center justify-between gap-4 py-3.5"
+                  >
+                    <span className="truncate font-medium text-neutral-900">{course.title}</span>
+                    <ArrowRight className="h-4 w-4 shrink-0 text-neutral-400" />
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      ) : null}
 
       {certificates.length > 0 ? (
         <section>

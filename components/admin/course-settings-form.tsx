@@ -327,7 +327,7 @@ export function CourseSettingsForm({
               <span>
                 <span className="font-semibold">Advanced settings</span>
                 <span className="mt-0.5 block text-sm font-normal text-muted">
-                  Community links and certificate template override — optional.
+                  Community, certificate template, and classroom engagement — optional.
                 </span>
               </span>
               <span className="text-sm font-normal text-muted group-open:hidden">Show</span>
@@ -368,6 +368,32 @@ export function CourseSettingsForm({
                     placeholder="https://chat.whatsapp.com/…"
                   />
                 </div>
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-app bg-white p-4">
+              <p className="font-medium">Classroom engagement</p>
+              <p className="mt-0.5 text-sm text-muted">
+                Controlled motion only. Celebrations stay rare — dance is reserved for course
+                complete and certificate unlock.
+              </p>
+              <div className="mt-4 flex flex-wrap gap-5">
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    name="companion_enabled"
+                    defaultChecked={course.companion_enabled !== false}
+                  />
+                  Classroom companion
+                </label>
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    name="celebrations_enabled"
+                    defaultChecked={course.celebrations_enabled !== false}
+                  />
+                  Milestone celebrations
+                </label>
               </div>
             </div>
 

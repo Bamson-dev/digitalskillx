@@ -15,6 +15,13 @@ import { isLessonComingSoon } from "@/lib/lesson-coming-soon";
 import { LessonAttachments } from "@/components/student/lesson-attachments";
 import { CourseResources } from "@/components/student/course-resources";
 import { CourseCertificateGoal } from "@/components/student/course-certificate-goal";
+import {
+  NextBestAction,
+  resolveNextBestAction,
+} from "@/components/student/next-best-action";
+import { LessonProgressChecklist } from "@/components/student/lesson-progress-checklist";
+import { ClassroomEngagementRoot } from "@/components/student/classroom-engagement-root";
+import { resolveEngagementFlags } from "@/lib/classroom-engagement";
 import { resolveCertificateTemplateKey } from "@/lib/certificate-template-resolve";
 import { isMissingColumnError } from "@/lib/schema-guard";
 import type { Lesson, Module } from "@/types/database";
@@ -79,7 +86,7 @@ export default async function LessonPage({ params }: { params: { id: string } })
   const studentId = enrolled ? targetStudentId : profile.id;
 
   const [
-    { data: course },
+    courseResult,
     { data: modules },
     { data: progress },
     { data: note },
@@ -89,7 +96,11 @@ export default async function LessonPage({ params }: { params: { id: string } })
     { data: courseResources },
     { data: certificate },
   ] = await Promise.all([
-    supabase.from("courses").select("id, title, certificate_enabled").eq("id", courseId).single(),
+    supabase
+      .from("courses")
+      .select("id, title, certificate_enabled, companion_enabled, celebrations_enabled")
+      .eq("id", courseId)
+      .single(),
     supabase.from("modules").select("*, lessons(*)").eq("course_id", courseId),
     session.from("lesson_progress").select("lesson_id, completed").eq("student_id", studentId),
     session
@@ -141,6 +152,24 @@ export default async function LessonPage({ params }: { params: { id: string } })
       : Promise.resolve({ data: null }),
   ]);
 
+  let course = courseResult.data as {
+    id: string;
+    title: string;
+    certificate_enabled: boolean | null;
+    companion_enabled?: boolean | null;
+    celebrations_enabled?: boolean | null;
+  } | null;
+  if (courseResult.error && isMissingColumnError(courseResult.error.message)) {
+    const fallback = await supabase
+      .from("courses")
+      .select("id, title, certificate_enabled")
+      .eq("id", courseId)
+      .single();
+    course = fallback.data
+      ? { ...fallback.data, companion_enabled: true, celebrations_enabled: true }
+      : null;
+  }
+
   const sortedModules = [...((modules as ModuleWithLessons[]) ?? [])].sort(
     (a, b) => a.position - b.position,
   );
@@ -159,8 +188,22 @@ export default async function LessonPage({ params }: { params: { id: string } })
     .eq("lesson_id", params.id)
     .maybeSingle();
 
+  let quizPassed = false;
+  if (quiz) {
+    const { data: passedAttempt } = await session
+      .from("quiz_attempts")
+      .select("id")
+      .eq("student_id", studentId)
+      .eq("quiz_id", quiz.id)
+      .eq("passed", true)
+      .limit(1)
+      .maybeSingle();
+    quizPassed = Boolean(passedAttempt);
+  }
+
   const isLocked = lockedIds.has(lesson.id);
   const isComingSoon = isLessonComingSoon(lesson);
+  const lessonCompleted = completedIds.has(lesson.id);
 
   const totalLessons = ordered.length;
   const lessonIndex = Math.max(1, ordered.findIndex((item) => item.id === lesson.id) + 1);
@@ -178,6 +221,18 @@ export default async function LessonPage({ params }: { params: { id: string } })
       ? await resolveCertificateTemplateKey(supabase, courseId)
       : null;
 
+  const nextAction = resolveNextBestAction({
+    lessonCompleted,
+    quizId: quiz?.id,
+    quizPassed: quiz ? quizPassed : null,
+    nextLessonId,
+    courseId,
+    certificateId: certificate?.id,
+    courseComplete,
+  });
+
+  const engagement = resolveEngagementFlags(course ?? undefined);
+
   return (
     <LessonLearningLayout
       courseId={courseId}
@@ -190,6 +245,10 @@ export default async function LessonPage({ params }: { params: { id: string } })
       lessonIndex={lessonIndex}
       totalLessons={totalLessons}
     >
+      <ClassroomEngagementRoot
+        companionEnabled={engagement.companionEnabled}
+        celebrationsEnabled={engagement.celebrationsEnabled}
+      />
       {isComingSoon ? (
         <div className="px-4 py-6 sm:px-0">
           <LessonComingSoonView
@@ -221,7 +280,7 @@ export default async function LessonPage({ params }: { params: { id: string } })
           <LessonPlayer
             lesson={lesson}
             studentEmail={profile.email}
-            completed={completedIds.has(lesson.id)}
+            completed={lessonCompleted}
             note={note?.content ?? ""}
             bookmarks={bookmarks ?? []}
             lessonIndex={lessonIndex}
@@ -233,16 +292,34 @@ export default async function LessonPage({ params }: { params: { id: string } })
           <LessonAttachments attachments={attachments ?? []} />
 
           {quiz ? (
+            <LessonProgressChecklist
+              lessonCompleted={lessonCompleted}
+              quiz={{ id: quiz.id, title: quiz.title, passed: quizPassed }}
+            />
+          ) : null}
+
+          {nextAction ? (
+            <NextBestAction
+              kind={nextAction.kind}
+              href={nextAction.href}
+              label={nextAction.label}
+              detail={nextAction.detail}
+            />
+          ) : quiz ? (
             <div className="flex flex-col gap-3 border-y border-neutral-200 px-4 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-0">
               <div>
                 <h3 className="font-display text-sm font-bold text-neutral-900">{quiz.title}</h3>
-                <p className="mt-1 text-sm text-neutral-500">Test what you just learned.</p>
+                <p className="mt-1 text-sm text-neutral-500">
+                  {quizPassed
+                    ? "You already passed this quiz. Retake anytime if you want more practice."
+                    : "Optional until you mark the lesson complete — then it becomes your next step."}
+                </p>
               </div>
               <Link
                 href={`/quizzes/${quiz.id}`}
-                className="inline-flex h-11 items-center justify-center bg-brand px-5 text-sm font-semibold text-white hover:bg-brand-700"
+                className="inline-flex h-11 items-center justify-center border border-neutral-200 px-5 text-sm font-semibold text-neutral-800 hover:border-neutral-400"
               >
-                Take quiz
+                {quizPassed ? "Review quiz" : "Take quiz"}
               </Link>
             </div>
           ) : null}
@@ -252,6 +329,7 @@ export default async function LessonPage({ params }: { params: { id: string } })
               unlocked={courseComplete || Boolean(certificate)}
               certificateId={certificate?.id}
               templateKey={certificateTemplateKey}
+              courseId={courseId}
             />
           ) : null}
 

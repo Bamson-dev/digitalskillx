@@ -5,6 +5,7 @@ import { requireStudent } from "@/lib/auth";
 import { Card, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { QuizTaker } from "@/components/student/quiz-taker";
+import { ClassroomEngagementRoot } from "@/components/student/classroom-engagement-root";
 import { formatDate } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "Quiz" };
@@ -55,6 +56,7 @@ export default async function StudentQuizPage({ params }: { params: { id: string
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
+      <ClassroomEngagementRoot />
       {attemptCount > 0 ? (
         <Card>
           <CardHeader title="Attempt history" />

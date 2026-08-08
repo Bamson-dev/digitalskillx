@@ -157,6 +157,10 @@ export type Course = Timestamps & {
   is_coming_soon: boolean;
   community_telegram_url: string | null;
   community_whatsapp_url: string | null;
+  /** Classroom companion — optional until migration 0035 applied. */
+  companion_enabled?: boolean;
+  /** Milestone celebrations — optional until migration 0035 applied. */
+  celebrations_enabled?: boolean;
   updated_at: string;
 };
 
@@ -444,6 +448,15 @@ export type AuditLog = Timestamps & {
   metadata: Json;
 };
 
+export type ProductEvent = {
+  id: string;
+  created_at: string;
+  event_name: string;
+  course_id: string | null;
+  student_id: string | null;
+  metadata: Json;
+};
+
 export type AiConversation = Timestamps & {
   id: string;
   student_id: string;
@@ -716,6 +729,7 @@ export type Database = {
       bookmarks: Table<Bookmark>;
       admin_notes: Table<AdminNote>;
       audit_logs: Table<AuditLog>;
+      product_events: Table<ProductEvent>;
       ai_conversations: Table<AiConversation>;
       support_requests: Table<
         SupportRequest,

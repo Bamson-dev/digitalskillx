@@ -45,7 +45,11 @@ export type EmbeddedVideo =
   | null;
 
 /** Privacy-enhanced YouTube embed URL for student lesson pages only. */
-export function youtubeLessonEmbedUrl(videoId: string, origin?: string): string {
+export function youtubeLessonEmbedUrl(
+  videoId: string,
+  origin?: string,
+  startSeconds?: number | null,
+): string {
   const params = new URLSearchParams({
     modestbranding: "1",
     rel: "0",
@@ -53,6 +57,8 @@ export function youtubeLessonEmbedUrl(videoId: string, origin?: string): string 
     playsinline: "1",
   });
   if (origin) params.set("origin", origin);
+  const start = Math.max(0, Math.floor(Number(startSeconds) || 0));
+  if (start > 0) params.set("start", String(start));
   return `https://www.youtube-nocookie.com/embed/${videoId}?${params.toString()}`;
 }
 
