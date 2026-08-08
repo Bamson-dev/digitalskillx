@@ -14,11 +14,9 @@ import { LessonComingSoonView } from "@/components/student/lesson-coming-soon-vi
 import { isLessonComingSoon } from "@/lib/lesson-coming-soon";
 import { LessonAttachments } from "@/components/student/lesson-attachments";
 import { CourseResources } from "@/components/student/course-resources";
-import { CourseProgressNudge } from "@/components/student/course-progress-nudge";
 import { CourseCertificateGoal } from "@/components/student/course-certificate-goal";
 import { resolveCertificateTemplateKey } from "@/lib/certificate-template-resolve";
 import { isMissingColumnError } from "@/lib/schema-guard";
-import { Card } from "@/components/ui/card";
 import type { Lesson, Module } from "@/types/database";
 
 export const metadata: Metadata = { title: "Lesson" };
@@ -80,54 +78,74 @@ export default async function LessonPage({ params }: { params: { id: string } })
 
   const studentId = enrolled ? targetStudentId : profile.id;
 
-  const [{ data: course }, { data: modules }, { data: progress }, { data: note }, { data: bookmarks }, { data: enrollment }, { data: attachments }, { data: courseResources }, { data: certificate }] =
-    await Promise.all([
-      supabase.from("courses").select("id, title, certificate_enabled").eq("id", courseId).single(),
-      supabase.from("modules").select("*, lessons(*)").eq("course_id", courseId),
-      session.from("lesson_progress").select("lesson_id, completed").eq("student_id", studentId),
-      session.from("student_notes").select("content").eq("student_id", studentId).eq("lesson_id", params.id).maybeSingle(),
-      session.from("bookmarks").select("*").eq("student_id", studentId).eq("lesson_id", params.id).order("timestamp_seconds"),
-      enrolled
-        ? supabase
-            .from("enrollments")
-            .select("enrolled_at, completed_at")
-            .eq("student_id", studentId)
-            .eq("course_id", courseId)
-            .maybeSingle()
-        : session
-            .from("enrollments")
-            .select("enrolled_at, completed_at")
-            .eq("student_id", studentId)
-            .eq("course_id", courseId)
-            .maybeSingle(),
-      supabase
-        .from("resources")
-        .select("id, title, file_url, file_type")
-        .eq("lesson_id", params.id)
-        .eq("is_archived", false)
-        .order("created_at", { ascending: true }),
-      supabase
-        .from("resources")
-        .select("id, title, file_url, file_type")
-        .eq("course_id", courseId)
-        .is("lesson_id", null)
-        .eq("is_archived", false)
-        .order("position", { ascending: true })
-        .order("created_at", { ascending: true }),
-      enrolled
-        ? supabase
-            .from("certificates")
-            .select("id")
-            .eq("student_id", studentId)
-            .eq("course_id", courseId)
-            .maybeSingle()
-        : Promise.resolve({ data: null }),
-    ]);
+  const [
+    { data: course },
+    { data: modules },
+    { data: progress },
+    { data: note },
+    { data: bookmarks },
+    { data: enrollment },
+    { data: attachments },
+    { data: courseResources },
+    { data: certificate },
+  ] = await Promise.all([
+    supabase.from("courses").select("id, title, certificate_enabled").eq("id", courseId).single(),
+    supabase.from("modules").select("*, lessons(*)").eq("course_id", courseId),
+    session.from("lesson_progress").select("lesson_id, completed").eq("student_id", studentId),
+    session
+      .from("student_notes")
+      .select("content")
+      .eq("student_id", studentId)
+      .eq("lesson_id", params.id)
+      .maybeSingle(),
+    session
+      .from("bookmarks")
+      .select("*")
+      .eq("student_id", studentId)
+      .eq("lesson_id", params.id)
+      .order("timestamp_seconds"),
+    enrolled
+      ? supabase
+          .from("enrollments")
+          .select("enrolled_at, completed_at")
+          .eq("student_id", studentId)
+          .eq("course_id", courseId)
+          .maybeSingle()
+      : session
+          .from("enrollments")
+          .select("enrolled_at, completed_at")
+          .eq("student_id", studentId)
+          .eq("course_id", courseId)
+          .maybeSingle(),
+    supabase
+      .from("resources")
+      .select("id, title, file_url, file_type")
+      .eq("lesson_id", params.id)
+      .eq("is_archived", false)
+      .order("created_at", { ascending: true }),
+    supabase
+      .from("resources")
+      .select("id, title, file_url, file_type")
+      .eq("course_id", courseId)
+      .is("lesson_id", null)
+      .eq("is_archived", false)
+      .order("position", { ascending: true })
+      .order("created_at", { ascending: true }),
+    enrolled
+      ? supabase
+          .from("certificates")
+          .select("id")
+          .eq("student_id", studentId)
+          .eq("course_id", courseId)
+          .maybeSingle()
+      : Promise.resolve({ data: null }),
+  ]);
 
-  const sortedModules = [...((modules as ModuleWithLessons[]) ?? [])].sort((a, b) => a.position - b.position);
+  const sortedModules = [...((modules as ModuleWithLessons[]) ?? [])].sort(
+    (a, b) => a.position - b.position,
+  );
   const completedIds = new Set((progress ?? []).filter((p) => p.completed).map((p) => p.lesson_id));
 
-  // Flatten lessons in order to evaluate locking + drip.
   const ordered: Lesson[] = sortedModules.flatMap((m) =>
     [...(m.lessons ?? [])].sort((a, b) => a.position - b.position),
   );
@@ -145,6 +163,12 @@ export default async function LessonPage({ params }: { params: { id: string } })
   const isComingSoon = isLessonComingSoon(lesson);
 
   const totalLessons = ordered.length;
+  const lessonIndex = Math.max(1, ordered.findIndex((item) => item.id === lesson.id) + 1);
+  const currentPos = ordered.findIndex((item) => item.id === lesson.id);
+  const prevLessonId = currentPos > 0 ? ordered[currentPos - 1]?.id ?? null : null;
+  const nextLessonId =
+    currentPos >= 0 && currentPos < ordered.length - 1 ? ordered[currentPos + 1]?.id ?? null : null;
+
   const completedLessons = ordered.filter((item) => completedIds.has(item.id)).length;
   const lessonsLeft = totalLessons - completedLessons;
   const progressPct = totalLessons > 0 ? Math.round((completedLessons / totalLessons) * 100) : 0;
@@ -162,56 +186,67 @@ export default async function LessonPage({ params }: { params: { id: string } })
       currentLessonId={lesson.id}
       completedIds={[...completedIds]}
       lockedIds={[...lockedIds]}
+      progressPct={progressPct}
+      lessonIndex={lessonIndex}
+      totalLessons={totalLessons}
     >
       {isComingSoon ? (
-        <LessonComingSoonView
-          lessonTitle={lesson.title}
-          courseTitle={course?.title ?? "Course"}
-          courseId={courseId}
-          description={lesson.description}
-          availableAt={lesson.coming_soon_available_at}
-        />
+        <div className="px-4 py-6 sm:px-0">
+          <LessonComingSoonView
+            lessonTitle={lesson.title}
+            courseTitle={course?.title ?? "Course"}
+            courseId={courseId}
+            description={lesson.description}
+            availableAt={lesson.coming_soon_available_at}
+          />
+        </div>
       ) : isLocked ? (
-        <Card className="flex flex-col items-center gap-3 py-16 text-center">
-          <Lock className="h-8 w-8 text-muted" />
-          <h2 className="text-lg font-semibold">This lesson is locked</h2>
-          <p className="max-w-sm text-sm text-muted">
+        <div className="mx-4 my-10 flex flex-col items-center gap-3 border border-neutral-200 px-6 py-16 text-center sm:mx-0">
+          <Lock className="h-8 w-8 text-neutral-400" />
+          <h2 className="font-display text-lg font-bold text-neutral-900">This lesson is locked</h2>
+          <p className="max-w-sm text-sm text-neutral-500">
             Complete the previous lesson or wait for it to unlock on its scheduled drip date.
           </p>
-        </Card>
-      ) : (
-        <div className="space-y-5">
-          {enrolled ? (
-            <Card className="p-4 sm:p-5">
-              <CourseProgressNudge
-                pct={progressPct}
-                lessonsLeft={lessonsLeft}
-                totalLessons={totalLessons}
-              />
-            </Card>
+          {prevLessonId ? (
+            <Link
+              href={`/lessons/${prevLessonId}`}
+              className="mt-2 inline-flex h-11 items-center bg-brand px-5 text-sm font-semibold text-white"
+            >
+              Go to previous lesson
+            </Link>
           ) : null}
+        </div>
+      ) : (
+        <div className="space-y-6 pb-2">
           <LessonPlayer
             lesson={lesson}
             studentEmail={profile.email}
             completed={completedIds.has(lesson.id)}
             note={note?.content ?? ""}
             bookmarks={bookmarks ?? []}
+            lessonIndex={lessonIndex}
+            totalLessons={totalLessons}
+            prevLessonId={prevLessonId}
+            nextLessonId={nextLessonId}
           />
+
           <LessonAttachments attachments={attachments ?? []} />
+
           {quiz ? (
-            <Card className="flex items-center justify-between">
+            <div className="flex flex-col gap-3 border-y border-neutral-200 px-4 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-0">
               <div>
-                <h3 className="font-semibold">{quiz.title}</h3>
-                <p className="text-sm text-muted">Test your understanding of this lesson.</p>
+                <h3 className="font-display text-sm font-bold text-neutral-900">{quiz.title}</h3>
+                <p className="mt-1 text-sm text-neutral-500">Test what you just learned.</p>
               </div>
               <Link
                 href={`/quizzes/${quiz.id}`}
-                className="rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700"
+                className="inline-flex h-11 items-center justify-center bg-brand px-5 text-sm font-semibold text-white hover:bg-brand-700"
               >
                 Take quiz
               </Link>
-            </Card>
+            </div>
           ) : null}
+
           {course?.certificate_enabled && enrolled ? (
             <CourseCertificateGoal
               unlocked={courseComplete || Boolean(certificate)}
@@ -219,12 +254,12 @@ export default async function LessonPage({ params }: { params: { id: string } })
               templateKey={certificateTemplateKey}
             />
           ) : null}
+
+          <div className="pb-2">
+            <CourseResources resources={courseResources ?? []} />
+          </div>
         </div>
       )}
-
-      <div className="mt-5">
-        <CourseResources resources={courseResources ?? []} />
-      </div>
     </LessonLearningLayout>
   );
 }
@@ -239,7 +274,6 @@ function computeLockedIds(
     const l = ordered[i];
     if (l.is_free_preview || l.is_coming_soon) continue;
 
-    // Sequential lock: previous required lesson must be completed (skip coming-soon placeholders).
     if (l.is_locked && i > 0) {
       let prevIdx = i - 1;
       while (prevIdx >= 0 && ordered[prevIdx].is_coming_soon) prevIdx--;
@@ -249,7 +283,6 @@ function computeLockedIds(
       }
     }
 
-    // Drip lock: not yet available X days after enrollment.
     if (l.drip_days && enrolledAt) {
       const unlockAt = new Date(enrolledAt).getTime() + l.drip_days * 86400000;
       if (Date.now() < unlockAt) locked.add(l.id);

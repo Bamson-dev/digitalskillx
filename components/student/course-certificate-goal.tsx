@@ -1,77 +1,53 @@
 import Link from "next/link";
 import { Award, Lock } from "lucide-react";
-import { CertificatePreview } from "@/components/certificates/certificate-preview";
-import {
-  DEFAULT_CERTIFICATE_TEMPLATE_KEY,
-  normalizeCertificateTemplateKey,
-  type CertificateTemplateKey,
-} from "@/lib/certificate-templates";
-import { Card } from "@/components/ui/card";
 
 export function CourseCertificateGoal({
   unlocked,
   certificateId,
-  templateKey,
 }: {
   unlocked: boolean;
   certificateId?: string | null;
   templateKey?: string | null;
 }) {
-  const resolvedTemplate: CertificateTemplateKey =
-    normalizeCertificateTemplateKey(templateKey) ?? DEFAULT_CERTIFICATE_TEMPLATE_KEY;
-
   if (unlocked) {
     return (
-      <Card className="overflow-hidden p-4 sm:p-5">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-          {certificateId ? (
-            <div className="shrink-0 sm:w-40">
-              <CertificatePreview templateKey={resolvedTemplate} compact className="shadow-none" />
-            </div>
-          ) : null}
+      <section className="border-y border-neutral-200 px-4 py-5 sm:px-0">
+        <div className="flex items-start gap-3">
+          <Award className="mt-0.5 h-5 w-5 shrink-0 text-brand" />
           <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2 text-brand">
-              <Award className="h-5 w-5" />
-              <p className="text-sm font-semibold uppercase tracking-wide">
-                {certificateId ? "Certificate earned" : "Course complete"}
-              </p>
-            </div>
-            <p className="mt-2 text-sm text-neutral-600">
+            <p className="font-display text-sm font-bold text-neutral-900">
+              {certificateId ? "Certificate earned" : "Course complete"}
+            </p>
+            <p className="mt-1 text-sm text-neutral-600">
               {certificateId
-                ? "You completed this course. View and download your certificate anytime."
-                : "Congratulations! You've completed this course."}
+                ? "You finished this course. View and download your certificate anytime."
+                : "Congratulations — you finished every lesson."}
             </p>
             {certificateId ? (
               <Link
                 href={`/certificates/${certificateId}`}
-                className="mt-4 inline-flex items-center rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700"
+                className="mt-3 inline-flex h-10 items-center bg-brand px-4 text-sm font-semibold text-white hover:bg-brand-700"
               >
                 View certificate
               </Link>
             ) : null}
           </div>
         </div>
-      </Card>
+      </section>
     );
   }
 
   return (
-    <Card className="overflow-hidden p-4 sm:p-5">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-        <div className="relative shrink-0 sm:w-40">
-          <CertificatePreview templateKey={resolvedTemplate} compact className="shadow-none" />
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 rounded-lg bg-neutral-900/45 text-white">
-            <Lock className="h-5 w-5" aria-hidden />
-            <span className="px-2 text-center text-xs font-semibold">Locked</span>
-          </div>
-        </div>
+    <section className="border-y border-neutral-200 px-4 py-5 sm:px-0">
+      <div className="flex items-start gap-3">
+        <Lock className="mt-0.5 h-5 w-5 shrink-0 text-neutral-400" />
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-semibold text-neutral-900">Your certificate awaits</p>
-          <p className="mt-2 text-sm text-neutral-600">
-            Complete this course to earn your certificate.
+          <p className="font-display text-sm font-bold text-neutral-900">Certificate awaiting</p>
+          <p className="mt-1 text-sm text-neutral-600">
+            Finish every lesson to unlock your DigitalSkillX certificate.
           </p>
         </div>
       </div>
-    </Card>
+    </section>
   );
 }

@@ -1,11 +1,15 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import { usePathname } from "next/navigation";
 import { Sparkles, X, Send, Loader2 } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 type Message = { role: "user" | "assistant"; content: string };
 
 export function AiAssistant() {
+  const pathname = usePathname();
+  const classroom = pathname.startsWith("/lessons/");
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([
     { role: "assistant", content: "Hi! I'm your learning assistant. Ask me anything about your courses." },
@@ -43,18 +47,31 @@ export function AiAssistant() {
     }
   }
 
+  const dock = cn(
+    "fixed right-4 z-40 sm:bottom-5 sm:right-5",
+    classroom ? "bottom-24" : "bottom-5",
+  );
+
   return (
     <>
       {!open ? (
         <button
           onClick={() => setOpen(true)}
-          className="fixed bottom-5 right-5 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-brand text-white shadow-lg transition hover:bg-brand-700"
+          className={cn(
+            dock,
+            "flex h-12 w-12 items-center justify-center bg-brand text-white transition hover:bg-brand-700 sm:h-14 sm:w-14",
+          )}
           aria-label="Open learning assistant"
         >
-          <Sparkles className="h-6 w-6" />
+          <Sparkles className="h-5 w-5 sm:h-6 sm:w-6" />
         </button>
       ) : (
-        <div className="fixed bottom-5 right-5 z-40 flex h-[28rem] w-[22rem] max-w-[calc(100vw-2.5rem)] flex-col overflow-hidden rounded-2xl border border-app bg-card shadow-xl">
+        <div
+          className={cn(
+            dock,
+            "flex h-[min(28rem,70vh)] w-[min(22rem,calc(100vw-2rem))] flex-col overflow-hidden border border-neutral-200 bg-white shadow-xl",
+          )}
+        >
           <div className="flex items-center justify-between bg-brand px-4 py-3 text-white">
             <span className="flex items-center gap-2 font-semibold">
               <Sparkles className="h-4 w-4" /> Learning Assistant
