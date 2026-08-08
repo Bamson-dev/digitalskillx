@@ -18,9 +18,12 @@ import { isSuccessfulGuestPurchase } from "@/lib/guest-checkout";
 import { ORG, siteUrl } from "@/lib/org";
 import { MarketplaceNav, MarketplaceFooter } from "@/components/marketplace/marketplace-chrome";
 import { CourseLandingView } from "@/components/marketplace/course-landing-view";
+import { SalesPageView } from "@/components/marketplace/sales-page-view";
 import { CourseComingSoonView } from "@/components/course/course-coming-soon-view";
 import { PaymentReturnHandler } from "@/components/marketplace/payment-return-handler";
 import { CourseViewTracker } from "@/components/marketplace/course-view-tracker";
+import { getPublishedSalesPageForCourse } from "@/lib/sales-pages/service";
+import { salesPageImportEnabled } from "@/lib/sales-pages/feature-flag";
 
 const courseSelect =
   "id, title, description, short_description, thumbnail_url, price_ngn, price_usd, learning_outcomes, instructor_name, instructor_bio, promo_video_url, is_coming_soon, certificate_enabled, category:course_categories(name), modules(id, title, position, lessons(id, title, position, lesson_type))";
@@ -165,6 +168,15 @@ export default async function CourseLandingPage({
     isCourseFree(course, "NGN");
   const purchaseComplete = !isEnrolled && (paidPurchaseComplete || freeEnrollComplete);
 
+  let publishedSalesPage: Awaited<ReturnType<typeof getPublishedSalesPageForCourse>> = null;
+  if (salesPageImportEnabled() && !course.is_coming_soon) {
+    try {
+      publishedSalesPage = await getPublishedSalesPageForCourse(supabase, course.id);
+    } catch {
+      publishedSalesPage = null;
+    }
+  }
+
   return (
     <div className="flex min-h-screen flex-col overflow-x-hidden bg-white text-neutral-800">
       <MarketplaceNav user={profile} />
@@ -189,6 +201,18 @@ export default async function CourseLandingPage({
             learningOutcomes={course.learning_outcomes ?? []}
             categoryName={category?.name ?? null}
             instructorName={course.instructor_name}
+          />
+        ) : publishedSalesPage ? (
+          <SalesPageView
+            course={{
+              ...course,
+              learning_outcomes: course.learning_outcomes ?? [],
+              modules,
+            }}
+            schema={publishedSalesPage.schema}
+            isEnrolled={isEnrolled}
+            isLoggedIn={Boolean(profile?.email)}
+            related={related}
           />
         ) : (
           <CourseLandingView

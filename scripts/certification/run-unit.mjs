@@ -476,3 +476,25 @@ console.log("PASS: heuristic recommendations scoring + ownership filter");
 }
 
 console.log("PASS: classroom companion rarity + reduced-motion guards");
+
+{
+  const { spawnSync } = await import("node:child_process");
+  const r = spawnSync(
+    process.execPath,
+    [
+      "--import",
+      join(root, "scripts/certification/register-ts-ext.mjs"),
+      join(root, "scripts/certification/test-sales-pages.mjs"),
+    ],
+    {
+      cwd: root,
+      encoding: "utf8",
+    },
+  );
+  if (r.status !== 0) {
+    console.error(r.stdout);
+    console.error(r.stderr);
+    process.exit(r.status ?? 1);
+  }
+  console.log("PASS: sales page phase 1 suite (via test-sales-pages.mjs)");
+}

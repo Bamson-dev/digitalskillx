@@ -15,6 +15,7 @@ import { SubmitButton } from "@/components/auth/submit-button";
 import { useToast } from "@/components/ui/toast";
 import { LessonAttachmentsPanel } from "@/components/admin/lesson-attachments-panel";
 import { CourseResourcesPanel } from "@/components/admin/course-resources-panel";
+import { CourseSalesPagePanel } from "@/components/admin/course-sales-page-panel";
 import type { AttachmentDisplay } from "@/lib/lesson-attachments-shared";
 import type { Course, CourseCategory, Lesson, Module } from "@/types/database";
 import type { CertificateTemplateKey } from "@/lib/certificate-templates";
@@ -104,6 +105,31 @@ export function CourseEditor({
       />
       {/* Curriculum is the next primary workflow */}
       <CurriculumCard courseId={course.id} modules={modules} lessonAttachments={lessonAttachments} />
+      <CourseSalesPagePanel
+        course={{
+          id: course.id,
+          title: course.title,
+          description: course.description,
+          short_description: course.short_description,
+          thumbnail_url: course.thumbnail_url,
+          price_ngn: course.price_ngn,
+          price_usd: course.price_usd,
+          learning_outcomes: course.learning_outcomes ?? [],
+          instructor_name: course.instructor_name,
+          instructor_bio: course.instructor_bio,
+          modules: modules.map((m) => ({
+            id: m.id,
+            title: m.title,
+            position: m.position,
+            lessons: (m.lessons ?? []).map((l) => ({
+              id: l.id,
+              title: l.title,
+              position: l.position,
+              lesson_type: l.lesson_type,
+            })),
+          })),
+        }}
+      />
       {/* Secondary: downloads / attachments */}
       <details className="group rounded-xl border border-dashed border-app bg-white open:shadow-sm">
         <summary className="cursor-pointer list-none px-5 py-4 font-semibold marker:content-none">

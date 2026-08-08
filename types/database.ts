@@ -29,6 +29,7 @@ export type EnrollmentLinkRedirect =
   | "first_course"
   | "dashboard"
   | "specific_course";
+export type SalesPageStatus = "draft" | "published" | "unpublished";
 export type TransactionStatus = "pending" | "success" | "failed";
 export type PaymentProvider = "paystack";
 export type LessonType =
@@ -603,6 +604,53 @@ export type AccountSession = {
   revoked_at: string | null;
 };
 
+export type SalesPage = {
+  id: string;
+  course_id: string;
+  title: string;
+  status: SalesPageStatus;
+  draft_schema: Json;
+  published_schema: Json | null;
+  draft_version: number;
+  published_version: number;
+  seo: Json;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+  published_at: string | null;
+};
+
+export type SalesPageAsset = {
+  id: string;
+  sales_page_id: string;
+  course_id: string;
+  filename: string;
+  original_filename: string;
+  mime_type: string;
+  size_bytes: number;
+  storage_provider: string;
+  storage_path: string;
+  public_url: string | null;
+  checksum: string | null;
+  source_url: string | null;
+  status: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type SalesPageImport = {
+  id: string;
+  sales_page_id: string;
+  course_id: string;
+  source_type: string;
+  source_format: string;
+  status: string;
+  report: Json;
+  created_by: string | null;
+  created_at: string;
+  completed_at: string | null;
+};
+
 export type Database = {
   public: {
     Tables: {
@@ -812,6 +860,28 @@ export type Database = {
         AccountSession,
         [Rel<"account_sessions_user_id_fkey", "user_id", "profiles", "id">]
       >;
+      sales_pages: Table<
+        SalesPage,
+        [
+          Rel<"sales_pages_course_id_fkey", "course_id", "courses", "id">,
+          Rel<"sales_pages_created_by_fkey", "created_by", "profiles", "id">,
+        ]
+      >;
+      sales_page_assets: Table<
+        SalesPageAsset,
+        [
+          Rel<"sales_page_assets_sales_page_id_fkey", "sales_page_id", "sales_pages", "id">,
+          Rel<"sales_page_assets_course_id_fkey", "course_id", "courses", "id">,
+        ]
+      >;
+      sales_page_imports: Table<
+        SalesPageImport,
+        [
+          Rel<"sales_page_imports_sales_page_id_fkey", "sales_page_id", "sales_pages", "id">,
+          Rel<"sales_page_imports_course_id_fkey", "course_id", "courses", "id">,
+          Rel<"sales_page_imports_created_by_fkey", "created_by", "profiles", "id">,
+        ]
+      >;
     };
     Views: Record<string, never>;
     Functions: {
@@ -854,6 +924,7 @@ export type Database = {
       enrollment_link_status: EnrollmentLinkStatus;
       enrollment_link_access: EnrollmentLinkAccess;
       enrollment_link_redirect: EnrollmentLinkRedirect;
+      sales_page_status: SalesPageStatus;
       lesson_type: LessonType;
       quiz_scope: QuizScope;
       question_type: QuestionType;
