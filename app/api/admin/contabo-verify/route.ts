@@ -2,6 +2,9 @@ import { NextResponse, type NextRequest } from "next/server";
 import { randomUUID } from "node:crypto";
 import { verifyCronSecret } from "@/lib/cron-auth";
 import { requireAdminApiAuth } from "@/lib/admin-api-auth";
+import { bootstrapRuntimeSecrets } from "@/lib/bootstrap-runtime-secrets";
+import { createAdminClientAsync } from "@/lib/supabase/admin";
+import { createClient } from "@/lib/supabase/server";
 import {
   createStorageAdapterFromEnv,
   resetStorageServiceCache,
@@ -26,8 +29,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
   }
-
-  // Temporary endpoint — remove after Contabo production verification.
 
   const provider = (process.env.STORAGE_PROVIDER ?? "").trim().toLowerCase();
   const envPresence = {
@@ -60,6 +61,38 @@ export async function POST(request: NextRequest) {
     }
   }
 
+  let schema: {
+    sales_pages: boolean;
+    sales_page_assets: boolean;
+    sales_page_imports: boolean;
+    error?: string;
+  } = {
+    sales_pages: false,
+    sales_page_assets: false,
+    sales_page_imports: false,
+  };
+  try {
+    await bootstrapRuntimeSecrets();
+    const session = createClient();
+    const admin = await createAdminClientAsync(session);
+    const checks = await Promise.all(
+      (["sales_pages", "sales_page_assets", "sales_page_imports"] as const).map(async (table) => {
+        const { error } = await admin.from(table).select("id").limit(1);
+        const missing = Boolean(
+          error?.message?.match(/does not exist|Could not find the table|schema cache/i),
+        );
+        return [table, !missing] as const;
+      }),
+    );
+    schema = {
+      sales_pages: checks.find((c) => c[0] === "sales_pages")?.[1] ?? false,
+      sales_page_assets: checks.find((c) => c[0] === "sales_page_assets")?.[1] ?? false,
+      sales_page_imports: checks.find((c) => c[0] === "sales_page_imports")?.[1] ?? false,
+    };
+  } catch (err) {
+    schema.error = err instanceof Error ? err.message : "schema_check_failed";
+  }
+
   const id = randomUUID();
   const path = `verification/contabo-production-test-${id}.txt`;
   const payload = Buffer.from(`digitalskillx-contabo-prod-verify-${id}`, "utf8");
@@ -76,6 +109,7 @@ export async function POST(request: NextRequest) {
         step: "adapter_init",
         error: message.replace(/[A-Za-z0-9/+]{24,}/g, "[REDACTED]"),
         envPresence,
+        schema,
       },
       { status: 500 },
     );
@@ -88,6 +122,7 @@ export async function POST(request: NextRequest) {
         step: "adapter_init",
         error: `Unexpected provider: ${storage.provider}`,
         envPresence,
+        schema,
       },
       { status: 500 },
     );
@@ -113,31 +148,21 @@ export async function POST(request: NextRequest) {
     steps.upload = "PASS";
 
     steps.exists_after_upload = (await storage.exists(path)) ? "PASS" : "FAIL";
-    if (steps.exists_after_upload === "FAIL") {
-      throw new Error("Object missing after upload.");
-    }
+    if (steps.exists_after_upload === "FAIL") throw new Error("Object missing after upload.");
 
     const meta = await storage.getMetadata(path);
-    steps.metadata =
-      meta && meta.size === payload.length ? "PASS" : "FAIL";
-    if (steps.metadata === "FAIL") {
-      throw new Error("Metadata mismatch after upload.");
-    }
+    steps.metadata = meta && meta.size === payload.length ? "PASS" : "FAIL";
+    if (steps.metadata === "FAIL") throw new Error("Metadata mismatch after upload.");
 
     const downloaded = await storage.download(path);
     steps.download = "PASS";
-    steps.content_match =
-      Buffer.compare(downloaded, payload) === 0 ? "PASS" : "FAIL";
-    if (steps.content_match === "FAIL") {
-      throw new Error("Downloaded content did not match upload.");
-    }
+    steps.content_match = Buffer.compare(downloaded, payload) === 0 ? "PASS" : "FAIL";
+    if (steps.content_match === "FAIL") throw new Error("Downloaded content did not match upload.");
 
     await storage.delete(path);
     steps.delete = "PASS";
     steps.exists_after_delete = (await storage.exists(path)) ? "FAIL" : "PASS";
-    if (steps.exists_after_delete === "FAIL") {
-      throw new Error("Object still exists after delete.");
-    }
+    if (steps.exists_after_delete === "FAIL") throw new Error("Object still exists after delete.");
 
     return NextResponse.json({
       ok: true,
@@ -146,13 +171,12 @@ export async function POST(request: NextRequest) {
       objectLeftBehind: false,
       steps,
       envPresence,
+      schema,
       timestamp: new Date().toISOString(),
     });
   } catch (err) {
     try {
-      if (await storage.exists(path)) {
-        await storage.delete(path);
-      }
+      if (await storage.exists(path)) await storage.delete(path);
     } catch {
       // best-effort cleanup
     }
@@ -166,6 +190,7 @@ export async function POST(request: NextRequest) {
         steps,
         error: message.replace(/[A-Za-z0-9/+]{24,}/g, "[REDACTED]"),
         envPresence,
+        schema,
         timestamp: new Date().toISOString(),
       },
       { status: 500 },
