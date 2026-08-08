@@ -5,6 +5,7 @@ import { X } from "lucide-react";
 import {
   buildClassroomMoment,
   classroomMomentEventName,
+  type CelebrationLevel,
   type ClassroomMoment,
   type CompanionMood,
 } from "@/lib/classroom-engagement";
@@ -17,51 +18,94 @@ function prefersReducedMotion() {
   return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 }
 
-/** Brand mark companion — geometric X mark, not a cartoon mascot. */
+function moodMotionClass(mood: CompanionMood, level: CelebrationLevel, dancing: boolean) {
+  if (dancing) return "dsx-companion-dance";
+  if (level === "energetic") return "dsx-companion-energetic";
+  if (level === "bigger" || level === "small") return "dsx-companion-pop";
+  switch (mood) {
+    case "happy":
+    case "correct":
+      return "dsx-companion-nod";
+    case "thinking":
+      return "dsx-companion-think";
+    case "supportive":
+    case "incorrect":
+      return "dsx-companion-soft";
+    case "welcome":
+      return "dsx-companion-welcome";
+    default:
+      return level === "subtle" ? "dsx-companion-nod" : undefined;
+  }
+}
+
+function moodAccent(mood: CompanionMood) {
+  switch (mood) {
+    case "supportive":
+    case "incorrect":
+      return "#737373";
+    case "thinking":
+      return "#525252";
+    case "certificate":
+    case "celebration":
+    case "streak":
+      return "#dc2626";
+    case "happy":
+    case "correct":
+      return "#171717";
+    default:
+      return "#171717";
+  }
+}
+
+/** Brand mark companion — geometric X, expression via motion + accent only. */
 function BrandCompanionMark({
   mood,
+  level,
   dancing,
 }: {
   mood: CompanionMood;
+  level: CelebrationLevel;
   dancing: boolean;
 }) {
-  const accent =
-    mood === "incorrect"
-      ? "#a3a3a3"
-      : mood === "certificate" || mood === "celebration"
-        ? "#dc2626"
-        : "#171717";
+  const reduced = prefersReducedMotion();
+  const motion = !reduced ? moodMotionClass(mood, level, dancing) : undefined;
+  const accent = moodAccent(mood);
+  const showDot = mood === "celebration" || mood === "certificate" || level === "energetic";
 
   return (
     <svg
       viewBox="0 0 64 64"
-      className={cn(
-        "h-11 w-11 sm:h-12 sm:w-12",
-        dancing && !prefersReducedMotion() && "dsx-companion-dance",
-        mood === "correct" && "dsx-companion-nod",
-        mood === "incorrect" && "dsx-companion-soft",
-      )}
+      className={cn("h-11 w-11 shrink-0 sm:h-12 sm:w-12", motion)}
       aria-hidden
     >
       <rect x="4" y="4" width="56" height="56" rx="4" fill="#fafafa" stroke="#e5e5e5" />
-      <path
-        d="M20 20 L44 44 M44 20 L20 44"
-        stroke={accent}
-        strokeWidth="6"
-        strokeLinecap="square"
-      />
-      {(mood === "celebration" || mood === "certificate") && (
-        <circle cx="52" cy="12" r="4" fill="#dc2626" className="dsx-companion-pulse" />
+      {mood === "thinking" ? (
+        <>
+          <circle cx="24" cy="28" r="2.5" fill={accent} />
+          <circle cx="32" cy="28" r="2.5" fill={accent} />
+          <circle cx="40" cy="28" r="2.5" fill={accent} />
+        </>
+      ) : (
+        <path
+          d="M20 20 L44 44 M44 20 L20 44"
+          stroke={accent}
+          strokeWidth="6"
+          strokeLinecap="square"
+        />
       )}
+      {showDot ? (
+        <circle cx="52" cy="12" r="4" fill="#dc2626" className="dsx-companion-pulse" />
+      ) : null}
     </svg>
   );
 }
 
-function ParticleBurst({ active }: { active: boolean }) {
+function ParticleBurst({ active, strong }: { active: boolean; strong?: boolean }) {
   if (!active) return null;
+  const count = strong ? 12 : 8;
   return (
     <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden>
-      {Array.from({ length: 8 }).map((_, i) => (
+      {Array.from({ length: count }).map((_, i) => (
         <span key={i} className="dsx-particle" style={{ ["--i" as string]: i }} />
       ))}
     </div>
@@ -70,7 +114,7 @@ function ParticleBurst({ active }: { active: boolean }) {
 
 /**
  * Lazy classroom companion host.
- * Dance only when moment.allowDance is true (course complete / certificate unlock).
+ * Full dance only when moment.allowDance (course complete / certificate unlock).
  */
 export function ClassroomMomentHost({
   companionEnabled = true,
@@ -86,11 +130,14 @@ export function ClassroomMomentHost({
 
   useEffect(() => {
     if (!companionEnabled) return;
+    let hideTimer: number | undefined;
 
     const onMoment = (event: Event) => {
       const detail = (event as CustomEvent<HostMoment>).detail;
       if (!detail) return;
-      if (!celebrationsEnabled && (detail.allowDance || detail.particles)) return;
+      if (!celebrationsEnabled && (detail.allowDance || detail.particles || detail.level === "energetic")) {
+        return;
+      }
 
       if (detail.dedupeKey) {
         try {
@@ -102,33 +149,38 @@ export function ClassroomMomentHost({
         }
       }
 
+      window.clearTimeout(hideTimer);
       setMoment(detail);
       setVisible(true);
       const ttl = reduced ? Math.min(detail.durationMs, 1200) : detail.durationMs;
-      const t = window.setTimeout(() => setVisible(false), ttl);
-      return () => window.clearTimeout(t);
+      hideTimer = window.setTimeout(() => setVisible(false), ttl);
     };
 
     window.addEventListener(classroomMomentEventName(), onMoment);
-    return () => window.removeEventListener(classroomMomentEventName(), onMoment);
+    return () => {
+      window.removeEventListener(classroomMomentEventName(), onMoment);
+      window.clearTimeout(hideTimer);
+    };
   }, [companionEnabled, celebrationsEnabled, reduced]);
 
   useEffect(() => {
-    if (!visible) return;
-    const t = window.setTimeout(() => setMoment(null), 400);
+    if (visible) return;
+    if (!moment) return;
+    const t = window.setTimeout(() => setMoment(null), 350);
     return () => window.clearTimeout(t);
-  }, [visible]);
+  }, [visible, moment]);
 
   if (!companionEnabled || !moment) return null;
 
   const showDance = Boolean(moment.allowDance && celebrationsEnabled && !reduced);
-  const showParticles = Boolean(moment.particles && celebrationsEnabled && !reduced && visible);
+  const showParticles = Boolean(
+    moment.particles && celebrationsEnabled && !reduced && visible,
+  );
 
   return (
     <div
       className={cn(
         "pointer-events-none fixed z-30",
-        /* Keep clear of video + sticky mobile lesson bar */
         "bottom-[5.5rem] right-3 sm:bottom-6 sm:right-6 lg:bottom-8 lg:right-8",
       )}
       role="status"
@@ -137,12 +189,15 @@ export function ClassroomMomentHost({
     >
       <div
         className={cn(
-          "pointer-events-auto relative w-[min(100vw-1.5rem,16rem)] border border-neutral-200 bg-white p-3 shadow-sm transition",
+          "pointer-events-auto relative w-[min(100vw-1.5rem,16.5rem)] border border-neutral-200 bg-white p-3 shadow-sm transition",
           visible ? "dsx-companion-enter opacity-100" : "opacity-0",
           reduced && "transition-none",
         )}
       >
-        <ParticleBurst active={showParticles} />
+        <ParticleBurst
+          active={showParticles}
+          strong={moment.level === "major" || moment.level === "special"}
+        />
         <button
           type="button"
           onClick={() => {
@@ -155,7 +210,7 @@ export function ClassroomMomentHost({
           <X className="h-3.5 w-3.5" />
         </button>
         <div className="flex items-center gap-3 pr-6">
-          <BrandCompanionMark mood={moment.mood} dancing={showDance} />
+          <BrandCompanionMark mood={moment.mood} level={moment.level} dancing={showDance} />
           <p id={labelId} className="font-display text-sm font-semibold leading-snug text-neutral-900">
             {moment.message}
           </p>
@@ -165,7 +220,6 @@ export function ClassroomMomentHost({
   );
 }
 
-/** Fire a local demo-safe moment builder for tests. */
 export function previewMoment(kind: Parameters<typeof buildClassroomMoment>[0]) {
   return buildClassroomMoment(kind);
 }

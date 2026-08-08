@@ -46,6 +46,16 @@ export function QuizTaker({
   }, [timeLimitMins, state.submitted, retryKey]);
 
   useEffect(() => {
+    if (state.submitted) return;
+    const difficult = Boolean(timeLimitMins) || questions.length >= 5;
+    if (!difficult) return;
+    const t = window.setTimeout(() => {
+      dispatchClassroomMoment("thinking", { dedupeKey: `quiz-think:${quizId}` });
+    }, 800);
+    return () => window.clearTimeout(t);
+  }, [quizId, timeLimitMins, questions.length, state.submitted]);
+
+  useEffect(() => {
     if (!state.submitted || state.pendingManual) return;
     if (state.passed) {
       dispatchClassroomMoment("quiz_passed", {

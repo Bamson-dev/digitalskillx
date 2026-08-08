@@ -1,4 +1,4 @@
-/* Classroom motion — lightweight, opt-in via companion host. Respect prefers-reduced-motion. */
+/* Classroom motion — lightweight. Full dance is rare (course / certificate only). */
 
 @keyframes dsx-companion-enter {
   from {
@@ -31,7 +31,50 @@
   }
 }
 
-/* Rare achievement only — never loop forever */
+@keyframes dsx-companion-think {
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+  50% {
+    transform: rotate(-4deg);
+  }
+}
+
+@keyframes dsx-companion-welcome {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  35% {
+    transform: translateY(-3px);
+  }
+}
+
+@keyframes dsx-companion-pop {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  40% {
+    transform: scale(1.04);
+  }
+}
+
+@keyframes dsx-companion-energetic {
+  0%,
+  100% {
+    transform: translateY(0) rotate(0deg);
+  }
+  25% {
+    transform: translateY(-3px) rotate(-3deg);
+  }
+  75% {
+    transform: translateY(-2px) rotate(3deg);
+  }
+}
+
+/* Rare — course complete / certificate only. Never loop forever. */
 @keyframes dsx-companion-dance {
   0%,
   100% {
@@ -81,6 +124,22 @@
   animation: dsx-companion-soft 500ms ease-in-out 1;
 }
 
+.dsx-companion-think {
+  animation: dsx-companion-think 900ms ease-in-out 1;
+}
+
+.dsx-companion-welcome {
+  animation: dsx-companion-welcome 700ms ease-out 1;
+}
+
+.dsx-companion-pop {
+  animation: dsx-companion-pop 500ms ease-out 1;
+}
+
+.dsx-companion-energetic {
+  animation: dsx-companion-energetic 650ms ease-in-out 2;
+}
+
 .dsx-companion-dance {
   animation: dsx-companion-dance 700ms ease-in-out 2;
 }
@@ -105,6 +164,10 @@
   .dsx-companion-enter,
   .dsx-companion-nod,
   .dsx-companion-soft,
+  .dsx-companion-think,
+  .dsx-companion-welcome,
+  .dsx-companion-pop,
+  .dsx-companion-energetic,
   .dsx-companion-dance,
   .dsx-companion-pulse,
   .dsx-particle {

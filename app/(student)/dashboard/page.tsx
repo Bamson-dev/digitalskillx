@@ -12,6 +12,7 @@ import { RecommendationRail } from "@/components/marketplace/recommendation-rail
 import { CourseThumbnailPlaceholder } from "@/components/marketplace/course-thumbnail-placeholder";
 import { resumeLessonPath } from "@/lib/system-email-triggers";
 import { recommendCourses } from "@/lib/recommendations";
+import { DashboardCompanionWelcome } from "@/components/student/dashboard-companion-welcome";
 import { toPercent } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "Dashboard" };
@@ -73,6 +74,7 @@ export default async function StudentDashboardPage() {
 
   return (
     <div className="mx-auto max-w-3xl space-y-12">
+      <DashboardCompanionWelcome />
       <header>
         <h1 className="font-display text-2xl font-bold tracking-tight text-neutral-900 sm:text-3xl">
           {firstName}, pick up where you left off

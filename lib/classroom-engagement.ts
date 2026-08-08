@@ -1,10 +1,23 @@
 /**
  * Classroom engagement moments — learning-first motion.
- * Dance/celebration is reserved for rare, genuine milestones only.
+ *
+ * Reaction ladder (professional, not childish):
+ * - Correct → happy
+ * - Difficult / thinking → thinking
+ * - Wrong → supportive
+ * - Lesson complete → small celebration
+ * - Module / badge → bigger celebration
+ * - 7-day streak → energetic (still short)
+ * - Course complete → major (dance)
+ * - Certificate → special (dance)
+ * - Dashboard open → quiet welcome once/day (no dance loop)
  */
 
 export type CompanionMood =
   | "idle"
+  | "happy"
+  | "thinking"
+  | "supportive"
   | "encouragement"
   | "correct"
   | "incorrect"
@@ -13,11 +26,23 @@ export type CompanionMood =
   | "streak"
   | "completion"
   | "certificate"
-  | "celebration";
+  | "celebration"
+  | "welcome";
+
+/** Visual intensity — dance reserved for major + special only. */
+export type CelebrationLevel =
+  | "none"
+  | "subtle"
+  | "small"
+  | "bigger"
+  | "energetic"
+  | "major"
+  | "special";
 
 export type ClassroomMomentKind =
   | "correct"
   | "incorrect"
+  | "thinking"
   | "lesson_complete"
   | "quiz_passed"
   | "quiz_failed"
@@ -28,15 +53,17 @@ export type ClassroomMomentKind =
   | "assignment_submitted"
   | "badge_earned"
   | "streak"
-  | "challenge_complete";
+  | "streak_7_day"
+  | "challenge_complete"
+  | "dashboard_welcome";
 
 export type ClassroomMoment = {
   kind: ClassroomMomentKind;
   message: string;
   mood: CompanionMood;
-  /** Rare — only major achievements. Never for routine quiz/lesson ticks. */
+  level: CelebrationLevel;
+  /** Full dance — only major course/certificate moments. */
   allowDance: boolean;
-  /** Short particles — only with allowDance or module/course milestones. */
   particles: boolean;
   durationMs: number;
 };
@@ -49,7 +76,7 @@ export function momentAllowsDance(kind: ClassroomMomentKind): boolean {
 
 export function buildClassroomMoment(
   kind: ClassroomMomentKind,
-  detail?: { pct?: number; score?: number },
+  detail?: { pct?: number; score?: number; days?: number },
 ): ClassroomMoment {
   const allowDance = momentAllowsDance(kind);
 
@@ -57,17 +84,29 @@ export function buildClassroomMoment(
     case "correct":
       return {
         kind,
-        message: "Correct.",
-        mood: "correct",
+        message: "Nice.",
+        mood: "happy",
+        level: "subtle",
         allowDance: false,
         particles: false,
-        durationMs: 1600,
+        durationMs: 1500,
+      };
+    case "thinking":
+      return {
+        kind,
+        message: "Take your time with this one.",
+        mood: "thinking",
+        level: "none",
+        allowDance: false,
+        particles: false,
+        durationMs: 2000,
       };
     case "incorrect":
       return {
         kind,
-        message: "Close. Take another look.",
-        mood: "incorrect",
+        message: "Close. Let's look at this again.",
+        mood: "supportive",
+        level: "none",
         allowDance: false,
         particles: false,
         durationMs: 2200,
@@ -77,6 +116,7 @@ export function buildClassroomMoment(
         kind,
         message: "Lesson complete.",
         mood: "encouragement",
+        level: "small",
         allowDance: false,
         particles: false,
         durationMs: 1800,
@@ -88,7 +128,8 @@ export function buildClassroomMoment(
           typeof detail?.score === "number"
             ? `Nice work — ${detail.score}%.`
             : "Quiz passed.",
-        mood: "correct",
+        mood: "happy",
+        level: "small",
         allowDance: false,
         particles: false,
         durationMs: 2000,
@@ -97,7 +138,8 @@ export function buildClassroomMoment(
       return {
         kind,
         message: "Review this section and try again.",
-        mood: "incorrect",
+        mood: "supportive",
+        level: "none",
         allowDance: false,
         particles: false,
         durationMs: 2400,
@@ -107,6 +149,7 @@ export function buildClassroomMoment(
         kind,
         message: "Module complete. Ready for the next one?",
         mood: "milestone",
+        level: "bigger",
         allowDance: false,
         particles: true,
         durationMs: 2400,
@@ -125,6 +168,7 @@ export function buildClassroomMoment(
         kind,
         message,
         mood: "milestone",
+        level: "small",
         allowDance: false,
         particles: false,
         durationMs: 2000,
@@ -135,6 +179,7 @@ export function buildClassroomMoment(
         kind,
         message: "Course complete.",
         mood: "celebration",
+        level: "major",
         allowDance: true,
         particles: true,
         durationMs: 3200,
@@ -144,15 +189,17 @@ export function buildClassroomMoment(
         kind,
         message: "Certificate unlocked.",
         mood: "certificate",
+        level: "special",
         allowDance: true,
         particles: true,
-        durationMs: 3200,
+        durationMs: 3400,
       };
     case "assignment_submitted":
       return {
         kind,
         message: "Submitted. Your instructor will review it.",
         mood: "encouragement",
+        level: "subtle",
         allowDance: false,
         particles: false,
         durationMs: 2000,
@@ -160,8 +207,9 @@ export function buildClassroomMoment(
     case "badge_earned":
       return {
         kind,
-        message: "New achievement.",
+        message: "New achievement unlocked.",
         mood: "celebration",
+        level: "bigger",
         allowDance: false,
         particles: true,
         durationMs: 2400,
@@ -169,26 +217,49 @@ export function buildClassroomMoment(
     case "streak":
       return {
         kind,
-        message: "Keep the learning streak going.",
+        message: "Ready to continue learning?",
         mood: "streak",
+        level: "subtle",
         allowDance: false,
         particles: false,
         durationMs: 1800,
+      };
+    case "streak_7_day":
+      return {
+        kind,
+        message: "7-day learning milestone.",
+        mood: "streak",
+        level: "energetic",
+        allowDance: false,
+        particles: true,
+        durationMs: 2600,
       };
     case "challenge_complete":
       return {
         kind,
         message: "Challenge complete.",
         mood: "challenge",
+        level: "bigger",
         allowDance: false,
         particles: true,
         durationMs: 2400,
+      };
+    case "dashboard_welcome":
+      return {
+        kind,
+        message: "Welcome back. Pick up where you left off.",
+        mood: "welcome",
+        level: "subtle",
+        allowDance: false,
+        particles: false,
+        durationMs: 2200,
       };
     default:
       return {
         kind: "lesson_complete",
         message: "Nice work.",
         mood: "encouragement",
+        level: "subtle",
         allowDance: false,
         particles: false,
         durationMs: 1600,
@@ -208,7 +279,7 @@ export function crossedProgressMilestone(prevPct: number, nextPct: number): numb
 
 export function dispatchClassroomMoment(
   kind: ClassroomMomentKind,
-  detail?: { pct?: number; score?: number; dedupeKey?: string },
+  detail?: { pct?: number; score?: number; days?: number; dedupeKey?: string },
 ) {
   if (typeof window === "undefined") return;
   const moment = buildClassroomMoment(kind, detail);

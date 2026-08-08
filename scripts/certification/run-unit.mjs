@@ -449,10 +449,20 @@ console.log("PASS: heuristic recommendations scoring + ownership filter");
 
   assert.equal(momentAllowsDance("lesson_complete"), false);
   assert.equal(momentAllowsDance("quiz_passed"), false);
+  assert.equal(momentAllowsDance("streak_7_day"), false);
+  assert.equal(momentAllowsDance("dashboard_welcome"), false);
   assert.equal(momentAllowsDance("course_complete"), true);
   assert.equal(momentAllowsDance("certificate_unlock"), true);
-  assert.equal(buildClassroomMoment("correct").allowDance, false);
+  assert.equal(buildClassroomMoment("correct").mood, "happy");
+  assert.equal(buildClassroomMoment("thinking").mood, "thinking");
+  assert.equal(buildClassroomMoment("incorrect").mood, "supportive");
+  assert.equal(buildClassroomMoment("lesson_complete").level, "small");
+  assert.equal(buildClassroomMoment("module_complete").level, "bigger");
+  assert.equal(buildClassroomMoment("streak_7_day").level, "energetic");
+  assert.equal(buildClassroomMoment("badge_earned").level, "bigger");
   assert.equal(buildClassroomMoment("course_complete").allowDance, true);
+  assert.equal(buildClassroomMoment("certificate_unlock").level, "special");
+  assert.equal(buildClassroomMoment("dashboard_welcome").allowDance, false);
   assert.equal(crossedProgressMilestone(49, 50), 50);
   assert.equal(crossedProgressMilestone(50, 51), null);
 
