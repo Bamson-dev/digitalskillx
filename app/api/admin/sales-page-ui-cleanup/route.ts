@@ -13,7 +13,7 @@ export const maxDuration = 60;
 /**
  * TEMPORARY: delete an E2E acceptance test course + Contabo sales-page assets.
  * Auth: CRON_SECRET bearer OR admin session.
- * Only allows courses whose title starts with "E2E test course".
+ * Only allows courses whose title starts with "Phase1 Acc UI" or "E2E test course".
  * Remove after Phase 1 UI acceptance.
  */
 export async function POST(request: NextRequest) {
@@ -50,9 +50,9 @@ export async function POST(request: NextRequest) {
     if (!course) {
       return NextResponse.json({ ok: true, alreadyGone: true });
     }
-    if (!/^E2E test course/i.test(String(course.title ?? ""))) {
+    if (!/^(Phase1 Acc UI|E2E test course)/i.test(String(course.title ?? ""))) {
       return NextResponse.json(
-        { error: "Refusing to delete: title must start with 'E2E test course'." },
+        { error: "Refusing to delete: title must start with 'Phase1 Acc UI' or 'E2E test course'." },
         { status: 403 },
       );
     }
