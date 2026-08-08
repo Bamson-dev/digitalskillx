@@ -5,7 +5,6 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   Copy,
-  ExternalLink,
   MoreHorizontal,
   Plus,
   Search,
@@ -40,6 +39,7 @@ export function EnrollmentLinksList() {
   const [accessType, setAccessType] = useState("all");
   const [sort, setSort] = useState("newest");
   const [menuId, setMenuId] = useState<string | null>(null);
+  const [menuPos, setMenuPos] = useState<{ top: number; left: number } | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
   const [bulkDeleting, setBulkDeleting] = useState(false);
 
@@ -70,6 +70,24 @@ export function EnrollmentLinksList() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    if (!menuId) return;
+    function onDocPointerDown(event: MouseEvent) {
+      const target = event.target as HTMLElement | null;
+      if (target?.closest?.("[data-enrollment-link-menu]")) return;
+      setMenuId(null);
+    }
+    function onKey(event: KeyboardEvent) {
+      if (event.key === "Escape") setMenuId(null);
+    }
+    document.addEventListener("mousedown", onDocPointerDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDocPointerDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [menuId]);
 
   const visibleIds = useMemo(() => links.map((link) => link.id), [links]);
   const selectedCount = selectedIds.size;
@@ -148,6 +166,7 @@ export function EnrollmentLinksList() {
 
   async function onAction(id: string, action: string) {
     setMenuId(null);
+    setMenuPos(null);
     try {
       if (action === "delete") {
         if (!confirm("Soft-delete this enrollment link?")) return;
@@ -259,7 +278,8 @@ export function EnrollmentLinksList() {
         </div>
       ) : null}
 
-      <div className="overflow-hidden rounded-xl border border-app bg-white">
+      <div className="rounded-xl border border-app bg-white">
+        <div className="overflow-x-auto">
         <table className="w-full text-left text-sm">
           <thead className="border-b border-app bg-surface-muted/40 text-xs uppercase tracking-wide text-muted">
             <tr>
@@ -352,26 +372,58 @@ export function EnrollmentLinksList() {
                         ? new Date(link.expires_at).toLocaleDateString()
                         : "—"}
                     </td>
-                    <td className="relative px-4 py-3 text-right">
+                    <td className="px-4 py-3 text-right">
                       <button
                         type="button"
+                        data-enrollment-link-menu
                         className="rounded-lg p-1.5 text-muted hover:bg-slate-100 hover:text-foreground"
-                        onClick={() => setMenuId(menuId === link.id ? null : link.id)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (menuId === link.id) {
+                            setMenuId(null);
+                            setMenuPos(null);
+                            return;
+                          }
+                          const rect = e.currentTarget.getBoundingClientRect();
+                          setMenuPos({
+                            top: rect.top - 8,
+                            left: Math.max(8, rect.right - 176),
+                          });
+                          setMenuId(link.id);
+                        }}
+                        aria-expanded={menuId === link.id}
+                        aria-haspopup="menu"
                         aria-label="Actions"
                       >
                         <MoreHorizontal className="h-4 w-4" />
                       </button>
-                      {menuId === link.id ? (
-                        <div className="absolute right-4 z-10 mt-1 w-44 rounded-lg border border-app bg-white py-1 shadow-lg">
+                      {menuId === link.id && menuPos ? (
+                        <div
+                          role="menu"
+                          data-enrollment-link-menu
+                          className="fixed z-[80] w-44 rounded-lg border border-app bg-white py-1 shadow-lg"
+                          style={{
+                            top: menuPos.top,
+                            left: menuPos.left,
+                            transform: "translateY(-100%)",
+                          }}
+                          onClick={(e) => e.stopPropagation()}
+                        >
                           <button
                             type="button"
+                            role="menuitem"
                             className="block w-full px-3 py-2 text-left hover:bg-brand-50"
-                            onClick={() => router.push(`/admin/enrollment-links/${link.id}`)}
+                            onClick={() => {
+                              setMenuId(null);
+                              setMenuPos(null);
+                              router.push(`/admin/enrollment-links/${link.id}`);
+                            }}
                           >
                             View / Edit
                           </button>
                           <button
                             type="button"
+                            role="menuitem"
                             className="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-brand-50"
                             onClick={() => void onAction(link.id, "copy")}
                           >
@@ -379,6 +431,7 @@ export function EnrollmentLinksList() {
                           </button>
                           <button
                             type="button"
+                            role="menuitem"
                             className="block w-full px-3 py-2 text-left hover:bg-brand-50"
                             onClick={() => void onAction(link.id, "duplicate")}
                           >
@@ -386,6 +439,7 @@ export function EnrollmentLinksList() {
                           </button>
                           <button
                             type="button"
+                            role="menuitem"
                             className="block w-full px-3 py-2 text-left hover:bg-brand-50"
                             onClick={() =>
                               void onAction(
@@ -398,10 +452,11 @@ export function EnrollmentLinksList() {
                           </button>
                           <button
                             type="button"
+                            role="menuitem"
                             className="flex w-full items-center gap-2 px-3 py-2 text-left text-red-600 hover:bg-red-50"
                             onClick={() => void onAction(link.id, "delete")}
                           >
-                            <ExternalLink className="h-3.5 w-3.5" /> Delete
+                            <Trash2 className="h-3.5 w-3.5" /> Delete
                           </button>
                         </div>
                       ) : null}
@@ -412,6 +467,7 @@ export function EnrollmentLinksList() {
             )}
           </tbody>
         </table>
+        </div>
       </div>
     </div>
   );
