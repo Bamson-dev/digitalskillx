@@ -498,3 +498,144 @@ console.log("PASS: classroom companion rarity + reduced-motion guards");
   }
   console.log("PASS: sales page phase 1 suite (via test-sales-pages.mjs)");
 }
+
+{
+  const { spawnSync } = await import("node:child_process");
+  const r = spawnSync(
+    process.execPath,
+    [
+      "--import",
+      join(root, "scripts/certification/register-ts-ext.mjs"),
+      join(root, "scripts/certification/test-sales-pages-phase2.mjs"),
+    ],
+    {
+      cwd: root,
+      encoding: "utf8",
+    },
+  );
+  if (r.status !== 0) {
+    console.error(r.stdout);
+    console.error(r.stderr);
+    process.exit(r.status ?? 1);
+  }
+  console.log("PASS: sales page phase 2 suite (via test-sales-pages-phase2.mjs)");
+}
+
+{
+  const { spawnSync } = await import("node:child_process");
+  const r = spawnSync(
+    process.execPath,
+    [
+      "--import",
+      join(root, "scripts/certification/register-ts-ext.mjs"),
+      join(root, "scripts/certification/test-sales-conversion-phase3.mjs"),
+    ],
+    {
+      cwd: root,
+      encoding: "utf8",
+    },
+  );
+  if (r.status !== 0) {
+    console.error(r.stdout);
+    console.error(r.stderr);
+    process.exit(r.status ?? 1);
+  }
+  console.log("PASS: sales conversion phase 3 suite (via test-sales-conversion-phase3.mjs)");
+}
+
+{
+  const { spawnSync } = await import("node:child_process");
+  const r = spawnSync(
+    process.execPath,
+    [
+      "--import",
+      join(root, "scripts/certification/register-ts-ext.mjs"),
+      join(root, "scripts/certification/test-customer-business-phase5.mjs"),
+    ],
+    {
+      cwd: root,
+      encoding: "utf8",
+    },
+  );
+  if (r.status !== 0) {
+    console.error(r.stdout);
+    console.error(r.stderr);
+    process.exit(r.status ?? 1);
+  }
+  console.log("PASS: customer business phase 5 suite (via test-customer-business-phase5.mjs)");
+}
+
+{
+  const { spawnSync } = await import("node:child_process");
+  const r = spawnSync(
+    process.execPath,
+    [
+      "--import",
+      join(root, "scripts/certification/register-ts-ext.mjs"),
+      join(root, "scripts/certification/test-platform-reliability-phase6.mjs"),
+    ],
+    {
+      cwd: root,
+      encoding: "utf8",
+    },
+  );
+  if (r.status !== 0) {
+    console.error(r.stdout);
+    console.error(r.stderr);
+    process.exit(r.status ?? 1);
+  }
+  console.log("PASS: platform reliability phase 6 suite (via test-platform-reliability-phase6.mjs)");
+}
+
+{
+  const { spawnSync } = await import("node:child_process");
+  const r = spawnSync(
+    process.execPath,
+    [
+      "--import",
+      join(root, "scripts/certification/register-ts-ext.mjs"),
+      join(root, "scripts/certification/test-classroom-intelligence-phase4.mjs"),
+    ],
+    { cwd: root, encoding: "utf8" },
+  );
+  if (r.status !== 0) {
+    console.error(r.stdout);
+    console.error(r.stderr);
+    process.exit(r.status ?? 1);
+  }
+  console.log("PASS: classroom intelligence phase 4 suite (via test-classroom-intelligence-phase4.mjs)");
+}
+
+{
+  const { spawnSync } = await import("node:child_process");
+  const r = spawnSync(
+    process.execPath,
+    [
+      "--import",
+      join(root, "scripts/certification/register-ts-ext.mjs"),
+      join(root, "scripts/certification/test-platform-hardening-phase6.mjs"),
+    ],
+    { cwd: root, encoding: "utf8" },
+  );
+  if (r.status !== 0) {
+    console.error(r.stdout);
+    console.error(r.stderr);
+    process.exit(r.status ?? 1);
+  }
+  console.log("PASS: platform hardening phase 6 suite (via test-platform-hardening-phase6.mjs)");
+}
+
+{
+  const { spawnSync } = await import("node:child_process");
+  const r = spawnSync(
+    process.execPath,
+    [join(root, "scripts/certification/test-product-experience-phase7.mjs")],
+    { cwd: root, encoding: "utf8" },
+  );
+  if (r.status !== 0) {
+    console.error(r.stdout);
+    console.error(r.stderr);
+    process.exit(r.status ?? 1);
+  }
+  console.log("PASS: product experience phase 7 suite (via test-product-experience-phase7.mjs)");
+}

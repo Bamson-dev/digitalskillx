@@ -3,7 +3,8 @@ import { verifyCronSecret } from "@/lib/cron-auth";
 import { bootstrapRuntimeSecrets } from "@/lib/bootstrap-runtime-secrets";
 import { createAdminClientAsync } from "@/lib/supabase/admin";
 import { ensurePurchaseEnrollment } from "@/lib/purchase";
-import { secureLog } from "@/lib/secure-log";
+import { secureLog, secureLogError } from "@/lib/secure-log";
+import { ErrorCode } from "@/lib/error-codes";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -14,7 +15,12 @@ type Issue = {
   count: number;
   sampleIds: string[];
   repaired?: number;
+  truncated?: boolean;
 };
+
+/** Cap full-row scans — integrity is sampled + repair-focused, not a warehouse dump. */
+const ENROLLMENT_SCAN_LIMIT = 5_000;
+const SUCCESS_TX_SCAN_LIMIT = 2_000;
 
 /**
  * Production DB integrity audit (and optional safe repairs).
@@ -32,9 +38,18 @@ export async function GET(request: NextRequest) {
   const repair = request.nextUrl.searchParams.get("repair") === "1";
   const issues: Issue[] = [];
 
-  const { data: enrollments } = await admin
+  const { data: enrollments, error: enrollErr } = await admin
     .from("enrollments")
-    .select("id, student_id, course_id");
+    .select("id, student_id, course_id")
+    .order("enrolled_at", { ascending: false })
+    .limit(ENROLLMENT_SCAN_LIMIT);
+
+  if (enrollErr) {
+    secureLogError("integrity", ErrorCode.DATABASE_QUERY_FAILED, "enrollments scan failed", {
+      error: enrollErr.message,
+    });
+  }
+
   const enrollKey = new Map<string, string[]>();
   for (const row of enrollments ?? []) {
     const key = `${row.student_id}:${row.course_id}`;
@@ -49,13 +64,22 @@ export async function GET(request: NextRequest) {
       severity: "critical",
       count: dupEnroll.length,
       sampleIds: dupEnroll.slice(0, 10).flatMap(([, ids]) => ids),
+      truncated: (enrollments ?? []).length >= ENROLLMENT_SCAN_LIMIT,
     });
   }
 
-  const { data: txs } = await admin
+  const { data: txs, error: txErr } = await admin
     .from("transactions")
-    .select("id, reference, student_id, course_id, status")
-    .eq("status", "success");
+    .select("id, reference, student_id, course_id, status, created_at")
+    .eq("status", "success")
+    .order("created_at", { ascending: false })
+    .limit(SUCCESS_TX_SCAN_LIMIT);
+
+  if (txErr) {
+    secureLogError("integrity", ErrorCode.DATABASE_QUERY_FAILED, "transactions scan failed", {
+      error: txErr.message,
+    });
+  }
 
   const successWithoutEnrollment: string[] = [];
   let repaired = 0;
@@ -80,7 +104,7 @@ export async function GET(request: NextRequest) {
           });
           repaired++;
         } catch (err) {
-          secureLog("error", "integrity", "repair enrollment failed", {
+          secureLogError("integrity", ErrorCode.ENROLLMENT_FAILED, "repair enrollment failed", {
             txId: tx.id,
             reference: tx.reference,
             error: err instanceof Error ? err.message : String(err),
@@ -96,6 +120,7 @@ export async function GET(request: NextRequest) {
       count: successWithoutEnrollment.length,
       sampleIds: successWithoutEnrollment.slice(0, 20),
       repaired: repair ? repaired : undefined,
+      truncated: (txs ?? []).length >= SUCCESS_TX_SCAN_LIMIT,
     });
   }
 
@@ -114,7 +139,6 @@ export async function GET(request: NextRequest) {
     });
   }
 
-  // Profiles missing for enrollments (batched)
   const studentIds = [...new Set((enrollments ?? []).map((e) => e.student_id))];
   const profileIds = new Set<string>();
   for (let i = 0; i < studentIds.length; i += 200) {
@@ -131,6 +155,7 @@ export async function GET(request: NextRequest) {
       severity: "high",
       count: orphanEnrollmentIds.length,
       sampleIds: orphanEnrollmentIds.slice(0, 20),
+      truncated: (enrollments ?? []).length >= ENROLLMENT_SCAN_LIMIT,
     });
   }
 
@@ -138,6 +163,8 @@ export async function GET(request: NextRequest) {
     issueCount: issues.length,
     repair,
     repaired,
+    enrollmentSample: (enrollments ?? []).length,
+    txSample: (txs ?? []).length,
   });
 
   const critical = issues.filter((i) => i.severity === "critical").length;
@@ -145,6 +172,10 @@ export async function GET(request: NextRequest) {
     ok: critical === 0,
     repaired: repair ? repaired : 0,
     issues,
+    scanLimits: {
+      enrollments: ENROLLMENT_SCAN_LIMIT,
+      successTransactions: SUCCESS_TX_SCAN_LIMIT,
+    },
     checkedAt: new Date().toISOString(),
   });
 }

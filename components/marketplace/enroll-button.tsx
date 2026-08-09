@@ -5,6 +5,12 @@ import { useRouter } from "next/navigation";
 import { Loader2, X } from "lucide-react";
 import { useCurrency } from "@/components/providers/currency-provider";
 import { cn } from "@/lib/utils";
+import { trackProductEvent } from "@/lib/product-analytics";
+import {
+  attributionToMetadata,
+  attributionToPaystackStrings,
+  type SalesAttribution,
+} from "@/lib/sales-attribution";
 
 export const USD_PAYMENTS_COMING_SOON = "USD payments coming soon.";
 
@@ -21,6 +27,11 @@ type Props = {
   className?: string;
   size?: "default" | "bar";
   hidden?: boolean;
+  /** Optional sales attribution passed into initialize (UTM / sales_page_id). */
+  attribution?: SalesAttribution | null;
+  /** When true, emit sales_page_checkout_start after initialize succeeds. */
+  trackCheckoutStart?: boolean;
+  checkoutMeta?: Record<string, string | undefined>;
 };
 
 const CHECKOUT_TIMEOUT_MS = 45_000;
@@ -50,28 +61,32 @@ function CourseComingSoonButton({
   );
 }
 
-function UsdComingSoonButton({
+function UsdCheckoutSwitch({
   className,
   size = "default",
 }: {
   className?: string;
   size?: "default" | "bar";
 }) {
+  const { setCurrency } = useCurrency();
   return (
-    <button
-      type="button"
-      disabled
-      aria-disabled="true"
-      className={cn(
-        "inline-flex cursor-not-allowed items-center justify-center rounded-lg border border-neutral-200 bg-neutral-100 font-semibold text-neutral-500",
-        size === "bar"
-          ? "h-12 min-w-[140px] px-4 text-xs sm:text-sm"
-          : "h-12 w-full px-4 text-xs sm:h-14 sm:min-w-[200px] sm:px-6 sm:text-sm",
-        className,
-      )}
-    >
-      {USD_PAYMENTS_COMING_SOON}
-    </button>
+    <div className={cn("space-y-2", className)}>
+      <p className="text-xs text-neutral-500 sm:text-sm">
+        USD checkout is not available yet. Continue in Nigerian Naira to enroll.
+      </p>
+      <button
+        type="button"
+        onClick={() => setCurrency("NGN")}
+        className={cn(
+          "inline-flex items-center justify-center rounded-lg bg-brand font-semibold text-white hover:bg-brand-700",
+          size === "bar"
+            ? "h-12 min-w-[140px] px-4 text-xs sm:text-sm"
+            : "h-12 w-full px-4 text-xs sm:h-14 sm:min-w-[200px] sm:px-6 sm:text-sm",
+        )}
+      >
+        Continue in NGN
+      </button>
+    </div>
   );
 }
 
@@ -167,6 +182,9 @@ export function EnrollButton({
   className,
   size = "default",
   hidden = false,
+  attribution = null,
+  trackCheckoutStart = false,
+  checkoutMeta,
 }: Props) {
   const router = useRouter();
   const { currency, courseIsFree } = useCurrency();
@@ -189,11 +207,7 @@ export function EnrollButton({
   }
 
   if (currency === "USD" && !isEnrolled) {
-    return (
-      <div className={className}>
-        <UsdComingSoonButton size={size} />
-      </div>
-    );
+    return <UsdCheckoutSwitch className={className} size={size} />;
   }
 
   async function startCheckout(guest?: { email: string; fullName: string }) {
@@ -204,11 +218,13 @@ export function EnrollButton({
     const timeoutId = window.setTimeout(() => controller.abort(), CHECKOUT_TIMEOUT_MS);
 
     try {
+      const attrStrings = attributionToPaystackStrings(attribution, checkoutMeta);
       const payload: {
         courseId: string;
         currency: "NGN";
         email?: string;
         fullName?: string;
+        attribution?: Record<string, string>;
       } = {
         courseId,
         currency: "NGN",
@@ -216,6 +232,9 @@ export function EnrollButton({
       if (guest) {
         payload.email = guest.email;
         payload.fullName = guest.fullName;
+      }
+      if (Object.keys(attrStrings).length) {
+        payload.attribution = attrStrings;
       }
 
       const res = await fetch("/api/payments/initialize", {
@@ -250,12 +269,32 @@ export function EnrollButton({
 
       if (!res.ok) throw new Error(json.error ?? "Payment could not start");
       if (json.enrolled) {
+        if (trackCheckoutStart) {
+          void trackProductEvent({
+            event: "sales_page_checkout_start",
+            courseId,
+            metadata: attributionToMetadata(attribution, {
+              ...checkoutMeta,
+              path: "free_or_existing",
+            }),
+          });
+        }
         setShowCheckoutModal(false);
         redirecting = true;
         window.location.assign(`/courses/${courseId}`);
         return;
       }
       if (json.authorizationUrl) {
+        if (trackCheckoutStart) {
+          void trackProductEvent({
+            event: "sales_page_checkout_start",
+            courseId,
+            metadata: attributionToMetadata(attribution, {
+              ...checkoutMeta,
+              path: "paystack",
+            }),
+          });
+        }
         redirecting = true;
         window.location.assign(json.authorizationUrl);
         return;

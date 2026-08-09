@@ -22,8 +22,11 @@ export default async function CertificatesPage() {
       </div>
 
       {certificates.length === 0 ? (
-        <Card className="text-center text-sm text-muted">
-          No certificates yet. Complete a course to earn one.
+        <Card className="space-y-3 p-6 text-center text-sm text-muted">
+          <p>No certificates yet. Complete a course to earn one.</p>
+          <Link href="/courses" className="inline-flex font-semibold text-brand hover:underline">
+            Go to my courses
+          </Link>
         </Card>
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">

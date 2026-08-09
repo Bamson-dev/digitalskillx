@@ -528,19 +528,26 @@ export async function sendProgressMilestoneEmailsIfNeeded(params: {
 }
 
 /** Daily cron: send idle reminders once per enrollment idle period. */
+/** Max enrollments examined per cron tick (avoids unbounded table scans at scale). */
+const IDLE_REMINDER_BATCH = 200;
+
 export async function processIdleReminderEmails(inactivityDays = 5) {
   const admin = await createAdminClientAsync();
   const cutoff = new Date(Date.now() - inactivityDays * 86400000).toISOString();
   const settings = await getPlatformSettingsAdmin();
   const sender = await getEmailSenderConfig();
 
+  // Prefer students idle longest: oldest enrollments without a reminder first.
   const { data: enrollments } = await admin
     .from("enrollments")
     .select(
       "id, student_id, course_id, enrolled_at, idle_reminder_sent_at, student:profiles(full_name, email, last_active_at, role, is_suspended), course:courses(title)",
     )
     .is("completed_at", null)
-    .is("idle_reminder_sent_at", null);
+    .is("idle_reminder_sent_at", null)
+    .lte("enrolled_at", cutoff)
+    .order("enrolled_at", { ascending: true })
+    .limit(IDLE_REMINDER_BATCH);
 
   let sent = 0;
   let skipped = 0;

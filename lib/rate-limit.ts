@@ -8,6 +8,8 @@ type RateLimitResult = {
   ok: boolean;
   remaining: number;
   retryAfterSec?: number;
+  /** True when the limiter could not read/write the bucket (DB error). */
+  unavailable?: boolean;
 };
 
 async function readBucket(key: string, limit: number, windowMs: number): Promise<RateLimitResult> {
@@ -30,7 +32,7 @@ async function readBucket(key: string, limit: number, windowMs: number): Promise
     }
     return { ok: true, remaining: limit - row.request_count };
   } catch {
-    return { ok: true, remaining: limit };
+    return { ok: true, remaining: limit, unavailable: true };
   }
 }
 
@@ -84,7 +86,7 @@ export async function rateLimit(
 
     return { ok: true, remaining: limit - row.request_count - 1 };
   } catch {
-    return { ok: true, remaining: limit };
+    return { ok: true, remaining: limit, unavailable: true };
   }
 }
 
@@ -99,9 +101,14 @@ export async function enforceRateLimit(
   routeKey: string,
   limit = DEFAULT_LIMIT,
   windowMs = WINDOW_MS,
+  options?: { failClosed?: boolean },
 ): Promise<RateLimitResult> {
   const ip = clientIp(request);
-  return rateLimit(`${routeKey}:${ip}`, limit, windowMs);
+  const result = await rateLimit(`${routeKey}:${ip}`, limit, windowMs);
+  if (options?.failClosed && result.unavailable) {
+    return { ok: false, remaining: 0, retryAfterSec: 60, unavailable: true };
+  }
+  return result;
 }
 
 /** Admin login: block check without consuming a slot. */

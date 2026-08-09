@@ -50,6 +50,7 @@ export function BrowseCatalog({
         case "title":
           return a.title.localeCompare(b.title);
         case "newest":
+          return String(b.created_at ?? "").localeCompare(String(a.created_at ?? ""));
         default:
           return 0;
       }

@@ -112,6 +112,25 @@ export async function drainBulkImportEmailOutbox(
   const started = Date.now();
   let claimed: Array<Record<string, unknown>> = [];
 
+  // Best-effort reclaim of rows stuck in "sending" after crashes (migration 0040).
+  try {
+    await admin.rpc("reclaim_stale_bulk_import_email_outbox" as never, {
+      p_older_than_minutes: 15,
+    } as never);
+  } catch {
+    // Fallback when RPC not applied yet: reset stale sending rows directly.
+    const staleBefore = new Date(Date.now() - 15 * 60 * 1000).toISOString();
+    await admin
+      .from("bulk_import_email_outbox" as never)
+      .update({
+        status: "pending",
+        updated_at: new Date().toISOString(),
+        last_error: "reclaimed_stale_sending",
+      } as never)
+      .eq("status", "sending")
+      .lt("updated_at", staleBefore);
+  }
+
   const { data: rpcRows, error: rpcError } = await admin.rpc(
     "claim_bulk_import_email_outbox" as never,
     { p_limit: limit } as never,

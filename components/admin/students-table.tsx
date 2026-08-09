@@ -18,7 +18,7 @@ export type StudentRow = {
 
 export function StudentsTable({ students }: { students: StudentRow[] }) {
   if (students.length === 0) {
-    return <p className="py-8 text-center text-sm text-muted">No students found.</p>;
+    return <p className="py-8 text-center text-sm text-muted">No customers match these filters.</p>;
   }
 
   return (

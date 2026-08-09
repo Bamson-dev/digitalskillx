@@ -6,8 +6,9 @@ export async function rateLimitedResponse(
   routeKey: string,
   limit = 100,
   windowMs?: number,
+  options?: { failClosed?: boolean },
 ): Promise<NextResponse | null> {
-  const result = await enforceRateLimit(request, routeKey, limit, windowMs);
+  const result = await enforceRateLimit(request, routeKey, limit, windowMs, options);
   if (result.ok) return null;
   const retryAfterSec = result.retryAfterSec ?? 60;
   const minutes = Math.max(1, Math.ceil(retryAfterSec / 60));

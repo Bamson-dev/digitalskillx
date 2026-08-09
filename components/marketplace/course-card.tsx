@@ -19,6 +19,7 @@ export type MarketplaceCourse = {
   category_name?: string | null;
   is_coming_soon?: boolean;
   rating?: number | null;
+  created_at?: string | null;
 };
 
 export function CourseCard({

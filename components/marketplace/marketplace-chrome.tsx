@@ -268,7 +268,7 @@ export function MarketplaceFooter() {
                 </Link>
               </li>
               <li>
-                <Link href="/about" className="hover:text-brand">
+                <Link href="/support" className="hover:text-brand">
                   Contact
                 </Link>
               </li>

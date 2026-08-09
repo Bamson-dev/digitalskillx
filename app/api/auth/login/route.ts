@@ -6,6 +6,9 @@ import {
   redirectWithPendingCookies,
 } from "@/lib/supabase/route-handler";
 import { safeNextPath } from "@/lib/safe-next-path";
+import { enforceRateLimit } from "@/lib/rate-limit";
+import { secureLogError } from "@/lib/secure-log";
+import { ErrorCode } from "@/lib/error-codes";
 
 export const dynamic = "force-dynamic";
 
@@ -16,8 +19,19 @@ export async function POST(request: NextRequest) {
   const password = String(formData.get("password") ?? "");
   const next = safeNextPath(String(formData.get("next") ?? "/dashboard"));
 
+  const limited = await enforceRateLimit(request, "auth-login", 30, 15 * 60 * 1000, {
+    failClosed: true,
+  });
+  if (!limited.ok) {
+    secureLogError("auth", ErrorCode.AUTH_RATE_LIMITED, "student login rate limited");
+    const errorUrl = new URL("/login", request.url);
+    errorUrl.searchParams.set("auth_error", "Too many sign-in attempts. Please try again later.");
+    return NextResponse.redirect(errorUrl, 303);
+  }
+
   const result = await runStudentLogin({ email, password });
   if (!result.ok) {
+    secureLogError("auth", ErrorCode.AUTH_FAILED, "student login failed");
     const errorUrl = new URL("/login", request.url);
     errorUrl.searchParams.set("auth_error", result.error);
     return NextResponse.redirect(errorUrl, 303);

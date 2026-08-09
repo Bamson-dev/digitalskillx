@@ -4,7 +4,12 @@ import { notify } from "@/lib/notifications";
 import { sendEmail } from "@/lib/email";
 import { emailTemplates } from "@/lib/email/templates";
 import { issueCertificate } from "@/lib/certificates";
+import { secureLogError } from "@/lib/secure-log";
+import { ErrorCode } from "@/lib/error-codes";
 import type { AutomationTrigger } from "@/types/database";
+
+/** Prevent daily cron from re-firing the same inactivity rule for the same student. */
+const INACTIVITY_COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000;
 
 export type AutomationAction =
   | { type: "send_email"; subject: string; body: string }
@@ -47,15 +52,45 @@ export async function runAutomations(
 
   for (const rule of rules) {
     const conditions = (rule.trigger_conditions ?? {}) as Record<string, unknown>;
-    // Simple condition matching: course_id must match when specified.
     if (conditions.course_id && conditions.course_id !== ctx.courseId) continue;
+    if (typeof conditions.has_tag === "string" && conditions.has_tag) {
+      const tags = (student?.tags ?? []).map((t) => t.toLowerCase());
+      if (!tags.includes(String(conditions.has_tag).toLowerCase())) continue;
+    }
+    if (typeof conditions.min_purchase_count === "number" && conditions.min_purchase_count > 0) {
+      const { count } = await supabase
+        .from("transactions")
+        .select("id", { count: "exact", head: true })
+        .eq("student_id", ctx.studentId)
+        .eq("status", "success");
+      if ((count ?? 0) < conditions.min_purchase_count) continue;
+    }
+
+    if (event === "student_inactive") {
+      const since = new Date(Date.now() - INACTIVITY_COOLDOWN_MS).toISOString();
+      const { data: recent } = await supabase
+        .from("audit_logs")
+        .select("id")
+        .eq("action", "automation_executed")
+        .eq("target_type", "automation_rule")
+        .eq("target_id", rule.id)
+        .gte("created_at", since)
+        .filter("metadata->context->>studentId", "eq", ctx.studentId)
+        .limit(1)
+        .maybeSingle();
+      if (recent) continue;
+    }
 
     const actions = (rule.actions ?? []) as AutomationAction[];
     for (const action of actions) {
       try {
         await executeAction(action, ctx, student?.email, student?.full_name);
       } catch (err) {
-        console.error("[automation] action failed", rule.id, action.type, err);
+        secureLogError("automation", ErrorCode.AUTOMATION_FAILED, "action failed", {
+          ruleId: rule.id,
+          actionType: action.type,
+          error: err instanceof Error ? err.message : String(err),
+        });
       }
     }
 
@@ -67,7 +102,10 @@ export async function runAutomations(
         metadata: { event, context: ctx },
       });
     } catch (err) {
-      console.error("[automation] audit log failed", rule.id, err);
+      secureLogError("automation", ErrorCode.DATABASE_QUERY_FAILED, "audit log failed", {
+        ruleId: rule.id,
+        error: err instanceof Error ? err.message : String(err),
+      });
     }
   }
 }

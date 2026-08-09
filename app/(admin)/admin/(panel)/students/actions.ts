@@ -510,7 +510,12 @@ export async function issueCertificateManual(formData: FormData) {
     .single();
   if (!profile?.email) throw new Error("Student profile not found.");
 
-  const cert = await issueCertificate({ studentId, courseId, sendEmail: true });
+  const cert = await issueCertificate({
+    studentId,
+    courseId,
+    sendEmail: true,
+    resendEmail: true,
+  });
   if (!cert) throw new Error("Could not issue certificate.");
 
   await logAudit({ action: "certificate_issued_manual", metadata: { studentId, courseId } });
@@ -531,5 +536,10 @@ export async function addAdminNote(formData: FormData) {
     content,
   });
   if (error) throw new Error(error.message);
+  await logAudit({
+    action: "note_added",
+    targetType: "profile",
+    targetId: studentId,
+  });
   revalidatePath(`/admin/students/${studentId}`);
 }

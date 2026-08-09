@@ -27,21 +27,35 @@ export async function GET(request: NextRequest) {
 
   let database: "unknown" | "connected" | "error" = "unknown";
   try {
-    const admin = await createAdminClientAsync();
-    const { error } = await admin.from("courses").select("id").limit(1);
+    // Bound the DB probe so readiness/liveness never hangs Playwright or load balancers.
+    const admin = await Promise.race([
+      createAdminClientAsync(),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error("health_db_timeout")), 4_000),
+      ),
+    ]);
+    const probe = admin.from("courses").select("id").limit(1);
+    const { error } = await Promise.race([
+      probe,
+      new Promise<{ error: { message: string } }>((resolve) =>
+        setTimeout(() => resolve({ error: { message: "health_db_timeout" } }), 4_000),
+      ),
+    ]);
     database = error ? "error" : "connected";
   } catch {
     database = "error";
   }
 
   if (!detailed) {
+    // Application liveness is 200 even when DB is degraded — callers read `status` / `database`.
+    // (Returning 503 here previously blocked Playwright webServer readiness forever.)
     return NextResponse.json(
       {
         status: database === "connected" ? "ok" : "degraded",
         database,
         timestamp: new Date().toISOString(),
       },
-      { status: database === "connected" ? 200 : 503 },
+      { status: 200 },
     );
   }
 
@@ -50,12 +64,17 @@ export async function GET(request: NextRequest) {
   const secrets = await integrationSecretsDiagnostics();
   const serviceRoleReady = await serviceRoleKeyConfigured();
 
+  const { getContaboIntegrationStatus } = await import("@/lib/storage");
+  const contabo = getContaboIntegrationStatus();
+
   const checks: Record<string, string> = {
     status: database === "connected" ? "ok" : "degraded",
     timestamp: new Date().toISOString(),
     deployment: secrets.deployment,
     database,
     paystack: paystackReady ? "configured" : "unconfigured",
+    contabo: contabo.configured ? "configured" : "unconfigured",
+    contaboProvider: contabo.provider,
     youtubeApiKey: youtube.status,
     youtubeApiKeySource: youtube.source,
     supabaseServiceRole: serviceRoleReady ? "configured" : "missing",

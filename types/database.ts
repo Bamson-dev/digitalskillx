@@ -67,7 +67,8 @@ export type AutomationTrigger =
   | "course_completed"
   | "course_enrolled"
   | "student_inactive"
-  | "account_created";
+  | "account_created"
+  | "customer_purchased";
 
 type Timestamps = { created_at: string };
 
@@ -651,6 +652,80 @@ export type SalesPageImport = {
   completed_at: string | null;
 };
 
+export type SalesPageVersion = {
+  id: string;
+  sales_page_id: string;
+  course_id: string;
+  version: number;
+  schema: Json;
+  seo: Json;
+  created_by: string | null;
+  created_at: string;
+};
+
+export type SalesPageLead = {
+  id: string;
+  course_id: string;
+  sales_page_id: string | null;
+  email: string;
+  full_name: string | null;
+  consent: boolean;
+  source: string;
+  metadata: Json;
+  created_at: string;
+  updated_at: string;
+};
+
+export type CourseRecommendationRow = {
+  id: string;
+  course_id: string;
+  recommended_course_id: string;
+  kind: "cross_sell" | "upsell" | "downsell" | "related";
+  sort_order: number;
+  active: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+export type TagCatalog = {
+  id: string;
+  slug: string;
+  label: string;
+  color: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type CustomerSegment = {
+  id: string;
+  name: string;
+  description: string | null;
+  definition: Json;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type CourseBundle = {
+  id: string;
+  title: string;
+  description: string | null;
+  price_ngn: number;
+  price_usd: number;
+  is_active: boolean;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type CourseBundleItem = {
+  id: string;
+  bundle_id: string;
+  course_id: string;
+  sort_order: number;
+};
+
 export type Database = {
   public: {
     Tables: {
@@ -880,6 +955,47 @@ export type Database = {
           Rel<"sales_page_imports_sales_page_id_fkey", "sales_page_id", "sales_pages", "id">,
           Rel<"sales_page_imports_course_id_fkey", "course_id", "courses", "id">,
           Rel<"sales_page_imports_created_by_fkey", "created_by", "profiles", "id">,
+        ]
+      >;
+      sales_page_versions: Table<
+        SalesPageVersion,
+        [
+          Rel<"sales_page_versions_sales_page_id_fkey", "sales_page_id", "sales_pages", "id">,
+          Rel<"sales_page_versions_course_id_fkey", "course_id", "courses", "id">,
+          Rel<"sales_page_versions_created_by_fkey", "created_by", "profiles", "id">,
+        ]
+      >;
+      sales_page_leads: Table<
+        SalesPageLead,
+        [
+          Rel<"sales_page_leads_course_id_fkey", "course_id", "courses", "id">,
+          Rel<"sales_page_leads_sales_page_id_fkey", "sales_page_id", "sales_pages", "id">,
+        ]
+      >;
+      course_recommendations: Table<
+        CourseRecommendationRow,
+        [
+          Rel<"course_recommendations_course_id_fkey", "course_id", "courses", "id">,
+          Rel<"course_recommendations_recommended_course_id_fkey", "recommended_course_id", "courses", "id">,
+        ]
+      >;
+      tag_catalog: Table<
+        TagCatalog,
+        [Rel<"tag_catalog_created_by_fkey", "created_by", "profiles", "id">]
+      >;
+      customer_segments: Table<
+        CustomerSegment,
+        [Rel<"customer_segments_created_by_fkey", "created_by", "profiles", "id">]
+      >;
+      course_bundles: Table<
+        CourseBundle,
+        [Rel<"course_bundles_created_by_fkey", "created_by", "profiles", "id">]
+      >;
+      course_bundle_items: Table<
+        CourseBundleItem,
+        [
+          Rel<"course_bundle_items_bundle_id_fkey", "bundle_id", "course_bundles", "id">,
+          Rel<"course_bundle_items_course_id_fkey", "course_id", "courses", "id">,
         ]
       >;
     };

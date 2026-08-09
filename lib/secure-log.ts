@@ -38,3 +38,13 @@ export function secureLog(
   else if (level === "warn") console.warn(`[${scope}]`, line);
   else console.info(`[${scope}]`, line);
 }
+
+/** Structured error with a stable internal code (safe for admin correlation). */
+export function secureLogError(
+  scope: string,
+  code: string,
+  message: string,
+  meta?: Record<string, unknown>,
+) {
+  secureLog("error", scope, message, { code, ...meta });
+}

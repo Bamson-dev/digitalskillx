@@ -7,8 +7,8 @@ import { verifyCronSecret } from "@/lib/cron-auth";
 export const dynamic = "force-dynamic";
 
 /**
- * Scheduled job (Vercel Cron) that emails inactive students once per idle period.
- * Protect with CRON_SECRET via the Authorization: Bearer header.
+ * Scheduled job: inactive students only (last_active_at older than threshold or null with old created_at).
+ * Does not treat all students as inactive.
  */
 export async function GET(request: NextRequest) {
   const auth = verifyCronSecret(request);
@@ -16,23 +16,31 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
 
-  const days = Number(process.env.INACTIVITY_DAYS ?? 5);
+  const days = Number(process.env.INACTIVITY_DAYS ?? 14);
+  const cutoff = new Date(Date.now() - days * 86400000).toISOString();
   const admin = createAdminClient();
 
-  const { data: students } = await admin
+  const { data: inactive } = await admin
     .from("profiles")
-    .select("id")
+    .select("id, last_active_at, created_at")
     .eq("role", "student")
-    .eq("is_suspended", false);
+    .eq("is_suspended", false)
+    .or(`last_active_at.is.null,last_active_at.lt.${cutoff}`)
+    .limit(500);
 
-  for (const s of students ?? []) {
+  let automationsProcessed = 0;
+  for (const s of inactive ?? []) {
+    // Skip brand-new accounts with null last_active that are younger than threshold
+    if (!s.last_active_at && s.created_at && s.created_at >= cutoff) continue;
     await runAutomations("student_inactive", { studentId: s.id });
+    automationsProcessed++;
   }
 
   const emailResult = await processIdleReminderEmails(days);
 
   return NextResponse.json({
-    automationsProcessed: students?.length ?? 0,
+    inactivityDays: days,
+    automationsProcessed,
     idleEmailsSent: emailResult.sent,
     idleEmailsSkipped: emailResult.skipped,
   });

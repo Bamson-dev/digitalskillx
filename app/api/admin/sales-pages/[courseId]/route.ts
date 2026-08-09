@@ -8,7 +8,10 @@ import {
   saveSalesPageDraft,
   publishSalesPage,
   unpublishSalesPage,
+  restoreSalesPageVersion,
+  restoreFromPublished,
 } from "@/lib/sales-pages/service";
+import { validateSalesPageForPublish, normalizeSalesPageSchema } from "@/lib/sales-pages/schema";
 
 type Ctx = { params: { courseId: string } };
 
@@ -52,7 +55,13 @@ export async function PATCH(request: Request, { params }: Ctx) {
   const auth = await requireAdminApiAuth({ lite: true });
   if ("error" in auth) return auth.error;
 
-  let body: { title?: string; schema?: unknown; seo?: unknown; action?: string };
+  let body: {
+    title?: string;
+    schema?: unknown;
+    seo?: unknown;
+    action?: string;
+    versionId?: string;
+  };
   try {
     body = await request.json();
   } catch {
@@ -61,12 +70,27 @@ export async function PATCH(request: Request, { params }: Ctx) {
 
   try {
     if (body.action === "publish") {
-      const page = await publishSalesPage(auth.admin, params.courseId);
+      const page = await publishSalesPage(auth.admin, params.courseId, auth.user.id);
       return NextResponse.json({ page });
     }
     if (body.action === "unpublish") {
       const page = await unpublishSalesPage(auth.admin, params.courseId);
       return NextResponse.json({ page });
+    }
+    if (body.action === "restore_published") {
+      const page = await restoreFromPublished(auth.admin, params.courseId);
+      return NextResponse.json({ page });
+    }
+    if (body.action === "restore_version") {
+      if (!body.versionId) {
+        return NextResponse.json({ error: "versionId is required." }, { status: 400 });
+      }
+      const page = await restoreSalesPageVersion(auth.admin, params.courseId, body.versionId);
+      return NextResponse.json({ page });
+    }
+    if (body.action === "validate") {
+      const schema = normalizeSalesPageSchema(body.schema);
+      return NextResponse.json({ issues: validateSalesPageForPublish(schema) });
     }
     const page = await saveSalesPageDraft(auth.admin, params.courseId, {
       title: body.title,

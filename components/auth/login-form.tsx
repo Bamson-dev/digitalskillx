@@ -10,7 +10,15 @@ import { SubmitButton } from "@/components/auth/submit-button";
 
 const initial: AuthState = {};
 
-export function LoginForm({ next, authError }: { next: string; authError?: string }) {
+export function LoginForm({
+  next,
+  authError,
+  registered,
+}: {
+  next: string;
+  authError?: string;
+  registered?: boolean;
+}) {
   const [mode, setMode] = useState<"password" | "magic">("password");
   const [magicState, magicAction] = useFormState(signInWithMagicLink, initial);
 
@@ -22,6 +30,12 @@ export function LoginForm({ next, authError }: { next: string; authError?: strin
           Log in to continue your learning.
         </p>
       </div>
+
+      {registered ? (
+        <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+          Account created. Log in to continue.
+        </p>
+      ) : null}
 
       {mode === "password" ? (
         <StudentPasswordLoginForm next={next} authError={authError} />

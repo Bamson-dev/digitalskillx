@@ -1,5 +1,7 @@
 # Supabase backup schedule (DigitalSkillX staging)
 
+See also: [Disaster recovery playbooks](./DISASTER_RECOVERY.md).
+
 Check your plan in the Supabase Dashboard: **Project Settings → Billing → Plan**.
 
 | Plan | Automatic daily backups | Point-in-time recovery (PITR) |

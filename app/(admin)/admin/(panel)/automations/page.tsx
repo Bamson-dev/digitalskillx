@@ -6,9 +6,28 @@ import { Card, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { AutomationBuilder } from "@/components/admin/automation-builder";
+import { ConfirmSubmitButton } from "@/components/admin/confirm-submit-button";
 import { toggleRule, deleteRule } from "./actions";
 
 export const metadata: Metadata = { title: "Automations" };
+
+const TRIGGER_LABELS: Record<string, string> = {
+  course_enrolled: "Course enrolled",
+  lesson_completed: "Lesson completed",
+  quiz_passed: "Quiz passed",
+  course_completed: "Course completed",
+  student_inactive: "Learner inactive",
+  customer_purchased: "Purchase completed",
+};
+
+const ACTION_LABELS: Record<string, string> = {
+  send_email: "Send email",
+  send_notification: "Send notification",
+  enroll_course: "Enroll in course",
+  issue_certificate: "Issue certificate",
+  add_tag: "Add tag",
+  notify_admin: "Notify admin",
+};
 
 export default async function AutomationsPage() {
   await requireAdmin();
@@ -31,11 +50,17 @@ export default async function AutomationsPage() {
       <Card>
         <CardHeader title="Active rules" />
         {!rules || rules.length === 0 ? (
-          <p className="text-sm text-muted">No automations yet.</p>
+          <p className="text-sm text-muted">
+            No automations yet. Create a rule above to email or notify learners automatically.
+          </p>
         ) : (
           <ul className="divide-y divide-[rgb(var(--border))]">
             {rules.map((r) => {
               const actions = Array.isArray(r.actions) ? r.actions : [];
+              const triggerLabel = TRIGGER_LABELS[r.trigger_event] ?? r.trigger_event;
+              const actionLabels = actions
+                .map((a) => ACTION_LABELS[(a as { type: string }).type] ?? (a as { type: string }).type)
+                .join(", ");
               return (
                 <li key={r.id} className="flex items-center justify-between py-3">
                   <div className="flex items-center gap-3">
@@ -43,7 +68,7 @@ export default async function AutomationsPage() {
                     <div>
                       <p className="text-sm font-medium">{r.name}</p>
                       <p className="text-xs text-muted">
-                        {r.trigger_event} → {actions.map((a) => (a as { type: string }).type).join(", ")}
+                        {triggerLabel} → {actionLabels || "No actions"}
                       </p>
                     </div>
                   </div>
@@ -58,9 +83,13 @@ export default async function AutomationsPage() {
                     </form>
                     <form action={deleteRule}>
                       <input type="hidden" name="id" value={r.id} />
-                      <button type="submit" className="text-red-600 hover:text-red-700">
+                      <ConfirmSubmitButton
+                        message="Delete this automation rule? This cannot be undone."
+                        className="text-red-600 hover:text-red-700"
+                        title="Delete rule"
+                      >
                         <Trash2 className="h-4 w-4" />
-                      </button>
+                      </ConfirmSubmitButton>
                     </form>
                   </div>
                 </li>

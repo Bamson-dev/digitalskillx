@@ -22,9 +22,20 @@ function loadTestEnv() {
 const env = loadTestEnv();
 const adminEmail = env.TEST_ADMIN_EMAIL ?? process.env.TEST_ADMIN_EMAIL ?? "admin@digitalskillx.com";
 const adminPassword = env.TEST_ADMIN_PASSWORD ?? process.env.TEST_ADMIN_PASSWORD ?? "";
+const supabaseUrl =
+  process.env.NEXT_PUBLIC_SUPABASE_URL ??
+  env.NEXT_PUBLIC_SUPABASE_URL ??
+  "";
+const supabaseLooksLive =
+  Boolean(supabaseUrl) &&
+  !/your-project|example\.supabase|localhost|127\.0\.0\.1/i.test(supabaseUrl);
 
 test.describe("RC — admin course lifecycle", () => {
   test.skip(!adminPassword, "TEST_ADMIN_PASSWORD required");
+  test.skip(
+    !supabaseLooksLive,
+    "NEXT_PUBLIC_SUPABASE_URL must point at a real project (not a placeholder)",
+  );
 
   test("create course → publish visibility → delete course", async ({ page }) => {
     const consoleErrors: string[] = [];

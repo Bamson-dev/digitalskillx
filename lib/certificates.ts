@@ -59,6 +59,8 @@ export async function issueCertificate(params: {
   completedAt?: string;
   recipientName?: string;
   sendEmail?: boolean;
+  /** When true, email even if the certificate already exists (admin resend). */
+  resendEmail?: boolean;
 }): Promise<Certificate | null> {
   const admin = await createAdminClientAsync();
 
@@ -117,7 +119,8 @@ export async function issueCertificate(params: {
       await admin.from("certificates").update({ recipient_name: nameOnCert }).eq("id", existing.id);
     }
 
-    if (shouldSendEmail) {
+    // Idempotent: do not re-email on retries unless explicitly requested.
+    if (shouldSendEmail && params.resendEmail) {
       await emailCertificate({
         studentId: canonicalStudentId,
         courseId: params.courseId,

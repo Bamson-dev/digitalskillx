@@ -1,6 +1,7 @@
 /**
- * First-party funnel analytics (Experience 2.0 Phase I).
+ * First-party funnel analytics.
  * Never invent metrics — only emit when a real user action occurs.
+ * Never send payment credentials, cards, secrets, passwords, or tokens.
  */
 
 export type ProductEventName =
@@ -8,7 +9,37 @@ export type ProductEventName =
   | "recommendation_click"
   | "browse_view"
   | "enroll_cta_click"
-  | "certificate_view";
+  | "certificate_view"
+  | "sales_page_view"
+  | "sales_page_cta_click"
+  | "sales_page_checkout_start"
+  | "sales_page_purchase"
+  | "sales_page_lead_capture"
+  | "sales_page_scroll_depth"
+  | "sales_page_section_view"
+  | "product_recommendation_view"
+  | "product_recommendation_click"
+  | "upsell_view"
+  | "upsell_click";
+
+export const PRODUCT_EVENT_NAMES: readonly ProductEventName[] = [
+  "course_view",
+  "recommendation_click",
+  "browse_view",
+  "enroll_cta_click",
+  "certificate_view",
+  "sales_page_view",
+  "sales_page_cta_click",
+  "sales_page_checkout_start",
+  "sales_page_purchase",
+  "sales_page_lead_capture",
+  "sales_page_scroll_depth",
+  "sales_page_section_view",
+  "product_recommendation_view",
+  "product_recommendation_click",
+  "upsell_view",
+  "upsell_click",
+] as const;
 
 export type ProductEventPayload = {
   event: ProductEventName;

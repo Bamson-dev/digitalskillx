@@ -14,7 +14,12 @@ import {
   CheckSquare,
   Zap,
   Megaphone,
+  ShoppingBag,
+  Briefcase,
+  UsersRound,
+  Package,
   AlertTriangle,
+  Activity,
   LogOut,
   Menu,
   X,
@@ -31,7 +36,7 @@ type NavItem = {
 const primaryNav: NavItem[] = [
   { href: "/admin/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/admin/courses", label: "Courses", icon: BookOpen },
-  { href: "/admin/students", label: "Students", icon: Users },
+  { href: "/admin/students", label: "Customers", icon: Users },
   { href: "/admin/enrollment-links", label: "Enrollment Links", icon: Link2 },
 ];
 
@@ -43,9 +48,14 @@ const teachingNav: NavItem[] = [
 
 const insightsNav: NavItem[] = [
   { href: "/admin/analytics", label: "Analytics", icon: BarChart3 },
+  { href: "/admin/sales", label: "Sales", icon: ShoppingBag },
+  { href: "/admin/business", label: "Business", icon: Briefcase },
+  { href: "/admin/segments", label: "Segments", icon: UsersRound },
+  { href: "/admin/bundles", label: "Bundles", icon: Package },
 ];
 
 const advancedNav: NavItem[] = [
+  { href: "/admin/system-health", label: "System health", icon: Activity },
   { href: "/admin/broken-lessons", label: "Broken lessons", icon: AlertTriangle },
   { href: "/admin/automations", label: "Automations", icon: Zap },
 ];

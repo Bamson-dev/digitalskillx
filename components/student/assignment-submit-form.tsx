@@ -45,8 +45,14 @@ export function AssignmentSubmitForm({
         ) : null}
         {allowed.includes("file") ? (
           <div>
-            <Label>File URL</Label>
-            <Input name="file_url" placeholder="Paste an uploaded file URL" />
+            <Label>Link to your file</Label>
+            <Input
+              name="file_url"
+              placeholder="https://drive.google.com/… or Dropbox link"
+            />
+            <p className="mt-1 text-xs text-muted">
+              Paste a shareable link to your file (Google Drive, Dropbox, etc.).
+            </p>
           </div>
         ) : null}
         <SubmitButton>Submit</SubmitButton>

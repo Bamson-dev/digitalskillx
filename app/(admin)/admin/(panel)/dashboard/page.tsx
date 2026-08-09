@@ -47,33 +47,33 @@ export default async function AdminDashboardPage() {
 
   const stats = [
     {
-      label: "Students",
+      label: "Learners",
       value: students,
-      hint: "Profiles with student role",
+      hint: "People with learner accounts",
       icon: <Users className="h-5 w-5" />,
     },
     {
       label: "Active (7 days)",
       value: activeStudents,
-      hint: "Students with last_active_at in the last week",
+      hint: "Learners who signed in this week",
       icon: <Users className="h-5 w-5" />,
     },
     {
       label: "Published courses",
       value: publishedCourses,
-      hint: `${courses} total courses (all statuses)`,
+      hint: `${courses} courses in total`,
       icon: <BookOpen className="h-5 w-5" />,
     },
     {
       label: "Enrollments",
       value: enrollments,
-      hint: "All enrollment rows",
+      hint: "Course seats granted",
       icon: <GraduationCap className="h-5 w-5" />,
     },
     {
       label: "Lessons completed",
       value: lessonsCompleted,
-      hint: "Completed lesson_progress rows",
+      hint: "Lessons marked complete",
       icon: <CheckCircle2 className="h-5 w-5" />,
     },
     {
@@ -86,7 +86,7 @@ export default async function AdminDashboardPage() {
 
   const shortcuts = [
     { href: "/admin/courses", label: "Create or edit a course", icon: Plus },
-    { href: "/admin/students", label: "Add students", icon: Users },
+    { href: "/admin/students", label: "Manage customers", icon: Users },
     { href: "/admin/enrollment-links", label: "Share an enrollment link", icon: Link2 },
     { href: "/admin/analytics", label: "View analytics", icon: CheckCircle2 },
     { href: "/admin/settings", label: "Platform settings", icon: Settings },
@@ -97,7 +97,7 @@ export default async function AdminDashboardPage() {
       <div>
         <h1 className="font-display text-2xl font-bold tracking-tight">Dashboard</h1>
         <p className="mt-1 text-sm text-muted">
-          Live counts from your database — zeros mean empty data, not placeholders.
+          A quick snapshot of learners, courses, and progress.
         </p>
       </div>
 

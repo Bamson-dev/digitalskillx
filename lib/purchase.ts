@@ -113,10 +113,53 @@ export async function fulfillPurchase(params: {
   const shouldNotify = claimedThisRun || enrollment.created;
 
   if (shouldNotify) {
-    const [{ data: profile }, { data: course }] = await Promise.all([
+    const [{ data: profile }, { data: course }, { data: tx }] = await Promise.all([
       admin.from("profiles").select("full_name, email").eq("id", params.studentId).single(),
       admin.from("courses").select("title").eq("id", params.courseId).single(),
+      admin
+        .from("transactions")
+        .select("paystack_data, amount, currency")
+        .eq("reference", params.reference)
+        .maybeSingle(),
     ]);
+
+    // Purchase attribution from initialize metadata (fail-open; never blocks fulfillment)
+    try {
+      const raw = tx?.paystack_data;
+      const bag =
+        raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+      const nested =
+        bag.metadata && typeof bag.metadata === "object"
+          ? (bag.metadata as Record<string, unknown>)
+          : {};
+      const pick = (key: string) => {
+        const a = bag[key];
+        const b = nested[key];
+        const v = typeof a === "string" ? a : typeof b === "string" ? b : "";
+        return v.trim().slice(0, 200);
+      };
+      const { recordProductEvent } = await import("@/lib/record-product-event");
+      await recordProductEvent({
+        event: "sales_page_purchase",
+        courseId: params.courseId,
+        studentId: params.studentId,
+        metadata: {
+          reference: params.reference,
+          sales_page_id: pick("sales_page_id") || null,
+          session_id: pick("session_id") || null,
+          utm_source: pick("utm_source") || null,
+          utm_medium: pick("utm_medium") || null,
+          utm_campaign: pick("utm_campaign") || null,
+          utm_content: pick("utm_content") || null,
+          utm_term: pick("utm_term") || null,
+          cta_id: pick("cta_id") || null,
+          amount: typeof tx?.amount === "number" ? tx.amount : null,
+          currency: typeof tx?.currency === "string" ? tx.currency : null,
+        },
+      });
+    } catch (err) {
+      console.error("[fulfillPurchase] purchase attribution event", err);
+    }
 
     if (course && enrollment.created) {
       await notify({
@@ -133,6 +176,14 @@ export async function fulfillPurchase(params: {
         });
       } catch (err) {
         console.error("[fulfillPurchase] course_enrolled automation", err);
+      }
+      try {
+        await runAutomations("customer_purchased", {
+          studentId: params.studentId,
+          courseId: params.courseId,
+        });
+      } catch (err) {
+        console.error("[fulfillPurchase] customer_purchased automation", err);
       }
     }
 

@@ -15,6 +15,7 @@ import { sendWelcomeEmailIfNeeded } from "@/lib/system-email-triggers";
 import { CHECKOUT_REF_COOKIE, checkoutRefCookieOptions, hashCheckoutBinding } from "@/lib/checkout-binding";
 import { runAutomations } from "@/lib/automation";
 import { secureLog } from "@/lib/secure-log";
+import type { Json } from "@/types/database";
 
 function jsonError(message: string, status: number) {
   return NextResponse.json({ error: message }, { status });
@@ -30,7 +31,13 @@ export async function POST(request: NextRequest) {
       data: { user },
     } = await supabase.auth.getUser();
 
-    let body: { courseId?: string; currency?: CurrencyCode; email?: string; fullName?: string };
+    let body: {
+      courseId?: string;
+      currency?: CurrencyCode;
+      email?: string;
+      fullName?: string;
+      attribution?: Record<string, string>;
+    };
     try {
       body = await request.json();
     } catch {
@@ -39,6 +46,16 @@ export async function POST(request: NextRequest) {
 
     if (!body.courseId) {
       return jsonError("courseId is required", 400);
+    }
+
+    /** Optional sales attribution — string-only, never secrets/cards. */
+    const attribution: Record<string, string> = {};
+    if (body.attribution && typeof body.attribution === "object") {
+      for (const [k, v] of Object.entries(body.attribution)) {
+        if (!k || k.length > 64) continue;
+        if (/password|token|secret|card|cvv|cvc|authorization/i.test(k)) continue;
+        if (typeof v === "string" && v.trim()) attribution[k] = v.trim().slice(0, 200);
+      }
     }
 
     const requestedCurrency: CurrencyCode = body.currency === "USD" ? "USD" : "NGN";
@@ -254,6 +271,14 @@ export async function POST(request: NextRequest) {
     const reference = generateReference();
     const storeCheckoutDetails = !studentIdForEnrollment || !profile?.email;
 
+    const paystackDataBase: Record<string, string> = {
+      ...attribution,
+    };
+    if (storeCheckoutDetails) {
+      paystackDataBase.checkout_email = checkoutEmail;
+      paystackDataBase.checkout_full_name = checkoutName;
+    }
+
     const { error: txError } = await admin.from("transactions").insert({
       student_id: studentIdForEnrollment,
       course_id: course.id,
@@ -261,13 +286,8 @@ export async function POST(request: NextRequest) {
       currency: "NGN",
       reference,
       status: "pending",
-      ...(storeCheckoutDetails
-        ? {
-            paystack_data: {
-              checkout_email: checkoutEmail,
-              checkout_full_name: checkoutName,
-            },
-          }
+      ...(Object.keys(paystackDataBase).length
+        ? { paystack_data: paystackDataBase as Json }
         : {}),
     });
 
@@ -286,6 +306,7 @@ export async function POST(request: NextRequest) {
       currency: "NGN",
       buyer_email: checkoutEmail,
       buyer_full_name: checkoutName,
+      ...attribution,
     };
     if (studentIdForEnrollment) {
       metadata.student_id = studentIdForEnrollment;

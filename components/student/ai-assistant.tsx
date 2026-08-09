@@ -12,7 +12,10 @@ export function AiAssistant() {
   const classroom = pathname.startsWith("/lessons/");
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([
-    { role: "assistant", content: "Hi! I'm your learning assistant. Ask me anything about your courses." },
+    {
+      role: "assistant",
+      content: "Ask me about your DigitalSkillX courses, lessons, or what to study next.",
+    },
   ]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -49,7 +52,8 @@ export function AiAssistant() {
 
   const dock = cn(
     "fixed right-4 z-40 sm:bottom-5 sm:right-5",
-    classroom ? "bottom-24" : "bottom-5",
+    // Clear the student mobile bottom tabs (~56px) on every student route, not only classroom.
+    classroom ? "bottom-24" : "bottom-20 sm:bottom-5",
   );
 
   return (

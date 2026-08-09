@@ -54,6 +54,7 @@ export async function POST(request: NextRequest) {
         courseId,
         recipientName: body.recipientName,
         sendEmail: true,
+        resendEmail: true,
       });
       if (!cert) {
         return NextResponse.json({ error: "Could not issue certificate." }, { status: 400 });

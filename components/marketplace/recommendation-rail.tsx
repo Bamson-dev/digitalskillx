@@ -13,11 +13,16 @@ export function RecommendationRail({
   subtitle,
   items,
   className,
+  trackAs,
+  seedCourseId,
 }: {
   title?: string;
   subtitle?: string;
   items: CourseRecommendation[];
   className?: string;
+  /** Emit product_recommendation_* or upsell_* events. */
+  trackAs?: "product_recommendation" | "upsell";
+  seedCourseId?: string;
 }) {
   if (items.length === 0) return null;
 
@@ -30,7 +35,12 @@ export function RecommendationRail({
       <ul className="mt-5 divide-y divide-neutral-200 border-y border-neutral-200">
         {items.map(({ course, reason }) => (
           <li key={course.id}>
-            <RecommendationRow course={course} reason={reason} />
+            <RecommendationRow
+              course={course}
+              reason={reason}
+              trackAs={trackAs}
+              seedCourseId={seedCourseId}
+            />
           </li>
         ))}
       </ul>
@@ -41,9 +51,13 @@ export function RecommendationRail({
 function RecommendationRow({
   course,
   reason,
+  trackAs,
+  seedCourseId,
 }: {
   course: RecommendableCourse;
   reason?: CourseRecommendation["reason"];
+  trackAs?: "product_recommendation" | "upsell";
+  seedCourseId?: string;
 }) {
   const label = reasonLabel(reason);
   const blurb = course.short_description ?? course.description;
@@ -55,8 +69,21 @@ function RecommendationRow({
         void trackProductEvent({
           event: "recommendation_click",
           courseId: course.id,
-          metadata: { reason: reason ?? null },
+          metadata: { reason: reason ?? null, seed_course_id: seedCourseId ?? null },
         });
+        if (trackAs === "upsell") {
+          void trackProductEvent({
+            event: "upsell_click",
+            courseId: course.id,
+            metadata: { seed_course_id: seedCourseId ?? null },
+          });
+        } else if (trackAs === "product_recommendation") {
+          void trackProductEvent({
+            event: "product_recommendation_click",
+            courseId: course.id,
+            metadata: { seed_course_id: seedCourseId ?? null, reason: reason ?? null },
+          });
+        }
       }}
       className="group flex min-h-[64px] items-center gap-4 py-4"
     >

@@ -25,8 +25,11 @@ import {
   setStudentTags,
   addAdminNote,
 } from "../actions";
+import { getCustomerTimeline, getCustomerValue } from "@/lib/customer-crm";
+import { listTagCatalog } from "@/lib/tag-catalog";
+import { logAudit } from "@/lib/audit";
 
-export const metadata: Metadata = { title: "Student" };
+export const metadata: Metadata = { title: "Customer" };
 
 export default async function StudentDetailPage({
   params,
@@ -59,7 +62,7 @@ export default async function StudentDetailPage({
   const hasLoggedIn = Boolean(lastSignInAt || student.last_active_at);
   const enrollmentStudentIds = [...new Set([params.id, authUserId].filter(Boolean))] as string[];
 
-  const [{ data: enrollments }, { data: allCourses }, { data: notes }, { data: certs }] =
+  const [{ data: enrollments }, { data: allCourses }, { data: notes }, { data: certs }, value, timeline, catalogTags, { data: purchases }, { data: auditRows }] =
     await Promise.all([
       supabase
         .from("enrollments")
@@ -69,14 +72,36 @@ export default async function StudentDetailPage({
       supabase.from("courses").select("id, title, visibility").order("title"),
       supabase
         .from("admin_notes")
-        .select("id, content, created_at")
+        .select("id, content, created_at, admin_id")
         .eq("student_id", params.id)
         .order("created_at", { ascending: false }),
       supabase
         .from("certificates")
         .select("id, certificate_number, recipient_name, student_id, course:courses(title)")
         .in("student_id", enrollmentStudentIds),
+      getCustomerValue(supabase, params.id),
+      getCustomerTimeline(supabase, params.id, 60),
+      listTagCatalog(supabase),
+      supabase
+        .from("transactions")
+        .select("id, amount, currency, status, reference, created_at, course:courses(title)")
+        .eq("student_id", params.id)
+        .eq("status", "success")
+        .order("created_at", { ascending: false })
+        .limit(30),
+      supabase
+        .from("audit_logs")
+        .select("id, action, created_at, metadata")
+        .eq("target_id", params.id)
+        .order("created_at", { ascending: false })
+        .limit(20),
     ]);
+
+  void logAudit({
+    action: "customer_viewed",
+    targetType: "profile",
+    targetId: params.id,
+  });
 
   const enrollmentRows = await Promise.all(
     (enrollments ?? []).map(async (e) => {
@@ -124,7 +149,7 @@ export default async function StudentDetailPage({
         href="/admin/students"
         className="inline-flex items-center gap-1 text-sm text-muted hover:text-foreground"
       >
-        <ArrowLeft className="h-4 w-4" /> All students
+        <ArrowLeft className="h-4 w-4" /> All customers
       </Link>
 
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
@@ -181,6 +206,31 @@ export default async function StudentDetailPage({
           resetPasswordAction={resetStudentPassword}
           deleteAction={deleteStudent}
         />
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <Card className="p-4">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted">Total spent</p>
+          <p className="mt-1 text-2xl font-bold tabular-nums">
+            ₦{Math.round(value.totalSpentNgn).toLocaleString()}
+          </p>
+        </Card>
+        <Card className="p-4">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted">Purchases</p>
+          <p className="mt-1 text-2xl font-bold tabular-nums">{value.purchaseCount}</p>
+        </Card>
+        <Card className="p-4">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted">Avg order</p>
+          <p className="mt-1 text-2xl font-bold tabular-nums">
+            ₦{Math.round(value.averageOrderValueNgn).toLocaleString()}
+          </p>
+        </Card>
+        <Card className="p-4">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted">Last purchase</p>
+          <p className="mt-1 text-sm font-semibold">
+            {value.lastPurchaseAt ? formatDate(value.lastPurchaseAt) : "—"}
+          </p>
+        </Card>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-3">
@@ -262,14 +312,20 @@ export default async function StudentDetailPage({
         </Card>
 
         <Card>
-          <CardHeader title="Tags" description="Group students (e.g. Batch 1)." />
+          <CardHeader title="Tags" description="Group customers. Catalog tags appear as suggestions." />
           <form action={setStudentTags} className="flex gap-2">
             <input type="hidden" name="id" value={student.id} />
             <Input
               name="tags"
               defaultValue={(student.tags ?? []).join(", ")}
               placeholder="Batch 1, Facebook Ads"
+              list="tag-catalog-suggestions"
             />
+            <datalist id="tag-catalog-suggestions">
+              {catalogTags.map((t) => (
+                <option key={t.id} value={t.label} />
+              ))}
+            </datalist>
             <Button type="submit" size="sm">
               Save
             </Button>
@@ -287,7 +343,7 @@ export default async function StudentDetailPage({
         </Card>
 
         <Card>
-          <CardHeader title="Internal notes" description="Visible to admins only." />
+          <CardHeader title="Internal notes" description="Visible to admins only — never shown to students." />
           <form action={addAdminNote} className="mb-4 flex gap-2">
             <input type="hidden" name="student_id" value={student.id} />
             <Textarea name="content" rows={2} placeholder="Add a private note…" className="flex-1" />
@@ -311,6 +367,77 @@ export default async function StudentDetailPage({
           </div>
         </Card>
       </div>
+
+      <div className="grid gap-6 lg:grid-cols-2">
+        <Card>
+          <CardHeader title="Purchase history" description="Successful transactions only." />
+          {(purchases ?? []).length === 0 ? (
+            <p className="px-4 pb-4 text-sm text-muted">No successful purchases.</p>
+          ) : (
+            <ul className="divide-y divide-app px-4 pb-4 text-sm">
+              {(purchases ?? []).map((p) => {
+                const course = Array.isArray(p.course) ? p.course[0] : p.course;
+                const naira =
+                  String(p.currency).toUpperCase() === "NGN" ? Number(p.amount) / 100 : Number(p.amount);
+                return (
+                  <li key={p.id} className="flex justify-between gap-3 py-2">
+                    <span>
+                      {(course as { title?: string } | null)?.title ?? "Course"}
+                      <span className="block text-xs text-muted">{p.reference}</span>
+                    </span>
+                    <span className="tabular-nums font-medium">
+                      ₦{Math.round(naira).toLocaleString()}
+                      <span className="block text-xs font-normal text-muted">
+                        {formatDate(p.created_at)}
+                      </span>
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </Card>
+
+        <Card>
+          <CardHeader
+            title="Communication / audit"
+            description="Recent admin actions targeting this customer."
+          />
+          {(auditRows ?? []).length === 0 ? (
+            <p className="px-4 pb-4 text-sm text-muted">No audit events linked to this profile yet.</p>
+          ) : (
+            <ul className="max-h-72 space-y-2 overflow-y-auto px-4 pb-4 text-sm">
+              {(auditRows ?? []).map((a) => (
+                <li key={a.id} className="border-b border-app/50 pb-2">
+                  <p className="font-medium">{a.action}</p>
+                  <p className="text-xs text-muted">
+                    {formatDate(a.created_at, { dateStyle: "medium", timeStyle: "short" })}
+                  </p>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
+      </div>
+
+      <Card>
+        <CardHeader title="Customer timeline" description="Chronological events from real system data." />
+        {timeline.length === 0 ? (
+          <p className="px-4 pb-4 text-sm text-muted">No timeline events yet.</p>
+        ) : (
+          <ol className="max-h-[480px] space-y-3 overflow-y-auto px-4 pb-4">
+            {timeline.map((ev) => (
+              <li key={ev.id} className="border-l-2 border-brand/30 pl-3 text-sm">
+                <p className="text-xs text-muted">
+                  {formatDate(ev.at, { dateStyle: "medium", timeStyle: "short" })}
+                </p>
+                <p className="font-medium">{ev.title}</p>
+                {ev.detail ? <p className="text-muted">{ev.detail}</p> : null}
+              </li>
+            ))}
+          </ol>
+        )}
+      </Card>
     </div>
   );
 }

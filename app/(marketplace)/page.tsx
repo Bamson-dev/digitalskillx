@@ -62,13 +62,20 @@ export default async function HomePage() {
     profile = data;
   }
 
-  const [courses, categories, trustStats] = await Promise.all([
-    fetchPublishedCourses<CatalogCourse>(
-      "id, title, description, short_description, thumbnail_url, price_ngn, price_usd, instructor_name, is_coming_soon, created_at, category:course_categories(name)",
-    ),
-    fetchCourseCategories(),
-    fetchTrustStats(),
-  ]);
+  let courses: CatalogCourse[] = [];
+  let categories: Awaited<ReturnType<typeof fetchCourseCategories>> = [];
+  let trustStats = { students: 0, certificates: 0 };
+  try {
+    [courses, categories, trustStats] = await Promise.all([
+      fetchPublishedCourses<CatalogCourse>(
+        "id, title, description, short_description, thumbnail_url, price_ngn, price_usd, instructor_name, is_coming_soon, created_at, category:course_categories(name)",
+      ),
+      fetchCourseCategories(),
+      fetchTrustStats(),
+    ]);
+  } catch (err) {
+    console.error("[HomePage] catalog fetch failed", err);
+  }
 
   const catalog = (courses ?? []).map((c) => ({
     ...c,

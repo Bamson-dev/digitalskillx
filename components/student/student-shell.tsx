@@ -188,7 +188,7 @@ export function StudentShell({
         </div>
       </div>
 
-      {/* Phase H — mobile bottom tabs (hidden in classroom to protect lesson controls) */}
+      {/* Mobile bottom tabs — hidden in classroom to protect lesson controls */}
       {!classroom ? (
         <nav
           className="fixed inset-x-0 bottom-0 z-30 border-t border-neutral-200 bg-white lg:hidden"

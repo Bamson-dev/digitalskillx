@@ -5,6 +5,7 @@ import { bootstrapRuntimeSecrets } from "@/lib/bootstrap-runtime-secrets";
 import { ensureStorageBuckets } from "@/lib/ensure-storage-buckets";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClientAsync } from "@/lib/supabase/admin";
+import { getAdminMfaStatus, isAdminMfaRequired } from "@/lib/admin-mfa";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 import type { Profile } from "@/types/database";
@@ -45,6 +46,18 @@ export async function requireAdminApiAuth(options?: {
     return {
       error: NextResponse.json({ error: "Admin access required." }, { status: 403 }),
     };
+  }
+
+  if (isAdminMfaRequired()) {
+    const mfa = await getAdminMfaStatus();
+    if (!mfa.enrolled || !mfa.verified) {
+      return {
+        error: NextResponse.json(
+          { error: "Admin MFA verification required.", code: "ADMIN_MFA_REQUIRED" },
+          { status: 403 },
+        ),
+      };
+    }
   }
 
   let admin: SupabaseClient<Database>;

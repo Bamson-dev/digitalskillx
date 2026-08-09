@@ -13,6 +13,7 @@ import {
   type LandingCourse,
 } from "@/lib/published-courses";
 import { recommendCourses } from "@/lib/recommendations";
+import { getCourseRecommendationsForDisplay } from "@/lib/course-recommendations";
 import { isCourseFree } from "@/lib/currency";
 import { isSuccessfulGuestPurchase } from "@/lib/guest-checkout";
 import { ORG, siteUrl } from "@/lib/org";
@@ -41,9 +42,52 @@ export async function generateMetadata({
   }>(params.id, "title, short_description, description, thumbnail_url");
   if (!course) return { title: "Course" };
 
-  const title = course.title;
-  const description = course.short_description ?? course.description ?? ORG.tagline;
   const url = `${siteUrl()}/course/${params.id}`;
+  let title = course.title;
+  let description = course.short_description ?? course.description ?? ORG.tagline;
+  let image = course.thumbnail_url;
+  let robots: Metadata["robots"] = undefined;
+
+  if (salesPageImportEnabled()) {
+    try {
+      const supabase = createClient();
+      const published = await getPublishedSalesPageForCourse(supabase, params.id);
+      if (published?.seo) {
+        const seo = published.seo;
+        title = seo.title || seo.ogTitle || published.title || title;
+        description = seo.description || seo.ogDescription || description;
+        if (seo.ogImageAssetId) {
+          image = `${siteUrl()}/api/sales-page-assets/${seo.ogImageAssetId}`;
+        }
+        if (seo.robots === "noindex") robots = { index: false, follow: false };
+        if (seo.canonicalUrl) {
+          /* applied below */
+        }
+        return {
+          title,
+          description,
+          alternates: seo.canonicalUrl ? { canonical: seo.canonicalUrl } : undefined,
+          robots,
+          openGraph: {
+            type: "website",
+            title: seo.ogTitle || title,
+            description: seo.ogDescription || description,
+            url: seo.canonicalUrl || url,
+            siteName: "DigitalSkillX",
+            images: image ? [{ url: image, alt: title }] : undefined,
+          },
+          twitter: {
+            card: "summary_large_image",
+            title: seo.ogTitle || title,
+            description: seo.ogDescription || description,
+            images: image ? [image] : undefined,
+          },
+        };
+      }
+    } catch {
+      /* fall through to course metadata */
+    }
+  }
 
   return {
     title,
@@ -54,13 +98,13 @@ export async function generateMetadata({
       description,
       url,
       siteName: "DigitalSkillX",
-      images: course.thumbnail_url ? [{ url: course.thumbnail_url, alt: title }] : undefined,
+      images: image ? [{ url: image, alt: title }] : undefined,
     },
     twitter: {
       card: "summary_large_image",
       title,
       description,
-      images: course.thumbnail_url ? [course.thumbnail_url] : undefined,
+      images: image ? [image] : undefined,
     },
   };
 }
@@ -135,15 +179,28 @@ export default async function CourseLandingPage({
     const cat = Array.isArray(course.category) ? course.category[0] : course.category;
     return cat?.name ?? null;
   })();
-  const related = recommendCourses({
-    catalog: relatedAll.map((c) => ({
-      ...c,
-      category_name: c.category?.name ?? null,
-    })),
+  const catalog = relatedAll.map((c) => ({
+    ...c,
+    category_name: c.category?.name ?? null,
+  }));
+  let related = recommendCourses({
+    catalog,
     ownedIds,
     seed: { id: course.id, title: course.title, category_name: categoryName },
     limit: 3,
   });
+  try {
+    await bootstrapRuntimeSecrets();
+    const recAdmin = await createAdminClientAsync(supabase);
+    related = await getCourseRecommendationsForDisplay(recAdmin, {
+      courseId: course.id,
+      catalog,
+      ownedIds,
+      limit: 3,
+    });
+  } catch {
+    /* keep heuristic fallback */
+  }
 
   let enrollmentCount: number | null = null;
   try {
@@ -210,6 +267,7 @@ export default async function CourseLandingPage({
               modules,
             }}
             schema={publishedSalesPage.schema}
+            salesPageId={publishedSalesPage.id}
             isEnrolled={isEnrolled}
             isLoggedIn={Boolean(profile?.email)}
             related={related}
