@@ -112,12 +112,12 @@ async function sendAuthLinkEmail(params: {
   return { sent: true as const };
 }
 
-/** Password reset via ZeptoMail (no Supabase Auth email). */
+/** Password reset via Resend (no Supabase Auth email). */
 export async function sendPasswordResetEmail(email: string) {
   return sendAuthLinkEmail({ email, type: "recovery", nextPath: "/reset-password" });
 }
 
-/** Magic-link sign-in via ZeptoMail (no Supabase Auth email). */
+/** Magic-link sign-in via Resend (no Supabase Auth email). */
 export async function sendMagicLinkEmail(email: string, nextPath = "/dashboard") {
   return sendAuthLinkEmail({ email, type: "magiclink", nextPath });
 }

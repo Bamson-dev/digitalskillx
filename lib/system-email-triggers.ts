@@ -415,7 +415,7 @@ const MILESTONE_SENT_COLUMNS: Record<
  *
  * Idempotency: each milestone is gated by a nullable `milestone_*_email_sent_at`
  * column on enrollments. We read sent flags before sending, and only set the
- * timestamp after ZeptoMail reports success — so retries never duplicate mail.
+ * timestamp after Resend reports success — so retries never duplicate mail.
  */
 export async function sendProgressMilestoneEmailsIfNeeded(params: {
   studentId: string;

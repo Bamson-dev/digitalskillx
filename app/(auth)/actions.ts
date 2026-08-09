@@ -50,7 +50,7 @@ export async function signUpWithPassword(
   return { message: result.message };
 }
 
-/** Passwordless magic-link login — link sent via ZeptoMail (not Supabase Auth). */
+/** Passwordless magic-link login — link sent via Resend (not Supabase Auth). */
 export async function signInWithMagicLink(
   _prev: AuthState,
   formData: FormData,
@@ -78,7 +78,7 @@ export async function signInWithMagicLink(
   }
 }
 
-/** Forgot password — reset link sent via ZeptoMail (not Supabase Auth). */
+/** Forgot password — reset link sent via Resend (not Supabase Auth). */
 export async function sendPasswordReset(
   _prev: AuthState,
   formData: FormData,

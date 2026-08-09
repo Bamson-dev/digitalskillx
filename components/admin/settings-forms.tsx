@@ -145,7 +145,7 @@ function EmailSettingsForm({ settings }: { settings: PlatformSettingsValues }) {
     <Card>
       <CardHeader
         title="Email settings"
-        description="Sender identity for ZeptoMail. The from address still comes from ZEPTOMAIL_FROM_EMAIL in server env."
+        description="Display name and reply-to for Resend. From address is RESEND_FROM_EMAIL in Coolify (courses@digitalskillx.com)."
       />
       <form action={action} className="space-y-4">
         <div>
@@ -260,19 +260,12 @@ function IntegrationSettingsForm({
               : "Required for Admin → Students (create account). If Coolify env vars fail, save the service_role secret from Supabase → Project Settings → API here."}
           </p>
         </div>
-        <div>
-          <Label htmlFor="zeptomail_smtp_password">ZeptoMail SMTP password</Label>
-          <Input
-            id="zeptomail_smtp_password"
-            name="zeptomail_smtp_password"
-            type="password"
-            autoComplete="off"
-            placeholder={emailConfigured ? "Password saved — paste to replace" : "Your ZeptoMail SMTP password"}
-          />
+        <div className="rounded-lg border border-border bg-muted/30 px-3 py-3 text-sm">
+          <p className="font-medium text-foreground">Transactional email (Resend)</p>
           <p className="mt-1 text-xs text-muted">
             {emailConfigured
-              ? "Transactional email (welcome, enrollment, receipts) is configured."
-              : "Required for student welcome and enrollment emails. Coolify env vars often do not reach Next.js — saving here is recommended."}
+              ? "Resend API key is available in the server runtime. Sender: courses@digitalskillx.com via Coolify (RESEND_FROM_EMAIL / RESEND_FROM_NAME)."
+              : "Set RESEND_API_KEY, RESEND_FROM_EMAIL, RESEND_FROM_NAME, and EMAIL_PROVIDER=resend in Coolify, then redeploy. SMTP/ZeptoMail is not used."}
           </p>
         </div>
         <AdminSaveButton label={label}>{label}</AdminSaveButton>

@@ -26,7 +26,7 @@ for (const p of FORBIDDEN_ROUTES) {
 ok("temporary verify/cleanup admin routes absent");
 
 const SECRETISH =
-  /(sk_live_[A-Za-z0-9]{16,}|eyJ[A-Za-z0-9_-]{40,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}|CONTABO_S3_SECRET_KEY\s*=\s*["'][^"'\n]{8,}["']|SUPABASE_SERVICE_ROLE_KEY\s*=\s*["']eyJ)/;
+  /(sk_live_[A-Za-z0-9]{16,}|re_[A-Za-z0-9]{32,}|eyJ[A-Za-z0-9_-]{40,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}|CONTABO_S3_SECRET_KEY\s*=\s*["'][^"'\n]{8,}["']|SUPABASE_SERVICE_ROLE_KEY\s*=\s*["']eyJ|NEXT_PUBLIC_RESEND_API_KEY\s*=)/;
 
 function walk(dir, out = []) {
   for (const name of readdirSync(dir)) {

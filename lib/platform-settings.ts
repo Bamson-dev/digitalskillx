@@ -27,6 +27,7 @@ function mergeSettings(row: SettingsRow | null): PlatformSettingsValues {
     default_timezone: row.default_timezone || PLATFORM_SETTINGS_DEFAULTS.default_timezone,
     email_sender_name:
       row.email_sender_name ??
+      process.env.RESEND_FROM_NAME ??
       process.env.ZEPTOMAIL_FROM_NAME ??
       PLATFORM_SETTINGS_DEFAULTS.email_sender_name,
     email_reply_to: row.email_reply_to,
@@ -68,11 +69,16 @@ export type EmailSenderConfig = {
   replyTo?: string;
 };
 
-/** Resolved sender identity: DB settings override ZeptoMail env defaults. */
+/** Resolved sender identity: DB settings override Resend env defaults. */
 export async function getEmailSenderConfig(): Promise<EmailSenderConfig> {
   const config: EmailSenderConfig = {
-    fromName: process.env.ZEPTOMAIL_FROM_NAME ?? PLATFORM_SETTINGS_DEFAULTS.platform_name,
-    fromAddress: process.env.ZEPTOMAIL_FROM_EMAIL ?? "courses@digitalskillx.com",
+    fromName:
+      process.env.RESEND_FROM_NAME?.trim() ||
+      PLATFORM_SETTINGS_DEFAULTS.platform_name ||
+      "DigitalSkillX",
+    fromAddress:
+      process.env.RESEND_FROM_EMAIL?.trim() ||
+      "courses@digitalskillx.com",
   };
 
   try {

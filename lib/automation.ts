@@ -165,7 +165,10 @@ async function executeAction(
       break;
     }
     case "notify_admin": {
-      const adminAddr = process.env.ZEPTOMAIL_FROM_EMAIL;
+      const adminAddr =
+        process.env.RESEND_FROM_EMAIL?.trim() ||
+        process.env.ADMIN_EMAIL?.trim() ||
+        "courses@digitalskillx.com";
       if (adminAddr) {
         await sendEmail({
           to: adminAddr,

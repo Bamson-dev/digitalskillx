@@ -24,6 +24,10 @@ const RUNTIME_KEYS = [
   "ZEPTOMAIL_SMTP_PASSWORD",
   "ZEPTOMAIL_FROM_EMAIL",
   "ZEPTOMAIL_FROM_NAME",
+  "EMAIL_PROVIDER",
+  "RESEND_API_KEY",
+  "RESEND_FROM_EMAIL",
+  "RESEND_FROM_NAME",
 ];
 
 function readEnv(name) {
@@ -184,7 +188,10 @@ async function main() {
   }
   console.log(`  DEEPSEEK_API_KEY=${secretStatus("DEEPSEEK_API_KEY")}`);
   console.log(`  PAYSTACK_SECRET_KEY=${secretStatus("PAYSTACK_SECRET_KEY")}`);
-  console.log(`  ZEPTOMAIL_SMTP_PASSWORD=${secretStatus("ZEPTOMAIL_SMTP_PASSWORD")}`);
+  console.log(`  EMAIL_PROVIDER=${readEnv("EMAIL_PROVIDER") || "(resend)"}`);
+  console.log(`  RESEND_API_KEY=${secretStatus("RESEND_API_KEY")}`);
+  console.log(`  RESEND_FROM_EMAIL=${readEnv("RESEND_FROM_EMAIL") ? "set" : "missing"}`);
+  console.log(`  RESEND_FROM_NAME=${readEnv("RESEND_FROM_NAME") ? "set" : "missing"}`);
 
   const nextBin = join(root, "node_modules", "next", "dist", "bin", "next");
   const fallbackBin = join(root, "node_modules", ".bin", "next");

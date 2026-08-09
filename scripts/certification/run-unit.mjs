@@ -639,3 +639,18 @@ console.log("PASS: classroom companion rarity + reduced-motion guards");
   }
   console.log("PASS: product experience phase 7 suite (via test-product-experience-phase7.mjs)");
 }
+
+{
+  const { spawnSync } = await import("node:child_process");
+  const r = spawnSync(
+    process.execPath,
+    [join(root, "scripts/certification/test-resend-email.mjs")],
+    { cwd: root, encoding: "utf8" },
+  );
+  if (r.status !== 0) {
+    console.error(r.stdout);
+    console.error(r.stderr);
+    process.exit(r.status ?? 1);
+  }
+  console.log("PASS: resend email provider suite (via test-resend-email.mjs)");
+}

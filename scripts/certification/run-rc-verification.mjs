@@ -539,8 +539,8 @@ console.log(`DigitalSkillX RC verification → ${base}\n`);
     record(
       "PAYMENTS",
       "Emails config (settings)",
-      /ZeptoMail|From email|SMTP|email/i.test(emailSettings),
-      /ZeptoMail|SMTP/i.test(emailSettings) ? "email settings present" : "missing email settings UI",
+      /Resend|From email|email|courses@digitalskillx/i.test(emailSettings),
+      /Resend|courses@digitalskillx/i.test(emailSettings) ? "email settings present" : "missing email settings UI",
     );
   }
 
@@ -902,7 +902,7 @@ console.log(`DigitalSkillX RC verification → ${base}\n`);
     record(
       "SYSTEM",
       "Emails",
-      /ZeptoMail|From email|SMTP/i.test(curl(["-b", adminJar, `${base}/admin/settings`])),
+      /Resend|From email|courses@digitalskillx/i.test(curl(["-b", adminJar, `${base}/admin/settings`])),
       "settings surface",
     );
 

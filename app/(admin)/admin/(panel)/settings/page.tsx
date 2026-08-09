@@ -6,7 +6,7 @@ import { getYoutubeApiKeyConfiguredFlag } from "@/lib/env-youtube";
 import { deepseekApiKeyConfigured } from "@/lib/env-deepseek";
 import { paystackSecretKeyConfigured } from "@/lib/env-paystack";
 import { serviceRoleKeyConfigured } from "@/lib/env-service-role";
-import { emailSmtpConfigured } from "@/lib/env-email";
+import { emailDeliveryConfigured } from "@/lib/env-email";
 import { SettingsForms } from "@/components/admin/settings-forms";
 
 export const metadata: Metadata = { title: "Settings" };
@@ -28,7 +28,7 @@ export default async function AdminSettingsPage() {
     deepseekApiKeyConfigured(supabase),
     paystackSecretKeyConfigured(supabase),
     serviceRoleKeyConfigured(supabase),
-    emailSmtpConfigured(),
+    emailDeliveryConfigured(),
   ]);
 
   return (

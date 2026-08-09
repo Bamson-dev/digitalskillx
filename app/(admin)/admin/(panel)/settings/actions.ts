@@ -188,9 +188,8 @@ export async function saveIntegrationSettings(
     const deepseekApiKey = String(formData.get("deepseek_api_key") ?? "").trim();
     const paystackSecretKey = String(formData.get("paystack_secret_key") ?? "").trim();
     const serviceRoleKey = String(formData.get("supabase_service_role_key") ?? "").trim();
-    const zeptomailPassword = String(formData.get("zeptomail_smtp_password") ?? "").trim();
 
-    if (!youtubeApiKey && !deepseekApiKey && !paystackSecretKey && !serviceRoleKey && !zeptomailPassword) {
+    if (!youtubeApiKey && !deepseekApiKey && !paystackSecretKey && !serviceRoleKey) {
       return { error: "Paste at least one key to save." };
     }
     if (youtubeApiKey === "your-youtube-data-api-key") {
@@ -205,7 +204,6 @@ export async function saveIntegrationSettings(
     if (deepseekApiKey) patch.deepseek_api_key = deepseekApiKey;
     if (paystackSecretKey) patch.paystack_secret_key = paystackSecretKey;
     if (serviceRoleKey) patch.supabase_service_role_key = serviceRoleKey;
-    if (zeptomailPassword) patch.zeptomail_smtp_password = zeptomailPassword;
 
     const supabase = createClient();
     const { error } = await supabase.from("platform_secrets").upsert(patch, { onConflict: "id" });
@@ -215,7 +213,6 @@ export async function saveIntegrationSettings(
     if (deepseekApiKey) setCachedIntegrationSecret("DEEPSEEK_API_KEY", deepseekApiKey);
     if (paystackSecretKey) setCachedIntegrationSecret("PAYSTACK_SECRET_KEY", paystackSecretKey);
     if (serviceRoleKey) setCachedIntegrationSecret("SUPABASE_SERVICE_ROLE_KEY", serviceRoleKey);
-    if (zeptomailPassword) setCachedIntegrationSecret("ZEPTOMAIL_SMTP_PASSWORD", zeptomailPassword);
     await warmIntegrationSecretsFromAdminSession(supabase);
 
     await logAudit({ action: "settings_integrations_saved" });
