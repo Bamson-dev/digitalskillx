@@ -15,6 +15,10 @@ import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
+import {
+  recallEnrollmentLinkUrl,
+  rememberEnrollmentLinkUrl,
+} from "@/lib/enrollment-links/client-url-cache";
 import type { EnrollmentLink, EnrollmentLinkStatus } from "@/types/database";
 
 type LinkRow = EnrollmentLink & {
@@ -128,7 +132,11 @@ export function EnrollmentLinksList() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
-    const json = (await res.json()) as { error?: string; url?: string };
+    const json = (await res.json()) as {
+      error?: string;
+      url?: string;
+      link?: { id: string };
+    };
     if (!res.ok) throw new Error(json.error ?? "Action failed");
     return json;
   }
@@ -181,6 +189,7 @@ export function EnrollmentLinksList() {
         const json = await patch(id, { action: "duplicate" });
         toast("Link duplicated");
         if (json.url) {
+          if (json.link?.id) rememberEnrollmentLinkUrl(json.link.id, json.url);
           await navigator.clipboard.writeText(json.url);
           toast("New link URL copied", "info");
         }
@@ -194,7 +203,22 @@ export function EnrollmentLinksList() {
         return;
       }
       if (action === "copy") {
-        toast("Token is only shown once at create. Open the link detail to manage settings.", "info");
+        const cached = recallEnrollmentLinkUrl(id);
+        if (cached) {
+          await navigator.clipboard.writeText(cached);
+          toast("Enrollment link copied");
+          return;
+        }
+        const ok = confirm(
+          "The full invite URL was only shown when this link was created.\n\nGenerate a new URL and copy it? The previous URL will stop working for new enrollments.",
+        );
+        if (!ok) return;
+        const json = await patch(id, { action: "regenerate_token" });
+        if (!json.url) throw new Error("Could not generate invite URL.");
+        rememberEnrollmentLinkUrl(id, json.url);
+        await navigator.clipboard.writeText(json.url);
+        toast("New enrollment link copied");
+        await load();
         return;
       }
     } catch (err) {
@@ -427,7 +451,7 @@ export function EnrollmentLinksList() {
                             className="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-brand-50"
                             onClick={() => void onAction(link.id, "copy")}
                           >
-                            <Copy className="h-3.5 w-3.5" /> Copy tip
+                            <Copy className="h-3.5 w-3.5" /> Copy link
                           </button>
                           <button
                             type="button"

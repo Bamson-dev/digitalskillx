@@ -258,6 +258,54 @@ export async function duplicateEnrollmentLink(
   });
 }
 
+/**
+ * Rotate the public invite token and return the new shareable URL.
+ * Needed because plaintext tokens are not stored after create.
+ */
+export async function regenerateEnrollmentLinkToken(
+  admin: SupabaseClient<Database>,
+  linkId: string,
+  adminUserId: string,
+) {
+  const { data: existing, error: loadError } = await admin
+    .from("enrollment_links")
+    .select("id, deleted_at")
+    .eq("id", linkId)
+    .maybeSingle();
+  if (loadError) throw new Error(loadError.message);
+  if (!existing || existing.deleted_at) throw new Error("Link not found.");
+
+  const plaintext = generateEnrollmentLinkToken();
+  const tokenHash = hashEnrollmentLinkToken(plaintext);
+  const tokenPrefix = enrollmentLinkTokenPrefix(plaintext);
+
+  const { data: link, error } = await admin
+    .from("enrollment_links")
+    .update({
+      token_hash: tokenHash,
+      token_prefix: tokenPrefix,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", linkId)
+    .is("deleted_at", null)
+    .select("*")
+    .single();
+
+  if (error) throw new Error(error.message);
+
+  await recordEnrollmentEvent(admin, {
+    event: "link_token_regenerated",
+    enrollmentLinkId: linkId,
+    userId: adminUserId,
+  });
+
+  return {
+    link: link as EnrollmentLink,
+    plaintextToken: plaintext,
+    url: publicEnrollUrl(plaintext),
+  };
+}
+
 export async function listEnrollmentLinks(
   admin: SupabaseClient<Database>,
   filters?: {

@@ -8,6 +8,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select } from "@/components/ui/select";
 import { useToast } from "@/components/ui/toast";
 import { AdminLoadingBanner } from "@/components/admin/admin-skeleton";
+import {
+  recallEnrollmentLinkUrl,
+  rememberEnrollmentLinkUrl,
+} from "@/lib/enrollment-links/client-url-cache";
 import type {
   EnrollmentLink,
   EnrollmentLinkAccess,
@@ -16,6 +20,7 @@ import type {
   EnrollmentLinkStatus,
 } from "@/types/database";
 import type { EnrollmentLinkAnalytics } from "@/lib/enrollment-links/analytics-service";
+import { Copy } from "lucide-react";
 
 type CourseRow = {
   course_id: string;
@@ -116,6 +121,34 @@ export function EnrollmentLinkDetail({
     }
   }
 
+  async function copyInviteUrl() {
+    try {
+      const cached = recallEnrollmentLinkUrl(linkId);
+      if (cached) {
+        await navigator.clipboard.writeText(cached);
+        toast("Enrollment link copied");
+        return;
+      }
+      const ok = confirm(
+        "The full invite URL was only shown when this link was created.\n\nGenerate a new URL and copy it? The previous URL will stop working for new enrollments.",
+      );
+      if (!ok) return;
+      const res = await fetch(`/api/admin/enrollment-links/${linkId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "regenerate_token" }),
+      });
+      const json = (await res.json()) as { error?: string; url?: string };
+      if (!res.ok || !json.url) throw new Error(json.error ?? "Could not generate invite URL.");
+      rememberEnrollmentLinkUrl(linkId, json.url);
+      await navigator.clipboard.writeText(json.url);
+      toast("New enrollment link copied");
+      await load();
+    } catch (err) {
+      toast(err instanceof Error ? err.message : "Copy failed", "error");
+    }
+  }
+
   if (loading || !link) {
     return (
       <div className="space-y-4">
@@ -126,12 +159,19 @@ export function EnrollmentLinkDetail({
 
   return (
     <div className="space-y-8">
-      <div>
-        <Link href="/admin/enrollment-links" className="text-sm text-muted hover:text-brand">
-          ← Enrollment Links
-        </Link>
-        <h1 className="mt-2 text-2xl font-bold">{link.name}</h1>
-        <p className="text-sm text-muted">Prefix {link.token_prefix}… · {link.current_redemptions} redemptions</p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <Link href="/admin/enrollment-links" className="text-sm text-muted hover:text-brand">
+            ← Enrollment Links
+          </Link>
+          <h1 className="mt-2 text-2xl font-bold">{link.name}</h1>
+          <p className="text-sm text-muted">
+            Prefix {link.token_prefix}… · {link.current_redemptions} redemptions
+          </p>
+        </div>
+        <Button type="button" variant="outline" onClick={() => void copyInviteUrl()}>
+          <Copy className="h-4 w-4" /> Copy link
+        </Button>
       </div>
 
       {analytics ? (

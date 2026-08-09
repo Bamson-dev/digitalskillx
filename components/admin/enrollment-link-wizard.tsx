@@ -10,6 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select } from "@/components/ui/select";
 import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/utils";
+import { rememberEnrollmentLinkUrl } from "@/lib/enrollment-links/client-url-cache";
 import type { EnrollmentLinkAccess, EnrollmentLinkRedirect } from "@/types/database";
 
 type CourseOption = { id: string; title: string };
@@ -71,6 +72,9 @@ export function EnrollmentLinkWizard({ courses }: { courses: CourseOption[] }) {
       };
       if (!res.ok) throw new Error(json.error ?? "Create failed");
       setCreated({ url: json.url!, token: json.plaintextToken! });
+      if (json.link?.id && json.url) {
+        rememberEnrollmentLinkUrl(json.link.id, json.url);
+      }
       toast("Enrollment link created");
     } catch (err) {
       toast(err instanceof Error ? err.message : "Create failed", "error");

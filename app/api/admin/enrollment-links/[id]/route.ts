@@ -7,6 +7,7 @@ import { enrollmentLinksEnabled } from "@/lib/enrollment-links/feature-flag";
 import {
   duplicateEnrollmentLink,
   getEnrollmentLinkById,
+  regenerateEnrollmentLinkToken,
   setEnrollmentLinkEnabled,
   softDeleteEnrollmentLink,
   updateEnrollmentLink,
@@ -60,7 +61,7 @@ export async function PATCH(request: NextRequest, { params }: Ctx) {
   if ("error" in auth) return auth.error;
 
   let body: {
-    action?: "enable" | "disable" | "duplicate" | "update";
+    action?: "enable" | "disable" | "duplicate" | "regenerate_token" | "update";
     name?: string;
     description?: string;
     courseIds?: string[];
@@ -95,6 +96,20 @@ export async function PATCH(request: NextRequest, { params }: Ctx) {
         targetType: "enrollment_link",
         targetId: result.link.id,
         metadata: { from: params.id },
+      });
+      return NextResponse.json({
+        link: result.link,
+        plaintextToken: result.plaintextToken,
+        url: result.url,
+      });
+    }
+
+    if (body.action === "regenerate_token") {
+      const result = await regenerateEnrollmentLinkToken(auth.admin, params.id, auth.user.id);
+      await logAudit({
+        action: "enrollment_link_token_regenerated",
+        targetType: "enrollment_link",
+        targetId: params.id,
       });
       return NextResponse.json({
         link: result.link,
