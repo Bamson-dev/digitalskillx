@@ -12,6 +12,7 @@ export type StudentCertificateRow = {
   certificateNumber: string;
   issuedAt: string;
   isValid: boolean;
+  courseId: string;
   courseTitle: string | null;
   recipientName: string;
 };
@@ -96,6 +97,7 @@ export async function getStudentCertificates(studentId: string): Promise<Student
     certificateNumber: row.certificate_number,
     issuedAt: row.issued_at,
     isValid: row.is_valid,
+    courseId: row.course_id,
     courseTitle: titleById.get(row.course_id) ?? null,
     recipientName: displayNameFrom(row.recipient_name, profile?.full_name, profile?.email),
   }));

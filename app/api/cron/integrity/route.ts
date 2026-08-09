@@ -88,6 +88,10 @@ export async function GET(request: NextRequest) {
       successWithoutEnrollment.push(tx.id);
       continue;
     }
+    // Digital-only purchases have no course_id — enrollment check does not apply.
+    if (!tx.course_id) {
+      continue;
+    }
     const { data: enr } = await admin
       .from("enrollments")
       .select("id")

@@ -18,6 +18,8 @@ import {
   Briefcase,
   UsersRound,
   Package,
+  Tag,
+  Percent,
   AlertTriangle,
   Activity,
   LogOut,
@@ -49,6 +51,8 @@ const teachingNav: NavItem[] = [
 const insightsNav: NavItem[] = [
   { href: "/admin/analytics", label: "Analytics", icon: BarChart3 },
   { href: "/admin/sales", label: "Sales", icon: ShoppingBag },
+  { href: "/admin/offers", label: "Offers", icon: Percent },
+  { href: "/admin/digital-products", label: "Digital products", icon: Tag },
   { href: "/admin/business", label: "Business", icon: Briefcase },
   { href: "/admin/segments", label: "Segments", icon: UsersRound },
   { href: "/admin/bundles", label: "Bundles", icon: Package },

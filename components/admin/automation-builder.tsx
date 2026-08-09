@@ -18,6 +18,7 @@ const TRIGGERS = [
   { value: "course_completed", label: "When a course is completed" },
   { value: "student_inactive", label: "When a student is inactive" },
   { value: "customer_purchased", label: "When a customer completes a purchase" },
+  { value: "checkout_abandoned", label: "When a checkout is abandoned" },
 ];
 
 const ACTIONS = [

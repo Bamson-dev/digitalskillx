@@ -16,11 +16,16 @@ export function CourseCertificateGoal({
   certificateId,
   courseId,
   templateKey,
+  nextStepHref,
+  nextStepTitle,
 }: {
   unlocked: boolean;
   certificateId?: string | null;
   templateKey?: string | null;
   courseId?: string | null;
+  /** Soft post-completion link — not a modal or promo popup. */
+  nextStepHref?: string | null;
+  nextStepTitle?: string | null;
 }) {
   useEffect(() => {
     if (!unlocked) return;
@@ -64,6 +69,16 @@ export function CourseCertificateGoal({
                   >
                     View certificate
                   </Link>
+                ) : null}
+                {nextStepHref ? (
+                  <p className="mt-3 text-sm text-neutral-600">
+                    <Link href={nextStepHref} className="font-medium text-brand hover:underline">
+                      Recommended next step
+                    </Link>
+                    {nextStepTitle ? (
+                      <span className="text-neutral-500"> — {nextStepTitle}</span>
+                    ) : null}
+                  </p>
                 ) : null}
               </div>
             </div>

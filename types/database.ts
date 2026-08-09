@@ -68,7 +68,8 @@ export type AutomationTrigger =
   | "course_enrolled"
   | "student_inactive"
   | "account_created"
-  | "customer_purchased";
+  | "customer_purchased"
+  | "checkout_abandoned";
 
 type Timestamps = { created_at: string };
 
@@ -213,7 +214,10 @@ export type Enrollment = {
 export type Transaction = Timestamps & {
   id: string;
   student_id: string | null;
-  course_id: string;
+  course_id: string | null;
+  offer_id: string | null;
+  bundle_id: string | null;
+  digital_product_id: string | null;
   amount: number;
   currency: string;
   provider: PaymentProvider;
@@ -223,6 +227,14 @@ export type Transaction = Timestamps & {
   anonymized: boolean;
   receipt_email_sent_at: string | null;
   updated_at: string;
+};
+
+export type CheckoutAbandonReminder = {
+  id: string;
+  transaction_id: string;
+  student_id: string | null;
+  email: string;
+  sent_at: string;
 };
 
 export type SystemEmailFailure = {
@@ -881,6 +893,13 @@ export type Database = {
         [
           Rel<"transactions_student_id_fkey", "student_id", "profiles", "id">,
           Rel<"transactions_course_id_fkey", "course_id", "courses", "id">,
+        ]
+      >;
+      checkout_abandon_reminders: Table<
+        CheckoutAbandonReminder,
+        [
+          Rel<"checkout_abandon_reminders_transaction_id_fkey", "transaction_id", "transactions", "id">,
+          Rel<"checkout_abandon_reminders_student_id_fkey", "student_id", "profiles", "id">,
         ]
       >;
       system_email_failures: Table<SystemEmailFailure, []>;

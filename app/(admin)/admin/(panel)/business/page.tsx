@@ -93,6 +93,7 @@ export default async function AdminBusinessPage({
             <Repeat className="h-3.5 w-3.5" /> Repeat purchasers
           </p>
           <p className="mt-2 text-2xl font-bold tabular-nums">{data.repeatPurchasers.toLocaleString()}</p>
+          <p className="mt-1 text-xs text-muted">{data.repeatPurchaseRate}% of buyers</p>
         </div>
       </div>
 
@@ -109,17 +110,24 @@ export default async function AdminBusinessPage({
           </div>
           <div>
             <p className="text-muted">Checkout starts</p>
-            <p className="font-semibold tabular-nums">{data.salesFunnel.checkoutStarts.toLocaleString()}</p>
+            <p className="font-semibold tabular-nums">{data.checkoutStarts.toLocaleString()}</p>
           </div>
           <div>
             <p className="text-muted">Purchases</p>
-            <p className="font-semibold tabular-nums">{data.salesFunnel.purchases.toLocaleString()}</p>
+            <p className="font-semibold tabular-nums">{data.purchases.toLocaleString()}</p>
           </div>
           <div>
             <p className="text-muted">Conversion</p>
             <p className="font-semibold tabular-nums">{data.salesFunnel.conversionRate}%</p>
           </div>
         </div>
+        <p className="mt-3 text-xs text-muted">
+          Stale pending checkouts (45m+):{" "}
+          <span className="font-medium text-neutral-800">{data.checkoutAbandonProxy.toLocaleString()}</span>
+          {" · "}
+          Failed checkouts:{" "}
+          <span className="font-medium text-neutral-800">{data.failedCheckouts.toLocaleString()}</span>
+        </p>
         <p className="mt-3 text-xs text-muted">
           Detailed Sales Page reporting:{" "}
           <Link href="/admin/sales" className="text-brand hover:underline">

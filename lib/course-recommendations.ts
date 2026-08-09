@@ -8,7 +8,28 @@ import {
   type RecommendationReason,
 } from "@/lib/recommendations";
 
-export type RecommendationKind = "cross_sell" | "upsell" | "downsell" | "related";
+export type RecommendationKind =
+  | "cross_sell"
+  | "upsell"
+  | "downsell"
+  | "related"
+  | "next_step"
+  | "frequently_bought"
+  | "upgrade"
+  | "bundle_component"
+  | "recommended";
+
+export const RECOMMENDATION_KIND_LABELS: Record<RecommendationKind, string> = {
+  cross_sell: "Cross-sell",
+  upsell: "Upsell",
+  downsell: "Downsell",
+  related: "Related",
+  next_step: "Next step",
+  frequently_bought: "Frequently bought together",
+  upgrade: "Upgrade",
+  bundle_component: "Bundle component",
+  recommended: "Recommended",
+};
 
 export type CourseRecommendationRow = {
   id: string;
@@ -37,7 +58,7 @@ export async function getCourseRecommendationsForDisplay(
     ? Array.isArray(params.kind)
       ? params.kind
       : [params.kind]
-    : (["cross_sell", "upsell", "related"] as RecommendationKind[]);
+    : (["cross_sell", "upsell", "related", "next_step", "upgrade", "recommended", "frequently_bought"] as RecommendationKind[]);
 
   const owned = new Set(params.ownedIds ?? []);
   const byId = new Map(params.catalog.map((c) => [c.id, c]));
@@ -69,7 +90,11 @@ export async function getCourseRecommendationsForDisplay(
     const course = byId.get(row.recommended_course_id);
     if (!course || course.is_coming_soon) continue;
     const reason: RecommendationReason =
-      row.kind === "related" ? "related" : row.kind === "upsell" ? "continue" : "related";
+      row.kind === "related" || row.kind === "frequently_bought"
+        ? "related"
+        : row.kind === "upsell" || row.kind === "upgrade" || row.kind === "next_step"
+          ? "continue"
+          : "related";
     fromAdmin.push({ course, reason });
   }
 

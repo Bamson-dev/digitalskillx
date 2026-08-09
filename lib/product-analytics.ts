@@ -20,7 +20,19 @@ export type ProductEventName =
   | "product_recommendation_view"
   | "product_recommendation_click"
   | "upsell_view"
-  | "upsell_click";
+  | "upsell_click"
+  | "product_viewed"
+  | "offer_viewed"
+  | "offer_cta_clicked"
+  | "checkout_started"
+  | "checkout_completed"
+  | "checkout_abandoned"
+  | "recommendation_viewed"
+  | "upsell_viewed"
+  | "upsell_accepted"
+  | "upsell_declined"
+  | "course_completed"
+  | "product_purchased";
 
 export const PRODUCT_EVENT_NAMES: readonly ProductEventName[] = [
   "course_view",
@@ -39,6 +51,19 @@ export const PRODUCT_EVENT_NAMES: readonly ProductEventName[] = [
   "product_recommendation_click",
   "upsell_view",
   "upsell_click",
+  // Phase 8 funnel names (aliases of legacy sales_page_* where applicable)
+  "product_viewed",
+  "offer_viewed",
+  "offer_cta_clicked",
+  "checkout_started",
+  "checkout_completed",
+  "checkout_abandoned",
+  "recommendation_viewed",
+  "upsell_viewed",
+  "upsell_accepted",
+  "upsell_declined",
+  "course_completed",
+  "product_purchased",
 ] as const;
 
 export type ProductEventPayload = {

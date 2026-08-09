@@ -118,6 +118,29 @@ export async function getBusinessOverview(admin: SupabaseClient, range: Business
 
   const funnel = await getSalesFunnelAnalytics(admin, toFunnelRange(range));
 
+  // Lightweight abandon proxy: pending checkouts older than 45m in range (capped).
+  let abandonQ = admin
+    .from("transactions")
+    .select("id", { count: "exact", head: true })
+    .eq("status", "pending")
+    .lt("created_at", new Date(Date.now() - 45 * 60 * 1000).toISOString());
+  if (start) abandonQ = abandonQ.gte("created_at", start.toISOString());
+  const { count: checkoutAbandonProxy } = await abandonQ;
+
+  // Also count failed txs in range as a secondary abandon signal (not added to proxy).
+  let failedQ = admin
+    .from("transactions")
+    .select("id", { count: "exact", head: true })
+    .eq("status", "failed");
+  if (start) failedQ = failedQ.gte("created_at", start.toISOString());
+  const { count: failedCheckouts } = await failedQ;
+
+  const uniqueBuyerCount = buyers.size;
+  const repeatPurchaseRate =
+    uniqueBuyerCount > 0
+      ? Math.round((repeatPurchasers / uniqueBuyerCount) * 1000) / 10
+      : 0;
+
   // Product performance join enrollments
   const productPerformance = [];
   for (const p of topProducts.slice(0, 8)) {
@@ -149,7 +172,7 @@ export async function getBusinessOverview(admin: SupabaseClient, range: Business
     revenueNgn,
     orders,
     averageOrderValueNgn: aov,
-    uniqueBuyers: buyers.size,
+    uniqueBuyers: uniqueBuyerCount,
     totalCustomers: totalCustomers ?? 0,
     newCustomers: newCustomers ?? 0,
     activeStudents: activeStudents ?? 0,
@@ -158,6 +181,11 @@ export async function getBusinessOverview(admin: SupabaseClient, range: Business
     completionRate:
       enrollments && enrollments > 0 ? Math.round((completions / enrollments) * 1000) / 10 : 0,
     repeatPurchasers,
+    repeatPurchaseRate,
+    checkoutStarts: funnel.totals.checkoutStarts,
+    purchases: funnel.totals.purchases,
+    checkoutAbandonProxy: checkoutAbandonProxy ?? 0,
+    failedCheckouts: failedCheckouts ?? 0,
     topProducts,
     productPerformance,
     revenueTrend,

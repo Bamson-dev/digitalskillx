@@ -18,6 +18,7 @@ const TRIGGER_LABELS: Record<string, string> = {
   course_completed: "Course completed",
   student_inactive: "Learner inactive",
   customer_purchased: "Purchase completed",
+  checkout_abandoned: "Checkout abandoned",
 };
 
 const ACTION_LABELS: Record<string, string> = {

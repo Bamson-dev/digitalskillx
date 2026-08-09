@@ -33,9 +33,10 @@ export default async function AdminCourseEditorPage({
 
   if (!course) notFound();
 
-  const [categories, settings] = await Promise.all([
+  const [categories, settings, allCoursesRes] = await Promise.all([
     supabase.from("course_categories").select("id, name, template_key").order("name"),
     getPlatformSettings(supabase),
+    supabase.from("courses").select("id, title").order("title"),
   ]);
 
   const globalDefaultTemplateKey =
@@ -97,6 +98,7 @@ export default async function AdminCourseEditorPage({
         globalDefaultTemplateKey={globalDefaultTemplateKey}
         lessonAttachments={lessonAttachments}
         courseResources={(courseResources ?? []) as AttachmentDisplay[]}
+        allCourses={allCoursesRes.data ?? []}
       />
 
       <CourseAdvancedTools

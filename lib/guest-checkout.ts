@@ -9,7 +9,8 @@ import {
   resolveCanonicalStudentId,
   syncStudentCourseAccess,
 } from "@/lib/admin-student-onboarding";
-import { fulfillPurchase, ensurePurchaseEnrollment } from "@/lib/purchase";
+import { ensurePurchaseEnrollment } from "@/lib/purchase";
+import { fulfillCommercePurchase, readCommerceMeta } from "@/lib/commerce-fulfillment";
 import { verifyTransaction, type VerifiedTransaction } from "@/lib/paystack";
 import { runAutomations } from "@/lib/automation";
 import type { Database } from "@/types/database";
@@ -204,7 +205,9 @@ export async function completePaidCheckout(reference: string) {
   const admin = await createAdminClientAsync();
   const { data: tx } = await admin
     .from("transactions")
-    .select("student_id, course_id, status, paystack_data, amount, currency")
+    .select(
+      "student_id, course_id, status, paystack_data, amount, currency, bundle_id, digital_product_id, offer_id",
+    )
     .eq("reference", reference)
     .maybeSingle();
 
@@ -212,10 +215,22 @@ export async function completePaidCheckout(reference: string) {
     return { ok: false as const, error: "Payment record not found.", status: 404 as const };
   }
 
+  const commerceMeta = readCommerceMeta(tx.paystack_data);
+
   const repairEnrollmentIfNeeded = async (studentId: string | null) => {
     if (!studentId) return null;
     try {
-      await ensurePurchaseEnrollment({ studentId, courseId: tx.course_id });
+      if (tx.course_id) {
+        await ensurePurchaseEnrollment({ studentId, courseId: tx.course_id });
+      }
+      if (tx.bundle_id || commerceMeta) {
+        await fulfillCommercePurchase({
+          admin,
+          studentId,
+          reference,
+          primaryCourseId: tx.course_id,
+        });
+      }
     } catch (err) {
       console.error("[completePaidCheckout] enrollment repair failed", reference, err);
     }
@@ -277,6 +292,7 @@ export async function completePaidCheckout(reference: string) {
 
   if (
     verified.metadata?.course_id &&
+    tx.course_id &&
     verified.metadata.course_id !== tx.course_id
   ) {
     console.error("[completePaidCheckout] course metadata mismatch", reference);
@@ -346,10 +362,11 @@ export async function completePaidCheckout(reference: string) {
     await admin.from("transactions").update({ student_id: studentId }).eq("reference", reference);
   }
 
-  const fulfillResult = await fulfillPurchase({
+  const fulfillResult = await fulfillCommercePurchase({
+    admin,
     studentId,
-    courseId: tx.course_id,
     reference,
+    primaryCourseId: tx.course_id,
     welcomePassword: password,
     buyerEmail,
     buyerName: buyerName ?? undefined,

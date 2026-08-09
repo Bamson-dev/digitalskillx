@@ -46,7 +46,7 @@ export async function POST(request: NextRequest) {
 
     if (!tx) return jsonError("Payment record not found.", 404);
 
-    if (body.courseId && tx.course_id !== body.courseId) {
+    if (body.courseId && tx.course_id && tx.course_id !== body.courseId) {
       return jsonError("Payment does not match this course.", 400);
     }
 

@@ -99,7 +99,13 @@ export async function deleteCourseBundle(admin: SupabaseClient, id: string) {
  */
 export async function enrollStudentInBundle(
   admin: SupabaseClient,
-  params: { studentId: string; bundleId: string; enrolledBy?: string | null },
+  params: {
+    studentId: string;
+    bundleId: string;
+    enrolledBy?: string | null;
+    /** Default admin for manual grants; use purchase for paid checkout. */
+    source?: "admin" | "purchase";
+  },
 ): Promise<{ enrolled: string[]; skipped: string[] }> {
   const { data: items, error } = await admin
     .from("course_bundle_items")
@@ -109,6 +115,7 @@ export async function enrollStudentInBundle(
 
   const enrolled: string[] = [];
   const skipped: string[] = [];
+  const source = params.source ?? "admin";
   for (const item of items ?? []) {
     const { data: existing } = await admin
       .from("enrollments")
@@ -123,7 +130,7 @@ export async function enrollStudentInBundle(
     const { error: enrErr } = await admin.from("enrollments").insert({
       student_id: params.studentId,
       course_id: item.course_id,
-      source: "admin",
+      source,
       enrolled_by: params.enrolledBy ?? null,
     });
     if (enrErr && !enrErr.message.toLowerCase().includes("duplicate")) {

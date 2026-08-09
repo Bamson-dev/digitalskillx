@@ -18,6 +18,15 @@ type ConfirmState =
     }
   | { status: "error"; message: string };
 
+function purchaseSuccessPath(courseId: string, reference: string) {
+  const params = new URLSearchParams({
+    courseId,
+    reference,
+    payment: "success",
+  });
+  return `/purchase/success?${params.toString()}`;
+}
+
 export function PaymentReturnHandler({
   courseId,
   courseTitle,
@@ -75,19 +84,24 @@ export function PaymentReturnHandler({
           return;
         }
 
-        if (json.sessionEstablished) {
+        const successCourseId = json.courseId;
+        const loggedInAfterConfirm =
+          Boolean(json.sessionEstablished) || isLoggedIn || json.needsLogin === false;
+
+        // Logged-in (or session just established): post-purchase page with access CTA + recs.
+        if (loggedInAfterConfirm) {
           setState({
             status: "success",
-            courseId: json.courseId,
+            courseId: successCourseId,
             autoRedirected: true,
           });
-          window.location.assign(`/courses/${json.courseId}`);
+          window.location.assign(purchaseSuccessPath(successCourseId, reference));
           return;
         }
 
         setState({
           status: "success",
-          courseId: json.courseId,
+          courseId: successCourseId,
           alreadyFulfilled: json.alreadyFulfilled,
           buyerEmail: json.buyerEmail,
           isNewAccount: json.isNewAccount,
@@ -112,7 +126,7 @@ export function PaymentReturnHandler({
     return () => {
       cancelled = true;
     };
-  }, [courseId, router, searchParams]);
+  }, [courseId, isLoggedIn, router, searchParams]);
 
   const paymentSuccess = searchParams.get("payment") === "success";
   const enrolled = searchParams.get("enrolled") === "1";
@@ -124,7 +138,7 @@ export function PaymentReturnHandler({
       <div className="border-b border-brand/20 bg-brand/5 px-4 py-4 text-center text-sm text-brand-700">
         <span className="inline-flex items-center gap-2">
           <Loader2 className="h-4 w-4 animate-spin" />
-          Opening your course…
+          Opening your purchase confirmation…
         </span>
       </div>
     );

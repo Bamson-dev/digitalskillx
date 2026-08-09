@@ -24,6 +24,8 @@ import { ClassroomEngagementRoot } from "@/components/student/classroom-engageme
 import { resolveEngagementFlags } from "@/lib/classroom-engagement";
 import { resolveCertificateTemplateKey } from "@/lib/certificate-template-resolve";
 import { isMissingColumnError } from "@/lib/schema-guard";
+import { fetchPublishedCourses, type CatalogCourse } from "@/lib/published-courses";
+import { getCourseRecommendationsForDisplay } from "@/lib/course-recommendations";
 import type { Lesson, Module } from "@/types/database";
 
 export const metadata: Metadata = { title: "Lesson" };
@@ -221,6 +223,40 @@ export default async function LessonPage({ params }: { params: { id: string } })
       ? await resolveCertificateTemplateKey(supabase, courseId)
       : null;
 
+  let nextStepHref: string | null = null;
+  let nextStepTitle: string | null = null;
+  if (enrolled && (courseComplete || certificate) && courseId) {
+    try {
+      const admin = await createAdminClientAsync(session);
+      const catalog = await fetchPublishedCourses<CatalogCourse>(
+        "id, title, description, short_description, thumbnail_url, price_ngn, price_usd, instructor_name, created_at, is_coming_soon, category:course_categories(name)",
+      );
+      const recommendable = catalog.map((c) => ({
+        ...c,
+        category_name: c.category?.name ?? null,
+      }));
+      const { data: ownedRows } = await admin
+        .from("enrollments")
+        .select("course_id")
+        .eq("student_id", studentId);
+      const ownedIds = new Set((ownedRows ?? []).map((r) => r.course_id));
+      const recs = await getCourseRecommendationsForDisplay(admin, {
+        courseId,
+        catalog: recommendable,
+        ownedIds,
+        kind: ["next_step", "upsell", "cross_sell", "related"],
+        limit: 1,
+      });
+      const first = recs[0];
+      if (first?.course?.id) {
+        nextStepHref = `/course/${first.course.id}`;
+        nextStepTitle = first.course.title;
+      }
+    } catch (err) {
+      console.error("[LessonPage] next-step recommendation failed", err);
+    }
+  }
+
   const nextAction = resolveNextBestAction({
     lessonCompleted,
     quizId: quiz?.id,
@@ -330,6 +366,8 @@ export default async function LessonPage({ params }: { params: { id: string } })
               certificateId={certificate?.id}
               templateKey={certificateTemplateKey}
               courseId={courseId}
+              nextStepHref={nextStepHref}
+              nextStepTitle={nextStepTitle}
             />
           ) : null}
 

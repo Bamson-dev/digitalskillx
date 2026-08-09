@@ -200,4 +200,41 @@ export function progressMilestoneEmail(p: ProgressMilestoneEmailParams) {
   };
 }
 
+export type CheckoutAbandonReminderEmailParams = {
+  firstName: string;
+  courseTitle?: string | null;
+  resumeUrl: string;
+  supportEmail: string;
+  brandColor?: string;
+};
+
+/** Soft reminder to finish checkout — no fake urgency or countdown copy. */
+export function checkoutAbandonReminderEmail(p: CheckoutAbandonReminderEmailParams) {
+  const productLine = p.courseTitle?.trim()
+    ? `You started checkout for <strong>${escapeHtml(p.courseTitle.trim())}</strong> on DigitalSkillX.`
+    : `You started checkout on DigitalSkillX.`;
+
+  const bodyHtml = `
+    <h1 style="margin:0 0 12px;font-size:24px;line-height:1.3;color:#111827;">Hi ${escapeHtml(p.firstName)},</h1>
+    <p style="margin:0 0 16px;font-size:15px;line-height:1.7;color:#475569;">
+      ${productLine} Your spot is still available whenever you are ready to continue.
+    </p>
+    <p style="margin:0;font-size:14px;line-height:1.7;color:#475569;">
+      Use the button below to pick up where you left off. If you already completed payment, you can ignore this message.
+    </p>`;
+
+  return {
+    subject: p.courseTitle?.trim()
+      ? `Continue your purchase — ${p.courseTitle.trim()}`
+      : "Continue your DigitalSkillX purchase",
+    html: emailLayout({
+      brandColor: p.brandColor,
+      title: "Continue your purchase",
+      bodyHtml,
+      cta: { label: "Resume checkout", url: p.resumeUrl },
+      supportEmail: p.supportEmail,
+    }),
+  };
+}
+
 export { courseListHtml };

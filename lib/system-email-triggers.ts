@@ -3,6 +3,7 @@ import { createAdminClientAsync } from "@/lib/supabase/admin";
 import { getEmailSenderConfig, getPlatformSettingsAdmin } from "@/lib/platform-settings";
 import { studentWelcomeEmail } from "@/lib/email/student-welcome";
 import {
+  checkoutAbandonReminderEmail,
   courseCompletionCertificateEmail,
   courseEnrollmentEmail,
   idleReminderEmail,
@@ -13,6 +14,9 @@ import { sendSystemEmail } from "@/lib/system-email";
 import { studentFirstName } from "@/lib/student-name";
 import { siteUrl } from "@/lib/org";
 import { courseCompletionPct } from "@/lib/progress";
+import { isMissingRelationError } from "@/lib/schema-guard";
+
+const CHECKOUT_ABANDON_EMAIL_COOLDOWN_MS = 72 * 60 * 60 * 1000;
 
 function parseCourseIdFromNext(next: string | null | undefined) {
   if (!next) return null;
@@ -140,7 +144,7 @@ export async function sendCourseEnrollmentEmail(params: {
   });
 
   return sendSystemEmail({
-    type: "welcome",
+    type: "course_enrollment",
     to: params.email,
     subject: tpl.subject,
     html: tpl.html,
@@ -645,6 +649,97 @@ export async function processIdleReminderEmails(inactivityDays = 5) {
   }
 
   return { sent, skipped };
+}
+
+/**
+ * One reminder per pending checkout transaction.
+ * Also skips if the same email received an abandon reminder in the last 72h.
+ */
+export async function sendCheckoutAbandonReminderIfNeeded(params: {
+  transactionId: string;
+  email: string;
+  fullName?: string | null;
+  courseTitle?: string | null;
+  resumeUrl: string;
+  studentId?: string | null;
+}) {
+  const email = params.email.trim().toLowerCase();
+  if (!email || !params.transactionId || !params.resumeUrl) {
+    return { sent: false as const, reason: "invalid_input" as const };
+  }
+
+  const admin = await createAdminClientAsync();
+
+  try {
+    const { data: existing } = await admin
+      .from("checkout_abandon_reminders")
+      .select("id")
+      .eq("transaction_id", params.transactionId)
+      .maybeSingle();
+    if (existing) {
+      return { sent: false as const, reason: "already_sent" as const };
+    }
+
+    const cooldownSince = new Date(Date.now() - CHECKOUT_ABANDON_EMAIL_COOLDOWN_MS).toISOString();
+    const { data: recentForEmail } = await admin
+      .from("checkout_abandon_reminders")
+      .select("id")
+      .eq("email", email)
+      .gte("sent_at", cooldownSince)
+      .limit(1)
+      .maybeSingle();
+    if (recentForEmail) {
+      return { sent: false as const, reason: "email_cooldown" as const };
+    }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    if (isMissingRelationError(message)) {
+      return { sent: false as const, reason: "table_missing" as const };
+    }
+    throw err;
+  }
+
+  const settings = await getPlatformSettingsAdmin();
+  const sender = await getEmailSenderConfig();
+  const tpl = checkoutAbandonReminderEmail({
+    firstName: studentFirstName(params.fullName ?? "there"),
+    courseTitle: params.courseTitle,
+    resumeUrl: params.resumeUrl,
+    supportEmail: sender.replyTo ?? sender.fromAddress,
+    brandColor: settings.primary_color,
+  });
+
+  const result = await sendSystemEmail({
+    type: "checkout_abandon_reminder",
+    to: email,
+    subject: tpl.subject,
+    html: tpl.html,
+    replyTo: sender.replyTo,
+    payload: {
+      transactionId: params.transactionId,
+      studentId: params.studentId ?? null,
+      resumeUrl: params.resumeUrl,
+    },
+  });
+
+  if (!result.sent) {
+    return { sent: false as const, reason: "send_failed" as const, error: result.error };
+  }
+
+  const { error: insertError } = await admin.from("checkout_abandon_reminders").insert({
+    transaction_id: params.transactionId,
+    student_id: params.studentId ?? null,
+    email,
+  });
+
+  if (insertError) {
+    // Unique race is fine — email already went out once for this transaction.
+    if (!/duplicate|unique/i.test(insertError.message)) {
+      console.error("[checkout-abandon] reminder row insert failed:", insertError.message);
+    }
+  }
+
+  return { sent: true as const };
 }
 
 export { parseCourseIdFromNext };

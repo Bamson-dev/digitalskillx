@@ -16,6 +16,7 @@ import { useToast } from "@/components/ui/toast";
 import { LessonAttachmentsPanel } from "@/components/admin/lesson-attachments-panel";
 import { CourseResourcesPanel } from "@/components/admin/course-resources-panel";
 import { CourseSalesPagePanel } from "@/components/admin/course-sales-page-panel";
+import { CourseRecommendationsPanel } from "@/components/admin/course-recommendations-panel";
 import type { AttachmentDisplay } from "@/lib/lesson-attachments-shared";
 import type { Course, CourseCategory, Lesson, Module } from "@/types/database";
 import type { CertificateTemplateKey } from "@/lib/certificate-templates";
@@ -87,6 +88,7 @@ export function CourseEditor({
   globalDefaultTemplateKey,
   lessonAttachments,
   courseResources,
+  allCourses = [],
 }: {
   course: Course;
   modules: ModuleWithLessons[];
@@ -94,6 +96,7 @@ export function CourseEditor({
   globalDefaultTemplateKey: CertificateTemplateKey;
   lessonAttachments: Record<string, AttachmentDisplay[]>;
   courseResources: AttachmentDisplay[];
+  allCourses?: Array<{ id: string; title: string }>;
 }) {
   return (
     <div className="space-y-6">
@@ -130,6 +133,7 @@ export function CourseEditor({
           })),
         }}
       />
+      <CourseRecommendationsPanel courseId={course.id} allCourses={allCourses} />
       {/* Secondary: downloads / attachments */}
       <details className="group rounded-xl border border-dashed border-app bg-white open:shadow-sm">
         <summary className="cursor-pointer list-none px-5 py-4 font-semibold marker:content-none">

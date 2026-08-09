@@ -33,6 +33,9 @@ export async function POST(request: NextRequest) {
 
     let body: {
       courseId?: string;
+      offerId?: string;
+      bundleId?: string;
+      couponCode?: string;
       currency?: CurrencyCode;
       email?: string;
       fullName?: string;
@@ -44,8 +47,8 @@ export async function POST(request: NextRequest) {
       return jsonError("Invalid request body.", 400);
     }
 
-    if (!body.courseId) {
-      return jsonError("courseId is required", 400);
+    if (!body.courseId && !body.offerId && !body.bundleId) {
+      return jsonError("courseId, offerId, or bundleId is required", 400);
     }
 
     /** Optional sales attribution — string-only, never secrets/cards. */
@@ -74,6 +77,27 @@ export async function POST(request: NextRequest) {
         .eq("id", user.id)
         .single();
       profile = p;
+    }
+
+    if (body.offerId || body.bundleId) {
+      const { initializeCommerceCheckout } = await import("@/lib/commerce-checkout-initialize");
+      return initializeCommerceCheckout({
+        admin,
+        userId: user?.id ?? null,
+        profile,
+        body: {
+          offerId: body.offerId,
+          bundleId: body.bundleId,
+          couponCode: body.couponCode,
+          email: body.email,
+          fullName: body.fullName,
+          attribution,
+        },
+      });
+    }
+
+    if (!body.courseId) {
+      return jsonError("courseId is required", 400);
     }
 
     const course = await fetchPublishedCourseById<{
