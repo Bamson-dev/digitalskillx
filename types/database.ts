@@ -738,6 +738,121 @@ export type CourseBundleItem = {
   sort_order: number;
 };
 
+export type CreatorProfile = {
+  id: string;
+  display_name: string;
+  short_bio: string;
+  expertise: string[];
+  teaches: string;
+  credentials: string;
+  relevance: string;
+  youtube_channel_id: string | null;
+  youtube_channel_url: string | null;
+  avatar_url: string | null;
+  research_status: "pending" | "complete" | "partial" | "failed";
+  created_at: string;
+  updated_at: string;
+};
+
+export type CreatorSource = {
+  id: string;
+  creator_profile_id: string;
+  source_type: "youtube_channel" | "website" | "linkedin" | "x" | "other" | "ai_synthesis";
+  source_url: string;
+  source_title: string;
+  source_identifier: string | null;
+  relationship: string;
+  research_status: string;
+  retrieved_at: string;
+};
+
+export type LearningPath = {
+  id: string;
+  slug: string;
+  title: string;
+  description: string;
+  short_description: string;
+  creator_profile_id: string | null;
+  status: "draft" | "review" | "published" | "rejected" | "archived";
+  category: string;
+  difficulty: "beginner" | "intermediate" | "advanced";
+  tags: string[];
+  learning_objectives: string[];
+  quality_score: number | null;
+  quality_breakdown: Json;
+  artwork_storage_path: string | null;
+  artwork_public_url: string | null;
+  source_playlist_id: string | null;
+  source_playlist_url: string | null;
+  source_playlist_title: string | null;
+  youtube_channel_id: string | null;
+  quiz_json: Json;
+  assessment_json: Json;
+  warnings: Json;
+  seo_title: string | null;
+  seo_description: string | null;
+  published_course_id: string | null;
+  factory_job_id: string | null;
+  published_at: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type LearningPathSection = {
+  id: string;
+  learning_path_id: string;
+  title: string;
+  position: number;
+};
+
+export type LearningPathLesson = {
+  id: string;
+  learning_path_id: string;
+  section_id: string | null;
+  title: string;
+  original_title: string;
+  youtube_video_id: string;
+  youtube_url: string;
+  summary: string;
+  learning_objectives: string[];
+  thumbnail_url: string | null;
+  duration_seconds: number | null;
+  position: number;
+  source_metadata: Json;
+};
+
+export type LearningPathSource = {
+  id: string;
+  learning_path_id: string;
+  source_type: "youtube_playlist" | "youtube_video" | "youtube_channel" | "website" | "other";
+  source_url: string;
+  source_title: string;
+  source_identifier: string | null;
+  relationship: string;
+  retrieved_at: string;
+};
+
+export type ContentFactoryJob = {
+  id: string;
+  admin_id: string;
+  input_type: "topic" | "playlist_url" | "playlist_id";
+  input_value: string;
+  status: "pending" | "processing" | "waiting_review" | "completed" | "failed" | "cancelled";
+  phase: string;
+  progress: number;
+  learning_path_id: string | null;
+  error_message: string | null;
+  last_error: string | null;
+  attempts: number;
+  result_snapshot: Json;
+  claimed_at: string | null;
+  created_at: string;
+  started_at: string | null;
+  completed_at: string | null;
+  updated_at: string;
+};
+
 export type Database = {
   public: {
     Tables: {
@@ -1017,6 +1132,40 @@ export type Database = {
           Rel<"course_bundle_items_course_id_fkey", "course_id", "courses", "id">,
         ]
       >;
+      creator_profiles: Table<CreatorProfile>;
+      creator_sources: Table<
+        CreatorSource,
+        [Rel<"creator_sources_creator_profile_id_fkey", "creator_profile_id", "creator_profiles", "id">]
+      >;
+      learning_paths: Table<
+        LearningPath,
+        [
+          Rel<"learning_paths_creator_profile_id_fkey", "creator_profile_id", "creator_profiles", "id">,
+          Rel<"learning_paths_created_by_fkey", "created_by", "profiles", "id">,
+        ]
+      >;
+      learning_path_sections: Table<
+        LearningPathSection,
+        [Rel<"learning_path_sections_learning_path_id_fkey", "learning_path_id", "learning_paths", "id">]
+      >;
+      learning_path_lessons: Table<
+        LearningPathLesson,
+        [
+          Rel<"learning_path_lessons_learning_path_id_fkey", "learning_path_id", "learning_paths", "id">,
+          Rel<"learning_path_lessons_section_id_fkey", "section_id", "learning_path_sections", "id">,
+        ]
+      >;
+      learning_path_sources: Table<
+        LearningPathSource,
+        [Rel<"learning_path_sources_learning_path_id_fkey", "learning_path_id", "learning_paths", "id">]
+      >;
+      content_factory_jobs: Table<
+        ContentFactoryJob,
+        [
+          Rel<"content_factory_jobs_admin_id_fkey", "admin_id", "profiles", "id">,
+          Rel<"content_factory_jobs_learning_path_id_fkey", "learning_path_id", "learning_paths", "id">,
+        ]
+      >;
     };
     Views: Record<string, never>;
     Functions: {
@@ -1035,6 +1184,10 @@ export type Database = {
       claim_bulk_import_email_outbox: {
         Args: { p_limit?: number };
         Returns: BulkImportEmailOutbox[];
+      };
+      claim_content_factory_jobs: {
+        Args: { p_limit?: number };
+        Returns: ContentFactoryJob[];
       };
       claim_enrollment_link_redemption: {
         Args: {

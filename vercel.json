@@ -15,6 +15,10 @@
     {
       "path": "/api/cron/checkout-abandon",
       "schedule": "20 * * * *"
+    },
+    {
+      "path": "/api/cron/content-factory",
+      "schedule": "5 * * * *"
     }
   ]
 }

@@ -25,6 +25,7 @@ import {
   LogOut,
   Menu,
   X,
+  Factory,
 } from "lucide-react";
 import { signOutAdmin } from "@/app/(admin)/admin/actions";
 import { cn } from "@/lib/utils";
@@ -59,6 +60,7 @@ const insightsNav: NavItem[] = [
 ];
 
 const advancedNav: NavItem[] = [
+  { href: "/admin/content-factory", label: "Content Factory", icon: Factory },
   { href: "/admin/system-health", label: "System health", icon: Activity },
   { href: "/admin/broken-lessons", label: "Broken lessons", icon: AlertTriangle },
   { href: "/admin/automations", label: "Automations", icon: Zap },

@@ -8,6 +8,7 @@ const PUBLIC_PREFIXES = [
   "/api/auth",
   "/api/enroll",
   "/course",
+  "/learn",
   "/checkout",
   "/enroll",
   "/enrollment",

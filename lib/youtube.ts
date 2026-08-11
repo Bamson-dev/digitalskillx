@@ -50,6 +50,28 @@ async function resolveKey(options?: YoutubeFetchOptions): Promise<string> {
   return getYoutubeApiKey();
 }
 
+/** Normalize YouTube Data API error bodies for callers (quota, auth, generic). */
+export function formatYoutubeApiError(status: number, json: unknown): string {
+  const body = json as {
+    error?: { message?: string; errors?: Array<{ reason?: string }> };
+  };
+  const reason = body?.error?.errors?.[0]?.reason ?? "";
+  const message = body?.error?.message ?? "";
+  if (
+    status === 403 &&
+    (/quota/i.test(reason) || /quota/i.test(message) || reason === "quotaExceeded")
+  ) {
+    return "YouTube API quota exceeded. Try again after the daily quota resets.";
+  }
+  if (status === 403 && (/keyInvalid|forbidden/i.test(reason) || /API key/i.test(message))) {
+    return "YouTube API key is invalid or YouTube Data API is not enabled.";
+  }
+  return (
+    message ||
+    `YouTube API error (${status}). Check that the API key is valid and the YouTube Data API is enabled.`
+  );
+}
+
 /** Parse ISO-8601 duration (e.g. PT1H2M30S) to seconds. */
 function parseDuration(iso: string): number {
   const m = iso.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
@@ -126,10 +148,7 @@ export async function fetchPlaylist(
     );
     const json = await res.json();
     if (!res.ok) {
-      const message =
-        json?.error?.message ??
-        `YouTube API error (${res.status}). Check that the API key is valid and the YouTube Data API is enabled.`;
-      throw new Error(message);
+      throw new Error(formatYoutubeApiError(res.status, json));
     }
     for (const item of json.items ?? []) {
       const videoId = item.snippet?.resourceId?.videoId;
@@ -153,6 +172,84 @@ export async function fetchPlaylist(
   );
   for (const v of videos) v.durationSeconds = details.get(v.videoId)?.duration ?? null;
   return videos;
+}
+
+export type YoutubeChannelMeta = {
+  channelId: string;
+  title: string;
+  description: string;
+  customUrl: string | null;
+  thumbnailUrl: string | null;
+  subscriberCount: number | null;
+  videoCount: number | null;
+  channelUrl: string;
+};
+
+/** Fetch public channel metadata for creator research (quota-conscious: one call). */
+export async function fetchChannelMeta(
+  channelId: string,
+  options?: YoutubeFetchOptions,
+): Promise<YoutubeChannelMeta | null> {
+  const apiKey = await resolveKey(options);
+  const res = await fetch(
+    `${API}/channels?part=snippet,statistics&id=${encodeURIComponent(channelId)}&key=${apiKey}`,
+  );
+  const json = await res.json();
+  if (!res.ok) {
+    throw new Error(formatYoutubeApiError(res.status, json));
+  }
+  const item = json.items?.[0];
+  if (!item) return null;
+  const customUrl =
+    typeof item.snippet?.customUrl === "string" && item.snippet.customUrl.trim()
+      ? item.snippet.customUrl.trim()
+      : null;
+  return {
+    channelId: item.id,
+    title: String(item.snippet?.title ?? "").trim() || "YouTube Creator",
+    description: String(item.snippet?.description ?? ""),
+    customUrl,
+    thumbnailUrl: item.snippet?.thumbnails?.high?.url ?? item.snippet?.thumbnails?.default?.url ?? null,
+    subscriberCount: item.statistics?.subscriberCount
+      ? Number(item.statistics.subscriberCount)
+      : null,
+    videoCount: item.statistics?.videoCount ? Number(item.statistics.videoCount) : null,
+    channelUrl: customUrl
+      ? `https://www.youtube.com/${customUrl.startsWith("@") ? customUrl : `@${customUrl}`}`
+      : `https://www.youtube.com/channel/${item.id}`,
+  };
+}
+
+/** Fetch playlist snippet including channel id (one API call). */
+export async function fetchPlaylistMeta(
+  playlistId: string,
+  options?: YoutubeFetchOptions,
+): Promise<{
+  playlistId: string;
+  title: string;
+  description: string;
+  channelId: string | null;
+  channelTitle: string | null;
+  thumbnailUrl: string | null;
+} | null> {
+  const apiKey = await resolveKey(options);
+  const res = await fetch(
+    `${API}/playlists?part=snippet&id=${encodeURIComponent(playlistId)}&key=${apiKey}`,
+  );
+  const json = await res.json();
+  if (!res.ok) {
+    throw new Error(formatYoutubeApiError(res.status, json));
+  }
+  const item = json.items?.[0];
+  if (!item) return null;
+  return {
+    playlistId,
+    title: String(item.snippet?.title ?? "").trim() || "Untitled playlist",
+    description: String(item.snippet?.description ?? ""),
+    channelId: item.snippet?.channelId ? String(item.snippet.channelId) : null,
+    channelTitle: item.snippet?.channelTitle ? String(item.snippet.channelTitle) : null,
+    thumbnailUrl: item.snippet?.thumbnails?.high?.url ?? null,
+  };
 }
 
 export async function fetchChannelUploads(

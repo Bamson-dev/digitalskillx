@@ -659,6 +659,21 @@ console.log("PASS: classroom companion rarity + reduced-motion guards");
   const { spawnSync } = await import("node:child_process");
   const r = spawnSync(
     process.execPath,
+    [join(root, "scripts/certification/test-content-factory.mjs")],
+    { cwd: root, encoding: "utf8" },
+  );
+  if (r.status !== 0) {
+    console.error(r.stdout);
+    console.error(r.stderr);
+    process.exit(r.status ?? 1);
+  }
+  console.log("PASS: content factory phase 1 suite (via test-content-factory.mjs)");
+}
+
+{
+  const { spawnSync } = await import("node:child_process");
+  const r = spawnSync(
+    process.execPath,
     [join(root, "scripts/certification/test-resend-email.mjs")],
     { cwd: root, encoding: "utf8" },
   );
