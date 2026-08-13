@@ -4,8 +4,21 @@ import { bootstrapRuntimeSecrets } from "@/lib/bootstrap-runtime-secrets";
 import { createAdminClientAsync } from "@/lib/supabase/admin";
 import { contentFactoryEnabled } from "@/lib/content-factory/feature-flag";
 import { processContentFactoryJob } from "@/lib/content-factory/process-job";
+import { approveLearningPath } from "@/lib/content-factory/learning-paths";
 import { isMissingRelationError } from "@/lib/schema-guard";
 import type { ContentFactoryJob } from "@/types/database";
+
+const JOB_SUMMARY =
+  "id, status, phase, progress, error_message, learning_path_id, input_value, result_snapshot, updated_at";
+
+async function recentJobs(admin: Awaited<ReturnType<typeof createAdminClientAsync>>) {
+  const { data } = await admin
+    .from("content_factory_jobs")
+    .select(JOB_SUMMARY)
+    .order("updated_at", { ascending: false })
+    .limit(8);
+  return data ?? [];
+}
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -27,6 +40,34 @@ export async function GET(request: NextRequest) {
 
   await bootstrapRuntimeSecrets();
   const admin = await createAdminClientAsync();
+
+  const approveJobId = request.nextUrl.searchParams.get("approve");
+  if (approveJobId) {
+    const { data: job, error: jobError } = await admin
+      .from("content_factory_jobs")
+      .select("id, learning_path_id, status")
+      .eq("id", approveJobId)
+      .maybeSingle();
+    if (jobError) return NextResponse.json({ error: jobError.message }, { status: 500 });
+    if (!job?.learning_path_id) {
+      return NextResponse.json({ error: "Job has no learning path to approve." }, { status: 400 });
+    }
+    try {
+      const path = await approveLearningPath(admin, job.learning_path_id);
+      return NextResponse.json({
+        ok: true,
+        approved: true,
+        slug: path.slug,
+        status: path.status,
+        jobs: await recentJobs(admin),
+      });
+    } catch (err) {
+      return NextResponse.json(
+        { error: err instanceof Error ? err.message : "Approve failed" },
+        { status: 400 },
+      );
+    }
+  }
 
   // Requeue infrastructure/AI failures that never created a path (e.g. DeepSeek 403).
   const { data: failedJobs } = await admin
@@ -88,10 +129,21 @@ export async function GET(request: NextRequest) {
 
   const jobs = (claimed ?? []) as ContentFactoryJob[];
   if (!jobs.length) {
-    return NextResponse.json({ ok: true, processed: 0 });
+    return NextResponse.json({ ok: true, processed: 0, jobs: await recentJobs(admin) });
   }
 
   const job = jobs[0]!;
   await processContentFactoryJob(admin, job.id);
-  return NextResponse.json({ ok: true, processed: 1, jobId: job.id });
+  const { data: processed } = await admin
+    .from("content_factory_jobs")
+    .select(JOB_SUMMARY)
+    .eq("id", job.id)
+    .maybeSingle();
+  return NextResponse.json({
+    ok: true,
+    processed: 1,
+    jobId: job.id,
+    job: processed,
+    jobs: await recentJobs(admin),
+  });
 }

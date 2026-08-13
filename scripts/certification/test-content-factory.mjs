@@ -141,6 +141,8 @@ console.log("PASS: Content Factory artifacts present");
   const cron = read("app/api/cron/content-factory/route.ts");
   assert.match(cron, /verifyCronSecret/);
   assert.match(cron, /stale_processing_reclaim|timed out while processing/);
+  assert.match(cron, /approveLearningPath/);
+
   const patch = read("app/api/admin/content-factory/jobs/[id]/route.ts");
   assert.match(patch, /retryFailedContentFactoryJob/);
   assert.match(patch, /requireAdminApiAuth/);
