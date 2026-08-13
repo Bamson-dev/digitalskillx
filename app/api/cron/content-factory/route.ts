@@ -28,6 +28,38 @@ export async function GET(request: NextRequest) {
   await bootstrapRuntimeSecrets();
   const admin = await createAdminClientAsync();
 
+  // Requeue infrastructure/AI failures that never created a path (e.g. DeepSeek 403).
+  const { data: failedJobs } = await admin
+    .from("content_factory_jobs")
+    .select("id, error_message, attempts")
+    .eq("status", "failed")
+    .is("learning_path_id", null)
+    .lt("attempts", 3)
+    .limit(5);
+
+  const retryable = (failedJobs ?? []).filter((job) =>
+    /DeepSeek request failed|timed out while processing/i.test(job.error_message ?? ""),
+  );
+  if (retryable.length) {
+    await admin
+      .from("content_factory_jobs")
+      .update({
+        status: "pending",
+        phase: "queued",
+        progress: 0,
+        error_message: null,
+        last_error: null,
+        started_at: null,
+        claimed_at: null,
+        completed_at: null,
+        updated_at: new Date().toISOString(),
+      })
+      .in(
+        "id",
+        retryable.map((job) => job.id),
+      );
+  }
+
   // Reclaim jobs stuck in processing (worker crash / timeout).
   const staleBefore = new Date(Date.now() - 20 * 60 * 1000).toISOString();
   await admin

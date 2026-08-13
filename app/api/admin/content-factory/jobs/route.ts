@@ -55,6 +55,17 @@ export async function POST(request: NextRequest) {
       inputType: body.inputType,
       inputValue: body.inputValue,
     });
+    const secret = process.env.CRON_SECRET?.trim();
+    if (secret) {
+      const cronUrl = new URL("/api/cron/content-factory", request.nextUrl.origin);
+      setTimeout(() => {
+        void fetch(cronUrl.toString(), {
+          method: "GET",
+          headers: { Authorization: `Bearer ${secret}` },
+          cache: "no-store",
+        }).catch(() => undefined);
+      }, 500);
+    }
     return NextResponse.json({ job });
   } catch (err) {
     return NextResponse.json(

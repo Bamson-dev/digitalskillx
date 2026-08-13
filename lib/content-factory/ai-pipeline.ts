@@ -26,15 +26,18 @@ async function deepseekJson(userPrompt: string): Promise<unknown> {
   if (!apiKey) {
     throw new Error("DeepSeek API key is not configured.");
   }
-  const model = getDeepseekModel();
+  // Must await: getDeepseekModel() is async. Passing the Promise serializes as {}
+  // and DeepSeek returns 403 "Failed to deserialize".
+  const model = await getDeepseekModel();
   const res = await fetch("https://api.deepseek.com/chat/completions", {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${apiKey}`,
+      Authorization: `Bearer ${apiKey.trim()}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
       model,
+      max_tokens: 4096,
       temperature: 0.4,
       messages: [
         { role: "system", content: CONTENT_FACTORY_EDITORIAL_SYSTEM },

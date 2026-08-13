@@ -126,6 +126,8 @@ console.log("PASS: Content Factory artifacts present");
   assert.match(ai, /scoreLearningPathQuality/);
   assert.match(ai, /generateCreatorProfileCopy/);
   assert.match(ai, /generateLearningPathQuizzes/);
+  assert.match(ai, /await getDeepseekModel\(\)/);
+  assert.doesNotMatch(ai, /const model = getDeepseekModel\(\)/);
   console.log("PASS: editorial rules + AI pipeline exports");
 }
 
