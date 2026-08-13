@@ -10,6 +10,7 @@ import {
   type ContentFactoryPhase,
 } from "@/lib/content-factory/shared";
 import { isMissingRelationError } from "@/lib/schema-guard";
+import { FACTORY_RETRY_MAX_ATTEMPTS, isPermanentFactoryError, isRetryableFactoryError } from "@/lib/content-factory/ops-shared";
 
 export async function createContentFactoryJob(
   admin: SupabaseClient<Database>,
@@ -20,6 +21,11 @@ export async function createContentFactoryJob(
   },
 ) {
   let inputValue = params.inputValue.trim();
+  if (params.inputType === "topic") {
+    throw new Error(
+      "Topic discovery creates a discovery run, not a generation job. Use inputType=topic on POST /api/admin/content-factory/jobs.",
+    );
+  }
   if (params.inputType === "playlist_url" || params.inputType === "playlist_id") {
     const parsed = parseYoutubePlaylistInput(inputValue);
     if ("error" in parsed) throw new Error(parsed.error);
@@ -53,10 +59,6 @@ export async function createContentFactoryJob(
       );
     }
   }
-  if (params.inputType === "topic" && inputValue.length < 2) {
-    throw new Error("Topic is too short.");
-  }
-
   const { data, error } = await admin
     .from("content_factory_jobs")
     .insert({
@@ -148,6 +150,13 @@ export async function retryFailedContentFactoryJob(
     throw new Error(
       "This failed job already has a draft learning path. Reject/archive that path and create a new job instead of retrying.",
     );
+  }
+  if (job.attempts >= FACTORY_RETRY_MAX_ATTEMPTS) {
+    throw new Error("Retry maximum reached.");
+  }
+  const reason = job.error_message || job.last_error || "";
+  if (isPermanentFactoryError(reason) || !isRetryableFactoryError(reason)) {
+    throw new Error("This failure is not retryable.");
   }
   const { data, error } = await admin
     .from("content_factory_jobs")

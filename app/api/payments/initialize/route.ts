@@ -35,6 +35,7 @@ export async function POST(request: NextRequest) {
       courseId?: string;
       offerId?: string;
       bundleId?: string;
+      learningPathId?: string;
       couponCode?: string;
       currency?: CurrencyCode;
       email?: string;
@@ -47,8 +48,8 @@ export async function POST(request: NextRequest) {
       return jsonError("Invalid request body.", 400);
     }
 
-    if (!body.courseId && !body.offerId && !body.bundleId) {
-      return jsonError("courseId, offerId, or bundleId is required", 400);
+    if (!body.courseId && !body.offerId && !body.bundleId && !body.learningPathId) {
+      return jsonError("courseId, offerId, bundleId, or learningPathId is required", 400);
     }
 
     /** Optional sales attribution — string-only, never secrets/cards. */
@@ -77,6 +78,22 @@ export async function POST(request: NextRequest) {
         .eq("id", user.id)
         .single();
       profile = p;
+    }
+
+    if (body.learningPathId) {
+      const { initializeLearningPathCertificateCheckout } = await import(
+        "@/lib/learn-certificate-checkout"
+      );
+      return initializeLearningPathCertificateCheckout({
+        admin,
+        userId: user?.id ?? null,
+        profile,
+        body: {
+          learningPathId: body.learningPathId,
+          email: body.email,
+          fullName: body.fullName,
+        },
+      });
     }
 
     if (body.offerId || body.bundleId) {

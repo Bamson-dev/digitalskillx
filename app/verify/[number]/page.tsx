@@ -2,29 +2,74 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { CheckCircle2, XCircle } from "lucide-react";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { ORG } from "@/lib/org";
+import { ORG, siteUrl } from "@/lib/org";
 import { formatDate } from "@/lib/utils";
+import { CertificateShareButton } from "@/components/certificate-share-button";
 
-export const metadata: Metadata = { title: "Verify certificate" };
 export const dynamic = "force-dynamic";
 
-export default async function VerifyPage({ params }: { params: { number: string } }) {
-  // Public page — uses the service-role client to read a single certificate.
-  const supabase = createAdminClient();
-  const { data: cert } = await supabase
-    .from("certificates")
-    .select(
-      "certificate_number, issued_at, completed_at, is_valid, recipient_name, student:profiles(full_name), course:courses(title)",
-    )
-    .eq("certificate_number", params.number)
-    .maybeSingle();
+type VerifyCert = {
+  certificate_number: string;
+  issued_at: string;
+  completed_at: string | null;
+  is_valid: boolean;
+  recipient_name: string | null;
+  student: { full_name: string | null } | { full_name: string | null }[] | null;
+  course: { title: string } | { title: string }[] | null;
+  learning_path?: { title: string; slug: string } | { title: string; slug: string }[] | null;
+};
 
+async function loadCertificate(number: string): Promise<VerifyCert | null> {
+  const supabase = createAdminClient();
+  const withPath =
+    "certificate_number, issued_at, completed_at, is_valid, recipient_name, student:profiles(full_name), course:courses(title), learning_path:learning_paths(title, slug)";
+  const base =
+    "certificate_number, issued_at, completed_at, is_valid, recipient_name, student:profiles(full_name), course:courses(title)";
+  let query = await supabase.from("certificates").select(withPath).eq("certificate_number", number).maybeSingle();
+  if (query.error && /learning_path|does not exist|could not find/i.test(query.error.message)) {
+    query = await supabase.from("certificates").select(base).eq("certificate_number", number).maybeSingle();
+  }
+  return (query.data as VerifyCert | null) ?? null;
+}
+
+function titleFrom(cert: VerifyCert | null) {
+  if (!cert) return null;
+  const course = Array.isArray(cert.course) ? cert.course[0] : cert.course;
+  const path = Array.isArray(cert.learning_path) ? cert.learning_path[0] : cert.learning_path;
+  return course?.title || path?.title || null;
+}
+
+export async function generateMetadata({ params }: { params: { number: string } }): Promise<Metadata> {
+  const cert = await loadCertificate(params.number);
+  const valid = !!cert && cert.is_valid;
+  const title = titleFrom(cert);
+  if (!valid || !title) {
+    return {
+      title: "Verify certificate",
+      robots: { index: false, follow: false },
+    };
+  }
+  const url = `${siteUrl()}/verify/${cert!.certificate_number}`;
+  const description = `Verify this DigitalSkillX certificate for ${title}.`;
+  return {
+    title: `Certificate · ${title}`,
+    description,
+    alternates: { canonical: url },
+    robots: { index: true, follow: true },
+    openGraph: { title: `DigitalSkillX certificate · ${title}`, description, url },
+  };
+}
+
+export default async function VerifyPage({ params }: { params: { number: string } }) {
+  const cert = await loadCertificate(params.number);
   const valid = !!cert && cert.is_valid;
   const student = cert ? (Array.isArray(cert.student) ? cert.student[0] : cert.student) : null;
   const course = cert ? (Array.isArray(cert.course) ? cert.course[0] : cert.course) : null;
-  const studentName =
-    cert?.recipient_name?.trim() || student?.full_name?.trim() || "—";
+  const path = cert ? (Array.isArray(cert.learning_path) ? cert.learning_path[0] : cert.learning_path) : null;
+  const subjectTitle = course?.title || path?.title || "—";
+  const studentName = cert?.recipient_name?.trim() || student?.full_name?.trim() || "—";
   const checkedAt = new Date().toISOString();
+  const verifyUrl = `${siteUrl()}/verify/${params.number}`;
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-center bg-brand-50 px-4 py-10">
@@ -38,13 +83,25 @@ export default async function VerifyPage({ params }: { params: { number: string 
             <CheckCircle2 className="mx-auto h-14 w-14 text-green-600" />
             <h1 className="mt-4 text-2xl font-bold text-green-700">Valid certificate</h1>
             <dl className="mt-6 space-y-3 text-left text-sm">
-              <Row label="Student" value={studentName} />
-              <Row label="Course" value={course?.title ?? "—"} />
+              <Row label="Learner" value={studentName} />
+              <Row label={path?.title ? "Learning path" : "Course"} value={subjectTitle} />
               <Row label="Completed" value={formatDate(cert!.completed_at ?? cert!.issued_at)} />
               <Row label="Issued" value={formatDate(cert!.issued_at)} />
               <Row label="Certificate №" value={cert!.certificate_number} mono />
               <Row label="Issued by" value={ORG.certificateOrg} />
+              <Row label="Status" value="Verified" />
             </dl>
+            <div className="mt-6 flex flex-col items-center gap-3 print:hidden">
+              <CertificateShareButton verifyUrl={verifyUrl} courseTitle={subjectTitle} />
+              <Link href="/learn" className="text-sm text-brand hover:underline">
+                Explore free learning
+              </Link>
+              {path?.slug ? (
+                <Link href={`/learn/${path.slug}`} className="text-sm text-brand hover:underline">
+                  View this learning path
+                </Link>
+              ) : null}
+            </div>
           </>
         ) : (
           <>

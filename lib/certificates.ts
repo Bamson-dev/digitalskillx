@@ -204,11 +204,22 @@ export async function reissueCertificate(params: {
 }) {
   const admin = await createAdminClientAsync();
 
-  const { data: cert } = await admin
-    .from("certificates")
-    .select("id, student_id, course_id, certificate_number, issued_at, recipient_name, is_valid")
-    .eq("id", params.certificateId)
-    .maybeSingle();
+  const withPath =
+    "id, student_id, course_id, learning_path_id, certificate_number, issued_at, recipient_name, is_valid";
+  const base = "id, student_id, course_id, certificate_number, issued_at, recipient_name, is_valid";
+  let certQuery = await admin.from("certificates").select(withPath).eq("id", params.certificateId).maybeSingle();
+  if (certQuery.error && /learning_path_id|does not exist|could not find/i.test(certQuery.error.message)) {
+    certQuery = await admin.from("certificates").select(base).eq("id", params.certificateId).maybeSingle();
+  }
+  const cert = certQuery.data
+    ? {
+        ...certQuery.data,
+        learning_path_id:
+          "learning_path_id" in certQuery.data
+            ? (certQuery.data as { learning_path_id?: string | null }).learning_path_id ?? null
+            : null,
+      }
+    : null;
 
   if (!cert) throw new Error("Certificate not found.");
   if (!cert.is_valid) throw new Error("This certificate is no longer valid.");
@@ -220,11 +231,18 @@ export async function reissueCertificate(params: {
     .maybeSingle();
   if (!profile?.email) throw new Error("Student profile not found.");
 
-  const { data: course } = await admin
-    .from("courses")
-    .select("title")
-    .eq("id", cert.course_id)
-    .maybeSingle();
+  let subjectTitle = "your course";
+  if (cert.course_id) {
+    const { data: course } = await admin.from("courses").select("title").eq("id", cert.course_id).maybeSingle();
+    subjectTitle = course?.title ?? "your course";
+  } else if (cert.learning_path_id) {
+    const { data: path } = await admin
+      .from("learning_paths")
+      .select("title")
+      .eq("id", cert.learning_path_id)
+      .maybeSingle();
+    subjectTitle = path?.title ?? "your learning path";
+  }
 
   const recipientName = certificateRecipientName({
     recipientName: params.recipientName ?? cert.recipient_name,
@@ -238,12 +256,12 @@ export async function reissueCertificate(params: {
 
   const emailResult = await emailCertificate({
     studentId: cert.student_id,
-    courseId: cert.course_id,
+    courseId: cert.course_id ?? cert.learning_path_id ?? cert.id,
     certificateId: cert.id,
     certificateNumber: cert.certificate_number,
     recipientName,
     email: profile.email,
-    courseTitle: course?.title ?? "your course",
+    courseTitle: subjectTitle,
     issuedAt: cert.issued_at,
   });
 

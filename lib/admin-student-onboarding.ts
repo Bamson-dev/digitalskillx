@@ -392,6 +392,7 @@ export async function reconcileOrphanCertificatesForEmail(
     if (certError) throw new Error(certError.message);
 
     for (const cert of orphanCerts ?? []) {
+      if (!cert.course_id) continue;
       const { data: existing } = await admin
         .from("certificates")
         .select("id")

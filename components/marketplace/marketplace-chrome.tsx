@@ -50,6 +50,7 @@ export function MarketplaceNav({
 
   const homeActive = pathname === "/";
   const browseActive = pathname === "/browse" || pathname.startsWith("/course");
+  const learnActive = pathname === "/learn" || pathname.startsWith("/learn/");
 
   return (
     <>
@@ -84,6 +85,15 @@ export function MarketplaceNav({
               )}
             >
               Browse
+            </Link>
+            <Link
+              href="/learn"
+              className={cn(
+                "text-[13px] font-medium tracking-wide transition",
+                learnActive ? "text-neutral-950" : "text-neutral-500 hover:text-neutral-950",
+              )}
+            >
+              Learn
             </Link>
           </nav>
 
@@ -155,6 +165,13 @@ export function MarketplaceNav({
                 className="px-3 py-3.5 text-sm font-medium text-neutral-800"
               >
                 Browse
+              </Link>
+              <Link
+                href="/learn"
+                onClick={() => setOpen(false)}
+                className="px-3 py-3.5 text-sm font-medium text-neutral-800"
+              >
+                Learn
               </Link>
               {user ? (
                 <Link
@@ -230,6 +247,11 @@ export function MarketplaceFooter() {
               <li>
                 <Link href="/browse" className="hover:text-brand">
                   Browse Courses
+                </Link>
+              </li>
+              <li>
+                <Link href="/learn" className="hover:text-brand">
+                  Free Learning
                 </Link>
               </li>
               <li>

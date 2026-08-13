@@ -2,6 +2,11 @@ import "server-only";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createAdminClientAsync } from "@/lib/supabase/admin";
+import { isMissingColumnError } from "@/lib/schema-guard";
+import {
+  fulfillLearningPathCertificatePurchase,
+  readLearningPathIdFromPaystackData,
+} from "@/lib/learn-certificates";
 import {
   findProfileByEmail,
   generateStrongPassword,
@@ -203,17 +208,37 @@ export async function isSuccessfulGuestPurchase(reference: string, courseId: str
 /** Idempotent paid checkout completion for browser confirm + Paystack webhook. */
 export async function completePaidCheckout(reference: string) {
   const admin = await createAdminClientAsync();
-  const { data: tx } = await admin
-    .from("transactions")
-    .select(
-      "student_id, course_id, status, paystack_data, amount, currency, bundle_id, digital_product_id, offer_id",
-    )
-    .eq("reference", reference)
-    .maybeSingle();
+  const fullSelect =
+    "student_id, course_id, status, paystack_data, amount, currency, bundle_id, digital_product_id, offer_id, learning_path_id";
+  const baseSelect =
+    "student_id, course_id, status, paystack_data, amount, currency, bundle_id, digital_product_id, offer_id";
+  const fullQuery = await admin.from("transactions").select(fullSelect).eq("reference", reference).maybeSingle();
+  const usedQuery =
+    fullQuery.error && isMissingColumnError(fullQuery.error.message)
+      ? await admin.from("transactions").select(baseSelect).eq("reference", reference).maybeSingle()
+      : fullQuery;
+  const raw = usedQuery.data as
+    | {
+        student_id: string | null;
+        course_id: string | null;
+        status: string;
+        paystack_data: unknown;
+        amount: number;
+        currency: string;
+        bundle_id: string | null;
+        digital_product_id: string | null;
+        offer_id: string | null;
+        learning_path_id?: string | null;
+      }
+    | null;
 
-  if (!tx) {
+  if (!raw) {
     return { ok: false as const, error: "Payment record not found.", status: 404 as const };
   }
+  const tx = {
+    ...raw,
+    learning_path_id: raw.learning_path_id ?? readLearningPathIdFromPaystackData(raw.paystack_data),
+  };
 
   const commerceMeta = readCommerceMeta(tx.paystack_data);
 
@@ -360,6 +385,32 @@ export async function completePaidCheckout(reference: string) {
 
   if (studentId !== tx.student_id) {
     await admin.from("transactions").update({ student_id: studentId }).eq("reference", reference);
+  }
+
+  const learningPathId = tx.learning_path_id || readLearningPathIdFromPaystackData(tx.paystack_data);
+  if (learningPathId && !tx.course_id && !tx.bundle_id && !tx.digital_product_id) {
+    const pathResult = await fulfillLearningPathCertificatePurchase({
+      admin,
+      studentId,
+      reference,
+      learningPathId,
+      buyerName: buyerName ?? undefined,
+    });
+    let session: CheckoutSession | undefined;
+    if (isNewAccount && password && !pathResult.alreadyFulfilled) {
+      session = (await signInCheckoutUser(buyerEmail, password)) ?? undefined;
+    }
+    return {
+      ok: true as const,
+      courseId: null,
+      learningPathId,
+      certificateId: pathResult.certificateId,
+      certificateNumber: pathResult.certificateNumber,
+      buyerEmail,
+      isNewAccount,
+      session,
+      alreadyFulfilled: pathResult.alreadyFulfilled,
+    };
   }
 
   const fulfillResult = await fulfillCommercePurchase({

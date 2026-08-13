@@ -220,6 +220,138 @@ export async function fetchChannelMeta(
   };
 }
 
+export type YoutubePlaylistSearchHit = {
+  playlistId: string;
+  title: string;
+  description: string;
+  channelId: string | null;
+  channelTitle: string | null;
+  thumbnailUrl: string | null;
+};
+
+/**
+ * Quota-expensive (100 units). Stage 1: one page, type=playlist only.
+ * Does not fetch playlistItems or videos.
+ */
+export async function searchYouTubePlaylists(
+  query: string,
+  maxResults = 25,
+  options?: YoutubeFetchOptions,
+): Promise<YoutubePlaylistSearchHit[]> {
+  const q = query.trim();
+  if (!q) return [];
+  const apiKey = await resolveKey(options);
+  const limit = Math.max(1, Math.min(50, Math.floor(maxResults) || 25));
+  const res = await fetch(
+    `${API}/search?part=snippet&type=playlist&maxResults=${limit}&q=${encodeURIComponent(q)}&key=${apiKey}`,
+  );
+  const json = await res.json();
+  if (!res.ok) {
+    throw new Error(formatYoutubeApiError(res.status, json));
+  }
+  const hits: YoutubePlaylistSearchHit[] = [];
+  for (const item of json.items ?? []) {
+    const playlistId = item?.id?.playlistId ? String(item.id.playlistId) : "";
+    if (!playlistId) continue;
+    hits.push({
+      playlistId,
+      title: String(item.snippet?.title ?? "").trim(),
+      description: String(item.snippet?.description ?? ""),
+      channelId: item.snippet?.channelId ? String(item.snippet.channelId) : null,
+      channelTitle: item.snippet?.channelTitle ? String(item.snippet.channelTitle) : null,
+      thumbnailUrl:
+        item.snippet?.thumbnails?.high?.url ?? item.snippet?.thumbnails?.default?.url ?? null,
+    });
+  }
+  return hits;
+}
+
+export type YoutubePlaylistDiscoveryMeta = {
+  playlistId: string;
+  title: string;
+  description: string;
+  channelId: string | null;
+  channelTitle: string | null;
+  thumbnailUrl: string | null;
+  itemCount: number | null;
+};
+
+/** Batch playlists.list snippet+contentDetails (no playlistItems). */
+export async function fetchPlaylistsDiscoveryMeta(
+  playlistIds: string[],
+  options?: YoutubeFetchOptions,
+): Promise<Map<string, YoutubePlaylistDiscoveryMeta>> {
+  const map = new Map<string, YoutubePlaylistDiscoveryMeta>();
+  const ids = [...new Set(playlistIds.map((id) => id.trim()).filter(Boolean))];
+  if (!ids.length) return map;
+  const apiKey = await resolveKey(options);
+  for (let i = 0; i < ids.length; i += 50) {
+    const batch = ids.slice(i, i + 50);
+    const res = await fetch(
+      `${API}/playlists?part=snippet,contentDetails&id=${encodeURIComponent(batch.join(","))}&key=${apiKey}`,
+    );
+    const json = await res.json();
+    if (!res.ok) {
+      throw new Error(formatYoutubeApiError(res.status, json));
+    }
+    for (const item of json.items ?? []) {
+      const playlistId = String(item.id ?? "");
+      if (!playlistId) continue;
+      const itemCount =
+        typeof item.contentDetails?.itemCount === "number"
+          ? item.contentDetails.itemCount
+          : Number.isFinite(Number(item.contentDetails?.itemCount))
+            ? Number(item.contentDetails.itemCount)
+            : null;
+      map.set(playlistId, {
+        playlistId,
+        title: String(item.snippet?.title ?? "").trim() || "Untitled playlist",
+        description: String(item.snippet?.description ?? ""),
+        channelId: item.snippet?.channelId ? String(item.snippet.channelId) : null,
+        channelTitle: item.snippet?.channelTitle ? String(item.snippet.channelTitle) : null,
+        thumbnailUrl: item.snippet?.thumbnails?.high?.url ?? null,
+        itemCount,
+      });
+    }
+  }
+  return map;
+}
+
+export type YoutubeChannelDiscoverySnippet = {
+  channelId: string;
+  description: string;
+};
+
+/** Batch channels.list for scoring only. Does not write creator_profiles. */
+export async function fetchChannelsDiscoverySnippets(
+  channelIds: string[],
+  options?: YoutubeFetchOptions,
+): Promise<Map<string, YoutubeChannelDiscoverySnippet>> {
+  const map = new Map<string, YoutubeChannelDiscoverySnippet>();
+  const ids = [...new Set(channelIds.map((id) => id.trim()).filter(Boolean))];
+  if (!ids.length) return map;
+  const apiKey = await resolveKey(options);
+  for (let i = 0; i < ids.length; i += 50) {
+    const batch = ids.slice(i, i + 50);
+    const res = await fetch(
+      `${API}/channels?part=snippet,statistics&id=${encodeURIComponent(batch.join(","))}&key=${apiKey}`,
+    );
+    const json = await res.json();
+    if (!res.ok) {
+      throw new Error(formatYoutubeApiError(res.status, json));
+    }
+    for (const item of json.items ?? []) {
+      const channelId = String(item.id ?? "");
+      if (!channelId) continue;
+      map.set(channelId, {
+        channelId,
+        description: String(item.snippet?.description ?? ""),
+      });
+    }
+  }
+  return map;
+}
+
 /** Fetch playlist snippet including channel id (one API call). */
 export async function fetchPlaylistMeta(
   playlistId: string,

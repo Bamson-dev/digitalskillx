@@ -215,6 +215,7 @@ export type Transaction = Timestamps & {
   id: string;
   student_id: string | null;
   course_id: string | null;
+  learning_path_id: string | null;
   offer_id: string | null;
   bundle_id: string | null;
   digital_product_id: string | null;
@@ -345,7 +346,8 @@ export type QuizAttempt = {
 export type Certificate = {
   id: string;
   student_id: string;
-  course_id: string;
+  course_id: string | null;
+  learning_path_id: string | null;
   certificate_number: string;
   issued_at: string;
   completed_at: string | null;
@@ -791,6 +793,10 @@ export type LearningPath = {
   warnings: Json;
   seo_title: string | null;
   seo_description: string | null;
+  certificate_enabled?: boolean;
+  certificate_price_ngn?: number | null;
+  recommended_course_id?: string | null;
+  certificate_template_override?: string | null;
   published_course_id: string | null;
   factory_job_id: string | null;
   published_at: string | null;
@@ -853,6 +859,61 @@ export type ContentFactoryJob = {
   updated_at: string;
 };
 
+export type ContentFactoryDiscoveryRun = {
+  id: string;
+  admin_id: string;
+  topic: string;
+  target_generate: number;
+  status: "queued" | "running" | "completed" | "failed" | "cancelled";
+  discovered_count: number;
+  filtered_count: number;
+  qualified_count: number;
+  generated_count: number;
+  failed_count: number;
+  error_message: string | null;
+  created_at: string;
+  completed_at: string | null;
+};
+
+export type ContentFactoryCandidate = {
+  id: string;
+  run_id: string;
+  playlist_id: string;
+  channel_id: string | null;
+  title: string;
+  channel_title: string;
+  item_count: number | null;
+  thumbnail_url: string | null;
+  topic: string;
+  discovery_query: string;
+  status:
+    | "discovered"
+    | "filtered"
+    | "qualified"
+    | "generating"
+    | "review"
+    | "rejected"
+    | "published"
+    | "blocked";
+  rule_score: number | null;
+  ai_score: number | null;
+  score_breakdown: Json;
+  filter_reason: string | null;
+  learning_path_id: string | null;
+  factory_job_id: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type ContentFactoryBlock = {
+  id: string;
+  kind: "playlist_id" | "channel_id";
+  value: string;
+  reason: string;
+  created_by: string | null;
+  created_at: string;
+};
+
 export type Database = {
   public: {
     Tables: {
@@ -912,6 +973,7 @@ export type Database = {
         [
           Rel<"certificates_student_id_fkey", "student_id", "profiles", "id">,
           Rel<"certificates_course_id_fkey", "course_id", "courses", "id">,
+          Rel<"certificates_learning_path_id_fkey", "learning_path_id", "learning_paths", "id">,
         ]
       >;
       assignments: Table<
@@ -1008,6 +1070,7 @@ export type Database = {
         [
           Rel<"transactions_student_id_fkey", "student_id", "profiles", "id">,
           Rel<"transactions_course_id_fkey", "course_id", "courses", "id">,
+          Rel<"transactions_learning_path_id_fkey", "learning_path_id", "learning_paths", "id">,
         ]
       >;
       checkout_abandon_reminders: Table<
@@ -1142,6 +1205,7 @@ export type Database = {
         [
           Rel<"learning_paths_creator_profile_id_fkey", "creator_profile_id", "creator_profiles", "id">,
           Rel<"learning_paths_created_by_fkey", "created_by", "profiles", "id">,
+          Rel<"learning_paths_recommended_course_id_fkey", "recommended_course_id", "courses", "id">,
         ]
       >;
       learning_path_sections: Table<
@@ -1165,6 +1229,22 @@ export type Database = {
           Rel<"content_factory_jobs_admin_id_fkey", "admin_id", "profiles", "id">,
           Rel<"content_factory_jobs_learning_path_id_fkey", "learning_path_id", "learning_paths", "id">,
         ]
+      >;
+      content_factory_discovery_runs: Table<
+        ContentFactoryDiscoveryRun,
+        [Rel<"content_factory_discovery_runs_admin_id_fkey", "admin_id", "profiles", "id">]
+      >;
+      content_factory_candidates: Table<
+        ContentFactoryCandidate,
+        [
+          Rel<"content_factory_candidates_run_id_fkey", "run_id", "content_factory_discovery_runs", "id">,
+          Rel<"content_factory_candidates_learning_path_id_fkey", "learning_path_id", "learning_paths", "id">,
+          Rel<"content_factory_candidates_factory_job_id_fkey", "factory_job_id", "content_factory_jobs", "id">,
+        ]
+      >;
+      content_factory_blocks: Table<
+        ContentFactoryBlock,
+        [Rel<"content_factory_blocks_created_by_fkey", "created_by", "profiles", "id">]
       >;
     };
     Views: Record<string, never>;

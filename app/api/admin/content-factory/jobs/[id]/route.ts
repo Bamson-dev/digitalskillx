@@ -5,6 +5,8 @@ import {
   getContentFactoryJob,
   retryFailedContentFactoryJob,
 } from "@/lib/content-factory/jobs";
+import { syncCandidatesForJob } from "@/lib/content-factory/generate";
+import { loadCreatorResearchBundle } from "@/lib/content-factory/creator-research";
 import {
   approveLearningPath,
   getLearningPathById,
@@ -12,6 +14,7 @@ import {
   rejectLearningPath,
 } from "@/lib/content-factory/learning-paths";
 import type { LearningPath } from "@/types/database";
+import { isMissingColumnError } from "@/lib/schema-guard";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -31,20 +34,20 @@ export async function GET(_request: NextRequest, { params }: Ctx) {
   let path = null;
   let curriculum = null;
   let creator = null;
+  let creatorSources: unknown[] = [];
+  let creatorQualityScore: number | null = null;
   if (job.learning_path_id) {
     path = await getLearningPathById(auth.admin, job.learning_path_id);
     curriculum = await loadLearningPathCurriculum(auth.admin, job.learning_path_id);
     if (path?.creator_profile_id) {
-      const { data } = await auth.admin
-        .from("creator_profiles")
-        .select("*")
-        .eq("id", path.creator_profile_id)
-        .maybeSingle();
-      creator = data;
+      const bundle = await loadCreatorResearchBundle(auth.admin, path.creator_profile_id);
+      creator = bundle?.profile ?? null;
+      creatorSources = bundle?.sources ?? [];
+      creatorQualityScore = bundle?.qualityScore ?? null;
     }
   }
 
-  return NextResponse.json({ job, path, curriculum, creator });
+  return NextResponse.json({ job, path, curriculum, creator, creatorSources, creatorQualityScore });
 }
 
 export async function PATCH(request: NextRequest, { params }: Ctx) {
@@ -71,6 +74,7 @@ export async function PATCH(request: NextRequest, { params }: Ctx) {
   try {
     if (body.action === "retry") {
       const retried = await retryFailedContentFactoryJob(auth.admin, params.id);
+      await syncCandidatesForJob(auth.admin, params.id);
       return NextResponse.json({ job: retried });
     }
 
@@ -80,10 +84,12 @@ export async function PATCH(request: NextRequest, { params }: Ctx) {
 
     if (body.action === "approve") {
       const path = await approveLearningPath(auth.admin, job.learning_path_id);
+      await syncCandidatesForJob(auth.admin, params.id);
       return NextResponse.json({ path });
     }
     if (body.action === "reject") {
       const path = await rejectLearningPath(auth.admin, job.learning_path_id, body.reason);
+      await syncCandidatesForJob(auth.admin, params.id);
       return NextResponse.json({ path });
     }
     if (body.action === "save_draft") {
@@ -105,15 +111,36 @@ export async function PATCH(request: NextRequest, { params }: Ctx) {
       }
       if (typeof patch.seo_title === "string") update.seo_title = patch.seo_title;
       if (typeof patch.seo_description === "string") update.seo_description = patch.seo_description;
+      if (typeof patch.certificate_enabled === "boolean") update.certificate_enabled = patch.certificate_enabled;
+      if (patch.certificate_price_ngn === null) update.certificate_price_ngn = null;
+      if (typeof patch.certificate_price_ngn === "number" && patch.certificate_price_ngn >= 0) {
+        update.certificate_price_ngn = Math.round(patch.certificate_price_ngn);
+      }
+      if (patch.recommended_course_id === null) update.recommended_course_id = null;
+      if (typeof patch.recommended_course_id === "string" && patch.recommended_course_id.trim()) {
+        update.recommended_course_id = patch.recommended_course_id.trim();
+      }
 
-      const { data, error } = await auth.admin
+      let result = await auth.admin
         .from("learning_paths")
         .update(update)
         .eq("id", job.learning_path_id)
         .select("*")
         .single();
-      if (error) throw new Error(error.message);
-      return NextResponse.json({ path: data });
+      if (result.error && isMissingColumnError(result.error.message)) {
+        const fallback = { ...update };
+        delete fallback.certificate_enabled;
+        delete fallback.certificate_price_ngn;
+        delete fallback.recommended_course_id;
+        result = await auth.admin
+          .from("learning_paths")
+          .update(fallback)
+          .eq("id", job.learning_path_id)
+          .select("*")
+          .single();
+      }
+      if (result.error) throw new Error(result.error.message);
+      return NextResponse.json({ path: result.data });
     }
     return NextResponse.json({ error: "Unknown action." }, { status: 400 });
   } catch (err) {

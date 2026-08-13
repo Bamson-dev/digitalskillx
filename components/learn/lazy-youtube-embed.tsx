@@ -18,11 +18,16 @@ export function LazyYoutubeEmbed({
       <button
         type="button"
         onClick={() => setActive(true)}
-        className="relative aspect-video w-full overflow-hidden rounded-xl bg-neutral-900 text-left"
+        className="relative aspect-video w-full overflow-hidden rounded-xl bg-neutral-900 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
         aria-label={`Play ${title}`}
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={thumb} alt="" className="h-full w-full object-cover opacity-90" loading="lazy" />
+        <img
+          src={thumb}
+          alt={`${title} thumbnail`}
+          className="h-full w-full object-cover opacity-90"
+          loading="lazy"
+        />
         <span className="absolute inset-0 flex items-center justify-center">
           <span className="rounded-full bg-white/95 px-4 py-2 text-sm font-semibold text-neutral-900">
             Play lesson

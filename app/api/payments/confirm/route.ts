@@ -129,6 +129,9 @@ export async function POST(request: NextRequest) {
       isNewAccount: result.isNewAccount ?? false,
       needsLogin: !user && !sessionEstablished,
       sessionEstablished,
+      certificateId: "certificateId" in result ? result.certificateId : null,
+      certificateNumber: "certificateNumber" in result ? result.certificateNumber : null,
+      learningPathId: "learningPathId" in result ? result.learningPathId : null,
     };
 
     const response =

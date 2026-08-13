@@ -32,6 +32,8 @@ const PUBLIC_PATHS = [
   "/privacy",
   "/terms",
   "/refund-policy",
+  "/sitemap.xml",
+  "/robots.txt",
 ];
 
 function isPublic(pathname: string) {

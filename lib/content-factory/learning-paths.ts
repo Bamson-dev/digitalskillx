@@ -1,6 +1,16 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, LearningPath, Json } from "@/types/database";
+import {
+  LIBRARY_PAGE_SIZE,
+  LIBRARY_RELATED_LIMIT,
+  categoryMatchesFilter,
+  parseLibraryCategory,
+  parseLibraryPage,
+  relatedLearningPaths,
+  sanitizeLibraryQuery,
+  type LibraryCategoryId,
+} from "@/lib/content-factory/library-shared";
 
 export async function getLearningPathById(admin: SupabaseClient<Database>, id: string) {
   const { data, error } = await admin.from("learning_paths").select("*").eq("id", id).maybeSingle();
@@ -33,6 +43,108 @@ export async function listPublishedLearningPaths(client: SupabaseClient<Database
     .limit(limit);
   if (error) throw new Error(error.message);
   return data ?? [];
+}
+
+export type PublishedLibraryPath = {
+  id: string;
+  slug: string;
+  title: string;
+  short_description: string;
+  category: string;
+  difficulty: "beginner" | "intermediate" | "advanced";
+  tags: string[];
+  artwork_public_url: string | null;
+  quality_score: number | null;
+  published_at: string | null;
+  creator_profile_id: string | null;
+  creator_name?: string | null;
+};
+
+const LIBRARY_LIST_SELECT =
+  "id, slug, title, short_description, category, difficulty, tags, artwork_public_url, quality_score, published_at, creator_profile_id";
+
+export async function listPublishedLearningLibrary(
+  client: SupabaseClient<Database>,
+  params: { q?: string | null; category?: string | null; page?: string | null; pageSize?: number },
+): Promise<{ paths: PublishedLibraryPath[]; page: number; pageSize: number; total: number; category: LibraryCategoryId; q: string }> {
+  const q = sanitizeLibraryQuery(params.q);
+  const category = parseLibraryCategory(params.category);
+  const page = parseLibraryPage(params.page);
+  const pageSize = params.pageSize ?? LIBRARY_PAGE_SIZE;
+  const from = (page - 1) * pageSize;
+  const to = from + pageSize - 1;
+  const needsMemoryFilter = category !== "all";
+
+  let query = client
+    .from("learning_paths")
+    .select(LIBRARY_LIST_SELECT, { count: "exact" })
+    .eq("status", "published")
+    .order("published_at", { ascending: false });
+
+  if (q) {
+    const { data: creators, error: creatorSearchError } = await client
+      .from("creator_profiles")
+      .select("id")
+      .ilike("display_name", `%${q}%`)
+      .limit(20);
+    const creatorIds = creatorSearchError ? [] : (creators ?? []).map((row) => row.id);
+    const parts = [
+      `title.ilike.%${q}%`,
+      `short_description.ilike.%${q}%`,
+      `category.ilike.%${q}%`,
+      `description.ilike.%${q}%`,
+    ];
+    if (creatorIds.length) parts.push(`creator_profile_id.in.(${creatorIds.join(",")})`);
+    query = query.or(parts.join(","));
+  }
+
+  const bounded = needsMemoryFilter ? query.limit(200) : query.range(from, to);
+  const { data, error, count } = await bounded;
+  if (error) throw new Error(error.message);
+
+  let paths = (data ?? []) as PublishedLibraryPath[];
+  if (needsMemoryFilter) {
+    paths = paths.filter((row) => categoryMatchesFilter(row.category, category));
+  }
+  const total = needsMemoryFilter ? paths.length : count ?? paths.length;
+  if (needsMemoryFilter) paths = paths.slice(from, to + 1);
+
+  const creatorIds = [...new Set(paths.map((row) => row.creator_profile_id).filter((id): id is string => Boolean(id)))];
+  if (creatorIds.length) {
+    const { data: creators } = await client
+      .from("creator_profiles")
+      .select("id, display_name")
+      .in("id", creatorIds);
+    const names = new Map((creators ?? []).map((row) => [row.id, row.display_name]));
+    paths = paths.map((row) => ({
+      ...row,
+      creator_name: row.creator_profile_id ? names.get(row.creator_profile_id) ?? null : null,
+    }));
+  }
+
+  return {
+    paths,
+    page,
+    pageSize,
+    total,
+    category,
+    q,
+  };
+}
+
+export async function listRelatedPublishedLearningPaths(
+  client: SupabaseClient<Database>,
+  seed: { id: string; category: string; title: string },
+) {
+  const { data, error } = await client
+    .from("learning_paths")
+    .select(LIBRARY_LIST_SELECT)
+    .eq("status", "published")
+    .neq("id", seed.id)
+    .order("published_at", { ascending: false })
+    .limit(24);
+  if (error) throw new Error(error.message);
+  return relatedLearningPaths((data ?? []) as PublishedLibraryPath[], seed, LIBRARY_RELATED_LIMIT);
 }
 
 export async function loadLearningPathCurriculum(

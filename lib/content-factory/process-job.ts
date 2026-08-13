@@ -4,14 +4,14 @@ import type { Database } from "@/types/database";
 import { fetchPlaylist, fetchPlaylistMeta, fetchChannelMeta } from "@/lib/youtube";
 import { getYoutubeApiKey } from "@/lib/env-youtube";
 import {
-  generateCreatorProfileCopy,
   generateLearningPathStructure,
   generateLearningPathQuizzes,
   scoreLearningPathQuality,
 } from "@/lib/content-factory/ai-pipeline";
 import { generateAndStoreLearningPathArtwork } from "@/lib/content-factory/artwork";
 import { uniqueLearningPathSlug, updateJobProgress } from "@/lib/content-factory/jobs";
-import { fetchPublicTextSnippet } from "@/lib/content-factory/safe-fetch";
+import { researchAndUpsertCreator } from "@/lib/content-factory/creator-research";
+import { reviewGeneratedLearningPath } from "@/lib/content-factory/quality";
 import { isMissingRelationError } from "@/lib/schema-guard";
 
 type Admin = SupabaseClient<Database>;
@@ -38,7 +38,7 @@ export async function processContentFactoryJob(admin: Admin, jobId: string): Pro
 
     if (job.input_type === "topic") {
       throw new Error(
-        "Topic discovery is prepared for a later step. For Phase 1, submit a YouTube playlist URL or ID.",
+        "Topic discovery is handled by discovery runs and does not generate learning paths in Stage 1. Submit a YouTube playlist URL or ID to generate.",
       );
     }
 
@@ -64,51 +64,41 @@ export async function processContentFactoryJob(admin: Admin, jobId: string): Pro
 
     await updateJobProgress(admin, jobId, { phase: "creator_research", progress: 20 });
 
-    let channel = meta.channelId
+    const channel = meta.channelId
       ? await fetchChannelMeta(meta.channelId, { apiKey })
       : null;
 
-    let extraSourceText = "";
-    if (channel?.channelUrl) {
-      const snippet = await fetchPublicTextSnippet(channel.channelUrl).catch(() => null);
-      if (snippet?.text) extraSourceText = snippet.text;
-    }
-
-    const creatorCopy = await generateCreatorProfileCopy({
-      channelTitle: channel?.title ?? meta.channelTitle ?? "YouTube Creator",
-      channelDescription: channel?.description ?? "",
-      playlistTitle: meta.title,
-      playlistDescription: meta.description,
-      extraSourceText,
-    });
-
-    const { data: creator, error: creatorError } = await admin
-      .from("creator_profiles")
-      .insert({
-        display_name: channel?.title ?? meta.channelTitle ?? "YouTube Creator",
-        short_bio: creatorCopy.short_bio,
-        expertise: creatorCopy.expertise,
-        teaches: creatorCopy.teaches,
-        credentials: creatorCopy.credentials,
-        relevance: creatorCopy.relevance,
-        youtube_channel_id: channel?.channelId ?? meta.channelId,
-        youtube_channel_url: channel?.channelUrl ?? null,
-        avatar_url: channel?.thumbnailUrl ?? null,
-        research_status: channel ? "complete" : "partial",
-      })
-      .select("*")
-      .single();
-    if (creatorError) throw new Error(creatorError.message);
-
-    if (channel?.channelUrl) {
-      await admin.from("creator_sources").insert({
-        creator_profile_id: creator.id,
-        source_type: "youtube_channel",
-        source_url: channel.channelUrl,
-        source_title: channel.title,
-        source_identifier: channel.channelId,
-        relationship: "primary",
+    let officialWebsite: string | null = null;
+    let creator;
+    try {
+      const researched = await researchAndUpsertCreator(admin, {
+        channel,
+        playlistTitle: meta.title,
+        playlistDescription: meta.description,
       });
+      creator = researched.creator;
+      officialWebsite = researched.officialWebsite;
+    } catch (err) {
+      const { data: fallback, error: creatorError } = await admin
+        .from("creator_profiles")
+        .insert({
+          display_name: channel?.title ?? meta.channelTitle ?? "YouTube Creator",
+          short_bio: (channel?.description ?? "").replace(/\s+/g, " ").trim().slice(0, 400),
+          expertise: [],
+          teaches: "",
+          credentials: "",
+          relevance: "",
+          youtube_channel_id: channel?.channelId ?? meta.channelId,
+          youtube_channel_url: channel?.channelUrl ?? null,
+          avatar_url: channel?.thumbnailUrl ?? null,
+          research_status: "failed",
+        })
+        .select("*")
+        .single();
+      if (creatorError || !fallback) {
+        throw new Error(err instanceof Error ? err.message : creatorError?.message ?? "Creator research failed.");
+      }
+      creator = fallback;
     }
 
     await updateJobProgress(admin, jobId, { phase: "ai_structure", progress: 40 });
@@ -173,6 +163,15 @@ export async function processContentFactoryJob(admin: Admin, jobId: string): Pro
       source_identifier: playlistId,
       relationship: "primary",
     });
+    if (officialWebsite) {
+      await admin.from("learning_path_sources").insert({
+        learning_path_id: path.id,
+        source_type: "website",
+        source_url: officialWebsite,
+        source_title: "Official website",
+        relationship: "supporting",
+      });
+    }
 
     const summaryById = new Map(
       structure.lesson_summaries.map((s) => [s.youtubeVideoId, s] as const),
@@ -297,11 +296,29 @@ export async function processContentFactoryJob(admin: Admin, jobId: string): Pro
       .update({
         status: "review",
         quality_score: quality.score,
-        quality_breakdown: quality.breakdown,
+        quality_breakdown: { heuristic: quality.breakdown },
         warnings: structure.warnings,
         updated_at: new Date().toISOString(),
       })
       .eq("id", path.id);
+
+    let qualityScore = quality.score;
+    let qualityStatus: string | null = null;
+    try {
+      const qc = await reviewGeneratedLearningPath(admin, path.id, { heuristic: quality.breakdown });
+      qualityScore = qc.review.overallScore;
+      qualityStatus = qc.review.status;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      structure.warnings.push(`Quality review unavailable: ${message}`);
+      await admin
+        .from("learning_paths")
+        .update({
+          warnings: structure.warnings,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", path.id);
+    }
 
     await updateJobProgress(admin, jobId, {
       status: "waiting_review",
@@ -311,7 +328,8 @@ export async function processContentFactoryJob(admin: Admin, jobId: string): Pro
       completed_at: new Date().toISOString(),
       result_snapshot: {
         lessonCount: usable.length,
-        qualityScore: quality.score,
+        qualityScore,
+        qualityStatus,
         slug,
       },
     });
