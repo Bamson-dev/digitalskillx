@@ -2,18 +2,30 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { contentFactoryEnabled } from "@/lib/content-factory/feature-flag";
-import { getCachedPublishedLearningPath } from "@/lib/content-factory/library-cache";
+import {
+  getCachedPublishedLearningPath,
+  getCachedCategoryHub,
+} from "@/lib/content-factory/library-cache";
 import {
   buildLearnJsonLd,
   formatLearningMinutes,
   jsonLdIsSafe,
   serializeJsonLd,
+  libraryCategoryLabel,
+  normalizeLibraryCategory,
 } from "@/lib/content-factory/library-shared";
+import {
+  buildCategoryHubCopy,
+  buildCategoryJsonLd,
+  categoryHubHref,
+  isLibraryCategoryHubSlug,
+} from "@/lib/content-factory/seo-shared";
 import { Suspense } from "react";
 import { LazyYoutubeEmbed } from "@/components/learn/lazy-youtube-embed";
 import { LessonProgressToggle } from "@/components/learn/lesson-progress";
 import { LearnCompletionPanel } from "@/components/learn/learn-completion-panel";
 import { LearnCertificateReturn } from "@/components/learn/learn-certificate-return";
+import { LearnCategoryHub } from "@/components/learn/learn-category-hub";
 import { MarketplaceNav, MarketplaceFooter } from "@/components/marketplace/marketplace-chrome";
 import { siteUrl } from "@/lib/org";
 
@@ -24,6 +36,29 @@ type Props = { params: { slug: string } };
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   if (!contentFactoryEnabled()) return { title: "Learning path" };
   try {
+    if (isLibraryCategoryHubSlug(params.slug)) {
+      const hub = await getCachedCategoryHub(params.slug);
+      if (hub) {
+        const copy = buildCategoryHubCopy(hub.category);
+        const url = `${siteUrl()}${categoryHubHref(hub.category)}`;
+        return {
+          title: copy.seo_title,
+          description: copy.seo_description,
+          alternates: { canonical: url },
+          openGraph: {
+            title: copy.seo_title,
+            description: copy.seo_description,
+            url,
+            type: "website",
+          },
+          twitter: {
+            card: "summary_large_image",
+            title: copy.seo_title,
+            description: copy.seo_description,
+          },
+        };
+      }
+    }
     const loaded = await getCachedPublishedLearningPath(params.slug);
     const path = loaded?.path;
     if (!path) return { title: "Learning path" };
@@ -56,6 +91,37 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 export default async function LearnPathPage({ params }: Props) {
   if (!contentFactoryEnabled()) notFound();
 
+  if (isLibraryCategoryHubSlug(params.slug)) {
+    let hub;
+    try {
+      hub = await getCachedCategoryHub(params.slug);
+    } catch {
+      hub = null;
+    }
+    if (hub) {
+      const jsonLd = buildCategoryJsonLd({
+        siteUrl: siteUrl(),
+        category: hub.category,
+        paths: hub.paths,
+      });
+      return (
+        <div className="marketplace min-w-0 overflow-x-hidden">
+          <MarketplaceNav user={null} hideCurrencyToggle />
+          {jsonLdIsSafe(jsonLd) ? (
+            <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: serializeJsonLd(jsonLd) }} />
+          ) : null}
+          <LearnCategoryHub
+            category={hub.category}
+            paths={hub.paths}
+            relatedCategories={hub.relatedCategories}
+            authorityArticles={hub.authorityArticles}
+          />
+          <MarketplaceFooter />
+        </div>
+      );
+    }
+  }
+
   let loaded;
   try {
     loaded = await getCachedPublishedLearningPath(params.slug);
@@ -63,7 +129,7 @@ export default async function LearnPathPage({ params }: Props) {
     notFound();
   }
   if (!loaded?.path) notFound();
-  const { path, curriculum, creator, related, recommendedCourse } = loaded;
+  const { path, curriculum, creator, related, recommendedCourse, recommendedReading } = loaded;
   const officialWebsite = curriculum.sources.find((s) => s.source_type === "website") ?? null;
   const playlistSource =
     curriculum.sources.find((s) => s.source_type === "youtube_playlist") ??
@@ -97,6 +163,7 @@ export default async function LearnPathPage({ params }: Props) {
     description: path.short_description || path.description,
     artworkUrl: path.artwork_public_url,
     creatorName: creator?.display_name ?? null,
+    category: path.category,
     lessons: curriculum.lessons
       .filter((l) => l.youtube_video_id && l.youtube_url)
       .map((l) => ({
@@ -105,6 +172,14 @@ export default async function LearnPathPage({ params }: Props) {
         youtubeVideoId: l.youtube_video_id,
       })),
   });
+
+  const categoryId = normalizeLibraryCategory(path.category);
+  const whoFor =
+    path.difficulty === "beginner"
+      ? "Beginners who want a structured free introduction before deeper practice."
+      : path.difficulty === "advanced"
+        ? "Learners ready for a deeper, more challenging free learning path."
+        : "Self-paced learners who want a clear free path with creator-credited YouTube lessons.";
 
   return (
     <div className="marketplace min-w-0 overflow-x-hidden">
@@ -119,12 +194,26 @@ export default async function LearnPathPage({ params }: Props) {
         >
           ← Free Learning Library
         </Link>
+        {categoryId !== "all" && categoryId !== "other" ? (
+          <span className="text-sm text-muted">
+            {" · "}
+            <Link
+              href={categoryHubHref(categoryId)}
+              className="hover:text-brand focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
+            >
+              {libraryCategoryLabel(categoryId)}
+            </Link>
+          </span>
+        ) : null}
 
         <header className="mt-4 max-w-3xl">
           <p className="text-sm font-medium text-brand">{path.category || "Free learning path"}</p>
           <h1 className="mt-2 text-3xl font-bold tracking-tight sm:text-4xl">{path.title}</h1>
           <Suspense fallback={null}>
-            <LearnCertificateReturn />
+            <LearnCertificateReturn
+              pathTitle={path.title}
+              recommendedCourse={recommendedCourse ?? null}
+            />
           </Suspense>
           <p className="mt-3 text-neutral-600">{path.short_description}</p>
           <p className="mt-4 text-sm text-neutral-700">
@@ -195,6 +284,11 @@ export default async function LearnPathPage({ params }: Props) {
                 </ul>
               </section>
             ) : null}
+
+            <section>
+              <h2 className="text-lg font-semibold">Who this is for</h2>
+              <p className="mt-2 text-sm text-neutral-700">{whoFor}</p>
+            </section>
 
             <section>
               <h2 className="text-lg font-semibold">Curriculum</h2>
@@ -274,6 +368,7 @@ export default async function LearnPathPage({ params }: Props) {
               slug={path.slug}
               pathId={path.id}
               title={path.title}
+              creatorName={creator?.display_name ?? null}
               lessonIds={numberedLessons.flatMap((group) => group.lessons.map(({ number }) => String(number)))}
               certificateEnabled={path.certificate_enabled === true}
               certificatePriceNgn={path.certificate_price_ngn ?? null}
@@ -365,6 +460,25 @@ export default async function LearnPathPage({ params }: Props) {
             ) : null}
           </aside>
         </div>
+
+        {recommendedReading?.length ? (
+          <section className="mt-12">
+            <h2 className="text-lg font-semibold">Recommended reading</h2>
+            <ul className="mt-4 space-y-2">
+              {recommendedReading.slice(0, 4).map((item) => (
+                <li key={item.id}>
+                  <Link
+                    href={`/guides/${item.slug}`}
+                    className="text-brand hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
+                  >
+                    {item.title}
+                  </Link>
+                  <span className="text-xs text-muted"> · {item.content_type.replace(/_/g, " ")}</span>
+                </li>
+              ))}
+            </ul>
+          </section>
+        ) : null}
 
         {related.length ? (
           <section className="mt-12">

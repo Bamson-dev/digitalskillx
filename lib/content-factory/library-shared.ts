@@ -1,5 +1,7 @@
 /** Pure Stage 7 learning-library helpers (no secrets, no I/O). */
 
+import { titleSimilarity } from "./ops-shared";
+
 export const LIBRARY_PAGE_SIZE = 20;
 export const LIBRARY_RELATED_LIMIT = 4;
 
@@ -93,12 +95,27 @@ export function formatLearningMinutes(totalSeconds: number | null | undefined): 
   return `About ${hours} hr ${rem} min`;
 }
 
-export function relatedLearningPaths<T extends { id: string; category: string; title: string }>(
+export function relatedLearningPaths<
+  T extends {
+    id: string;
+    category: string;
+    title: string;
+    tags?: string[] | null;
+    difficulty?: string | null;
+  },
+>(
   catalog: T[],
-  seed: { id: string; category: string; title: string },
+  seed: {
+    id: string;
+    category: string;
+    title: string;
+    tags?: string[] | null;
+    difficulty?: string | null;
+  },
   limit = LIBRARY_RELATED_LIMIT,
 ): T[] {
   const seedCat = normalizeLibraryCategory(seed.category);
+  const seedTags = new Set((seed.tags ?? []).map((t) => t.toLowerCase()));
   const scored = catalog
     .filter((row) => row.id !== seed.id)
     .map((row) => {
@@ -107,11 +124,34 @@ export function relatedLearningPaths<T extends { id: string; category: string; t
       else if (row.category && seed.category && row.category.toLowerCase() === seed.category.toLowerCase()) {
         score += 40;
       }
+      const sim = titleSimilarity(seed.title, row.title);
+      if (sim >= 0.2) score += Math.round(sim * 30);
+      for (const tag of row.tags ?? []) {
+        if (seedTags.has(tag.toLowerCase())) score += 8;
+      }
+      if (seed.difficulty && row.difficulty && seed.difficulty === row.difficulty) score += 6;
       return { row, score };
     })
     .filter((item) => item.score > 0)
-    .sort((a, b) => b.score - a.score);
-  return scored.slice(0, limit).map((item) => item.row);
+    .sort((a, b) => b.score - a.score || a.row.title.localeCompare(b.row.title));
+
+  const picked: T[] = [];
+  const usedCategories = new Set<string>();
+  for (const item of scored) {
+    if (picked.length >= limit) break;
+    const cat = normalizeLibraryCategory(item.row.category);
+    if (picked.length >= 2 && usedCategories.has(cat) && scored.length > limit) continue;
+    picked.push(item.row);
+    usedCategories.add(cat);
+  }
+  if (picked.length < limit) {
+    for (const item of scored) {
+      if (picked.length >= limit) break;
+      if (picked.some((row) => row.id === item.row.id)) continue;
+      picked.push(item.row);
+    }
+  }
+  return picked;
 }
 
 export function libraryHref(params: { q?: string; category?: string; page?: number }): string {
@@ -130,9 +170,11 @@ export function buildLearnJsonLd(input: {
   description: string;
   artworkUrl: string | null;
   creatorName: string | null;
+  category?: string | null;
   lessons: Array<{ title: string; youtubeUrl: string; youtubeVideoId: string }>;
 }): Record<string, unknown> {
   const pageUrl = `${input.siteUrl}/learn/${input.slug}`;
+  const category = normalizeLibraryCategory(input.category);
   const videos = input.lessons.slice(0, 40).map((lesson) => ({
     "@type": "VideoObject",
     name: lesson.title,
@@ -140,16 +182,27 @@ export function buildLearnJsonLd(input: {
     embedUrl: `https://www.youtube-nocookie.com/embed/${lesson.youtubeVideoId}`,
     thumbnailUrl: `https://i.ytimg.com/vi/${lesson.youtubeVideoId}/hqdefault.jpg`,
   }));
+  const crumbs: Array<Record<string, unknown>> = [
+    { "@type": "ListItem", position: 1, name: "Home", item: input.siteUrl },
+    { "@type": "ListItem", position: 2, name: "Free Learning Library", item: `${input.siteUrl}/learn` },
+  ];
+  if (category !== "all" && category !== "other") {
+    crumbs.push({
+      "@type": "ListItem",
+      position: 3,
+      name: libraryCategoryLabel(category),
+      item: `${input.siteUrl}/learn/${category}`,
+    });
+    crumbs.push({ "@type": "ListItem", position: 4, name: input.title, item: pageUrl });
+  } else {
+    crumbs.push({ "@type": "ListItem", position: 3, name: input.title, item: pageUrl });
+  }
   return {
     "@context": "https://schema.org",
     "@graph": [
       {
         "@type": "BreadcrumbList",
-        itemListElement: [
-          { "@type": "ListItem", position: 1, name: "Home", item: input.siteUrl },
-          { "@type": "ListItem", position: 2, name: "Free Learning Library", item: `${input.siteUrl}/learn` },
-          { "@type": "ListItem", position: 3, name: input.title, item: pageUrl },
-        ],
+        itemListElement: crumbs,
       },
       {
         "@type": "Course",

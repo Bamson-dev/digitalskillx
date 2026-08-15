@@ -9,6 +9,7 @@ const PUBLIC_PREFIXES = [
   "/api/enroll",
   "/course",
   "/learn",
+  "/guides",
   "/checkout",
   "/enroll",
   "/enrollment",

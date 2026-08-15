@@ -43,6 +43,25 @@ assert.notEqual(hashCheckoutBinding("dsx_1", "a@b.com"), hashCheckoutBinding("ds
 console.log("PASS: offline unit checks (safeNextPath, checkout binding)");
 
 {
+  const { spawnSync } = await import("node:child_process");
+  const r = spawnSync(
+    process.execPath,
+    [
+      "--import",
+      join(root, "scripts/certification/register-ts-ext.mjs"),
+      join(root, "scripts/certification/test-learn-certificate-offers.mjs"),
+    ],
+    { cwd: root, encoding: "utf8" },
+  );
+  if (r.status !== 0) {
+    console.error(r.stdout);
+    console.error(r.stderr);
+    process.exit(r.status ?? 1);
+  }
+  console.log("PASS: Stage 8 certificate offer validators");
+}
+
+{
   const { parseStudentCsv, isNonCourseCsvValue } = await import(
     pathToFileURL(join(root, "lib/student-csv-parse.ts")).href
   );

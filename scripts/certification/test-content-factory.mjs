@@ -1946,7 +1946,7 @@ function runDeterministicQualityChecks(input) {
   const quality = read("lib/content-factory/quality.ts");
   assert.match(proc, /reviewGeneratedLearningPath/);
   assert.match(quality, /quality_score: review.overallScore/);
-  assert.match(quality, /quality_breakdown: review/);
+  assert.match(quality, /quality_breakdown: qualityPayload|preserveSeoGrowthOnQualityWrite/);
   console.log("PASS: S5-16 quality result stored");
 }
 
@@ -2728,9 +2728,13 @@ console.log("\nAll Content Factory Phase 1 + Stage 1–7 offline checks passed."
   assert.match(shared, /summarizeLearnCompletion/);
   assert.match(shared, /isComplete: total > 0 && completed === total/);
   const panel = read("components/learn/learn-completion-panel.tsx");
-  assert.match(panel, /You completed the lessons in this learning path/);
-  assert.match(panel, /Want a certificate for this learning path/);
+  const checkoutUi = read("components/learn/learn-certificate-checkout.tsx");
+  assert.match(panel, /You completed this learning path/);
+  assert.match(panel, /Get your DigitalSkillX certificate/);
+  assert.match(panel, /Certificate includes/);
+  assert.match(checkoutUi, /Get My Certificate/);
   assert.doesNotMatch(panel, /verified you watched/);
+  assert.doesNotMatch(panel, /from\(\"lesson_progress\"\)/);
   console.log("PASS: S8-4 completion detection + certificate CTA");
 }
 
@@ -2786,7 +2790,9 @@ console.log("\nAll Content Factory Phase 1 + Stage 1–7 offline checks passed."
   const panel = read("components/learn/learn-completion-panel.tsx");
   assert.match(cache, /recommended_course_id/);
   assert.match(cache, /visibility\", \"published\"/);
+  assert.match(cache, /price_ngn/);
   assert.match(panel, /\/course\/\$\{recommendedCourse.id\}/);
+  assert.match(panel, /summary.isComplete && recommendedCourse/);
   assert.doesNotMatch(panel, /RecommendationRail|recordProductEvent/);
   console.log("PASS: S8-14 paid course recommendation");
 }
@@ -2826,6 +2832,7 @@ console.log("\nAll Content Factory Phase 1 + Stage 1–7 offline checks passed."
 {
   assert.ok(existsSync(join(root, "supabase/migrations/0044_learning_path_certificates.sql")));
   assert.ok(existsSync(join(root, "sql/apply-learning-path-certificates.sql")));
+  assert.ok(!existsSync(join(root, "supabase/migrations/0045_learning_path_certificates.sql")));
   const mig = read("supabase/migrations/0044_learning_path_certificates.sql");
   const migSql = mig
     .split("\n")
@@ -2840,7 +2847,95 @@ console.log("\nAll Content Factory Phase 1 + Stage 1–7 offline checks passed."
   console.log("PASS: S8 migration 0044 additive and unapplied");
 }
 
+{
+  const adminApi = read("app/api/admin/content-factory/certificate-offers/route.ts");
+  const adminUi = read("components/admin/learning-path-certificate-offers.tsx");
+  const jobs = read("app/api/admin/content-factory/jobs/[id]/route.ts");
+  const panel = read("components/admin/content-factory-panel.tsx");
+  assert.match(adminApi, /requireAdminApiAuth/);
+  assert.match(adminApi, /saveLearningPathCertificateOffer/);
+  assert.match(adminUi, /Save certificate offer/);
+  assert.match(adminUi, /Published/);
+  assert.doesNotMatch(adminUi, /Recommended paid course ID/);
+  assert.doesNotMatch(jobs, /certificate_enabled/);
+  assert.doesNotMatch(jobs, /recommended_course_id/);
+  assert.match(panel, /Learning path certificates/);
+  const adminLib = read("lib/learn-certificate-admin.ts");
+  assert.match(adminLib, /saveLearningPathCertificateOffer/);
+  assert.match(adminLib, /listPublishedCoursesForRecommendation/);
+  assert.doesNotMatch(adminLib, /status: \"draft\"/);
+  console.log("PASS: S8-25 admin certificate offer config without UUID/unpublish");
+}
+
+{
+  const issue = read("lib/learn-certificates.ts");
+  const pdf = read("lib/certificate-pdf.ts");
+  const email = read("lib/email/system-templates.ts");
+  const share = read("lib/certificate-share.ts");
+  const verify = read("app/verify/[number]/page.tsx");
+  const ret = read("components/learn/learn-certificate-return.tsx");
+  assert.match(issue, /isUniqueViolation/);
+  assert.match(issue, /kind: \"learning_path\"/);
+  assert.match(pdf, /completed the DigitalSkillX learning path/);
+  assert.match(pdf, /has successfully completed/);
+  assert.match(email, /kind === \"learning_path\"/);
+  assert.match(email, /does not claim a partnership/);
+  assert.match(share, /kind === \"learning_path\"/);
+  assert.match(verify, /PATH_CERTIFICATE_ATTRIBUTION/);
+  assert.match(verify, /robots: \{ index: false/);
+  assert.match(ret, /Certificate issued successfully/);
+  assert.match(ret, /Want to go deeper/);
+  assert.match(ret, /CertificateShareButton/);
+  assert.doesNotMatch(pdf, /official certification/i);
+  assert.doesNotMatch(email, /official certification/i);
+  console.log("PASS: S8-26–32 PDF, email, verify, share, post-purchase, idempotency");
+}
+
 console.log("\nAll Content Factory Phase 1 + Stage 1–8 offline checks passed.");
+
+{
+  const { spawnSync } = await import("node:child_process");
+  const r = spawnSync(
+    process.execPath,
+    [
+      "--import",
+      join(root, "scripts/certification/register-ts-ext.mjs"),
+      join(root, "scripts/certification/test-seo-growth.mjs"),
+    ],
+    { cwd: root, encoding: "utf8" },
+  );
+  if (r.status !== 0) {
+    console.error(r.stdout);
+    console.error(r.stderr);
+    process.exit(r.status ?? 1);
+  }
+  console.log(r.stdout.trim().split("\n").filter((line) => line.startsWith("PASS:")).join("\n"));
+  console.log("PASS: Stage 9 SEO growth suite");
+}
+
+console.log("\nAll Content Factory Phase 1 + Stage 1–9 offline checks passed.");
+
+{
+  const { spawnSync } = await import("node:child_process");
+  const r = spawnSync(
+    process.execPath,
+    [
+      "--import",
+      join(root, "scripts/certification/register-ts-ext.mjs"),
+      join(root, "scripts/certification/test-organic-authority.mjs"),
+    ],
+    { cwd: root, encoding: "utf8" },
+  );
+  if (r.status !== 0) {
+    console.error(r.stdout);
+    console.error(r.stderr);
+    process.exit(r.status ?? 1);
+  }
+  console.log(r.stdout.trim().split("\n").filter((line) => line.startsWith("PASS:")).join("\n"));
+  console.log("PASS: Stage 10 organic authority suite");
+}
+
+console.log("\nAll Content Factory Phase 1 + Stage 1–10 offline checks passed.");
 
 
 

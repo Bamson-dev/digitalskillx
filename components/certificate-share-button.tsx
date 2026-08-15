@@ -11,11 +11,11 @@ import {
 
 type Props = CertificateShareInput;
 
-export function CertificateShareButton({ verifyUrl, courseTitle }: Props) {
+export function CertificateShareButton({ verifyUrl, courseTitle, kind }: Props) {
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
-  const input = { verifyUrl, courseTitle };
+  const input = { verifyUrl, courseTitle, kind };
 
   useEffect(() => {
     function onClick(e: MouseEvent) {
@@ -51,11 +51,11 @@ export function CertificateShareButton({ verifyUrl, courseTitle }: Props) {
 
   async function copyLink() {
     try {
-      await navigator.clipboard.writeText(certificateShareMessage(input));
+      await navigator.clipboard.writeText(verifyUrl);
       setCopied(true);
       setOpen(false);
     } catch {
-      window.prompt("Copy this link to share:", certificateShareMessage(input));
+      window.prompt("Copy this verification link:", verifyUrl);
     }
   }
 
@@ -64,11 +64,12 @@ export function CertificateShareButton({ verifyUrl, courseTitle }: Props) {
       <button
         type="button"
         onClick={() => void handleShareClick()}
-        className="inline-flex items-center gap-2 rounded-lg border border-app px-4 py-2 text-sm font-semibold transition-colors hover:bg-brand-50"
+        className="inline-flex min-h-[44px] items-center gap-2 rounded-lg border border-app px-4 py-2 text-sm font-semibold transition-colors hover:bg-brand-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
+        aria-label="Share certificate verification link"
         aria-expanded={open}
         aria-haspopup="menu"
       >
-        <Share2 className="h-4 w-4" />
+        <Share2 className="h-4 w-4" aria-hidden="true" />
         Share
       </button>
 
@@ -96,8 +97,8 @@ export function CertificateShareButton({ verifyUrl, courseTitle }: Props) {
             onClick={() => void copyLink()}
             className="flex w-full items-center gap-2 border-t border-app px-4 py-2.5 text-left text-sm font-medium text-foreground hover:bg-brand-50"
           >
-            {copied ? <Check className="h-4 w-4 text-green-600" /> : <Copy className="h-4 w-4" />}
-            {copied ? "Copied!" : "Copy link"}
+            {copied ? <Check className="h-4 w-4 text-green-600" aria-hidden="true" /> : <Copy className="h-4 w-4" aria-hidden="true" />}
+            {copied ? "Copied verification link" : "Copy verification link"}
           </button>
         </div>
       ) : null}

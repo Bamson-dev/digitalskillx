@@ -14,7 +14,6 @@ import {
   rejectLearningPath,
 } from "@/lib/content-factory/learning-paths";
 import type { LearningPath } from "@/types/database";
-import { isMissingColumnError } from "@/lib/schema-guard";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -111,34 +110,13 @@ export async function PATCH(request: NextRequest, { params }: Ctx) {
       }
       if (typeof patch.seo_title === "string") update.seo_title = patch.seo_title;
       if (typeof patch.seo_description === "string") update.seo_description = patch.seo_description;
-      if (typeof patch.certificate_enabled === "boolean") update.certificate_enabled = patch.certificate_enabled;
-      if (patch.certificate_price_ngn === null) update.certificate_price_ngn = null;
-      if (typeof patch.certificate_price_ngn === "number" && patch.certificate_price_ngn >= 0) {
-        update.certificate_price_ngn = Math.round(patch.certificate_price_ngn);
-      }
-      if (patch.recommended_course_id === null) update.recommended_course_id = null;
-      if (typeof patch.recommended_course_id === "string" && patch.recommended_course_id.trim()) {
-        update.recommended_course_id = patch.recommended_course_id.trim();
-      }
 
-      let result = await auth.admin
+      const result = await auth.admin
         .from("learning_paths")
         .update(update)
         .eq("id", job.learning_path_id)
         .select("*")
         .single();
-      if (result.error && isMissingColumnError(result.error.message)) {
-        const fallback = { ...update };
-        delete fallback.certificate_enabled;
-        delete fallback.certificate_price_ngn;
-        delete fallback.recommended_course_id;
-        result = await auth.admin
-          .from("learning_paths")
-          .update(fallback)
-          .eq("id", job.learning_path_id)
-          .select("*")
-          .single();
-      }
       if (result.error) throw new Error(result.error.message);
       return NextResponse.json({ path: result.data });
     }

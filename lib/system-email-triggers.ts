@@ -223,6 +223,8 @@ export async function sendCertificateIssuedEmail(params: {
   email: string;
   courseTitle: string;
   issuedAt: string;
+  kind?: "course" | "learning_path";
+  creatorName?: string | null;
 }) {
   const { generateCertificatePdfBuffer } = await import("@/lib/certificate-pdf");
 
@@ -230,6 +232,7 @@ export async function sendCertificateIssuedEmail(params: {
   const sender = await getEmailSenderConfig();
   const baseUrl = siteUrl();
   const certificateUrl = `${baseUrl}/certificates/${params.certificateId}`;
+  const verifyUrl = `${baseUrl}/verify/${params.certificateNumber}`;
 
   const tpl = courseCompletionCertificateEmail({
     firstName: studentFirstName(params.fullName),
@@ -238,15 +241,18 @@ export async function sendCertificateIssuedEmail(params: {
     certificateUrl,
     supportEmail: sender.replyTo ?? sender.fromAddress,
     brandColor: settings.primary_color,
+    kind: params.kind,
+    verifyUrl,
   });
 
-  const verifyUrl = `${baseUrl}/verify/${params.certificateNumber}`;
   const pdf = await generateCertificatePdfBuffer({
     recipientName: params.fullName,
     courseTitle: params.courseTitle,
     certificateNumber: params.certificateNumber,
     issuedAt: params.issuedAt,
     verifyUrl,
+    kind: params.kind,
+    creatorName: params.creatorName,
   });
 
   return sendSystemEmail({

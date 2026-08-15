@@ -914,6 +914,59 @@ export type ContentFactoryBlock = {
   created_at: string;
 };
 
+export type AuthorityArticle = {
+  id: string;
+  title: string;
+  slug: string;
+  content_type:
+    | "guide"
+    | "tutorial"
+    | "explainer"
+    | "study_notes"
+    | "lesson_summary"
+    | "faq"
+    | "glossary"
+    | "practical_example"
+    | "common_mistakes"
+    | "comparison"
+    | "prerequisites"
+    | "next_steps";
+  description: string;
+  body_md: string;
+  learning_path_id: string | null;
+  category: string;
+  target_intent: string;
+  target_audience: string;
+  related_lesson_ids: string[];
+  related_lesson_titles: string[];
+  seo_title: string | null;
+  seo_description: string | null;
+  status:
+    | "idea"
+    | "qualified"
+    | "generating"
+    | "review"
+    | "approved"
+    | "published"
+    | "rejected"
+    | "failed";
+  quality_score: number | null;
+  quality_breakdown: Json;
+  opportunity_score: number;
+  source_urls: string[];
+  internal_links: Json;
+  generation_meta: Json;
+  word_count: number;
+  stale_at: string | null;
+  source_updated_at: string | null;
+  reviewed_at: string | null;
+  published_at: string | null;
+  rejected_at: string | null;
+  reject_reason: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 export type Database = {
   public: {
     Tables: {
@@ -1245,6 +1298,10 @@ export type Database = {
       content_factory_blocks: Table<
         ContentFactoryBlock,
         [Rel<"content_factory_blocks_created_by_fkey", "created_by", "profiles", "id">]
+      >;
+      authority_articles: Table<
+        AuthorityArticle,
+        [Rel<"authority_articles_learning_path_id_fkey", "learning_path_id", "learning_paths", "id">]
       >;
     };
     Views: Record<string, never>;

@@ -1,6 +1,9 @@
 import { requireAdmin } from "@/lib/auth";
 import { contentFactoryEnabled } from "@/lib/content-factory/feature-flag";
 import { ContentFactoryPanel } from "@/components/admin/content-factory-panel";
+import { LearningPathCertificateOffers } from "@/components/admin/learning-path-certificate-offers";
+import { OrganicAuthorityPanel } from "@/components/admin/organic-authority-panel";
+import { SeoGrowthPanel } from "@/components/admin/seo-growth-panel";
 import Link from "next/link";
 
 export const metadata = { title: "Content Factory" };
@@ -32,6 +35,9 @@ export default async function AdminContentFactoryPage() {
         </p>
       </div>
       <ContentFactoryPanel />
+      <SeoGrowthPanel />
+      <OrganicAuthorityPanel />
+      <LearningPathCertificateOffers />
     </div>
   );
 }

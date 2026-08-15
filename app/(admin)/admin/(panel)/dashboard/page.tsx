@@ -13,6 +13,8 @@ import {
 import { createClient } from "@/lib/supabase/server";
 import { StatCard } from "@/components/admin/stat-card";
 import { Card, CardHeader } from "@/components/ui/card";
+import { isMissingColumnError } from "@/lib/schema-guard";
+import { formatNaira } from "@/lib/currency";
 
 export const metadata: Metadata = { title: "Admin dashboard" };
 
@@ -22,6 +24,36 @@ async function count(table: string, filter?: (q: any) => any) {
   if (filter) query = filter(query);
   const { count: c } = await query;
   return c ?? 0;
+}
+
+async function countPathCertificates() {
+  const supabase = createClient();
+  const { count: c, error } = await supabase
+    .from("certificates")
+    .select("id", { count: "exact", head: true })
+    .not("learning_path_id", "is", null)
+    .eq("is_valid", true);
+  if (error && isMissingColumnError(error.message)) return 0;
+  return c ?? 0;
+}
+
+async function sumPathCertificateRevenue() {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("transactions")
+    .select("amount")
+    .not("learning_path_id", "is", null)
+    .eq("status", "success")
+    .limit(2000);
+  if (error) {
+    if (isMissingColumnError(error.message)) return 0;
+    return 0;
+  }
+  const kobo = (data ?? []).reduce(
+    (sum, row) => sum + (typeof row.amount === "number" ? row.amount : 0),
+    0,
+  );
+  return Math.round(kobo / 100);
 }
 
 export default async function AdminDashboardPage() {
@@ -35,6 +67,8 @@ export default async function AdminDashboardPage() {
     enrollments,
     certificates,
     lessonsCompleted,
+    pathCertificates,
+    pathCertificateRevenue,
   ] = await Promise.all([
     count("profiles", (q) => q.eq("role", "student")),
     count("profiles", (q) => q.eq("role", "student").gte("last_active_at", sevenDaysAgo)),
@@ -43,6 +77,8 @@ export default async function AdminDashboardPage() {
     count("enrollments"),
     count("certificates", (q) => q.eq("is_valid", true)),
     count("lesson_progress", (q) => q.eq("completed", true)),
+    countPathCertificates(),
+    sumPathCertificateRevenue(),
   ]);
 
   const stats = [
@@ -82,12 +118,21 @@ export default async function AdminDashboardPage() {
       hint: "Valid certificates only",
       icon: <Award className="h-5 w-5" />,
     },
+    {
+      label: "Learning path certificates",
+      value: pathCertificates,
+      hint: pathCertificateRevenue
+        ? `${formatNaira(pathCertificateRevenue)} from verified payments`
+        : "Verified learning-path certificates",
+      icon: <Award className="h-5 w-5" />,
+    },
   ];
 
   const shortcuts = [
     { href: "/admin/courses", label: "Create or edit a course", icon: Plus },
     { href: "/admin/students", label: "Manage customers", icon: Users },
     { href: "/admin/enrollment-links", label: "Share an enrollment link", icon: Link2 },
+    { href: "/admin/content-factory", label: "Content Factory & SEO growth", icon: BookOpen },
     { href: "/admin/analytics", label: "View analytics", icon: CheckCircle2 },
     { href: "/admin/settings", label: "Platform settings", icon: Settings },
   ];

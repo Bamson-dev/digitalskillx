@@ -33,8 +33,9 @@ export function LessonProgressToggle({ slug, lessonId }: { slug: string; lessonI
     <button
       type="button"
       onClick={toggle}
-      className="mt-2 text-xs text-muted hover:text-brand"
+      className="mt-2 text-xs text-muted hover:text-brand focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
       aria-pressed={done}
+      aria-label={done ? "Mark lesson incomplete" : "Mark lesson complete"}
     >
       {done ? "Completed" : "Mark complete"}
     </button>

@@ -241,11 +241,17 @@ export async function reviewGeneratedLearningPath(
     ? path.warnings.filter((row): row is string => typeof row === "string" && !row.startsWith("ERROR:") && !row.startsWith("WARNING:"))
     : [];
 
+  const { preserveSeoGrowthOnQualityWrite } = await import("@/lib/content-factory/seo-shared");
+  const qualityPayload = preserveSeoGrowthOnQualityWrite(
+    path.quality_breakdown,
+    review as unknown as Record<string, unknown>,
+  );
+
   await admin
     .from("learning_paths")
     .update({
       quality_score: review.overallScore,
-      quality_breakdown: review as unknown as Json,
+      quality_breakdown: qualityPayload as unknown as Json,
       warnings: [...existingWarnings, ...warningLines] as Json,
       updated_at: new Date().toISOString(),
     })

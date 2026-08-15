@@ -15,6 +15,7 @@ import { sendCertificateIssuedEmail } from "@/lib/system-email-triggers";
 import { DEFAULT_CERTIFICATE_TEMPLATE_KEY, normalizeCertificateTemplateKey } from "@/lib/certificate-templates";
 import { isMissingColumnError } from "@/lib/schema-guard";
 import { pathCertificateOfferable } from "@/lib/content-factory/library-shared";
+import { isUniqueViolation } from "@/lib/learn-certificate-shared";
 
 type Admin = SupabaseClient<Database>;
 
@@ -71,7 +72,7 @@ export async function issueLearningPathCertificate(params: {
 
   const { data: path, error: pathError } = await admin
     .from("learning_paths")
-    .select("id, title, status, certificate_template_override")
+    .select("id, title, status, certificate_template_override, creator_profile_id")
     .eq("id", params.learningPathId)
     .maybeSingle();
   if (pathError) {
@@ -114,7 +115,18 @@ export async function issueLearningPathCertificate(params: {
     })
     .select("*")
     .single();
-  if (error || !cert) return null;
+  if (error || !cert) {
+    if (error && isUniqueViolation(error.message)) {
+      const { data: raced } = await admin
+        .from("certificates")
+        .select("*")
+        .eq("student_id", canonicalStudentId)
+        .eq("learning_path_id", params.learningPathId)
+        .maybeSingle();
+      return raced ?? null;
+    }
+    return null;
+  }
 
   await notify({
     studentId: canonicalStudentId,
@@ -125,6 +137,15 @@ export async function issueLearningPathCertificate(params: {
   });
 
   if (params.sendEmail !== false) {
+    let creatorName: string | null = null;
+    if (path.creator_profile_id) {
+      const { data: creator } = await admin
+        .from("creator_profiles")
+        .select("display_name")
+        .eq("id", path.creator_profile_id)
+        .maybeSingle();
+      creatorName = creator?.display_name ?? null;
+    }
     await sendCertificateIssuedEmail({
       studentId: canonicalStudentId,
       courseId: params.learningPathId,
@@ -134,6 +155,8 @@ export async function issueLearningPathCertificate(params: {
       email: profile.email,
       courseTitle: path.title,
       issuedAt: cert.issued_at,
+      kind: "learning_path",
+      creatorName,
     });
   }
 

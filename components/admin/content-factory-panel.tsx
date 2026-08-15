@@ -354,9 +354,6 @@ export function ContentFactoryPanel() {
                   title: selected.path.title,
                   description: selected.path.description,
                   short_description: selected.path.short_description,
-                  certificate_enabled: selected.path.certificate_enabled === true,
-                  certificate_price_ngn: selected.path.certificate_price_ngn ?? null,
-                  recommended_course_id: selected.path.recommended_course_id ?? null,
                 }
               : undefined,
         }),
@@ -827,62 +824,11 @@ export function ContentFactoryPanel() {
                   }
                 />
                 <p className="text-sm text-neutral-600">{selected.path.description}</p>
-                <div className="mt-3 space-y-2 rounded-xl border border-app p-3">
-                  <h4 className="text-sm font-semibold">Certificate &amp; advanced course</h4>
-                  <label className="flex items-center gap-2 text-sm">
-                    <input
-                      type="checkbox"
-                      checked={selected.path.certificate_enabled === true}
-                      onChange={(e) =>
-                        setSelected((prev) =>
-                          prev?.path
-                            ? { ...prev, path: { ...prev.path, certificate_enabled: e.target.checked } }
-                            : prev,
-                        )
-                      }
-                    />
-                    Offer paid certificate
-                  </label>
-                  <label className="block text-xs text-muted">Certificate price (NGN)</label>
-                  <Input
-                    type="number"
-                    min={0}
-                    value={selected.path.certificate_price_ngn ?? ""}
-                    onChange={(e) =>
-                      setSelected((prev) =>
-                        prev?.path
-                          ? {
-                              ...prev,
-                              path: {
-                                ...prev.path,
-                                certificate_price_ngn: e.target.value === "" ? null : Number(e.target.value),
-                              },
-                            }
-                          : prev,
-                      )
-                    }
-                  />
-                  <label className="block text-xs text-muted">Recommended paid course ID</label>
-                  <Input
-                    value={selected.path.recommended_course_id ?? ""}
-                    onChange={(e) =>
-                      setSelected((prev) =>
-                        prev?.path
-                          ? {
-                              ...prev,
-                              path: {
-                                ...prev.path,
-                                recommended_course_id: e.target.value.trim() || null,
-                              },
-                            }
-                          : prev,
-                      )
-                    }
-                  />
-                  <p className="text-xs text-muted">
-                    Save draft after editing. Price is charged from the server. AI cannot set this.
-                  </p>
-                </div>
+                <p className="mt-3 text-xs text-muted">
+                  Certificate price, recommended course, and template are configured in{" "}
+                  <strong>Learning path certificates</strong> below. That save does not change
+                  publication status.
+                </p>
                 <p className="text-xs text-muted">
                   {selected.path.category} · {selected.path.difficulty}
                   {selected.path.status === "published" ? (

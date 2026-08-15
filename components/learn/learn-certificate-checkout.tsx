@@ -36,10 +36,13 @@ export function LearnCertificateCheckout({
         error?: string;
         authorizationUrl?: string;
         alreadyOwned?: boolean;
+        certificateId?: string | null;
       };
       if (!res.ok) throw new Error(json.error ?? "Checkout could not start.");
       if (json.alreadyOwned) {
-        window.location.href = "/certificates";
+        window.location.href = json.certificateId
+          ? `/certificates/${json.certificateId}`
+          : "/certificates";
         return;
       }
       if (!json.authorizationUrl) throw new Error("Checkout could not start.");
@@ -56,21 +59,27 @@ export function LearnCertificateCheckout({
   }
 
   return (
-    <div className="mt-3">
+    <div className="mt-4 min-w-0">
       {!open ? (
         <button
           type="button"
           onClick={() => setOpen(true)}
-          className="inline-flex h-10 items-center rounded-lg bg-brand px-4 text-sm font-semibold text-white hover:bg-brand-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
+          className="inline-flex min-h-[44px] w-full items-center justify-center rounded-lg bg-brand px-4 text-sm font-semibold text-white hover:bg-brand-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand sm:w-auto"
         >
-          Get certificate · {formatNaira(priceNgn)}
+          Get My Certificate · {formatNaira(priceNgn)}
         </button>
       ) : (
-        <form onSubmit={onSubmit} className="space-y-2">
-          <p className="text-xs text-muted">
-            Certificate for {title}. Price is set on the server. Lessons stay free.
+        <form onSubmit={onSubmit} className="space-y-3">
+          <p className="text-sm text-neutral-700">
+            Certificate for <span className="font-medium">{title}</span>. Price{" "}
+            {formatNaira(priceNgn)} is charged from the server — not from this form.
           </p>
-          <label className="block text-xs text-muted" htmlFor="cert-name">
+          <ul className="list-disc space-y-1 pl-5 text-sm text-neutral-700">
+            <li>Your name on the certificate</li>
+            <li>Learning path title and completion date</li>
+            <li>Certificate number and public verification link</li>
+          </ul>
+          <label className="block text-sm font-medium text-neutral-800" htmlFor="cert-name">
             Full name
           </label>
           <input
@@ -80,10 +89,10 @@ export function LearnCertificateCheckout({
             onChange={(e) => setFullName(e.target.value)}
             required
             minLength={2}
-            className="h-10 w-full rounded-lg border border-app px-3 text-sm"
+            className="h-11 w-full rounded-lg border border-app px-3 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
             autoComplete="name"
           />
-          <label className="block text-xs text-muted" htmlFor="cert-email">
+          <label className="block text-sm font-medium text-neutral-800" htmlFor="cert-email">
             Email
           </label>
           <input
@@ -93,22 +102,26 @@ export function LearnCertificateCheckout({
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
-            className="h-10 w-full rounded-lg border border-app px-3 text-sm"
+            className="h-11 w-full rounded-lg border border-app px-3 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
             autoComplete="email"
           />
-          {error ? <p className="text-sm text-red-600">{error}</p> : null}
+          {error ? (
+            <p className="text-sm text-red-600" role="alert">
+              {error}
+            </p>
+          ) : null}
           <div className="flex flex-wrap gap-2">
             <button
               type="submit"
               disabled={loading}
-              className="h-10 rounded-lg bg-brand px-4 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60"
+              className="inline-flex min-h-[44px] items-center rounded-lg bg-brand px-4 text-sm font-semibold text-white hover:bg-brand-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand disabled:opacity-60"
             >
-              {loading ? "Starting checkout…" : "Continue to payment"}
+              {loading ? "Starting Paystack…" : `Pay ${formatNaira(priceNgn)} with Paystack`}
             </button>
             <button
               type="button"
               onClick={() => setOpen(false)}
-              className="h-10 rounded-lg border border-app px-4 text-sm"
+              className="inline-flex min-h-[44px] items-center rounded-lg border border-app px-4 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
             >
               Cancel
             </button>

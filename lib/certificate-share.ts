@@ -3,9 +3,13 @@
 export type CertificateShareInput = {
   verifyUrl: string;
   courseTitle: string;
+  kind?: "course" | "learning_path";
 };
 
 export function certificateShareText(input: CertificateShareInput) {
+  if (input.kind === "learning_path") {
+    return `I completed the DigitalSkillX learning path ${input.courseTitle}. Verify my certificate:`;
+  }
   return `I earned a certificate in ${input.courseTitle} from DigitalSkillX! Verify it here:`;
 }
 

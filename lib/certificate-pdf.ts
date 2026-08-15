@@ -1,5 +1,6 @@
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 import { ORG } from "@/lib/org";
+import type { CertificateSubjectKind } from "@/lib/learn-certificate-shared";
 
 export type CertificatePdfInput = {
   recipientName: string;
@@ -7,6 +8,8 @@ export type CertificatePdfInput = {
   certificateNumber: string;
   issuedAt: string;
   verifyUrl: string;
+  kind?: CertificateSubjectKind;
+  creatorName?: string | null;
 };
 
 /** Landscape A4 certificate PDF (serverless-safe; no external font files). */
@@ -66,19 +69,37 @@ export async function generateCertificatePdfBuffer(
     y -= size + 12;
   };
 
+  const isLearningPath = input.kind === "learning_path";
+
   drawCentered("Certificate of Completion", 28, helveticaBold);
   y -= 8;
   drawCentered(ORG.certificateOrg, 12, helvetica, textMuted);
   y -= 16;
-  drawCentered("This certifies that", 14, helvetica, textMuted);
+  drawCentered(
+    isLearningPath ? "This certificate recognizes that" : "This certifies that",
+    14,
+    helvetica,
+    textMuted,
+  );
   y -= 8;
   drawCentered(input.recipientName, 32, helveticaBold);
   y -= 8;
-  drawCentered("has successfully completed", 14, helvetica, textMuted);
+  drawCentered(
+    isLearningPath
+      ? "completed the DigitalSkillX learning path"
+      : "has successfully completed",
+    14,
+    helvetica,
+    textMuted,
+  );
   y -= 8;
   drawCentered(input.courseTitle, 20, helveticaBold);
+  if (isLearningPath && input.creatorName?.trim()) {
+    y -= 4;
+    drawCentered(`Lessons by ${input.creatorName.trim()} on YouTube`, 11, helvetica, textMuted);
+  }
 
-  y = margin + innerMargin + 80;
+  y = margin + innerMargin + (isLearningPath ? 96 : 80);
   const issued = new Date(input.issuedAt).toLocaleDateString("en-GB", {
     day: "numeric",
     month: "long",
@@ -87,6 +108,14 @@ export async function generateCertificatePdfBuffer(
   drawCentered(`Issued ${issued}`, 11, helvetica, textMuted);
   drawCentered(`Certificate No. ${input.certificateNumber}`, 10, helvetica, textMuted);
   drawCentered(`Verify: ${input.verifyUrl}`, 9, helvetica, textMuted);
+  if (isLearningPath) {
+    drawCentered(
+      "DigitalSkillX certifies completion of this learning path, not partnership with the creator.",
+      8,
+      helvetica,
+      textMuted,
+    );
+  }
 
   const pdfBytes = await pdfDoc.save();
   return Buffer.from(pdfBytes);

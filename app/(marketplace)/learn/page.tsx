@@ -31,16 +31,19 @@ export async function generateMetadata({ searchParams }: { searchParams: Search 
       : page > 1
         ? `${categoryLabel} · Free Learning · Page ${page}`
         : `${categoryLabel} · Free Learning Library`;
-  const canonical = `${siteUrl()}${libraryHref({
-    category: q ? undefined : category,
-    page: q ? undefined : page,
-  })}`;
+  const canonical =
+    !q && category !== "all" && page <= 1
+      ? `${siteUrl()}/learn/${category}`
+      : `${siteUrl()}${libraryHref({
+          category: q ? undefined : category === "all" ? undefined : category,
+          page: q ? undefined : page,
+        })}`;
   return {
     title,
     description:
       "Learn profitable skills for free. DigitalSkillX organizes public YouTube lessons into structured learning paths with clear creator credit.",
     alternates: { canonical },
-    robots: q ? { index: false, follow: true } : undefined,
+    robots: q || page > 1 || category !== "all" ? { index: false, follow: true } : undefined,
     openGraph: {
       title: "Learn profitable skills for free",
       description:

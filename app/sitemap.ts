@@ -10,6 +10,7 @@ function staticEntries(base: string): MetadataRoute.Sitemap {
     { url: base, lastModified: new Date(), changeFrequency: "daily", priority: 1 },
     { url: `${base}/about`, lastModified: new Date(), changeFrequency: "monthly", priority: 0.5 },
     { url: `${base}/learn`, lastModified: new Date(), changeFrequency: "daily", priority: 0.85 },
+    { url: `${base}/guides`, lastModified: new Date(), changeFrequency: "daily", priority: 0.7 },
     { url: `${base}/privacy`, lastModified: new Date(), changeFrequency: "yearly", priority: 0.3 },
     { url: `${base}/terms`, lastModified: new Date(), changeFrequency: "yearly", priority: 0.3 },
     { url: `${base}/refund-policy`, lastModified: new Date(), changeFrequency: "yearly", priority: 0.3 },
@@ -45,9 +46,11 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     }));
 
     let learnPages: MetadataRoute.Sitemap = [];
+    let categoryPages: MetadataRoute.Sitemap = [];
+    let guidePages: MetadataRoute.Sitemap = [];
     const { data: paths, error: pathError } = await admin
       .from("learning_paths")
-      .select("slug, updated_at, published_at")
+      .select("slug, updated_at, published_at, category, status")
       .eq("status", "published")
       .limit(500);
 
@@ -55,19 +58,62 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       // Table may not exist until migration 0042 is applied.
       console.error("[sitemap] learning_paths query failed:", pathError.message);
     } else {
-      learnPages = (paths ?? []).map((p) => ({
-        url: `${base}/learn/${p.slug}`,
-        lastModified: p.updated_at
-          ? new Date(p.updated_at)
-          : p.published_at
-            ? new Date(p.published_at)
+      const { CATEGORY_HUB_MIN_PATHS, isLibraryCategoryHubSlug } = await import(
+        "@/lib/content-factory/seo-shared"
+      );
+      const { normalizeLibraryCategory, LIBRARY_CATEGORIES } = await import(
+        "@/lib/content-factory/library-shared"
+      );
+      learnPages = (paths ?? [])
+        .filter((p) => !isLibraryCategoryHubSlug(p.slug))
+        .map((p) => ({
+          url: `${base}/learn/${p.slug}`,
+          lastModified: p.updated_at
+            ? new Date(p.updated_at)
+            : p.published_at
+              ? new Date(p.published_at)
+              : new Date(),
+          changeFrequency: "weekly" as const,
+          priority: 0.75,
+        }));
+      const counts = new Map<string, number>();
+      for (const path of paths ?? []) {
+        const cat = normalizeLibraryCategory(path.category);
+        if (cat === "all" || cat === "other") continue;
+        counts.set(cat, (counts.get(cat) ?? 0) + 1);
+      }
+      categoryPages = LIBRARY_CATEGORIES.filter((c) => c.id !== "all")
+        .filter((c) => (counts.get(c.id) ?? 0) >= CATEGORY_HUB_MIN_PATHS)
+        .map((c) => ({
+          url: `${base}/learn/${c.id}`,
+          lastModified: new Date(),
+          changeFrequency: "weekly" as const,
+          priority: 0.7,
+        }));
+    }
+
+    const { data: guides, error: guideError } = await admin
+      .from("authority_articles")
+      .select("slug, updated_at, published_at, status")
+      .eq("status", "published")
+      .limit(500);
+    if (guideError) {
+      // Table may not exist until migration 0045 is applied.
+      console.error("[sitemap] authority_articles query failed:", guideError.message);
+    } else {
+      guidePages = (guides ?? []).map((g) => ({
+        url: `${base}/guides/${g.slug}`,
+        lastModified: g.updated_at
+          ? new Date(g.updated_at)
+          : g.published_at
+            ? new Date(g.published_at)
             : new Date(),
         changeFrequency: "weekly" as const,
-        priority: 0.75,
+        priority: 0.65,
       }));
     }
 
-    return [...staticPages, ...coursePages, ...learnPages];
+    return [...staticPages, ...coursePages, ...categoryPages, ...learnPages, ...guidePages];
   } catch (err) {
     console.error("[sitemap] failed to load courses:", err);
     return staticPages;

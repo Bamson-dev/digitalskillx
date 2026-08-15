@@ -51,22 +51,36 @@ export type CourseCompletionCertificateEmailParams = {
   certificateUrl: string;
   supportEmail: string;
   brandColor?: string;
+  kind?: "course" | "learning_path";
+  verifyUrl?: string;
 };
 
 export function courseCompletionCertificateEmail(p: CourseCompletionCertificateEmailParams) {
+  const isLearningPath = p.kind === "learning_path";
+  const intro = isLearningPath
+    ? `This certificate recognizes that you completed the DigitalSkillX learning path <strong>${escapeHtml(p.courseTitle)}</strong>.`
+    : `You completed <strong>${escapeHtml(p.courseTitle)}</strong> on DigitalSkillX. Brilliant work!`;
+  const verifyLine = p.verifyUrl
+    ? `<p style="margin:8px 0 0;font-size:14px;line-height:1.6;color:#334155;">Verify: <a href="${escapeHtml(p.verifyUrl)}" style="color:#b91c1c;text-decoration:underline;">${escapeHtml(p.verifyUrl)}</a></p>`
+    : "";
+  const attribution = isLearningPath
+    ? `<p style="margin:0 0 8px;font-size:13px;line-height:1.7;color:#64748b;">Lessons embed original YouTube videos. DigitalSkillX organizes public educational content into a learning path and does not claim a partnership with the creator.</p>`
+    : "";
   const bodyHtml = `
     <h1 style="margin:0 0 12px;font-size:24px;line-height:1.3;color:#111827;">Congratulations, ${escapeHtml(p.firstName)}!</h1>
     <p style="margin:0 0 16px;font-size:15px;line-height:1.7;color:#475569;">
-      You completed <strong>${escapeHtml(p.courseTitle)}</strong> on DigitalSkillX. Brilliant work!
+      ${intro}
     </p>
     <div style="margin:0 0 20px;padding:16px 18px;background:#ecfdf5;border:1px solid #a7f3d0;border-radius:12px;">
-      <p style="margin:0 0 8px;font-size:14px;font-weight:700;color:#065f46;">Your certificate is issued</p>
+      <p style="margin:0 0 8px;font-size:14px;font-weight:700;color:#065f46;">Your DigitalSkillX certificate is issued</p>
       <p style="margin:0;font-size:14px;line-height:1.6;color:#334155;">
         Certificate number: <strong>${escapeHtml(p.certificateNumber)}</strong>
       </p>
+      ${verifyLine}
     </div>
+    ${attribution}
     <p style="margin:0 0 8px;font-size:14px;line-height:1.7;color:#475569;">
-      View and download your certificate anytime. Share it on LinkedIn or with employers to showcase your new skill.
+      View and download your certificate anytime. Share the verification link on LinkedIn or with employers.
     </p>`;
 
   return {
