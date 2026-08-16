@@ -92,11 +92,19 @@ export async function PATCH(request: NextRequest, { params }: Ctx) {
       return NextResponse.json({ path });
     }
     if (body.action === "save_draft") {
+      // Edits must not demote a QC-ready path out of `review`, or approve would be blocked.
+      const existing = await getLearningPathById(auth.admin, job.learning_path_id);
+      if (!existing) return NextResponse.json({ error: "Learning path not found." }, { status: 404 });
+      if (existing.status === "published") {
+        return NextResponse.json({ error: "Published paths cannot be saved as draft here." }, { status: 400 });
+      }
       const patch = body.patch ?? {};
       const update: Partial<LearningPath> = {
-        status: "draft",
         updated_at: new Date().toISOString(),
       };
+      if (existing.status !== "review") {
+        update.status = "draft";
+      }
       if (typeof patch.title === "string") update.title = patch.title;
       if (typeof patch.description === "string") update.description = patch.description;
       if (typeof patch.short_description === "string") update.short_description = patch.short_description;

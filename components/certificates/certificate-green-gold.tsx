@@ -54,6 +54,7 @@ export function CertificateGreenGold({
   qrDataUrl,
   organizationName = "DigitalSkillX",
   rootId,
+  kind,
 }: CertificateRenderData) {
   return (
     <div
@@ -127,7 +128,11 @@ export function CertificateGreenGold({
           >
             {studentName}
           </p>
-          <p style={{ margin: "1rem 0 0", fontSize: "0.85rem", opacity: 0.75 }}>has successfully completed</p>
+          <p style={{ margin: "1rem 0 0", fontSize: "0.85rem", opacity: 0.75 }}>
+            {kind === "learning_path"
+              ? "completed the DigitalSkillX learning path"
+              : "has successfully completed"}
+          </p>
           <p style={{ margin: "0.35rem 0 0", fontSize: "1.25rem", fontWeight: 600, color: GREEN }}>{courseName}</p>
 
           <div style={{ marginTop: "1.5rem" }}>

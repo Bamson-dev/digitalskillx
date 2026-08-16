@@ -44,6 +44,7 @@ export function CertificateGoldCharcoal({
   qrDataUrl,
   organizationName = "DigitalSkillX",
   rootId,
+  kind,
 }: CertificateRenderData) {
   return (
     <div
@@ -117,7 +118,11 @@ export function CertificateGoldCharcoal({
           >
             {studentName}
           </p>
-          <p style={{ margin: "1rem 0 0", fontSize: "0.85rem", opacity: 0.75 }}>has successfully completed</p>
+          <p style={{ margin: "1rem 0 0", fontSize: "0.85rem", opacity: 0.75 }}>
+            {kind === "learning_path"
+              ? "completed the DigitalSkillX learning path"
+              : "has successfully completed"}
+          </p>
           <p
             style={{
               margin: "0.35rem 0 0",

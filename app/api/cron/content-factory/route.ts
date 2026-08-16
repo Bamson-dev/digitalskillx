@@ -7,7 +7,6 @@ import { processContentFactoryJob } from "@/lib/content-factory/process-job";
 import { processQueuedDiscoveryRun } from "@/lib/content-factory/discovery";
 import { processPendingQualification } from "@/lib/content-factory/qualify";
 import { syncCandidatesForJob } from "@/lib/content-factory/generate";
-import { approveLearningPath } from "@/lib/content-factory/learning-paths";
 import { isMissingRelationError } from "@/lib/schema-guard";
 import { FACTORY_RETRY_MAX_ATTEMPTS, isRetryableFactoryError } from "@/lib/content-factory/ops-shared";
 import type { ContentFactoryJob } from "@/types/database";
@@ -45,34 +44,7 @@ export async function GET(request: NextRequest) {
   await bootstrapRuntimeSecrets();
   const admin = await createAdminClientAsync();
 
-  const approveJobId = request.nextUrl.searchParams.get("approve");
-  if (approveJobId) {
-    const { data: job, error: jobError } = await admin
-      .from("content_factory_jobs")
-      .select("id, learning_path_id, status")
-      .eq("id", approveJobId)
-      .maybeSingle();
-    if (jobError) return NextResponse.json({ error: jobError.message }, { status: 500 });
-    if (!job?.learning_path_id) {
-      return NextResponse.json({ error: "Job has no learning path to approve." }, { status: 400 });
-    }
-    try {
-      const path = await approveLearningPath(admin, job.learning_path_id);
-      await syncCandidatesForJob(admin, job.id);
-      return NextResponse.json({
-        ok: true,
-        approved: true,
-        slug: path.slug,
-        status: path.status,
-        jobs: await recentJobs(admin),
-      });
-    } catch (err) {
-      return NextResponse.json(
-        { error: err instanceof Error ? err.message : "Approve failed" },
-        { status: 400 },
-      );
-    }
-  }
+  // Publishing is admin-only (human approval gate). Cron must not publish paths.
 
   const discovery = await processQueuedDiscoveryRun(admin);
 

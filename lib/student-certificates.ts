@@ -25,6 +25,7 @@ export type StudentCertificateDetail = {
   templateKey: string | null;
   recipientName: string;
   courseTitle: string;
+  kind: "course" | "learning_path";
 };
 
 async function assertOwnStudentAccess(studentId: string) {
@@ -135,9 +136,9 @@ export async function getStudentCertificateById(
   const { admin, targetStudentId, profile } = await resolveTargetStudentId(studentId);
 
   const withPath =
-    "id, certificate_number, issued_at, completed_at, template_key, recipient_name, student_id, course:courses(title), learning_path:learning_paths(title)";
+    "id, certificate_number, issued_at, completed_at, template_key, recipient_name, student_id, course_id, learning_path_id, course:courses(title), learning_path:learning_paths(title)";
   const base =
-    "id, certificate_number, issued_at, completed_at, template_key, recipient_name, student_id, course:courses(title)";
+    "id, certificate_number, issued_at, completed_at, template_key, recipient_name, student_id, course_id, course:courses(title)";
   const pathDetail = await admin.from("certificates").select(withPath).eq("id", certificateId).maybeSingle();
   const certQuery =
     pathDetail.error && /learning_path|does not exist|could not find/i.test(pathDetail.error.message)
@@ -153,6 +154,8 @@ export async function getStudentCertificateById(
         template_key: string | null;
         recipient_name: string | null;
         student_id: string;
+        course_id?: string | null;
+        learning_path_id?: string | null;
         course: { title: string } | { title: string }[] | null;
         learning_path?: { title: string } | { title: string }[] | null;
       }
@@ -161,6 +164,7 @@ export async function getStudentCertificateById(
 
   const course = Array.isArray(cert.course) ? cert.course[0] : cert.course;
   const path = Array.isArray(cert.learning_path) ? cert.learning_path[0] : cert.learning_path;
+  const kind: "course" | "learning_path" = cert.learning_path_id ? "learning_path" : "course";
 
   return {
     id: cert.id,
@@ -170,5 +174,6 @@ export async function getStudentCertificateById(
     templateKey: cert.template_key,
     recipientName: displayNameFrom(cert.recipient_name, profile?.full_name, profile?.email),
     courseTitle: course?.title || path?.title || "Certificate",
+    kind,
   };
 }

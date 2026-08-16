@@ -1,4 +1,5 @@
 import "server-only";
+import { revalidatePath } from "next/cache";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, LearningPath, Json } from "@/types/database";
 import {
@@ -179,11 +180,32 @@ export async function approveLearningPath(
   if (!path) throw new Error("Learning path not found.");
   if (path.status === "rejected") throw new Error("Rejected paths cannot be published.");
   if (path.status === "published") return path;
+  if (path.status !== "review") {
+    throw new Error(
+      "Learning path must finish generation and quality control (status: review) before publishing.",
+    );
+  }
   if (!path.title.trim()) throw new Error("Title is required.");
   if (!path.slug.trim()) throw new Error("Slug is required.");
   if (!path.short_description.trim()) throw new Error("Short description is required.");
   if (!path.creator_profile_id) throw new Error("Creator profile is required before publishing.");
   if (!path.source_playlist_id) throw new Error("Source playlist is required before publishing.");
+
+  if (path.factory_job_id) {
+    const { data: job, error: jobError } = await admin
+      .from("content_factory_jobs")
+      .select("id, status, phase")
+      .eq("id", path.factory_job_id)
+      .maybeSingle();
+    if (jobError) throw new Error(jobError.message);
+    if (!job) throw new Error("Factory job for this learning path was not found.");
+    const ready = job.status === "waiting_review" || job.status === "completed";
+    if (!ready) {
+      throw new Error(
+        "Factory job must reach waiting_review (QC finished) before this path can be published.",
+      );
+    }
+  }
 
   const { data: lessons, error: lessonError } = await admin
     .from("learning_path_lessons")
@@ -223,6 +245,9 @@ export async function approveLearningPath(
       })
       .eq("id", path.factory_job_id);
   }
+
+  revalidatePath("/learn");
+  revalidatePath(`/learn/${data.slug}`);
 
   return data;
 }

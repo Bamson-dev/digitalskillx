@@ -9,6 +9,8 @@ export type CertificateRenderData = {
   qrDataUrl: string;
   organizationName?: string;
   rootId?: string;
+  /** Course certificates keep course wording; path certificates use learning-path wording. */
+  kind?: "course" | "learning_path";
 };
 
 export type CertificateTemplateProps = CertificateRenderData & {

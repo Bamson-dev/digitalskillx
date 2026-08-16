@@ -150,7 +150,8 @@ console.log("PASS: Content Factory artifacts present");
   const cron = read("app/api/cron/content-factory/route.ts");
   assert.match(cron, /verifyCronSecret/);
   assert.match(cron, /stale_processing_reclaim|timed out while processing/);
-  assert.match(cron, /approveLearningPath/);
+  assert.doesNotMatch(cron, /approveLearningPath/);
+  assert.doesNotMatch(cron, /approveJobId|searchParams\.get\(["']approve["']\)/);
 
   const patch = read("app/api/admin/content-factory/jobs/[id]/route.ts");
   assert.match(patch, /retryFailedContentFactoryJob/);
@@ -1933,12 +1934,16 @@ function runDeterministicQualityChecks(input) {
 {
   const approve = read("lib/content-factory/learning-paths.ts");
   assert.match(approve, /export async function approveLearningPath/);
+  assert.match(approve, /path\.status !== "review"/);
+  assert.match(approve, /waiting_review/);
   assert.doesNotMatch(approve, /quality_status|needs_revision/);
   assert.doesNotMatch(approve, /reviewGeneratedLearningPath/);
   const panel = read("components/admin/content-factory-panel.tsx");
   assert.match(panel, /Approve & publish/);
   assert.match(panel, /Needs revision/);
-  console.log("PASS: S5-15 warning does not automatically block admin approval");
+  const jobPatch = read("app/api/admin/content-factory/jobs/[id]/route.ts");
+  assert.match(jobPatch, /existing\.status !== "review"/);
+  console.log("PASS: S5-15 publish requires review; QC warnings do not auto-block admin approval");
 }
 
 {

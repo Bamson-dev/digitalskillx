@@ -34,7 +34,11 @@ export default async function CertificateDetailPage({ params }: { params: { id: 
         </Link>
         <div className="flex flex-wrap gap-2">
           <PrintButton />
-          <CertificateShareButton verifyUrl={verifyUrl} courseTitle={cert.courseTitle} />
+          <CertificateShareButton
+            verifyUrl={verifyUrl}
+            courseTitle={cert.courseTitle}
+            kind={cert.kind}
+          />
           <a
             href={linkedinUrl}
             target="_blank"
@@ -61,6 +65,7 @@ export default async function CertificateDetailPage({ params }: { params: { id: 
         issuedAt={cert.issuedAt}
         certificateNumber={cert.certificateNumber}
         qrDataUrl={qr}
+        kind={cert.kind}
         templateKey={
           normalizeCertificateTemplateKey(cert.templateKey) ?? DEFAULT_CERTIFICATE_TEMPLATE_KEY
         }

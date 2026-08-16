@@ -13,6 +13,7 @@ export function CertificateView({
   certificateNumber,
   qrDataUrl,
   templateKey = DEFAULT_CERTIFICATE_TEMPLATE_KEY,
+  kind = "course",
 }: {
   studentName: string;
   courseName: string;
@@ -21,6 +22,7 @@ export function CertificateView({
   certificateNumber: string;
   qrDataUrl: string;
   templateKey?: CertificateTemplateKey | null;
+  kind?: "course" | "learning_path";
 }) {
   return (
     <CertificateRenderer
@@ -33,6 +35,7 @@ export function CertificateView({
       certificateNumber={certificateNumber}
       qrDataUrl={qrDataUrl}
       organizationName="DigitalSkillX"
+      kind={kind}
     />
   );
 }
