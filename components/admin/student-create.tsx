@@ -113,8 +113,10 @@ function CourseCheckboxList({ courses }: { courses: PublishedCourse[] }) {
 
 function Feedback({
   state,
+  onContinueJob,
 }: {
   state: StudentActionState;
+  onContinueJob?: (jobId: string) => void;
 }) {
   const { toast } = useToast();
 
@@ -141,6 +143,16 @@ function Feedback({
       toast(json.error ?? "Action failed", "error");
     } else if (action === "resend_emails") {
       toast("Failed emails re-queued for sending.");
+    } else if (action === "notify_enrolled") {
+      const json = (await res.json().catch(() => ({}))) as {
+        queued?: number;
+        alreadyQueued?: number;
+      };
+      toast(
+        `Queued ${json.queued ?? 0} enrollment email(s). Keep this page open while they send.`,
+        "success",
+      );
+      if (state.bulkJobId) onContinueJob?.(state.bulkJobId);
     } else if (action === "retry_failed") {
       toast("Failed rows re-queued. Background processing will retry them.");
     }
@@ -190,33 +202,43 @@ function Feedback({
                 : ""}
             </li>
           </ul>
-          {state.bulkJobId &&
-          (state.bulkSummary.failedCount ?? state.bulkSummary.failed.length) > 0 ? (
+          {state.bulkJobId ? (
             <div className="mt-3 flex flex-wrap gap-2">
               <Button
                 type="button"
                 size="sm"
-                variant="outline"
-                onClick={() => void runJobAction("export_failed")}
+                onClick={() => void runJobAction("notify_enrolled")}
               >
-                Download failed rows
+                Send enrollment emails to everyone in this job
               </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                onClick={() => void runJobAction("retry_failed")}
-              >
-                Retry failed rows
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                onClick={() => void runJobAction("resend_emails")}
-              >
-                Resend failed emails
-              </Button>
+              {(state.bulkSummary.failedCount ?? state.bulkSummary.failed.length) > 0 ? (
+                <>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => void runJobAction("export_failed")}
+                  >
+                    Download failed rows
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => void runJobAction("retry_failed")}
+                  >
+                    Retry failed rows
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() => void runJobAction("resend_emails")}
+                  >
+                    Resend failed emails
+                  </Button>
+                </>
+              ) : null}
             </div>
           ) : null}
           {state.bulkSummary.failed.length > 0 ? (
@@ -279,8 +301,8 @@ export function StudentCreate({
     });
   }
 
-  async function handleResumeJob() {
-    const jobId = resumeJobId.trim();
+  async function handleResumeJob(jobIdOverride?: string) {
+    const jobId = (jobIdOverride ?? resumeJobId).trim();
     if (!jobId) {
       setCsvState({ error: "Paste a job ID to resume." });
       return;
@@ -317,6 +339,7 @@ export function StudentCreate({
           emailsQueued: initial.status.emailsQueued,
           emailsSent: initial.status.emailsSent,
           emailsFailed: initial.status.emailsFailed,
+          emailsPending: initial.status.emailsPending,
         });
         return;
       }
@@ -545,6 +568,26 @@ export function StudentCreate({
             </p>
           </div>
 
+          <label className="flex items-start gap-3 rounded-lg border border-app bg-surface-muted/20 px-3 py-3">
+            <input
+              type="checkbox"
+              name="notify_already_enrolled"
+              value="1"
+              defaultChecked
+              className="mt-0.5 h-5 w-5 shrink-0 rounded border-neutral-300 text-brand focus:ring-brand"
+            />
+            <span>
+              <span className="block text-sm font-medium text-neutral-900">
+                Email everyone in this CSV, including students already enrolled
+              </span>
+              <span className="mt-0.5 block text-xs text-muted">
+                Needed when re-uploading the same buyer list. Already-enrolled students stay
+                enrolled and receive a login email. Leave this checked so Resend shows their Gmail
+                addresses.
+              </span>
+            </span>
+          </label>
+
           <Button type="submit" disabled={csvUploading || !serviceRoleReady}>
             <Upload className="h-4 w-4" />{" "}
             {csvUploading
@@ -558,7 +601,8 @@ export function StudentCreate({
             <p className="text-sm font-semibold text-neutral-900">Resume a past import</p>
             <p className="mt-1 text-xs text-muted">
               Resume this job and keep the page open until you see “Bulk upload finished”.
-              Closing the tab can stop the import.
+              Closing the tab can stop the import. To email a finished import, resume it, then click
+              Send enrollment emails to everyone in this job.
             </p>
             <div className="mt-3 flex flex-col gap-2 sm:flex-row">
               <Input
@@ -581,7 +625,7 @@ export function StudentCreate({
         </form>
 
       <div className="mt-4 space-y-3">
-        <Feedback state={state} />
+        <Feedback state={state} onContinueJob={(jobId) => void handleResumeJob(jobId)} />
       </div>
     </Card>
   );

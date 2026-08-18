@@ -14,6 +14,7 @@ export type BulkImportStatusJson = {
   emailsSent?: number;
   emailsFailed?: number;
   emailsQueued?: number;
+  emailsPending?: number;
 };
 
 export type BulkImportPollSummary = {
@@ -29,6 +30,7 @@ export type BulkImportPollSummary = {
   emailsSent?: number;
   emailsFailed?: number;
   emailsQueued?: number;
+  emailsPending?: number;
 };
 
 async function fetchBulkJobStatus(jobId: string) {
@@ -98,17 +100,22 @@ function toSummary(statusJson: BulkImportStatusJson): BulkImportPollSummary {
     emailsSent: statusJson.emailsSent,
     emailsFailed: statusJson.emailsFailed,
     emailsQueued: statusJson.emailsQueued,
+    emailsPending: statusJson.emailsPending,
   };
 }
 
 export function bulkImportFinishedMessage(summary: BulkImportPollSummary) {
   const skippedNote =
-    summary.skipped > 0 ? ` Skipped students were already enrolled in this course.` : "";
-  return `Bulk upload finished: ${summary.created} new account(s), ${summary.enrolled} existing student(s) enrolled, ${summary.skipped} already enrolled (skipped), ${summary.failed} failed.${skippedNote}${
+    summary.skipped > 0
+      ? ` Skipped students were already enrolled in this course.`
+      : "";
+  const emailNote =
     summary.emailsQueued != null
-      ? ` Emails: ${summary.emailsSent ?? 0} sent, ${summary.emailsFailed ?? 0} failed (${summary.emailsQueued} queued).`
-      : ""
-  }`;
+      ? ` Emails: ${summary.emailsSent ?? 0} sent, ${summary.emailsFailed ?? 0} failed (${summary.emailsQueued} queued${
+          summary.emailsPending ? `, ${summary.emailsPending} still sending` : ""
+        }).`
+      : "";
+  return `Bulk upload finished: ${summary.created} new account(s), ${summary.enrolled} existing student(s) enrolled, ${summary.skipped} already enrolled (skipped), ${summary.failed} failed.${skippedNote}${emailNote}`;
 }
 
 export async function kickBulkImportJob(jobId: string) {
@@ -118,6 +125,20 @@ export async function kickBulkImportJob(jobId: string) {
       credentials: "include",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ action: "process", jobId }),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+async function kickBulkEmailDrain() {
+  try {
+    const res = await fetch("/api/admin/bulk-students", {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "drain_emails" }),
     });
     return res.ok;
   } catch {
@@ -144,7 +165,12 @@ export async function pollBulkImportJob(
 
   const kickIfIdle = () => {
     if (kickInFlight) return;
-    kickInFlight = kickBulkImportJob(jobId).finally(() => {
+    const sendingEmails = lastSummary?.phase === "sending_emails" || (lastSummary?.emailsPending ?? 0) > 0;
+    kickInFlight = (
+      sendingEmails && lastSummary && lastSummary.processedRows >= lastSummary.totalRows
+        ? kickBulkEmailDrain()
+        : kickBulkImportJob(jobId)
+    ).finally(() => {
       kickInFlight = null;
     });
   };
@@ -212,10 +238,14 @@ export async function pollBulkImportJob(
     const phaseLabel = statusJson.phase?.replace(/_/g, " ") ?? "processing";
     const waiting = statusJson.processedRows <= previousProcessed;
     if (!waiting) previousProcessed = statusJson.processedRows;
+    const emailPart =
+      statusJson.phase === "sending_emails" || (statusJson.emailsPending ?? 0) > 0
+        ? ` Sending emails: ${statusJson.emailsSent ?? 0} sent, ${statusJson.emailsPending ?? 0} waiting.`
+        : "";
     onUpdate({
       message: waiting
-        ? `Job ${jobId.slice(0, 8)}… still working ${statusJson.processedRows} / ${statusJson.totalRows}. Keep this page open.`
-        : `Job ${jobId.slice(0, 8)}… ${phaseLabel}: ${statusJson.processedRows} / ${statusJson.totalRows} rows`,
+        ? `Job ${jobId.slice(0, 8)}… still working ${statusJson.processedRows} / ${statusJson.totalRows}.${emailPart} Keep this page open.`
+        : `Job ${jobId.slice(0, 8)}… ${phaseLabel}: ${statusJson.processedRows} / ${statusJson.totalRows} rows.${emailPart}`,
       progress: {
         processed: statusJson.processedRows,
         total: statusJson.totalRows,

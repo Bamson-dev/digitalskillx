@@ -14,6 +14,7 @@ import {
   waitForStudentProfile,
   type CourseLookup,
 } from "@/lib/admin-student-onboarding";
+import { sendCourseEnrollmentEmail } from "@/lib/system-email-triggers";
 import { getPlatformSettingsAdmin } from "@/lib/platform-settings";
 import type { Database } from "@/types/database";
 
@@ -107,6 +108,7 @@ export async function runBulkStudentCsvUpload(params: {
   defaultCourseId: string | null;
   enrollableCourses?: CourseLookup[];
   maxRows?: number;
+  notifyAlreadyEnrolled?: boolean;
 }): Promise<BulkUploadResult> {
   const csvText = params.csvText.trim();
   if (!csvText) {
@@ -265,8 +267,22 @@ export async function runBulkStudentCsvUpload(params: {
         }).catch((err) => console.error("[runBulkStudentCsvUpload] welcome email", err));
         created++;
       } else if (newlyEnrolled) {
+        void sendCourseEnrollmentEmail({
+          studentId,
+          courseId: resolved.courseId,
+          fullName,
+          email,
+        }).catch((err) => console.error("[runBulkStudentCsvUpload] enrollment email", err));
         enrolled++;
       } else {
+        if (params.notifyAlreadyEnrolled) {
+          void sendCourseEnrollmentEmail({
+            studentId,
+            courseId: resolved.courseId,
+            fullName,
+            email,
+          }).catch((err) => console.error("[runBulkStudentCsvUpload] enrollment email", err));
+        }
         skipped++;
       }
     } catch (rowError) {

@@ -11,7 +11,7 @@ import {
   processBulkImportUntilBudget,
   retryFailedBulkImportRows,
 } from "@/lib/bulk-import-job";
-import { resendFailedOutboxForJob } from "@/lib/bulk-import-email-outbox";
+import { resendFailedOutboxForJob, enqueueEnrollmentNoticesForJob, drainBulkImportEmailOutbox } from "@/lib/bulk-import-email-outbox";
 import { bulkImportStage } from "@/lib/bulk-import-telemetry";
 import {
   BULK_SYNC_MAX_ROWS,
@@ -92,6 +92,25 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ ok: true });
       }
 
+      if (body.action === "notify_enrolled" && body.jobId) {
+        const queued = await enqueueEnrollmentNoticesForJob(auth.admin, body.jobId);
+        const drain = await drainBulkImportEmailOutbox(auth.admin, 40);
+        const origin = new URL(request.url).origin;
+        const { scheduleBulkWorkerContinuation } = await import("@/lib/bulk-import-continue");
+        scheduleBulkWorkerContinuation({
+          origin,
+          path: "/api/cron/email-outbox",
+          depth: 0,
+          reason: "notify_enrolled",
+        });
+        return NextResponse.json({ ok: true, ...queued, drain });
+      }
+
+      if (body.action === "drain_emails") {
+        const drain = await drainBulkImportEmailOutbox(auth.admin, 40);
+        return NextResponse.json({ ok: true, ...drain });
+      }
+
       if (body.action === "export_failed" && body.jobId) {
         const csv = await exportFailedBulkImportRowsCsv(
           auth.admin,
@@ -135,6 +154,8 @@ export async function POST(request: NextRequest) {
     }
 
     const defaultCourseId = String(formData.get("default_course_id") ?? "").trim() || null;
+    const notifyAlreadyEnrolled =
+      String(formData.get("notify_already_enrolled") ?? "") === "1";
     const csvText = await readCsvFromFormData(formData);
     if (!csvText?.trim()) {
       return NextResponse.json({ error: "Upload a CSV file or paste CSV rows." }, { status: 400 });
@@ -160,6 +181,7 @@ export async function POST(request: NextRequest) {
       adminUserId: auth.user.id,
       csvText,
       defaultCourseId,
+      notifyAlreadyEnrolled,
     });
 
     if ("fallbackRequired" in created) {
@@ -177,6 +199,7 @@ export async function POST(request: NextRequest) {
         adminUserId: auth.user.id,
         csvText,
         defaultCourseId,
+        notifyAlreadyEnrolled,
       });
 
       await logAudit({

@@ -9,6 +9,7 @@ import { siteUrl as orgSiteUrl } from "@/lib/org";
 import { bulkImportStage } from "@/lib/bulk-import-telemetry";
 import { isMissingColumnError } from "@/lib/schema-guard";
 import { isSyntheticTestRecipient } from "@/lib/email/synthetic-recipient";
+import { buildCourseResolver } from "@/lib/course-resolver";
 import type { Database } from "@/types/database";
 
 export type OutboxKind = "welcome" | "enrollment_notice";
@@ -208,6 +209,23 @@ export async function drainBulkImportEmailOutbox(
             updated_at: new Date().toISOString(),
           } as never)
           .eq("id", id);
+        try {
+          const { data: job } = await admin
+            .from("bulk_import_jobs")
+            .select("emails_failed")
+            .eq("id", jobId)
+            .maybeSingle();
+          if (job && "emails_failed" in job) {
+            await admin
+              .from("bulk_import_jobs")
+              .update({
+                emails_failed: ((job as { emails_failed?: number }).emails_failed ?? 0) + 1,
+              } as never)
+              .eq("id", jobId);
+          }
+        } catch {
+          /* ignore */
+        }
         failed++;
         bulkImportStage("email_skipped_synthetic", { jobId, ok: true, kind, email });
         continue;
@@ -362,4 +380,145 @@ export async function resendFailedOutboxForJob(
     }
     throw new Error(error.message);
   }
+}
+
+export async function countPendingOutboxForJob(
+  admin: SupabaseClient<Database>,
+  jobId: string,
+) {
+  const { count, error } = await admin
+    .from("bulk_import_email_outbox" as never)
+    .select("id", { count: "exact", head: true })
+    .eq("job_id", jobId)
+    .in("status", ["pending", "sending"]);
+  if (error) {
+    if (outboxTableMissing(error.message)) return 0;
+    return 0;
+  }
+  return count ?? 0;
+}
+
+/**
+ * Queue enrollment notices for created/enrolled/skipped rows that do not already
+ * have a pending or sent outbox row on this job. Used to email a finished CSV
+ * import that skipped already-enrolled students.
+ */
+export async function enqueueEnrollmentNoticesForJob(
+  admin: SupabaseClient<Database>,
+  jobId: string,
+): Promise<{ queued: number; alreadyQueued: number; skippedSynthetic: number }> {
+  const { data: job, error: jobError } = await admin
+    .from("bulk_import_jobs")
+    .select("id, default_course_id")
+    .eq("id", jobId)
+    .single();
+  if (jobError) throw new Error(jobError.message);
+
+  const { data: courses, error: coursesError } = await admin.from("courses").select("id, title");
+  if (coursesError) throw new Error(coursesError.message);
+  const resolveCourse = buildCourseResolver((courses ?? []) as Array<{ id: string; title: string }>);
+
+  const { data: rows, error: rowsError } = await admin
+    .from("bulk_import_rows")
+    .select("id, email, full_name, course_ref, status")
+    .eq("job_id", jobId)
+    .in("status", ["created", "enrolled", "skipped"]);
+  if (rowsError) throw new Error(rowsError.message);
+
+  const { data: existing, error: existingError } = await admin
+    .from("bulk_import_email_outbox" as never)
+    .select("email")
+    .eq("job_id", jobId)
+    .in("status", ["pending", "sending", "sent"]);
+  if (existingError && !outboxTableMissing(existingError.message)) {
+    throw new Error(existingError.message);
+  }
+  const already = new Set(
+    ((existing ?? []) as Array<{ email: string }>).map((row) =>
+      String(row.email ?? "")
+        .trim()
+        .toLowerCase(),
+    ),
+  );
+
+  const emails = [
+    ...new Set(
+      (rows ?? [])
+        .map((row) => String(row.email ?? "").trim().toLowerCase())
+        .filter(Boolean),
+    ),
+  ];
+  const profileByEmail = new Map<string, { id: string; full_name: string | null }>();
+  for (let i = 0; i < emails.length; i += 100) {
+    const slice = emails.slice(i, i + 100);
+    const { data: profiles, error } = await admin
+      .from("profiles")
+      .select("id, email, full_name")
+      .in("email", slice);
+    if (error) throw new Error(error.message);
+    for (const profile of profiles ?? []) {
+      const key = String(profile.email ?? "")
+        .trim()
+        .toLowerCase();
+      if (key) profileByEmail.set(key, { id: profile.id, full_name: profile.full_name });
+    }
+  }
+
+  let queued = 0;
+  let alreadyQueued = 0;
+  let skippedSynthetic = 0;
+
+  for (const row of rows ?? []) {
+    const email = String(row.email ?? "")
+      .trim()
+      .toLowerCase();
+    if (!email) continue;
+    if (isSyntheticTestRecipient(email)) {
+      skippedSynthetic += 1;
+      continue;
+    }
+    if (already.has(email)) {
+      alreadyQueued += 1;
+      continue;
+    }
+    const profile = profileByEmail.get(email);
+    if (!profile) continue;
+    const resolved = resolveCourse(String(row.course_ref ?? ""), job.default_course_id);
+    const result = await enqueueBulkImportEmail(admin, {
+      jobId,
+      rowId: String(row.id),
+      studentId: profile.id,
+      email,
+      fullName: String(row.full_name || profile.full_name || email.split("@")[0] || "Student"),
+      courseTitle: resolved.courseTitle,
+      passwordPlain: null,
+      kind: "enrollment_notice",
+    });
+    if (result.queued) {
+      already.add(email);
+      queued += 1;
+    }
+  }
+
+  if (queued > 0 || (await countPendingOutboxForJob(admin, jobId)) > 0) {
+    await admin
+      .from("bulk_import_jobs")
+      .update({
+        status: "processing",
+        phase: "sending_emails",
+        finished_at: null,
+        updated_at: new Date().toISOString(),
+      } as never)
+      .eq("id", jobId);
+  }
+
+  bulkImportStage("enrollment_notices_enqueued", {
+    jobId,
+    ok: true,
+    queued,
+    alreadyQueued,
+    skippedSynthetic,
+  });
+
+  return { queued, alreadyQueued, skippedSynthetic };
 }

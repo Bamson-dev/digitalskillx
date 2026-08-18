@@ -10,7 +10,11 @@ import {
   type CourseLookup,
 } from "@/lib/admin-student-onboarding";
 import { runAutomations } from "@/lib/automation";
-import { enqueueBulkImportEmail } from "@/lib/bulk-import-email-outbox";
+import {
+  countPendingOutboxForJob,
+  drainBulkImportEmailOutbox,
+  enqueueBulkImportEmail,
+} from "@/lib/bulk-import-email-outbox";
 import { bulkImportStage, timedStage } from "@/lib/bulk-import-telemetry";
 import { isMissingColumnError } from "@/lib/schema-guard";
 import type { BulkImportRow, BulkImportRowStatus, Database } from "@/types/database";
@@ -50,12 +54,24 @@ export type BulkImportJobSummary = {
   emailsQueued?: number;
   emailsSent?: number;
   emailsFailed?: number;
+  emailsPending?: number;
   errorMessage?: string | null;
   failures: Array<{ row: number; email: string; reason: string }>;
   done: boolean;
   pendingRows?: number;
   processingRows?: number;
 };
+
+/** Stored on bulk_import_jobs.error_message so re-uploads can email already-enrolled students without a new column. */
+export const NOTIFY_ALREADY_ENROLLED_SENTINEL = "notify_already_enrolled";
+
+function jobNotifiesAlreadyEnrolled(job: { error_message?: string | null }) {
+  return job.error_message === NOTIFY_ALREADY_ENROLLED_SENTINEL;
+}
+
+function publicJobErrorMessage(message: string | null | undefined) {
+  return message === NOTIFY_ALREADY_ENROLLED_SENTINEL ? null : message ?? null;
+}
 
 function jobsTableMissing(message: string) {
   return isMissingColumnError(message) || /bulk_import_jobs|relation .* does not exist/i.test(message);
@@ -108,6 +124,7 @@ export async function createBulkImportJob(params: {
   adminUserId: string;
   csvText: string;
   defaultCourseId: string | null;
+  notifyAlreadyEnrolled?: boolean;
 }): Promise<{ jobId: string; totalRows: number } | { fallbackRequired: true; reason: string }> {
   const parseStarted = Date.now();
   const { rows } = parseStudentCsv(params.csvText);
@@ -155,6 +172,9 @@ export async function createBulkImportJob(params: {
       total_rows: dataRows.length,
       phase: "queued",
       started_at: new Date().toISOString(),
+      ...(params.notifyAlreadyEnrolled
+        ? { error_message: NOTIFY_ALREADY_ENROLLED_SENTINEL }
+        : {}),
     } as never)
     .select("id")
     .single();
@@ -169,6 +189,9 @@ export async function createBulkImportJob(params: {
           default_course_id: params.defaultCourseId,
           status: "pending",
           total_rows: dataRows.length,
+          ...(params.notifyAlreadyEnrolled
+            ? { error_message: NOTIFY_ALREADY_ENROLLED_SENTINEL }
+            : {}),
         })
         .select("id")
         .single();
@@ -352,9 +375,8 @@ async function recountAndPersistJobCounters(
       enrolled_count: enrolled,
       skipped_count: skipped,
       failed_count: failed,
-      status: rowsDone ? "completed" : "processing",
+      status: "processing",
       phase: rowsDone ? "sending_emails" : "processing_rows",
-      finished_at: rowsDone ? new Date().toISOString() : null,
       updated_at: new Date().toISOString(),
     } as never)
     .eq("id", jobId);
@@ -405,6 +427,7 @@ export async function processBulkImportChunk(params: {
 
     if (jobError) throw new Error(jobError.message);
     const jobRow = job;
+    const notifyAlreadyEnrolled = jobNotifiesAlreadyEnrolled(jobRow);
 
     if (!params.asWorker && jobRow.admin_id !== params.adminUserId) {
       throw new Error("Forbidden.");
@@ -418,7 +441,7 @@ export async function processBulkImportChunk(params: {
       .from("bulk_import_jobs")
       .update({
         status: "processing",
-        phase: "processing_rows",
+        phase: jobRow.phase === "sending_emails" ? "sending_emails" : "processing_rows",
         updated_at: new Date().toISOString(),
       } as never)
       .eq("id", jobId);
@@ -676,7 +699,27 @@ export async function processBulkImportChunk(params: {
 
             const enrollKey = `${studentId}:${resolved.courseId}`;
             if (enrolledKeys.has(enrollKey)) {
-              await markRow(params.admin, row.id, "skipped", "Already enrolled in this course", email);
+              if (notifyAlreadyEnrolled) {
+                await enqueueBulkImportEmail(params.admin, {
+                  jobId,
+                  rowId: row.id,
+                  studentId,
+                  email,
+                  fullName: name,
+                  courseTitle: resolved.courseTitle,
+                  passwordPlain: null,
+                  kind: "enrollment_notice",
+                });
+              }
+              await markRow(
+                params.admin,
+                row.id,
+                "skipped",
+                notifyAlreadyEnrolled
+                  ? "Already enrolled — enrollment email queued"
+                  : "Already enrolled in this course",
+                email,
+              );
               counters.skipped += 1;
               continue;
             }
@@ -726,7 +769,27 @@ export async function processBulkImportChunk(params: {
               await markRow(params.admin, row.id, "enrolled", null, email);
               counters.enrolled += 1;
             } else {
-              await markRow(params.admin, row.id, "skipped", "Already enrolled in this course", email);
+              if (notifyAlreadyEnrolled) {
+                await enqueueBulkImportEmail(params.admin, {
+                  jobId,
+                  rowId: row.id,
+                  studentId,
+                  email,
+                  fullName: name,
+                  courseTitle: resolved.courseTitle,
+                  passwordPlain: null,
+                  kind: "enrollment_notice",
+                });
+              }
+              await markRow(
+                params.admin,
+                row.id,
+                "skipped",
+                notifyAlreadyEnrolled
+                  ? "Already enrolled — enrollment email queued"
+                  : "Already enrolled in this course",
+                email,
+              );
               counters.skipped += 1;
             }
           } catch (err) {
@@ -775,21 +838,28 @@ export async function processBulkImportChunk(params: {
 
 async function maybeFinalizeJobPhase(admin: SupabaseClient<Database>, jobId: string) {
   try {
-    const { count } = await admin
-      .from("bulk_import_email_outbox" as never)
-      .select("id", { count: "exact", head: true })
-      .eq("job_id", jobId)
-      .in("status", ["pending", "sending"]);
-    if ((count ?? 0) === 0) {
+    const pendingEmails = await countPendingOutboxForJob(admin, jobId);
+    if (pendingEmails === 0) {
       await admin
         .from("bulk_import_jobs")
         .update({
           phase: "completed",
           status: "completed",
+          finished_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         } as never)
         .eq("id", jobId);
       bulkImportStage("import_completed", { jobId, ok: true });
+    } else {
+      await admin
+        .from("bulk_import_jobs")
+        .update({
+          phase: "sending_emails",
+          status: "processing",
+          finished_at: null,
+          updated_at: new Date().toISOString(),
+        } as never)
+        .eq("id", jobId);
     }
   } catch {
     await admin
@@ -797,6 +867,7 @@ async function maybeFinalizeJobPhase(admin: SupabaseClient<Database>, jobId: str
       .update({
         phase: "completed",
         status: "completed",
+        finished_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       } as never)
       .eq("id", jobId);
@@ -819,7 +890,14 @@ export async function processBulkImportUntilBudget(params: {
   while (Date.now() - started < budgetMs && rounds < 80) {
     const pending = await countRowsByStatus(params.admin, params.jobId, "pending");
     const processing = await countRowsByStatus(params.admin, params.jobId, "processing");
-    if (pending === 0 && processing === 0) break;
+    if (pending === 0 && processing === 0) {
+      await drainBulkImportEmailOutbox(params.admin, 40);
+      await maybeFinalizeJobPhase(params.admin, params.jobId);
+      summary = await getBulkImportJobSummary(params.admin, params.jobId);
+      rounds++;
+      if (summary.done || (summary.emailsPending ?? 0) === 0) break;
+      continue;
+    }
     summary = await processBulkImportChunk({
       admin: params.admin,
       adminUserId: params.adminUserId,
@@ -914,6 +992,8 @@ export async function getBulkImportJobSummary(
   let pendingRows = 0;
   let processingRows = 0;
   let rowsDone = statusDone || jobRow.processed_rows >= jobRow.total_rows;
+  const emailsPending = await countPendingOutboxForJob(admin, jobId);
+  const errorMessage = publicJobErrorMessage(jobRow.error_message);
 
   if (!options?.lite) {
     const { data: failedRows } = await admin
@@ -941,7 +1021,8 @@ export async function getBulkImportJobSummary(
       emailsQueued: jobRow.emails_queued,
       emailsSent: jobRow.emails_sent,
       emailsFailed: jobRow.emails_failed,
-      errorMessage: jobRow.error_message,
+      emailsPending,
+      errorMessage,
       failures: (failedRows ?? []).map((r) => ({
         row: r.row_number,
         email: r.email || "(missing)",
@@ -949,7 +1030,7 @@ export async function getBulkImportJobSummary(
       })),
       pendingRows,
       processingRows,
-      done: statusDone && rowsDone,
+      done: rowsDone && emailsPending === 0 && (statusDone || jobRow.phase === "completed"),
     };
   }
 
@@ -994,11 +1075,12 @@ export async function getBulkImportJobSummary(
     emailsQueued: jobRow.emails_queued,
     emailsSent: jobRow.emails_sent,
     emailsFailed: jobRow.emails_failed,
-    errorMessage: jobRow.error_message,
+    emailsPending,
+    errorMessage,
     failures,
     pendingRows,
     processingRows,
-    done: statusDone && rowsDone,
+    done: rowsDone && emailsPending === 0 && (statusDone || jobRow.phase === "completed"),
   };
 }
 

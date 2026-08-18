@@ -120,7 +120,10 @@ export function courseEnrollmentEmail(p: CourseEnrollmentEmailParams) {
       </ul>
     </div>
     <p style="margin:0;font-size:14px;line-height:1.7;color:#475569;">
-      Log in with your DigitalSkillX account to start learning. Your login email is the address this message was sent to.
+      Log in at <a href="${escapeHtml(p.loginUrl)}" style="color:#b91c1c;text-decoration:underline;">${escapeHtml(p.loginUrl)}</a>
+      with the email address this message was sent to. If you do not have a password yet, use
+      <a href="${escapeHtml(p.loginUrl.replace(/\/login\/?$/, "/forgot-password"))}" style="color:#b91c1c;text-decoration:underline;">Forgot password</a>
+      to set one, then open your course.
     </p>`;
 
   return {
