@@ -544,7 +544,12 @@ export function StudentCreate({
           </div>
 
           <Button type="submit" disabled={csvUploading || !serviceRoleReady}>
-            <Upload className="h-4 w-4" /> {csvUploading ? "Uploading…" : "Import students"}
+            <Upload className="h-4 w-4" />{" "}
+            {csvUploading
+              ? csvState.bulkJobId
+                ? "Processing…"
+                : "Uploading…"
+              : "Import students"}
           </Button>
 
           <div className="rounded-lg border border-app bg-surface-muted/20 p-4">

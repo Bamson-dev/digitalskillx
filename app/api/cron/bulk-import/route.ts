@@ -38,7 +38,7 @@ export async function POST(request: NextRequest) {
   try {
     const jobs = await processPendingBulkImportJobs(admin, {
       maxJobs: 2,
-      budgetMs: 55_000,
+      budgetMs: 90_000,
     });
     const email = await drainBulkImportEmailOutbox(admin, 25);
 

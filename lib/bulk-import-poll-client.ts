@@ -109,6 +109,20 @@ export function bulkImportFinishedMessage(summary: BulkImportPollSummary) {
   }`;
 }
 
+export async function kickBulkImportJob(jobId: string) {
+  try {
+    const res = await fetch("/api/admin/bulk-students", {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "process", jobId }),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
 export async function pollBulkImportJob(
   jobId: string,
   totalRows: number,
@@ -125,9 +139,20 @@ export async function pollBulkImportJob(
   let previousProcessed = 0;
   let lastSummary: BulkImportPollSummary | null = null;
   let statusFailRounds = 0;
+  let kickInFlight: Promise<boolean> | null = null;
+
+  const kickIfIdle = () => {
+    if (kickInFlight) return;
+    kickInFlight = kickBulkImportJob(jobId).finally(() => {
+      kickInFlight = null;
+    });
+  };
+
+  kickIfIdle();
 
   while (Date.now() - pollStarted < maxWaitMs) {
-    await new Promise((r) => setTimeout(r, 4000));
+    await new Promise((r) => setTimeout(r, 2000));
+    kickIfIdle();
 
     const fetched = await fetchBulkJobStatus(jobId);
     if (!fetched) {

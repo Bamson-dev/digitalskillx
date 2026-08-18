@@ -9,7 +9,6 @@ import {
   isValidStudentEmail,
   parseStudentCsv,
   resolveStudentIdByEmail,
-  waitForStudentProfile,
   type CourseLookup,
 } from "@/lib/admin-student-onboarding";
 import { runAutomations } from "@/lib/automation";
@@ -18,8 +17,27 @@ import { bulkImportStage, timedStage } from "@/lib/bulk-import-telemetry";
 import { isMissingColumnError } from "@/lib/schema-guard";
 import type { BulkImportRow, BulkImportRowStatus, Database } from "@/types/database";
 
-export const BULK_IMPORT_CHUNK_SIZE = 15;
+export const BULK_IMPORT_CHUNK_SIZE = 80;
+export const BULK_IMPORT_ROW_CONCURRENCY = 8;
 export const BULK_IMPORT_MAX_ROWS = 10_000;
+
+async function mapWithConcurrency<T>(
+  items: T[],
+  concurrency: number,
+  worker: (item: T) => Promise<void>,
+) {
+  if (items.length === 0) return;
+  const limit = Math.max(1, Math.min(concurrency, items.length));
+  let next = 0;
+  async function run() {
+    while (next < items.length) {
+      const current = items[next]!;
+      next += 1;
+      await worker(current);
+    }
+  }
+  await Promise.all(Array.from({ length: limit }, () => run()));
+}
 
 export type BulkImportJobSummary = {
   jobId: string;
@@ -458,193 +476,209 @@ export async function processBulkImportChunk(params: {
       found: profileMap.size,
     });
 
-    let created = 0;
-    let enrolled = 0;
-    let skipped = 0;
-    let failed = 0;
-
+    const counters = { created: 0, enrolled: 0, skipped: 0, failed: 0 };
+    const groups = new Map<string, BulkImportRow[]>();
     for (const row of rows) {
       const email = row.email.trim().toLowerCase();
-      const fullName = row.full_name.trim();
-      const rowStarted = Date.now();
-      try {
-        if (!email) {
-          await markRow(params.admin, row.id, "failed", "Email is required on each row");
-          failed++;
-          continue;
-        }
-        if (!isValidStudentEmail(email)) {
-          await markRow(params.admin, row.id, "failed", "Invalid email format", email);
-          failed++;
-          continue;
-        }
-        const name = fullName || email.split("@")[0] || "Student";
-        const resolved = resolveCourse(row.course_ref, jobRow.default_course_id);
-        if (resolved.error || !resolved.courseId) {
-          await markRow(
-            params.admin,
-            row.id,
-            "failed",
-            resolved.error ?? "No course on row and no default course selected",
-            email,
-          );
-          failed++;
-          continue;
-        }
+      if (!email) {
+        await markRow(params.admin, row.id, "failed", "Email is required on each row");
+        counters.failed += 1;
+        continue;
+      }
+      const list = groups.get(email) ?? [];
+      list.push(row);
+      groups.set(email, list);
+    }
 
-        let studentId: string | null = profileMap.get(email)?.id ?? null;
-        let isNew = false;
-        let password: string | null = null;
-
-        const existing = profileMap.get(email);
-        if (existing?.is_suspended) {
-          await markRow(params.admin, row.id, "failed", "Student account is suspended", email);
-          failed++;
-          continue;
-        }
-
-        if (!studentId) {
-          studentId = await resolveStudentIdByEmail(params.admin, email);
-        }
-
-        if (!studentId) {
-          password = generateStrongPassword();
-          bulkImportStage("student_creation", { jobId, ok: true, email });
-          let createError: { message: string } | null = null;
-          let createdUserId: string | null = null;
-
-          for (let attempt = 0; attempt < 3; attempt++) {
-            const { data: createdUser, error } = await params.admin.auth.admin.createUser({
-              email,
-              password,
-              email_confirm: true,
-              user_metadata: { full_name: name },
-            });
-            if (!error && createdUser.user?.id) {
-              createdUserId = createdUser.user.id;
-              createError = null;
-              break;
+    await mapWithConcurrency(
+      [...groups.entries()],
+      BULK_IMPORT_ROW_CONCURRENCY,
+      async ([email, groupRows]) => {
+        for (const row of groupRows) {
+          const fullName = row.full_name.trim();
+          const rowStarted = Date.now();
+          try {
+            if (!isValidStudentEmail(email)) {
+              await markRow(params.admin, row.id, "failed", "Invalid email format", email);
+              counters.failed += 1;
+              continue;
             }
-            createError = error ? { message: error.message } : { message: "User create failed" };
-            if (!isTransientUpstreamError(createError.message) || attempt === 2) break;
-            bulkImportStage("transient_retry", {
-              jobId,
-              ok: false,
-              error: `createUser: ${createError.message.slice(0, 160)}`,
-              attempt: attempt + 1,
-            });
-            await new Promise((r) => setTimeout(r, 750 * (attempt + 1)));
-          }
-
-          if (!createdUserId) {
-            const recovered = await resolveStudentIdByEmail(params.admin, email);
-            if (!recovered) {
+            const name = fullName || email.split("@")[0] || "Student";
+            const resolved = resolveCourse(row.course_ref, jobRow.default_course_id);
+            if (resolved.error || !resolved.courseId) {
               await markRow(
                 params.admin,
                 row.id,
                 "failed",
-                createError?.message ?? "User create failed",
+                resolved.error ?? "No course on row and no default course selected",
                 email,
               );
-              failed++;
+              counters.failed += 1;
               continue;
             }
-            studentId = recovered;
-            await ensureImportedStudentProfile(params.admin, {
-              studentId,
-              email,
-              fullName: name,
-            });
-          } else {
-            studentId = createdUserId;
-            isNew = true;
-            await params.admin.from("profiles").update({ full_name: name }).eq("id", studentId);
-            await waitForStudentProfile(params.admin, studentId);
-            try {
-              await runAutomations("account_created", { studentId });
-            } catch (err) {
-              bulkImportStage("automation_account_created", {
-                jobId,
-                ok: false,
-                error: err instanceof Error ? err.message : String(err),
-              });
+
+            let studentId: string | null = profileMap.get(email)?.id ?? null;
+            let isNew = false;
+            let password: string | null = null;
+
+            const existing = profileMap.get(email);
+            if (existing?.is_suspended) {
+              await markRow(params.admin, row.id, "failed", "Student account is suspended", email);
+              counters.failed += 1;
+              continue;
             }
+
+            if (!studentId) {
+              password = generateStrongPassword();
+              bulkImportStage("student_creation", { jobId, ok: true, email });
+              let createError: { message: string } | null = null;
+              let createdUserId: string | null = null;
+
+              for (let attempt = 0; attempt < 3; attempt++) {
+                const { data: createdUser, error } = await params.admin.auth.admin.createUser({
+                  email,
+                  password,
+                  email_confirm: true,
+                  user_metadata: { full_name: name },
+                });
+                if (!error && createdUser.user?.id) {
+                  createdUserId = createdUser.user.id;
+                  createError = null;
+                  break;
+                }
+                createError = error ? { message: error.message } : { message: "User create failed" };
+                const alreadyExists = /already|registered|exists/i.test(createError.message);
+                if (alreadyExists || !isTransientUpstreamError(createError.message) || attempt === 2) {
+                  break;
+                }
+                bulkImportStage("transient_retry", {
+                  jobId,
+                  ok: false,
+                  error: `createUser: ${createError.message.slice(0, 160)}`,
+                  attempt: attempt + 1,
+                });
+                await new Promise((r) => setTimeout(r, 400 * (attempt + 1)));
+              }
+
+              if (!createdUserId) {
+                const recovered = await resolveStudentIdByEmail(params.admin, email);
+                if (!recovered) {
+                  await markRow(
+                    params.admin,
+                    row.id,
+                    "failed",
+                    createError?.message ?? "User create failed",
+                    email,
+                  );
+                  counters.failed += 1;
+                  continue;
+                }
+                studentId = recovered;
+                await ensureImportedStudentProfile(params.admin, {
+                  studentId,
+                  email,
+                  fullName: name,
+                });
+              } else {
+                studentId = createdUserId;
+                isNew = true;
+                await ensureImportedStudentProfile(params.admin, {
+                  studentId,
+                  email,
+                  fullName: name,
+                });
+                try {
+                  await runAutomations("account_created", { studentId });
+                } catch (err) {
+                  bulkImportStage("automation_account_created", {
+                    jobId,
+                    ok: false,
+                    error: err instanceof Error ? err.message : String(err),
+                  });
+                }
+              }
+            }
+
+            if (!studentId) {
+              await markRow(params.admin, row.id, "failed", "Could not resolve student account", email);
+              counters.failed += 1;
+              continue;
+            }
+
+            profileMap.set(email, {
+              id: studentId,
+              full_name: name,
+              email,
+              is_suspended: false,
+            });
+
+            const { newlyEnrolled } = await withTransientRetry("enroll", jobId, () =>
+              grantCourseAccessForBulkImport(params.admin, {
+                studentId: studentId!,
+                courseId: resolved.courseId!,
+                enrolledBy: params.adminUserId || jobRow.admin_id,
+                fullName: name,
+                email,
+              }),
+            );
+            bulkImportStage("enrollment", {
+              jobId,
+              ok: true,
+              email,
+              newlyEnrolled,
+              durationMs: Date.now() - rowStarted,
+            });
+
+            if (isNew && password) {
+              await enqueueBulkImportEmail(params.admin, {
+                jobId,
+                rowId: row.id,
+                studentId,
+                email,
+                fullName: name,
+                courseTitle: resolved.courseTitle,
+                passwordPlain: password,
+                kind: "welcome",
+              });
+              await markRow(params.admin, row.id, "created", null, email);
+              counters.created += 1;
+            } else if (newlyEnrolled) {
+              await enqueueBulkImportEmail(params.admin, {
+                jobId,
+                rowId: row.id,
+                studentId,
+                email,
+                fullName: name,
+                courseTitle: resolved.courseTitle,
+                passwordPlain: null,
+                kind: "enrollment_notice",
+              });
+              await markRow(params.admin, row.id, "enrolled", null, email);
+              counters.enrolled += 1;
+            } else {
+              await markRow(params.admin, row.id, "skipped", "Already enrolled in this course", email);
+              counters.skipped += 1;
+            }
+          } catch (err) {
+            const reason = err instanceof Error ? err.message : "Enrollment failed";
+            bulkImportStage("row_failed", {
+              jobId,
+              ok: false,
+              email,
+              error: reason,
+              durationMs: Date.now() - rowStarted,
+            });
+            await markRow(params.admin, row.id, "failed", reason, email);
+            counters.failed += 1;
           }
         }
+      },
+    );
 
-        if (!studentId) {
-          await markRow(params.admin, row.id, "failed", "Could not resolve student account", email);
-          failed++;
-          continue;
-        }
-
-        profileMap.set(email, {
-          id: studentId,
-          full_name: name,
-          email,
-          is_suspended: false,
-        });
-
-        const { newlyEnrolled } = await withTransientRetry("enroll", jobId, () =>
-          grantCourseAccessForBulkImport(params.admin, {
-            studentId: studentId!,
-            courseId: resolved.courseId!,
-            enrolledBy: params.adminUserId || jobRow.admin_id,
-            fullName: name,
-            email,
-          }),
-        );
-        bulkImportStage("enrollment", {
-          jobId,
-          ok: true,
-          email,
-          newlyEnrolled,
-          durationMs: Date.now() - rowStarted,
-        });
-
-        if (isNew && password) {
-          await enqueueBulkImportEmail(params.admin, {
-            jobId,
-            rowId: row.id,
-            studentId,
-            email,
-            fullName: name,
-            courseTitle: resolved.courseTitle,
-            passwordPlain: password,
-            kind: "welcome",
-          });
-          await markRow(params.admin, row.id, "created", null, email);
-          created++;
-        } else if (newlyEnrolled) {
-          await enqueueBulkImportEmail(params.admin, {
-            jobId,
-            rowId: row.id,
-            studentId,
-            email,
-            fullName: name,
-            courseTitle: resolved.courseTitle,
-            passwordPlain: null,
-            kind: "enrollment_notice",
-          });
-          await markRow(params.admin, row.id, "enrolled", null, email);
-          enrolled++;
-        } else {
-          await markRow(params.admin, row.id, "skipped", "Already enrolled in this course", email);
-          skipped++;
-        }
-      } catch (err) {
-        const reason = err instanceof Error ? err.message : "Enrollment failed";
-        bulkImportStage("row_failed", {
-          jobId,
-          ok: false,
-          email,
-          error: reason,
-          durationMs: Date.now() - rowStarted,
-        });
-        await markRow(params.admin, row.id, "failed", reason, email);
-        failed++;
-      }
-    }
+    const created = counters.created;
+    const enrolled = counters.enrolled;
+    const skipped = counters.skipped;
+    const failed = counters.failed;
 
     const recounted = await recountAndPersistJobCounters(params.admin, jobId);
 
@@ -707,11 +741,11 @@ export async function processBulkImportUntilBudget(params: {
   budgetMs?: number;
   asWorker?: boolean;
 }): Promise<BulkImportJobSummary> {
-  const budgetMs = params.budgetMs ?? 50_000;
+  const budgetMs = params.budgetMs ?? 90_000;
   const started = Date.now();
   let summary = await getBulkImportJobSummary(params.admin, params.jobId);
   let rounds = 0;
-  while (Date.now() - started < budgetMs && rounds < 40) {
+  while (Date.now() - started < budgetMs && rounds < 80) {
     const pending = await countRowsByStatus(params.admin, params.jobId, "pending");
     const processing = await countRowsByStatus(params.admin, params.jobId, "processing");
     if (pending === 0 && processing === 0) break;
@@ -755,7 +789,7 @@ export async function processPendingBulkImportJobs(
       admin,
       adminUserId: job.admin_id,
       jobId: job.id,
-      budgetMs: opts?.budgetMs ?? 45_000,
+      budgetMs: opts?.budgetMs ?? 90_000,
       asWorker: true,
     });
     results.push(summary);

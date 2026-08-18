@@ -32,35 +32,33 @@ export function scheduleBulkWorkerContinuation(params: {
   const url = new URL(params.path, params.origin);
   url.searchParams.set("depth", String(depth + 1));
 
-  // Small delay lets the current invocation return before the next starts.
-  const delayMs = 750;
-  setTimeout(() => {
-    void fetch(url.toString(), {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${secret}`,
-        "x-bulk-continue-depth": String(depth + 1),
-      },
-      cache: "no-store",
-    })
-      .then(async (res) => {
-        bulkImportStage("continuation_fired", {
-          ok: res.ok,
-          path: params.path,
-          depth: depth + 1,
-          status: res.status,
-          reason: params.reason,
-        });
-      })
-      .catch((err) => {
-        bulkImportStage("continuation_failed", {
-          ok: false,
-          path: params.path,
-          depth: depth + 1,
-          error: err instanceof Error ? err.message : String(err),
-        });
+  // Fire immediately. A delayed timer is killed when the serverless isolate freezes
+  // after the HTTP response, which previously left imports stuck after one chunk.
+  void fetch(url.toString(), {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${secret}`,
+      "x-bulk-continue-depth": String(depth + 1),
+    },
+    cache: "no-store",
+  })
+    .then((res) => {
+      bulkImportStage("continuation_fired", {
+        ok: res.ok,
+        path: params.path,
+        depth: depth + 1,
+        status: res.status,
+        reason: params.reason,
       });
-  }, delayMs);
+    })
+    .catch((err) => {
+      bulkImportStage("continuation_failed", {
+        ok: false,
+        path: params.path,
+        depth: depth + 1,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    });
 }
 
 export function continuationDepthFromRequest(request: Request) {
