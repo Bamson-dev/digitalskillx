@@ -178,7 +178,9 @@ function Feedback({
           <ul className="mt-2 space-y-1 text-neutral-700">
             <li>Created: {state.bulkSummary.created}</li>
             <li>Existing students enrolled: {state.bulkSummary.enrolled}</li>
-            <li>Skipped: {state.bulkSummary.skipped}</li>
+            <li>
+              Skipped (already enrolled in this course): {state.bulkSummary.skipped}
+            </li>
             <li>
               Failed:{" "}
               {state.bulkSummary.failedCount ?? state.bulkSummary.failed.length}

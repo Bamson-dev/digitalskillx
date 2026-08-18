@@ -257,80 +257,47 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Large uploads: process immediately in this request, then keep draining via UI kicks + cron.
+    // Large uploads: return a jobId immediately so the UI can show progress.
+    // The admin page then drives processing via action=process; cron is a backup.
     const origin = new URL(request.url).origin;
-    let summary: Awaited<ReturnType<typeof processBulkImportUntilBudget>>;
-    try {
-      summary = await processBulkImportUntilBudget({
-        admin: auth.admin,
-        adminUserId: auth.user.id,
-        jobId: created.jobId,
-        budgetMs: 90_000,
-        asWorker: true,
+    void processBulkImportUntilBudget({
+      admin: auth.admin,
+      adminUserId: auth.user.id,
+      jobId: created.jobId,
+      budgetMs: 90_000,
+      asWorker: true,
+    })
+      .then(async (summary) => {
+        const { scheduleBulkWorkerContinuation } = await import("@/lib/bulk-import-continue");
+        scheduleBulkWorkerContinuation({
+          origin,
+          path: summary.done ? "/api/cron/email-outbox" : "/api/cron/bulk-import",
+          depth: 0,
+          reason: summary.done ? "post_upload_emails" : "post_upload_kick",
+        });
+      })
+      .catch((err) => {
+        bulkImportStage("inline_kick_failed", {
+          jobId: created.jobId,
+          ok: false,
+          error: err instanceof Error ? err.message : String(err),
+        });
+        void import("@/lib/bulk-import-continue").then(({ scheduleBulkWorkerContinuation }) => {
+          scheduleBulkWorkerContinuation({
+            origin,
+            path: "/api/cron/bulk-import",
+            depth: 0,
+            reason: "kick_error_recovery",
+          });
+        });
       });
-    } catch (err) {
-      bulkImportStage("inline_kick_failed", {
-        jobId: created.jobId,
-        ok: false,
-        error: err instanceof Error ? err.message : String(err),
-      });
-      const { scheduleBulkWorkerContinuation } = await import("@/lib/bulk-import-continue");
-      scheduleBulkWorkerContinuation({
-        origin,
-        path: "/api/cron/bulk-import",
-        depth: 0,
-        reason: "kick_error_recovery",
-      });
-      return NextResponse.json({
-        jobId: created.jobId,
-        totalRows: created.totalRows,
-        chunked: true,
-        processedRows: 0,
-        message: `Import job created for ${created.totalRows} rows. Processing in the background…`,
-      });
-    }
-
-    if (!summary.done) {
-      const { scheduleBulkWorkerContinuation } = await import("@/lib/bulk-import-continue");
-      scheduleBulkWorkerContinuation({
-        origin,
-        path: "/api/cron/bulk-import",
-        depth: 0,
-        reason: "post_upload_kick",
-      });
-    } else {
-      await logAudit({
-        action: "students_bulk_created",
-        metadata: {
-          jobId: summary.jobId,
-          created: summary.created,
-          enrolled: summary.enrolled,
-          skipped: summary.skipped,
-          failedCount: summary.failed,
-        },
-      });
-      revalidatePath("/admin/students");
-      revalidatePath("/admin/analytics");
-      const { scheduleBulkWorkerContinuation } = await import("@/lib/bulk-import-continue");
-      scheduleBulkWorkerContinuation({
-        origin,
-        path: "/api/cron/email-outbox",
-        depth: 0,
-        reason: "post_upload_emails",
-      });
-      return NextResponse.json(jobResponse(summary));
-    }
 
     return NextResponse.json({
       jobId: created.jobId,
       totalRows: created.totalRows,
-      processedRows: summary.processedRows,
-      created: summary.created,
-      enrolled: summary.enrolled,
-      skipped: summary.skipped,
-      failed: summary.failed,
       chunked: true,
-      message: `Import processing ${summary.processedRows}/${created.totalRows} rows…`,
+      processedRows: 0,
+      message: `Import started for ${created.totalRows} rows. Processing…`,
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Bulk upload failed.";

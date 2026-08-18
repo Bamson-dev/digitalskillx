@@ -3,9 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   buildCourseResolver,
   ensureImportedStudentProfile,
-  findProfileByEmail,
   generateStrongPassword,
-  grantCourseAccessForBulkImport,
   isValidStudentEmail,
   parseStudentCsv,
   resolveStudentIdByEmail,
@@ -249,19 +247,71 @@ async function batchFindProfilesByEmails(
       if (row.email) map.set(row.email.trim().toLowerCase(), row);
     }
   }
-  for (const email of unique) {
-    if (map.has(email)) continue;
-    const profile = await findProfileByEmail(admin, email);
-    if (profile) {
-      map.set(email, {
-        id: profile.id,
-        full_name: profile.full_name,
-        email: profile.email,
-        is_suspended: profile.is_suspended,
-      });
+  return map;
+}
+
+async function loadExistingEnrollmentKeys(
+  admin: SupabaseClient<Database>,
+  studentIds: string[],
+  courseIds: string[],
+) {
+  const keys = new Set<string>();
+  if (studentIds.length === 0 || courseIds.length === 0) return keys;
+  const uniqueStudents = [...new Set(studentIds)];
+  for (let i = 0; i < uniqueStudents.length; i += 200) {
+    const slice = uniqueStudents.slice(i, i + 200);
+    const { data, error } = await admin
+      .from("enrollments")
+      .select("student_id, course_id")
+      .in("student_id", slice)
+      .in("course_id", courseIds);
+    if (error) throw new Error(error.message);
+    for (const row of data ?? []) {
+      keys.add(`${row.student_id}:${row.course_id}`);
     }
   }
-  return map;
+  return keys;
+}
+
+async function fastBulkEnroll(
+  admin: SupabaseClient<Database>,
+  params: {
+    studentId: string;
+    courseId: string;
+    enrolledBy: string;
+    fullName: string;
+    email: string;
+  },
+): Promise<boolean> {
+  await ensureImportedStudentProfile(admin, {
+    studentId: params.studentId,
+    email: params.email,
+    fullName: params.fullName,
+  });
+  const { error } = await admin.from("enrollments").insert({
+    student_id: params.studentId,
+    course_id: params.courseId,
+    enrolled_by: params.enrolledBy,
+    source: "admin",
+  });
+  if (error) {
+    if (error.code === "23505" || error.message.toLowerCase().includes("duplicate")) {
+      return false;
+    }
+    throw new Error(error.message);
+  }
+  try {
+    await runAutomations("course_enrolled", {
+      studentId: params.studentId,
+      courseId: params.courseId,
+    });
+  } catch (err) {
+    bulkImportStage("automation_course_enrolled", {
+      ok: false,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+  return true;
 }
 
 async function countRowsByStatus(
@@ -469,6 +519,18 @@ export async function processBulkImportChunk(params: {
 
     const emails = rows.map((r) => r.email.trim().toLowerCase()).filter(Boolean);
     const profileMap = await batchFindProfilesByEmails(params.admin, emails);
+    const courseIdsForChunk = [
+      ...new Set(
+        rows
+          .map((row) => resolveCourse(row.course_ref, jobRow.default_course_id).courseId)
+          .filter((id): id is string => Boolean(id)),
+      ),
+    ];
+    const enrolledKeys = await loadExistingEnrollmentKeys(
+      params.admin,
+      [...profileMap.values()].map((row) => row.id),
+      courseIdsForChunk,
+    );
     bulkImportStage("student_lookup_batch", {
       jobId,
       ok: true,
@@ -612,8 +674,15 @@ export async function processBulkImportChunk(params: {
               is_suspended: false,
             });
 
-            const { newlyEnrolled } = await withTransientRetry("enroll", jobId, () =>
-              grantCourseAccessForBulkImport(params.admin, {
+            const enrollKey = `${studentId}:${resolved.courseId}`;
+            if (enrolledKeys.has(enrollKey)) {
+              await markRow(params.admin, row.id, "skipped", "Already enrolled in this course", email);
+              counters.skipped += 1;
+              continue;
+            }
+
+            const newlyEnrolled = await withTransientRetry("enroll", jobId, () =>
+              fastBulkEnroll(params.admin, {
                 studentId: studentId!,
                 courseId: resolved.courseId!,
                 enrolledBy: params.adminUserId || jobRow.admin_id,
@@ -621,6 +690,7 @@ export async function processBulkImportChunk(params: {
                 email,
               }),
             );
+            if (newlyEnrolled) enrolledKeys.add(enrollKey);
             bulkImportStage("enrollment", {
               jobId,
               ok: true,

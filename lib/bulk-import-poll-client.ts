@@ -102,7 +102,9 @@ function toSummary(statusJson: BulkImportStatusJson): BulkImportPollSummary {
 }
 
 export function bulkImportFinishedMessage(summary: BulkImportPollSummary) {
-  return `Bulk upload finished: ${summary.created} created, ${summary.enrolled} existing student(s) enrolled, ${summary.skipped} skipped, ${summary.failed} failed.${
+  const skippedNote =
+    summary.skipped > 0 ? ` Skipped students were already enrolled in this course.` : "";
+  return `Bulk upload finished: ${summary.created} new account(s), ${summary.enrolled} existing student(s) enrolled, ${summary.skipped} already enrolled (skipped), ${summary.failed} failed.${skippedNote}${
     summary.emailsQueued != null
       ? ` Emails: ${summary.emailsSent ?? 0} sent, ${summary.emailsFailed ?? 0} failed (${summary.emailsQueued} queued).`
       : ""
