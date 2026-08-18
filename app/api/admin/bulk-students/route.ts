@@ -97,7 +97,7 @@ export async function POST(request: NextRequest) {
         const drain = await drainBulkImportEmailOutboxUntilBudget(auth.admin, {
           jobId: body.jobId,
           batchSize: 40,
-          budgetMs: 85_000,
+          budgetMs: 25_000,
         });
         const origin = new URL(request.url).origin;
         const { scheduleBulkWorkerContinuation } = await import("@/lib/bulk-import-continue");
@@ -114,7 +114,7 @@ export async function POST(request: NextRequest) {
         const drain = await drainBulkImportEmailOutboxUntilBudget(auth.admin, {
           jobId: body.jobId,
           batchSize: 40,
-          budgetMs: 85_000,
+          budgetMs: 25_000,
         });
         return NextResponse.json({ ok: true, ...drain });
       }

@@ -15,6 +15,7 @@ export type BulkImportStatusJson = {
   emailsFailed?: number;
   emailsQueued?: number;
   emailsPending?: number;
+  emailsReady?: number;
   resendReady?: boolean;
   emailError?: string | null;
 };
@@ -33,6 +34,7 @@ export type BulkImportPollSummary = {
   emailsFailed?: number;
   emailsQueued?: number;
   emailsPending?: number;
+  emailsReady?: number;
   resendReady?: boolean;
   emailError?: string | null;
 };
@@ -105,6 +107,7 @@ function toSummary(statusJson: BulkImportStatusJson): BulkImportPollSummary {
     emailsFailed: statusJson.emailsFailed,
     emailsQueued: statusJson.emailsQueued,
     emailsPending: statusJson.emailsPending,
+    emailsReady: statusJson.emailsReady,
     resendReady: statusJson.resendReady,
     emailError: statusJson.emailError,
   };
@@ -118,7 +121,9 @@ export function bulkImportFinishedMessage(summary: BulkImportPollSummary) {
   const emailNote =
     summary.emailsQueued != null
       ? ` Emails: ${summary.emailsSent ?? 0} sent, ${summary.emailsFailed ?? 0} failed (${summary.emailsQueued} queued${
-          summary.emailsPending ? `, ${summary.emailsPending} still sending` : ""
+          summary.emailsPending
+            ? `, ${summary.emailsPending} waiting${summary.emailsReady != null && summary.emailsReady < summary.emailsPending ? ` (${summary.emailsReady} ready now)` : ""}`
+            : ""
         }).`
       : "";
   return `Bulk upload finished: ${summary.created} new account(s), ${summary.enrolled} existing student(s) enrolled, ${summary.skipped} already enrolled (skipped), ${summary.failed} failed.${skippedNote}${emailNote}`;
@@ -169,23 +174,8 @@ export async function pollBulkImportJob(
   let statusFailRounds = 0;
   let kickInFlight: Promise<boolean> | null = null;
 
-  const kickIfIdle = () => {
-    if (kickInFlight) return;
-    const sendingEmails = lastSummary?.phase === "sending_emails" || (lastSummary?.emailsPending ?? 0) > 0;
-    kickInFlight = (
-      sendingEmails && lastSummary && lastSummary.processedRows >= lastSummary.totalRows
-        ? kickBulkEmailDrain(jobId)
-        : kickBulkImportJob(jobId)
-    ).finally(() => {
-      kickInFlight = null;
-    });
-  };
-
-  kickIfIdle();
-
   while (Date.now() - pollStarted < maxWaitMs) {
     await new Promise((r) => setTimeout(r, 2000));
-    kickIfIdle();
 
     const fetched = await fetchBulkJobStatus(jobId);
     if (!fetched) {
@@ -244,9 +234,29 @@ export async function pollBulkImportJob(
     const phaseLabel = statusJson.phase?.replace(/_/g, " ") ?? "processing";
     const waiting = statusJson.processedRows <= previousProcessed;
     if (!waiting) previousProcessed = statusJson.processedRows;
+
+    const sendingEmails =
+      statusJson.phase === "sending_emails" || (statusJson.emailsPending ?? 0) > 0;
+    if (sendingEmails && statusJson.processedRows >= statusJson.totalRows) {
+      if (!kickInFlight) {
+        kickInFlight = kickBulkEmailDrain(jobId).finally(() => {
+          kickInFlight = null;
+        });
+      }
+    } else if (!kickInFlight) {
+      kickInFlight = kickBulkImportJob(jobId).finally(() => {
+        kickInFlight = null;
+      });
+    }
+
     const emailPart =
       statusJson.phase === "sending_emails" || (statusJson.emailsPending ?? 0) > 0
-        ? ` Sending emails: ${statusJson.emailsSent ?? 0} sent, ${statusJson.emailsPending ?? 0} waiting.${
+        ? ` Sending emails: ${statusJson.emailsSent ?? 0} sent, ${statusJson.emailsPending ?? 0} waiting${
+            statusJson.emailsReady != null &&
+            statusJson.emailsReady < (statusJson.emailsPending ?? 0)
+              ? ` (${statusJson.emailsReady} ready)`
+              : ""
+          }.${
             statusJson.resendReady === false
               ? " Resend is not configured on Vercel — add RESEND_API_KEY and redeploy."
               : statusJson.emailError

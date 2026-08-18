@@ -452,14 +452,19 @@ export async function drainBulkImportEmailOutboxUntilBudget(
       failed: 0,
       batches: 0,
       resendReady: false as const,
-      error: "Resend is not configured. Add RESEND_API_KEY in Vercel → Environment Variables, then redeploy.",
+      error:
+        "Resend is not configured. Add RESEND_API_KEY in Vercel → Environment Variables, then redeploy.",
     };
+  }
+
+  if (opts?.jobId) {
+    await prepareJobOutboxForDrain(admin, opts.jobId);
   }
 
   await purgeSyntheticPendingOutbox(admin);
 
   const batchSize = opts?.batchSize ?? 40;
-  const budgetMs = opts?.budgetMs ?? 85_000;
+  const budgetMs = opts?.budgetMs ?? 25_000;
   const started = Date.now();
   let sent = 0;
   let failed = 0;
@@ -522,20 +527,60 @@ export async function getOutboxDiagnosticsForJob(
   };
 }
 
+export async function prepareJobOutboxForDrain(
+  admin: SupabaseClient<Database>,
+  jobId: string,
+) {
+  const now = new Date().toISOString();
+  await admin
+    .from("bulk_import_email_outbox" as never)
+    .update({
+      status: "pending",
+      scheduled_at: now,
+      updated_at: now,
+      last_error: null,
+    } as never)
+    .eq("job_id", jobId)
+    .eq("status", "sending");
+
+  await admin
+    .from("bulk_import_email_outbox" as never)
+    .update({
+      scheduled_at: now,
+      updated_at: now,
+    } as never)
+    .eq("job_id", jobId)
+    .eq("status", "pending");
+}
+
 export async function countPendingOutboxForJob(
   admin: SupabaseClient<Database>,
   jobId: string,
 ) {
-  const { count, error } = await admin
-    .from("bulk_import_email_outbox" as never)
-    .select("id", { count: "exact", head: true })
-    .eq("job_id", jobId)
-    .in("status", ["pending", "sending"]);
-  if (error) {
-    if (outboxTableMissing(error.message)) return 0;
-    return 0;
+  const now = new Date().toISOString();
+  const [total, ready] = await Promise.all([
+    admin
+      .from("bulk_import_email_outbox" as never)
+      .select("id", { count: "exact", head: true })
+      .eq("job_id", jobId)
+      .in("status", ["pending", "sending"]),
+    admin
+      .from("bulk_import_email_outbox" as never)
+      .select("id", { count: "exact", head: true })
+      .eq("job_id", jobId)
+      .eq("status", "pending")
+      .lte("scheduled_at", now),
+  ]);
+
+  if (total.error && !outboxTableMissing(total.error.message)) return { total: 0, ready: 0 };
+  if (ready.error && !outboxTableMissing(ready.error.message)) {
+    return { total: total.count ?? 0, ready: 0 };
   }
-  return count ?? 0;
+
+  return {
+    total: total.count ?? 0,
+    ready: ready.count ?? 0,
+  };
 }
 
 /**
@@ -640,7 +685,7 @@ export async function enqueueEnrollmentNoticesForJob(
     }
   }
 
-  if (queued > 0 || (await countPendingOutboxForJob(admin, jobId)) > 0) {
+  if (queued > 0 || (await countPendingOutboxForJob(admin, jobId)).total > 0) {
     await admin
       .from("bulk_import_jobs")
       .update({

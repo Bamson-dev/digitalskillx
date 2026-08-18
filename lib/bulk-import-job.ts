@@ -56,6 +56,7 @@ export type BulkImportJobSummary = {
   emailsSent?: number;
   emailsFailed?: number;
   emailsPending?: number;
+  emailsReady?: number;
   resendReady?: boolean;
   emailError?: string | null;
   errorMessage?: string | null;
@@ -842,7 +843,7 @@ export async function processBulkImportChunk(params: {
 async function maybeFinalizeJobPhase(admin: SupabaseClient<Database>, jobId: string) {
   try {
     const pendingEmails = await countPendingOutboxForJob(admin, jobId);
-    if (pendingEmails === 0) {
+    if (pendingEmails.total === 0) {
       await admin
         .from("bulk_import_jobs")
         .update({
@@ -897,7 +898,7 @@ export async function processBulkImportUntilBudget(params: {
       await drainBulkImportEmailOutboxUntilBudget(params.admin, {
         jobId: params.jobId,
         batchSize: 40,
-        budgetMs: Math.min(budgetMs, 85_000),
+        budgetMs: 25_000,
       });
       await maybeFinalizeJobPhase(params.admin, params.jobId);
       summary = await getBulkImportJobSummary(params.admin, params.jobId);
@@ -999,7 +1000,9 @@ export async function getBulkImportJobSummary(
   let pendingRows = 0;
   let processingRows = 0;
   let rowsDone = statusDone || jobRow.processed_rows >= jobRow.total_rows;
-  const emailsPending = await countPendingOutboxForJob(admin, jobId);
+  const outboxCounts = await countPendingOutboxForJob(admin, jobId);
+  const emailsPending = outboxCounts.total;
+  const emailsReady = outboxCounts.ready;
   const outboxDiagnostics = await getOutboxDiagnosticsForJob(admin, jobId);
   const errorMessage = publicJobErrorMessage(jobRow.error_message);
   const emailError =
@@ -1034,6 +1037,7 @@ export async function getBulkImportJobSummary(
       emailsSent: jobRow.emails_sent,
       emailsFailed: jobRow.emails_failed,
       emailsPending,
+      emailsReady,
       resendReady: outboxDiagnostics.resendReady,
       emailError,
       errorMessage,
@@ -1090,6 +1094,7 @@ export async function getBulkImportJobSummary(
     emailsSent: jobRow.emails_sent,
     emailsFailed: jobRow.emails_failed,
     emailsPending,
+    emailsReady,
     resendReady: outboxDiagnostics.resendReady,
     emailError,
     errorMessage,
