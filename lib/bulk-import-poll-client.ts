@@ -136,8 +136,7 @@ export async function pollBulkImportJob(
   }) => void,
 ): Promise<{ ok: true; summary: BulkImportPollSummary } | { ok: false; error: string }> {
   const pollStarted = Date.now();
-  const maxWaitMs = Math.max(10 * 60_000, totalRows * 800);
-  let stalledRounds = 0;
+  const maxWaitMs = Math.max(45 * 60_000, totalRows * 3_000);
   let previousProcessed = 0;
   let lastSummary: BulkImportPollSummary | null = null;
   let statusFailRounds = 0;
@@ -211,8 +210,12 @@ export async function pollBulkImportJob(
     statusFailRounds = 0;
     lastSummary = toSummary(statusJson);
     const phaseLabel = statusJson.phase?.replace(/_/g, " ") ?? "processing";
+    const waiting = statusJson.processedRows <= previousProcessed;
+    if (!waiting) previousProcessed = statusJson.processedRows;
     onUpdate({
-      message: `Job ${jobId.slice(0, 8)}… ${phaseLabel}: ${statusJson.processedRows} / ${statusJson.totalRows} rows`,
+      message: waiting
+        ? `Job ${jobId.slice(0, 8)}… still working ${statusJson.processedRows} / ${statusJson.totalRows}. Keep this page open.`
+        : `Job ${jobId.slice(0, 8)}… ${phaseLabel}: ${statusJson.processedRows} / ${statusJson.totalRows} rows`,
       progress: {
         processed: statusJson.processedRows,
         total: statusJson.totalRows,
@@ -223,19 +226,6 @@ export async function pollBulkImportJob(
     if (statusJson.done) {
       return { ok: true, summary: lastSummary };
     }
-
-    if (statusJson.processedRows <= previousProcessed) {
-      stalledRounds += 1;
-    } else {
-      stalledRounds = 0;
-      previousProcessed = statusJson.processedRows;
-    }
-    if (stalledRounds >= 40) {
-      return {
-        ok: false,
-        error: `Import still running slowly (Job ${jobId}). Leave this open or come back later — background workers continue processing.`,
-      };
-    }
   }
 
   if (lastSummary?.done) {
@@ -244,6 +234,6 @@ export async function pollBulkImportJob(
 
   return {
     ok: false,
-    error: `Timed out waiting for job ${jobId}. Background processing may still finish — use Resume job later.`,
+    error: `Timed out waiting for job ${jobId}. Click Resume job and keep this page open until you see Bulk upload finished.`,
   };
 }

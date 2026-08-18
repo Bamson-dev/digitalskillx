@@ -557,7 +557,8 @@ export function StudentCreate({
           <div className="rounded-lg border border-app bg-surface-muted/20 p-4">
             <p className="text-sm font-semibold text-neutral-900">Resume a past import</p>
             <p className="mt-1 text-xs text-muted">
-              Check progress or view the final summary for a job without re-uploading the CSV.
+              Resume this job and keep the page open until you see “Bulk upload finished”.
+              Closing the tab can stop the import.
             </p>
             <div className="mt-3 flex flex-col gap-2 sm:flex-row">
               <Input

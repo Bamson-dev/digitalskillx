@@ -813,6 +813,7 @@ export async function processBulkImportUntilBudget(params: {
 }): Promise<BulkImportJobSummary> {
   const budgetMs = params.budgetMs ?? 90_000;
   const started = Date.now();
+  await reclaimStaleBulkImportClaims(params.admin, 2);
   let summary = await getBulkImportJobSummary(params.admin, params.jobId);
   let rounds = 0;
   while (Date.now() - started < budgetMs && rounds < 80) {
