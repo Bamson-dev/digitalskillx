@@ -123,6 +123,14 @@ assert.equal(preview.skippedSuppressed, 1);
 assert.equal(preview.skippedAlreadyEnrolled, 1);
 assert.ok(preview.selected.length < 5);
 ok("recipient selection is explicit and does not auto-target every user");
+{
+  const storeSrc = readFileSync(join(root, "lib/email-campaigns/store.ts"), "utf8");
+  const panel = readFileSync(join(root, "components/admin/email-campaign-panel.tsx"), "utf8");
+  assert.match(storeSrc, /from\("enrollments"\)/);
+  assert.match(storeSrc, /listEverEnrolledStudentIds/);
+  assert.match(panel, /Every student who has ever been enrolled/);
+  ok("student enrollment source uses everyone who has ever been enrolled");
+}
 
 assert.equal(canProcessCampaign("draft").ok, false);
 assert.equal(canProcessCampaign("paused").ok, false);

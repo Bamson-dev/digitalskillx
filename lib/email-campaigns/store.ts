@@ -50,6 +50,49 @@ const EMPTY_COUNTS: CampaignCounts = {
   nextScheduledAt: null,
 };
 
+const PROFILE_ID_PAGE = 200;
+const ENROLLMENT_PAGE = 1000;
+const INSERT_PAGE = 100;
+const MAX_ENROLLMENT_SCAN = 50_000;
+
+async function listEverEnrolledStudentIds(admin: Admin): Promise<string[]> {
+  const ids = new Set<string>();
+  for (let from = 0; from < MAX_ENROLLMENT_SCAN; from += ENROLLMENT_PAGE) {
+    const { data, error } = await admin
+      .from("enrollments")
+      .select("student_id")
+      .not("student_id", "is", null)
+      .range(from, from + ENROLLMENT_PAGE - 1);
+    if (error) throw new Error(error.message);
+    const rows = data ?? [];
+    for (const row of rows) {
+      if (row.student_id) ids.add(row.student_id);
+    }
+    if (rows.length < ENROLLMENT_PAGE) break;
+  }
+  return [...ids];
+}
+
+async function loadProfilesByIds(admin: Admin, studentIds: string[]): Promise<CandidateRecipient[]> {
+  const candidates: CandidateRecipient[] = [];
+  for (let i = 0; i < studentIds.length; i += PROFILE_ID_PAGE) {
+    const chunk = studentIds.slice(i, i + PROFILE_ID_PAGE);
+    const { data, error } = await admin
+      .from("profiles")
+      .select("id, email, full_name")
+      .in("id", chunk);
+    if (error) throw new Error(error.message);
+    for (const row of data ?? []) {
+      candidates.push({
+        email: row.email,
+        fullName: row.full_name,
+        profileId: row.id,
+      });
+    }
+  }
+  return candidates;
+}
+
 function asCampaign(row: Record<string, unknown> | null): CampaignRecord | null {
   if (!row) return null;
   return {
@@ -204,25 +247,15 @@ export async function previewStudents(
   admin: Admin,
   campaignId: string,
 ): Promise<SelectionPreview> {
-  const { data, error } = await admin
-    .from("profiles")
-    .select("id, email, full_name")
-    .eq("role", "student")
-    .eq("is_suspended", false)
-    .limit(5000);
-  if (error) throw new Error(error.message);
-
+  const studentIds = await listEverEnrolledStudentIds(admin);
+  const candidates = await loadProfilesByIds(admin, studentIds);
   const [suppressed, enrolled] = await Promise.all([
     loadSuppressedEmailSet(admin),
     loadEnrolledEmailSet(admin, campaignId),
   ]);
   return filterEnrollmentCandidates({
     source: "students",
-    candidates: (data ?? []).map((row) => ({
-      email: row.email,
-      fullName: row.full_name,
-      profileId: row.id,
-    })),
+    candidates,
     suppressedEmails: suppressed,
     alreadyEnrolledEmails: enrolled,
   });
@@ -343,21 +376,25 @@ export async function enrollCandidates(
     next_send_at: now,
   }));
 
-  const { error } = await admin.from("email_campaign_recipients" as never).insert(rows as never);
-  if (error) {
-    if (/duplicate|unique/i.test(error.message)) {
-      let inserted = 0;
-      for (const row of rows) {
-        const { error: oneErr } = await admin
-          .from("email_campaign_recipients" as never)
-          .insert(row as never);
-        if (!oneErr) inserted += 1;
-      }
-      return inserted;
+  let inserted = 0;
+  for (let i = 0; i < rows.length; i += INSERT_PAGE) {
+    const chunk = rows.slice(i, i + INSERT_PAGE);
+    const { error: chunkErr } = await admin
+      .from("email_campaign_recipients" as never)
+      .insert(chunk as never);
+    if (!chunkErr) {
+      inserted += chunk.length;
+      continue;
     }
-    throw new Error(error.message);
+    if (!/duplicate|unique/i.test(chunkErr.message)) throw new Error(chunkErr.message);
+    for (const row of chunk) {
+      const { error: oneErr } = await admin
+        .from("email_campaign_recipients" as never)
+        .insert(row as never);
+      if (!oneErr) inserted += 1;
+    }
   }
-  return rows.length;
+  return inserted;
 }
 
 export async function setCampaignStatus(

@@ -170,7 +170,7 @@ export function EmailCampaignPanel({
       <Card>
         <CardHeader
           title="Recipient enrollment"
-          description="Nobody is emailed just by opening this page. Preview is a dry-run. Enroll only adds people to the sequence. Sending starts only after activation."
+          description="Choose every student who has ever been enrolled, dry-run to see the count, then enroll. Email 1 starts only after the campaign is Active."
         />
         <form action={previewAction} className="space-y-3">
           <Label htmlFor="source">Source</Label>
@@ -178,10 +178,10 @@ export function EmailCampaignPanel({
             id="source"
             name="source"
             className="h-10 w-full rounded-lg border border-app bg-card px-3 text-sm"
-            defaultValue="buyers"
+            defaultValue="students"
           >
+            <option value="students">Every student who has ever been enrolled</option>
             <option value="buyers">Previous buyers (successful transactions)</option>
-            <option value="students">Enrolled students (LMS profiles)</option>
             <option value="csv">CSV / pasted emails that already exist as students</option>
           </select>
           <Label htmlFor="csv_text">CSV or pasted emails (CSV source only)</Label>
