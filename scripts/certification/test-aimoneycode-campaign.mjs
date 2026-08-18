@@ -460,6 +460,7 @@ const campaignFixture = {
   );
   assert.doesNotMatch(client, /RESEND_API_KEY|CRON_SECRET|re_[A-Za-z0-9]{8,}/);
   assert.doesNotMatch(actions, /NEXT_PUBLIC_RESEND/);
+  assert.match(actions, /revalidatePath\("\/admin\/email-campaigns"\)/);
   ok("no email secrets appear in client campaign UI");
 }
 

@@ -1,5 +1,6 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/auth";
 import { getAdminSupabase } from "@/lib/admin-supabase";
 import { logAudit } from "@/lib/audit";
@@ -76,6 +77,7 @@ export async function previewCampaignRecipients(
       targetId: campaign.id,
       metadata: { source, selected: preview.selected.length, dryRun: true },
     });
+    revalidatePath("/admin/email-campaigns");
 
     return {
       message: `Dry-run only — no emails sent. ${preview.selected.length} recipient(s) would be enrolled.`,
@@ -124,6 +126,7 @@ export async function enrollCampaignRecipients(
       targetId: campaign.id,
       metadata: { source, attempted: preview.selected.length, inserted, campaignStatus: campaign.status },
     });
+    revalidatePath("/admin/email-campaigns");
 
     if (campaign.status === "active") {
       await processAimoneycodeCampaignTick({
@@ -186,6 +189,8 @@ export async function setAimoneycodeCampaignStatus(
       });
     }
 
+    revalidatePath("/admin/email-campaigns");
+
     const label =
       status === "active"
         ? "Campaign activated. Eligible Email 1s will send from the server."
@@ -247,6 +252,7 @@ export async function testSendAimoneycodeEmail(
       targetType: "email_campaign",
       metadata: { step, to },
     });
+    revalidatePath("/admin/email-campaigns");
 
     return { message: `Test Email ${step} sent to ${to}. This did not enroll or advance any campaign recipient.` };
   } catch (err) {
