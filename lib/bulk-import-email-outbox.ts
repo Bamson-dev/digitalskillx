@@ -8,9 +8,11 @@ import { studentFirstName } from "@/lib/student-name";
 import { siteUrl as orgSiteUrl } from "@/lib/org";
 import { bulkImportStage } from "@/lib/bulk-import-telemetry";
 import { isMissingColumnError } from "@/lib/schema-guard";
+import { isSyntheticTestRecipient } from "@/lib/email/synthetic-recipient";
 import type { Database } from "@/types/database";
 
 export type OutboxKind = "welcome" | "enrollment_notice";
+export { isSyntheticTestRecipient } from "@/lib/email/synthetic-recipient";
 
 function siteUrl() {
   return (process.env.NEXT_PUBLIC_SITE_URL ?? orgSiteUrl() ?? "https://digitalskillx.com").replace(
@@ -39,6 +41,16 @@ export async function enqueueBulkImportEmail(
     kind: OutboxKind;
   },
 ): Promise<{ queued: boolean; fallbackSent?: boolean }> {
+  if (isSyntheticTestRecipient(params.email)) {
+    bulkImportStage("email_skipped_synthetic", {
+      jobId: params.jobId,
+      ok: true,
+      kind: params.kind,
+      email: params.email,
+    });
+    return { queued: false };
+  }
+
   const { error } = await admin.from("bulk_import_email_outbox" as never).insert({
     job_id: params.jobId,
     row_id: params.rowId,
@@ -186,6 +198,21 @@ export async function drainBulkImportEmailOutbox(
     const attempts = Number(row.attempts ?? 1);
 
     try {
+      if (isSyntheticTestRecipient(email)) {
+        await admin
+          .from("bulk_import_email_outbox" as never)
+          .update({
+            status: "failed",
+            password_plain: null,
+            last_error: "Skipped synthetic test recipient",
+            updated_at: new Date().toISOString(),
+          } as never)
+          .eq("id", id);
+        failed++;
+        bulkImportStage("email_skipped_synthetic", { jobId, ok: true, kind, email });
+        continue;
+      }
+
       if (kind === "welcome") {
         if (!password) {
           throw new Error("Welcome email missing password payload");

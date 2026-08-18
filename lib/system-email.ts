@@ -2,6 +2,7 @@ import "server-only";
 import type { Json } from "@/types/database";
 import { createAdminClientAsync } from "@/lib/supabase/admin";
 import { sendEmail } from "@/lib/email";
+import { isSyntheticTestRecipient } from "@/lib/email/synthetic-recipient";
 
 export type SystemEmailType =
   | "welcome"
@@ -28,6 +29,11 @@ export type SendSystemEmailParams = {
 
 /** Send a system email; log failures for retry without throwing. */
 export async function sendSystemEmail(params: SendSystemEmailParams) {
+  if (isSyntheticTestRecipient(params.to)) {
+    console.warn(`[system-email] ${params.type} skipped synthetic test recipient ${params.to}`);
+    return { sent: false as const, skipped: true as const, error: "synthetic_test_recipient" };
+  }
+
   const result = await sendEmail({
     to: params.to,
     subject: params.subject,
