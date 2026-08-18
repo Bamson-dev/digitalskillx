@@ -484,6 +484,18 @@ export async function drainBulkImportEmailOutboxUntilBudget(
   return { sent, failed, batches, resendReady: true as const };
 }
 
+export async function countGlobalPendingOutbox(admin: SupabaseClient<Database>) {
+  const { count, error } = await admin
+    .from("bulk_import_email_outbox" as never)
+    .select("id", { count: "exact", head: true })
+    .in("status", ["pending", "sending"]);
+  if (error) {
+    if (outboxTableMissing(error.message)) return 0;
+    return 0;
+  }
+  return count ?? 0;
+}
+
 export async function resendFailedOutboxForJob(
   admin: SupabaseClient<Database>,
   jobId: string,

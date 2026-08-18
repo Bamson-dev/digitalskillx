@@ -9,6 +9,7 @@ export function scheduleBulkWorkerContinuation(params: {
   path: "/api/cron/bulk-import" | "/api/cron/email-outbox";
   depth?: number;
   reason?: string;
+  jobId?: string;
 }) {
   const secret = process.env.CRON_SECRET?.trim();
   const depth = params.depth ?? 0;
@@ -31,6 +32,7 @@ export function scheduleBulkWorkerContinuation(params: {
 
   const url = new URL(params.path, params.origin);
   url.searchParams.set("depth", String(depth + 1));
+  if (params.jobId) url.searchParams.set("jobId", params.jobId);
 
   // Fire immediately. A delayed timer is killed when the serverless isolate freezes
   // after the HTTP response, which previously left imports stuck after one chunk.

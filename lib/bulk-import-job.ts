@@ -16,6 +16,7 @@ import {
   enqueueBulkImportEmail,
   getOutboxDiagnosticsForJob,
 } from "@/lib/bulk-import-email-outbox";
+import { scheduleBulkWorkerContinuation } from "@/lib/bulk-import-continue";
 import { bulkImportStage, timedStage } from "@/lib/bulk-import-telemetry";
 import { isMissingColumnError } from "@/lib/schema-guard";
 import type { BulkImportRow, BulkImportRowStatus, Database } from "@/types/database";
@@ -840,7 +841,7 @@ export async function processBulkImportChunk(params: {
   });
 }
 
-async function maybeFinalizeJobPhase(admin: SupabaseClient<Database>, jobId: string) {
+export async function maybeFinalizeJobPhase(admin: SupabaseClient<Database>, jobId: string) {
   try {
     const pendingEmails = await countPendingOutboxForJob(admin, jobId);
     if (pendingEmails.total === 0) {
@@ -885,6 +886,7 @@ export async function processBulkImportUntilBudget(params: {
   jobId: string;
   budgetMs?: number;
   asWorker?: boolean;
+  origin?: string;
 }): Promise<BulkImportJobSummary> {
   const budgetMs = params.budgetMs ?? 90_000;
   const started = Date.now();
@@ -923,13 +925,36 @@ export async function processBulkImportUntilBudget(params: {
     rounds,
     durationMs: Date.now() - started,
   });
-  return getBulkImportJobSummary(params.admin, params.jobId);
+
+  summary = await getBulkImportJobSummary(params.admin, params.jobId);
+  if (params.asWorker && params.origin) {
+    if ((summary.emailsPending ?? 0) > 0) {
+      scheduleBulkWorkerContinuation({
+        origin: params.origin,
+        path: "/api/cron/email-outbox",
+        jobId: params.jobId,
+        depth: 0,
+        reason: "worker_emails_remaining",
+      });
+    } else if (
+      !summary.done &&
+      ((summary.pendingRows ?? 0) > 0 || (summary.processingRows ?? 0) > 0)
+    ) {
+      scheduleBulkWorkerContinuation({
+        origin: params.origin,
+        path: "/api/cron/bulk-import",
+        depth: 0,
+        reason: "worker_rows_remaining",
+      });
+    }
+  }
+  return summary;
 }
 
 /** Cron: pick oldest active jobs and process within budget. */
 export async function processPendingBulkImportJobs(
   admin: SupabaseClient<Database>,
-  opts?: { maxJobs?: number; budgetMs?: number },
+  opts?: { maxJobs?: number; budgetMs?: number; origin?: string },
 ) {
   await reclaimStaleBulkImportClaims(admin, 12);
   const { data: jobs, error } = await admin
@@ -948,6 +973,7 @@ export async function processPendingBulkImportJobs(
       jobId: job.id,
       budgetMs: opts?.budgetMs ?? 90_000,
       asWorker: true,
+      origin: opts?.origin,
     });
     results.push(summary);
   }

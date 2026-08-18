@@ -55,11 +55,14 @@ export async function POST(request: NextRequest) {
         const limited = await rateLimitedResponse(request, "admin-bulk-students-kick", 120);
         if (limited) return limited;
 
+        const origin = new URL(request.url).origin;
         const summary = await processBulkImportUntilBudget({
           admin: auth.admin,
           adminUserId: auth.user.id,
           jobId: body.jobId,
           budgetMs: 90_000,
+          origin,
+          asWorker: true,
         });
         if (summary.done) {
           await logAudit({
@@ -105,17 +108,29 @@ export async function POST(request: NextRequest) {
           origin,
           path: "/api/cron/email-outbox",
           depth: 0,
+          jobId: body.jobId,
           reason: "notify_enrolled",
         });
         return NextResponse.json({ ok: true, ...queued, drain });
       }
 
       if (body.action === "drain_emails") {
+        const origin = new URL(request.url).origin;
         const drain = await drainBulkImportEmailOutboxUntilBudget(auth.admin, {
           jobId: body.jobId,
           batchSize: 40,
           budgetMs: 25_000,
         });
+        if (body.jobId) {
+          const { scheduleBulkWorkerContinuation } = await import("@/lib/bulk-import-continue");
+          scheduleBulkWorkerContinuation({
+            origin,
+            path: "/api/cron/email-outbox",
+            jobId: body.jobId,
+            depth: 0,
+            reason: "admin_drain_emails",
+          });
+        }
         return NextResponse.json({ ok: true, ...drain });
       }
 
@@ -149,6 +164,8 @@ export async function POST(request: NextRequest) {
 
     const auth = await requireAdminApiAuth();
     if ("error" in auth) return auth.error;
+
+    const origin = new URL(request.url).origin;
 
     // Job creation only — tight limit (prevents abuse, not chunk loops)
     const limited = await rateLimitedResponse(request, "admin-bulk-students-create", 15);
@@ -248,6 +265,7 @@ export async function POST(request: NextRequest) {
         jobId: created.jobId,
         budgetMs: 120_000,
         asWorker: true,
+        origin,
       });
 
       for (let attempt = 0; !summary.done && attempt < 24; attempt++) {
@@ -257,6 +275,7 @@ export async function POST(request: NextRequest) {
           jobId: created.jobId,
           budgetMs: 120_000,
           asWorker: true,
+          origin,
         });
       }
 
@@ -289,23 +308,33 @@ export async function POST(request: NextRequest) {
     }
 
     // Large uploads: return a jobId immediately so the UI can show progress.
-    // The admin page then drives processing via action=process; cron is a backup.
-    const origin = new URL(request.url).origin;
+    // Background workers continue processing and email sending if the browser closes.
     void processBulkImportUntilBudget({
       admin: auth.admin,
       adminUserId: auth.user.id,
       jobId: created.jobId,
       budgetMs: 90_000,
       asWorker: true,
+      origin,
     })
       .then(async (summary) => {
         const { scheduleBulkWorkerContinuation } = await import("@/lib/bulk-import-continue");
-        scheduleBulkWorkerContinuation({
-          origin,
-          path: summary.done ? "/api/cron/email-outbox" : "/api/cron/bulk-import",
-          depth: 0,
-          reason: summary.done ? "post_upload_emails" : "post_upload_kick",
-        });
+        if ((summary.emailsPending ?? 0) > 0) {
+          scheduleBulkWorkerContinuation({
+            origin,
+            path: "/api/cron/email-outbox",
+            jobId: created.jobId,
+            depth: 0,
+            reason: "post_upload_emails",
+          });
+        } else if (!summary.done) {
+          scheduleBulkWorkerContinuation({
+            origin,
+            path: "/api/cron/bulk-import",
+            depth: 0,
+            reason: "post_upload_kick",
+          });
+        }
       })
       .catch((err) => {
         bulkImportStage("inline_kick_failed", {
@@ -328,7 +357,7 @@ export async function POST(request: NextRequest) {
       totalRows: created.totalRows,
       chunked: true,
       processedRows: 0,
-      message: `Import started for ${created.totalRows} rows. Processing…`,
+      message: `Import started for ${created.totalRows} rows. Processing continues in the background — safe to close this tab.`,
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Bulk upload failed.";

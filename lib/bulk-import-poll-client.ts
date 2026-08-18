@@ -266,7 +266,7 @@ export async function pollBulkImportJob(
         : "";
     onUpdate({
       message: waiting
-        ? `Job ${jobId.slice(0, 8)}… still working ${statusJson.processedRows} / ${statusJson.totalRows}.${emailPart} Keep this page open.`
+        ? `Job ${jobId.slice(0, 8)}… still working ${statusJson.processedRows} / ${statusJson.totalRows}.${emailPart} You can close this tab — sending continues in the background.`
         : `Job ${jobId.slice(0, 8)}… ${phaseLabel}: ${statusJson.processedRows} / ${statusJson.totalRows} rows.${emailPart}`,
       progress: {
         processed: statusJson.processedRows,

@@ -149,7 +149,7 @@ function Feedback({
         alreadyQueued?: number;
       };
       toast(
-        `Queued ${json.queued ?? 0} enrollment email(s). Keep this page open while they send.`,
+        `Queued ${json.queued ?? 0} enrollment email(s). Emails continue sending in the background.`,
         "success",
       );
       if (state.bulkJobId) onContinueJob?.(state.bulkJobId);
@@ -600,9 +600,8 @@ export function StudentCreate({
           <div className="rounded-lg border border-app bg-surface-muted/20 p-4">
             <p className="text-sm font-semibold text-neutral-900">Resume a past import</p>
             <p className="mt-1 text-xs text-muted">
-              Resume this job and keep the page open until you see “Bulk upload finished”.
-              Closing the tab can stop the import. To email a finished import, resume it, then click
-              Send enrollment emails to everyone in this job.
+              Paste a job ID to check progress. Row import and email sending continue in the
+              background after you close this tab. Resume to see the latest sent count.
             </p>
             <div className="mt-3 flex flex-col gap-2 sm:flex-row">
               <Input
