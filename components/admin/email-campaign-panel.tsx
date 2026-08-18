@@ -8,6 +8,7 @@ import {
   enrollCampaignRecipients,
   previewCampaignRecipients,
   setAimoneycodeCampaignStatus,
+  startSendingToAllStudents,
   testSendAimoneycodeEmail,
   type CampaignActionState,
 } from "@/app/(admin)/admin/(panel)/email-campaigns/actions";
@@ -73,6 +74,7 @@ export function EmailCampaignPanel({
   adminEmail: string;
   resendReady: boolean;
 }) {
+  const [startState, startAction] = useFormState(startSendingToAllStudents, emptyAction);
   const [previewState, previewAction] = useFormState(previewCampaignRecipients, emptyAction);
   const [enrollState, enrollAction] = useFormState(enrollCampaignRecipients, emptyAction);
   const [statusState, statusAction] = useFormState(setAimoneycodeCampaignStatus, emptyAction);
@@ -89,12 +91,15 @@ export function EmailCampaignPanel({
     );
   }
 
+  const startLabel =
+    status === "active" ? "Add new students and keep sending" : "Start sending to all students";
+
   return (
     <div className="space-y-6">
       <Card>
         <CardHeader
           title={campaignName}
-          description="Draft by default. Recipients are not emailed until you enroll a list and then activate the campaign."
+          description="One list: every enrolled student and every bulk-uploaded student. Click Start. The server sends Email 1, then one email a day for 30 days. You can close this page."
         />
         <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 text-sm">
           <div>
@@ -146,77 +151,44 @@ export function EmailCampaignPanel({
             </dd>
           </div>
         </dl>
-        <form action={statusAction} className="mt-5 flex flex-wrap gap-2">
-          <input type="hidden" name="status" value="active" />
-          <SubmitButton disabled={status === "active"}>Activate campaign</SubmitButton>
-        </form>
-        <form action={statusAction} className="mt-2 flex flex-wrap gap-2">
-          <input type="hidden" name="status" value="paused" />
-          <SubmitButton variant="outline" disabled={status !== "active"}>
-            Pause sending
+
+        <form
+          action={startAction}
+          className="mt-5"
+          onSubmit={(event) => {
+            const ok = window.confirm(
+              "This adds every student to the 30-day sequence and starts Email 1 from the server. Continue?",
+            );
+            if (!ok) event.preventDefault();
+          }}
+        >
+          <SubmitButton disabled={!resendReady} pendingText="Adding students…">
+            {startLabel}
           </SubmitButton>
         </form>
-        <form action={statusAction} className="mt-2 flex flex-wrap gap-2">
-          <input type="hidden" name="status" value="active" />
-          <SubmitButton variant="outline" disabled={status !== "paused"}>
-            Resume sending
-          </SubmitButton>
-        </form>
+        <p className="mt-2 text-xs text-muted">
+          Activate with nobody on the list does nothing. This button adds the list and starts sending.
+        </p>
+        <div className="mt-3">
+          <ActionBanner state={startState} />
+        </div>
+
+        <div className="mt-4 flex flex-wrap gap-2">
+          <form action={statusAction}>
+            <input type="hidden" name="status" value="paused" />
+            <SubmitButton variant="outline" disabled={status !== "active"}>
+              Pause sending
+            </SubmitButton>
+          </form>
+          <form action={statusAction}>
+            <input type="hidden" name="status" value="active" />
+            <SubmitButton variant="outline" disabled={status !== "paused"}>
+              Resume sending
+            </SubmitButton>
+          </form>
+        </div>
         <div className="mt-3">
           <ActionBanner state={statusState} />
-        </div>
-      </Card>
-
-      <Card>
-        <CardHeader
-          title="Recipient enrollment"
-          description="This list includes course enrollments and every student from bulk CSV uploads. Dry-run first, then enroll. Email 1 starts only after the campaign is Active."
-        />
-        <form action={previewAction} className="space-y-3">
-          <Label htmlFor="source">Source</Label>
-          <select
-            id="source"
-            name="source"
-            className="h-10 w-full rounded-lg border border-app bg-card px-3 text-sm"
-            defaultValue="students"
-          >
-            <option value="students">Every enrolled student and every bulk-uploaded student</option>
-            <option value="buyers">Previous buyers (successful transactions)</option>
-            <option value="csv">CSV / pasted emails that already exist as students</option>
-          </select>
-          <Label htmlFor="csv_text">CSV or pasted emails (CSV source only)</Label>
-          <textarea
-            id="csv_text"
-            name="csv_text"
-            rows={6}
-            className="w-full rounded-lg border border-app bg-card px-3 py-2 text-sm"
-            placeholder="email,full_name&#10;ada@example.com,Ada"
-          />
-          <div className="flex flex-wrap gap-2">
-            <SubmitButton variant="outline">Dry-run preview</SubmitButton>
-          </div>
-        </form>
-        <form action={enrollAction} className="mt-4 space-y-3">
-          <input type="hidden" name="source" id="enroll_source" />
-          <input type="hidden" name="csv_text" id="enroll_csv" />
-          <SubmitButton
-            onClick={(event) => {
-              const source = document.querySelector<HTMLSelectElement>("#source");
-              const csv = document.querySelector<HTMLTextAreaElement>("#csv_text");
-              const sourceInput = event.currentTarget.form?.querySelector<HTMLInputElement>(
-                "#enroll_source",
-              );
-              const csvInput = event.currentTarget.form?.querySelector<HTMLInputElement>("#enroll_csv");
-              if (sourceInput && source) sourceInput.value = source.value;
-              if (csvInput && csv) csvInput.value = csv.value;
-            }}
-          >
-            Enroll previewed recipients
-          </SubmitButton>
-        </form>
-        <div className="mt-3 space-y-2">
-          <ActionBanner state={previewState} />
-          <ActionBanner state={enrollState} />
         </div>
       </Card>
 
@@ -253,6 +225,61 @@ export function EmailCampaignPanel({
           <ActionBanner state={testState} />
         </div>
       </Card>
+
+      <details className="rounded-xl border border-app bg-card p-5">
+        <summary className="cursor-pointer text-sm font-semibold">Advanced: other lists and dry-run</summary>
+        <p className="mt-2 text-sm text-muted">
+          The Start button already uses every enrolled student and every bulk-uploaded student. Use this
+          only if you need buyers or a pasted CSV instead.
+        </p>
+        <form action={previewAction} className="mt-4 space-y-3">
+          <Label htmlFor="source">Source</Label>
+          <select
+            id="source"
+            name="source"
+            className="h-10 w-full rounded-lg border border-app bg-card px-3 text-sm"
+            defaultValue="students"
+          >
+            <option value="students">Every enrolled student and every bulk-uploaded student</option>
+            <option value="buyers">Previous buyers (successful transactions)</option>
+            <option value="csv">CSV / pasted emails that already exist as students</option>
+          </select>
+          <Label htmlFor="csv_text">CSV or pasted emails (CSV source only)</Label>
+          <textarea
+            id="csv_text"
+            name="csv_text"
+            rows={6}
+            className="w-full rounded-lg border border-app bg-card px-3 py-2 text-sm"
+            placeholder="email,full_name&#10;ada@example.com,Ada"
+          />
+          <div className="flex flex-wrap gap-2">
+            <SubmitButton variant="outline">Dry-run preview</SubmitButton>
+          </div>
+        </form>
+        <form action={enrollAction} className="mt-4 space-y-3">
+          <input type="hidden" name="source" id="enroll_source" />
+          <input type="hidden" name="csv_text" id="enroll_csv" />
+          <SubmitButton
+            variant="outline"
+            onClick={(event) => {
+              const source = document.querySelector<HTMLSelectElement>("#source");
+              const csv = document.querySelector<HTMLTextAreaElement>("#csv_text");
+              const sourceInput = event.currentTarget.form?.querySelector<HTMLInputElement>(
+                "#enroll_source",
+              );
+              const csvInput = event.currentTarget.form?.querySelector<HTMLInputElement>("#enroll_csv");
+              if (sourceInput && source) sourceInput.value = source.value;
+              if (csvInput && csv) csvInput.value = csv.value;
+            }}
+          >
+            Enroll this list only
+          </SubmitButton>
+        </form>
+        <div className="mt-3 space-y-2">
+          <ActionBanner state={previewState} />
+          <ActionBanner state={enrollState} />
+        </div>
+      </details>
 
       <Card>
         <CardHeader title="Email 1–30 preview" description="Copy comes from content/aimoneycode-30-day-email-sequence.md" />

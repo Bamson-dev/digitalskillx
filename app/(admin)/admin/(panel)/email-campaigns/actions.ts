@@ -4,15 +4,14 @@ import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/auth";
 import { getAdminSupabase } from "@/lib/admin-supabase";
 import { logAudit } from "@/lib/audit";
+import { scheduleBulkWorkerContinuation } from "@/lib/bulk-import-continue";
 import { sendEmail } from "@/lib/email";
 import { AIMONEYCODE_CAMPAIGN_SLUG, AIMONEYCODE_TOTAL_STEPS, isValidEmail } from "@/lib/email-campaigns/constants";
 import { isSyntheticTestRecipient } from "@/lib/email/synthetic-recipient";
 import { getAimoneycodeEmail } from "@/lib/email-campaigns/sequence";
 import { renderCampaignEmailHtml } from "@/lib/email-campaigns/render";
 import { listUnsubscribeHeader, unsubscribeUrl } from "@/lib/email-campaigns/unsubscribe";
-import { processAimoneycodeCampaignTick } from "@/lib/email-campaigns/processor";
 import {
-  createSupabaseCampaignStore,
   enrollCandidates,
   loadCampaignSnapshot,
   previewBuyers,
@@ -21,6 +20,7 @@ import {
   setCampaignStatus,
 } from "@/lib/email-campaigns/store";
 import { resendConfigured } from "@/lib/email/providers/resend";
+import { siteUrl } from "@/lib/org";
 
 export type CampaignActionState = {
   error?: string;
@@ -37,6 +37,14 @@ export type CampaignActionState = {
   };
 };
 
+function kickCampaignProcessor(reason: string) {
+  scheduleBulkWorkerContinuation({
+    origin: siteUrl(),
+    path: "/api/cron/email-campaigns",
+    reason,
+  });
+}
+
 async function requireCampaign() {
   await requireAdmin();
   const admin = await getAdminSupabase();
@@ -47,7 +55,47 @@ async function requireCampaign() {
   if (!snapshot.campaign) {
     throw new Error("AI Money Code campaign row is missing. Re-run migration 0046.");
   }
-  return { admin, campaign: snapshot.campaign };
+  return { admin, campaign: snapshot.campaign, snapshot };
+}
+
+export async function startSendingToAllStudents(
+  _prev: CampaignActionState,
+  _formData?: FormData,
+): Promise<CampaignActionState> {
+  try {
+    const { admin, campaign } = await requireCampaign();
+    if (!resendConfigured()) {
+      return { error: "Resend is not configured. Set RESEND_API_KEY before sending." };
+    }
+
+    const preview = await previewStudents(admin, campaign.id);
+    const inserted = await enrollCandidates(admin, campaign.id, preview.selected);
+    if (campaign.status !== "active") {
+      await setCampaignStatus(admin, campaign.id, "active");
+    }
+
+    await logAudit({
+      action: "email_campaign_start_all_students",
+      targetType: "email_campaign",
+      targetId: campaign.id,
+      metadata: {
+        attempted: preview.selected.length,
+        inserted,
+        alreadyEnrolled: preview.skippedAlreadyEnrolled,
+        fromStatus: campaign.status,
+      },
+    });
+
+    kickCampaignProcessor("admin_start_all_students");
+    revalidatePath("/admin/email-campaigns");
+
+    const added = inserted > 0 ? `Added ${inserted} student(s). ` : "Everyone eligible is already on the list. ";
+    return {
+      message: `${added}The campaign is active. Email 1 is sending from the server — you can close this page.`,
+    };
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "Could not start the campaign." };
+  }
 }
 
 export async function previewCampaignRecipients(
@@ -112,7 +160,7 @@ export async function enrollCampaignRecipients(
             : null;
     if (!preview) return { error: "Choose buyers, enrolled students, or a CSV list." };
     if (preview.selected.length === 0) {
-      return { error: "No new eligible recipients to enroll. Run a dry-run preview first." };
+      return { error: "No new eligible recipients to enroll." };
     }
 
     const inserted = await enrollCandidates(admin, campaign.id, preview.selected);
@@ -123,27 +171,17 @@ export async function enrollCampaignRecipients(
       targetId: campaign.id,
       metadata: { source, attempted: preview.selected.length, inserted, campaignStatus: campaign.status },
     });
-    revalidatePath("/admin/email-campaigns");
 
     if (campaign.status === "active") {
-      await processAimoneycodeCampaignTick({
-        store: createSupabaseCampaignStore(admin),
-        sendEmail: (mail) =>
-          sendEmail({
-            to: mail.to,
-            subject: mail.subject,
-            html: mail.html,
-            headers: mail.headers,
-            idempotencyKey: mail.idempotencyKey,
-          }),
-      });
+      kickCampaignProcessor("admin_enroll_active");
     }
+    revalidatePath("/admin/email-campaigns");
 
     return {
       message:
         campaign.status === "active"
-          ? `Enrolled ${inserted} recipient(s). Email 1 will send for newly enrolled people because the campaign is active.`
-          : `Enrolled ${inserted} recipient(s). Campaign is still draft — nothing will send until you activate it.`,
+          ? `Enrolled ${inserted} recipient(s). Email 1 will send from the server.`
+          : `Enrolled ${inserted} recipient(s). Click Start sending to activate.`,
     };
   } catch (err) {
     return { error: err instanceof Error ? err.message : "Enrollment failed." };
@@ -173,26 +211,16 @@ export async function setAimoneycodeCampaignStatus(
     });
 
     if (status === "active") {
-      await processAimoneycodeCampaignTick({
-        store: createSupabaseCampaignStore(admin),
-        sendEmail: (mail) =>
-          sendEmail({
-            to: mail.to,
-            subject: mail.subject,
-            html: mail.html,
-            headers: mail.headers,
-            idempotencyKey: mail.idempotencyKey,
-          }),
-      });
+      kickCampaignProcessor("admin_status_active");
     }
 
     revalidatePath("/admin/email-campaigns");
 
     const label =
       status === "active"
-        ? "Campaign activated. Eligible Email 1s will send from the server."
+        ? "Campaign is active. Emails send from the server — you can close this page."
         : status === "paused"
-          ? "Campaign paused. No further sequence emails will send."
+          ? "Sending paused. No further sequence emails will send."
           : "Campaign set back to draft. Sending is blocked.";
     return { message: label };
   } catch (err) {

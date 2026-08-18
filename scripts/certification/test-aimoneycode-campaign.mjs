@@ -128,9 +128,11 @@ ok("recipient selection is explicit and does not auto-target every user");
   const panel = readFileSync(join(root, "components/admin/email-campaign-panel.tsx"), "utf8");
   assert.match(storeSrc, /from\("enrollments"\)/);
   assert.match(storeSrc, /listEverEnrolledStudentIds/);
-  assert.match(storeSrc, /bulk_import_rows/);
+  assert.match(storeSrc, /bulk_import_email_outbox/);
   assert.match(storeSrc, /listBulkUploadCandidates/);
+  assert.doesNotMatch(storeSrc, /bulk_import_rows/);
   assert.match(panel, /Every enrolled student and every bulk-uploaded student/);
+  assert.match(panel, /Start sending to all students/);
   ok("student enrollment source includes enrollments and bulk uploads");
 }
 
@@ -484,7 +486,19 @@ const campaignFixture = {
     "utf8",
   );
   assert.doesNotMatch(page, /enrollCandidates|processAimoneycodeCampaignTick/);
+  assert.match(page, /maxDuration = 120/);
   ok("admin page load does not enroll or send");
+}
+
+{
+  const actions = readFileSync(
+    join(root, "app/(admin)/admin/(panel)/email-campaigns/actions.ts"),
+    "utf8",
+  );
+  assert.match(actions, /startSendingToAllStudents/);
+  assert.match(actions, /scheduleBulkWorkerContinuation/);
+  assert.doesNotMatch(actions, /processAimoneycodeCampaignTick/);
+  ok("start sending enrolls then kicks the server worker instead of sending inline");
 }
 
 {

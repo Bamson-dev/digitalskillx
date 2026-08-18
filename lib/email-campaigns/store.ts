@@ -52,8 +52,9 @@ const EMPTY_COUNTS: CampaignCounts = {
 
 const PROFILE_ID_PAGE = 200;
 const ENROLLMENT_PAGE = 1000;
-const INSERT_PAGE = 100;
+const INSERT_PAGE = 250;
 const MAX_ENROLLMENT_SCAN = 50_000;
+const MAX_OUTBOX_PAGES = 5;
 
 async function listEverEnrolledStudentIds(admin: Admin): Promise<string[]> {
   const ids = new Set<string>();
@@ -95,71 +96,6 @@ async function listAllStudentProfiles(admin: Admin): Promise<CandidateRecipient[
   return candidates;
 }
 
-async function loadProfilesByEmails(admin: Admin, emails: string[]): Promise<CandidateRecipient[]> {
-  const candidates: CandidateRecipient[] = [];
-  for (let i = 0; i < emails.length; i += PROFILE_ID_PAGE) {
-    const chunk = emails.slice(i, i + PROFILE_ID_PAGE);
-    const { data, error } = await admin
-      .from("profiles")
-      .select("id, email, full_name")
-      .in("email", chunk);
-    if (error) throw new Error(error.message);
-    for (const row of data ?? []) {
-      candidates.push({
-        email: row.email,
-        fullName: row.full_name,
-        profileId: row.id,
-      });
-    }
-  }
-  return candidates;
-}
-
-async function listBulkUploadCandidates(admin: Admin): Promise<CandidateRecipient[]> {
-  const emails = new Set<string>();
-  const studentIds = new Set<string>();
-
-  for (let from = 0; from < MAX_ENROLLMENT_SCAN; from += ENROLLMENT_PAGE) {
-    const { data, error } = await admin
-      .from("bulk_import_rows")
-      .select("email, status")
-      .in("status", ["created", "enrolled", "skipped"])
-      .range(from, from + ENROLLMENT_PAGE - 1);
-    if (error) {
-      if (isMissingRelationError(error.message)) break;
-      throw new Error(error.message);
-    }
-    const rows = data ?? [];
-    for (const row of rows) {
-      const email = normalizeEmail(row.email ?? "");
-      if (email) emails.add(email);
-    }
-    if (rows.length < ENROLLMENT_PAGE) break;
-  }
-
-  for (let from = 0; from < MAX_ENROLLMENT_SCAN; from += ENROLLMENT_PAGE) {
-    const { data, error } = await admin
-      .from("bulk_import_email_outbox")
-      .select("student_id, email")
-      .range(from, from + ENROLLMENT_PAGE - 1);
-    if (error) {
-      if (isMissingRelationError(error.message)) break;
-      throw new Error(error.message);
-    }
-    const rows = data ?? [];
-    for (const row of rows) {
-      if (row.student_id) studentIds.add(row.student_id);
-      const email = normalizeEmail(row.email ?? "");
-      if (email) emails.add(email);
-    }
-    if (rows.length < ENROLLMENT_PAGE) break;
-  }
-
-  const fromIds = await loadProfilesByIds(admin, [...studentIds]);
-  const fromEmails = await loadProfilesByEmails(admin, [...emails]);
-  return [...fromIds, ...fromEmails];
-}
-
 async function loadProfilesByIds(admin: Admin, studentIds: string[]): Promise<CandidateRecipient[]> {
   const candidates: CandidateRecipient[] = [];
   for (let i = 0; i < studentIds.length; i += PROFILE_ID_PAGE) {
@@ -178,6 +114,27 @@ async function loadProfilesByIds(admin: Admin, studentIds: string[]): Promise<Ca
     }
   }
   return candidates;
+}
+
+async function listBulkUploadCandidates(admin: Admin): Promise<CandidateRecipient[]> {
+  const studentIds = new Set<string>();
+  for (let page = 0; page < MAX_OUTBOX_PAGES; page++) {
+    const from = page * ENROLLMENT_PAGE;
+    const { data, error } = await admin
+      .from("bulk_import_email_outbox")
+      .select("student_id")
+      .range(from, from + ENROLLMENT_PAGE - 1);
+    if (error) {
+      if (isMissingRelationError(error.message)) break;
+      throw new Error(error.message);
+    }
+    const rows = data ?? [];
+    for (const row of rows) {
+      if (row.student_id) studentIds.add(row.student_id);
+    }
+    if (rows.length < ENROLLMENT_PAGE) break;
+  }
+  return loadProfilesByIds(admin, [...studentIds]);
 }
 
 function asCampaign(row: Record<string, unknown> | null): CampaignRecord | null {
@@ -471,11 +428,15 @@ export async function enrollCandidates(
   let inserted = 0;
   for (let i = 0; i < rows.length; i += INSERT_PAGE) {
     const chunk = rows.slice(i, i + INSERT_PAGE);
-    const { error: chunkErr } = await admin
+    const { error: chunkErr, count } = await admin
       .from("email_campaign_recipients" as never)
-      .insert(chunk as never);
+      .upsert(chunk as never, {
+        onConflict: "campaign_id,email",
+        ignoreDuplicates: true,
+        count: "exact",
+      });
     if (!chunkErr) {
-      inserted += chunk.length;
+      inserted += count ?? chunk.length;
       continue;
     }
     if (!/duplicate|unique/i.test(chunkErr.message)) throw new Error(chunkErr.message);

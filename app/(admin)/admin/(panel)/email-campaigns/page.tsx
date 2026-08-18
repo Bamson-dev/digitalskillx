@@ -8,6 +8,7 @@ import { ctaUrlForStep } from "@/lib/email-campaigns/constants";
 import { resendConfigured } from "@/lib/email/providers/resend";
 
 export const metadata: Metadata = { title: "Email campaigns" };
+export const maxDuration = 120;
 
 export default async function AdminEmailCampaignsPage() {
   const adminProfile = await requireAdmin();
@@ -62,8 +63,8 @@ export default async function AdminEmailCampaignsPage() {
       <div>
         <h1 className="text-2xl font-bold">Email campaigns</h1>
         <p className="mt-1 text-sm text-muted">
-          AI Money Code 30-day sequence. Server-side sending only. The campaign stays draft until
-          you activate it.
+          AI Money Code 30-day sequence. Choose the student list and click Start. Emails send from
+          the server — you can close this page.
         </p>
       </div>
       {loadError ? (
