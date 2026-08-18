@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { verifyCronSecret } from "@/lib/cron-auth";
 import { bootstrapRuntimeSecrets } from "@/lib/bootstrap-runtime-secrets";
 import { createAdminClientAsync } from "@/lib/supabase/admin";
-import { drainBulkImportEmailOutbox } from "@/lib/bulk-import-email-outbox";
+import { drainBulkImportEmailOutboxUntilBudget } from "@/lib/bulk-import-email-outbox";
 import { bulkImportStage } from "@/lib/bulk-import-telemetry";
 import {
   continuationDepthFromRequest,
@@ -30,8 +30,10 @@ export async function POST(request: NextRequest) {
   const origin = new URL(request.url).origin;
 
   try {
-    const result = await drainBulkImportEmailOutbox(admin, 40);
-    // Full batch strongly suggests more pending rows in outbox
+    const result = await drainBulkImportEmailOutboxUntilBudget(admin, {
+      batchSize: 40,
+      budgetMs: 100_000,
+    });
     const more = result.sent + result.failed >= 30;
 
     if (more) {

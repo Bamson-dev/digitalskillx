@@ -9,6 +9,7 @@ import { siteUrl as orgSiteUrl } from "@/lib/org";
 import { bulkImportStage } from "@/lib/bulk-import-telemetry";
 import { isMissingColumnError } from "@/lib/schema-guard";
 import { isSyntheticTestRecipient } from "@/lib/email/synthetic-recipient";
+import { resendConfigured } from "@/lib/email/providers/resend";
 import { buildCourseResolver } from "@/lib/course-resolver";
 import type { Database } from "@/types/database";
 
@@ -118,22 +119,18 @@ export async function enqueueBulkImportEmail(
   throw new Error(error.message);
 }
 
-export async function drainBulkImportEmailOutbox(
+async function reclaimStaleOutboxSending(
   admin: SupabaseClient<Database>,
-  limit = 20,
-): Promise<{ sent: number; failed: number }> {
-  const started = Date.now();
-  let claimed: Array<Record<string, unknown>> = [];
-
-  // Best-effort reclaim of rows stuck in "sending" after crashes (migration 0040).
+  olderThanMinutes = 2,
+  jobId?: string,
+) {
   try {
     await admin.rpc("reclaim_stale_bulk_import_email_outbox" as never, {
-      p_older_than_minutes: 15,
+      p_older_than_minutes: olderThanMinutes,
     } as never);
   } catch {
-    // Fallback when RPC not applied yet: reset stale sending rows directly.
-    const staleBefore = new Date(Date.now() - 15 * 60 * 1000).toISOString();
-    await admin
+    const staleBefore = new Date(Date.now() - olderThanMinutes * 60 * 1000).toISOString();
+    let query = admin
       .from("bulk_import_email_outbox" as never)
       .update({
         status: "pending",
@@ -142,28 +139,29 @@ export async function drainBulkImportEmailOutbox(
       } as never)
       .eq("status", "sending")
       .lt("updated_at", staleBefore);
+    if (jobId) query = query.eq("job_id", jobId);
+    await query;
   }
+}
 
-  const { data: rpcRows, error: rpcError } = await admin.rpc(
-    "claim_bulk_import_email_outbox" as never,
-    { p_limit: limit } as never,
-  );
+async function claimOutboxRows(
+  admin: SupabaseClient<Database>,
+  limit: number,
+  jobId?: string,
+): Promise<Array<Record<string, unknown>>> {
+  const claimed: Array<Record<string, unknown>> = [];
 
-  if (!rpcError && Array.isArray(rpcRows)) {
-    claimed = rpcRows as Array<Record<string, unknown>>;
-  } else {
+  if (jobId) {
     const { data: pending, error } = await admin
       .from("bulk_import_email_outbox" as never)
       .select("*")
+      .eq("job_id", jobId)
       .eq("status", "pending")
       .lte("scheduled_at", new Date().toISOString())
       .order("scheduled_at", { ascending: true })
       .limit(limit);
     if (error) {
-      if (outboxTableMissing(error.message)) {
-        bulkImportStage("email_drain_skipped_no_table", { ok: true, error: error.message });
-        return { sent: 0, failed: 0 };
-      }
+      if (outboxTableMissing(error.message)) return [];
       throw new Error(error.message);
     }
     for (const row of pending ?? []) {
@@ -180,7 +178,89 @@ export async function drainBulkImportEmailOutbox(
         .maybeSingle();
       if (locked) claimed.push(locked as Record<string, unknown>);
     }
+    return claimed;
   }
+
+  const { data: rpcRows, error: rpcError } = await admin.rpc(
+    "claim_bulk_import_email_outbox" as never,
+    { p_limit: limit } as never,
+  );
+
+  if (!rpcError && Array.isArray(rpcRows)) {
+    return rpcRows as Array<Record<string, unknown>>;
+  }
+
+  const { data: pending, error } = await admin
+    .from("bulk_import_email_outbox" as never)
+    .select("*")
+    .eq("status", "pending")
+    .lte("scheduled_at", new Date().toISOString())
+    .order("scheduled_at", { ascending: true })
+    .limit(limit);
+  if (error) {
+    if (outboxTableMissing(error.message)) return [];
+    throw new Error(error.message);
+  }
+  for (const row of pending ?? []) {
+    const { data: locked } = await admin
+      .from("bulk_import_email_outbox" as never)
+      .update({
+        status: "sending",
+        attempts: ((row as { attempts?: number }).attempts ?? 0) + 1,
+        updated_at: new Date().toISOString(),
+      } as never)
+      .eq("id", (row as { id: string }).id)
+      .eq("status", "pending")
+      .select("*")
+      .maybeSingle();
+    if (locked) claimed.push(locked as Record<string, unknown>);
+  }
+  return claimed;
+}
+
+/** Fail pending synthetic test rows in bulk so real buyer mail is not stuck behind them. */
+export async function purgeSyntheticPendingOutbox(admin: SupabaseClient<Database>) {
+  const patterns = ["cert+%", "stress+%", "csv-cert+%", "paystack-cert+%"];
+  let purged = 0;
+  for (const pattern of patterns) {
+    const { data: rows } = await admin
+      .from("bulk_import_email_outbox" as never)
+      .select("id, email, job_id")
+      .eq("status", "pending")
+      .ilike("email", pattern);
+    for (const row of rows ?? []) {
+      const email = String((row as { email?: string }).email ?? "");
+      if (!isSyntheticTestRecipient(email)) continue;
+      const id = String((row as { id: string }).id);
+      const jobId = String((row as { job_id: string }).job_id);
+      await admin
+        .from("bulk_import_email_outbox" as never)
+        .update({
+          status: "failed",
+          password_plain: null,
+          last_error: "Skipped synthetic test recipient",
+          updated_at: new Date().toISOString(),
+        } as never)
+        .eq("id", id);
+      purged++;
+      bulkImportStage("email_skipped_synthetic", { jobId, ok: true, email });
+    }
+  }
+  if (purged > 0) {
+    bulkImportStage("synthetic_outbox_purged", { ok: true, rowCount: purged });
+  }
+  return purged;
+}
+
+export async function drainBulkImportEmailOutbox(
+  admin: SupabaseClient<Database>,
+  limit = 20,
+  options?: { jobId?: string; reclaimMinutes?: number },
+): Promise<{ sent: number; failed: number; claimed: number; resendReady: boolean }> {
+  const started = Date.now();
+  const resendReady = resendConfigured();
+  await reclaimStaleOutboxSending(admin, options?.reclaimMinutes ?? 2, options?.jobId);
+  const claimed = await claimOutboxRows(admin, limit, options?.jobId);
 
   const settings = await getPlatformSettingsAdmin();
   const sender = await getEmailSenderConfig();
@@ -351,11 +431,52 @@ export async function drainBulkImportEmailOutbox(
     ok: true,
     sent,
     failed,
+    claimed: claimed.length,
+    resendReady,
+    jobId: options?.jobId,
     durationMs: Date.now() - started,
     rowCount: claimed.length,
   });
 
-  return { sent, failed };
+  return { sent, failed, claimed: claimed.length, resendReady };
+}
+
+/** Drain many batches within a time budget (admin UI / cron). */
+export async function drainBulkImportEmailOutboxUntilBudget(
+  admin: SupabaseClient<Database>,
+  opts?: { jobId?: string; batchSize?: number; budgetMs?: number },
+) {
+  if (!resendConfigured()) {
+    return {
+      sent: 0,
+      failed: 0,
+      batches: 0,
+      resendReady: false as const,
+      error: "Resend is not configured. Add RESEND_API_KEY in Vercel → Environment Variables, then redeploy.",
+    };
+  }
+
+  await purgeSyntheticPendingOutbox(admin);
+
+  const batchSize = opts?.batchSize ?? 40;
+  const budgetMs = opts?.budgetMs ?? 85_000;
+  const started = Date.now();
+  let sent = 0;
+  let failed = 0;
+  let batches = 0;
+
+  while (Date.now() - started < budgetMs) {
+    const batch = await drainBulkImportEmailOutbox(admin, batchSize, {
+      jobId: opts?.jobId,
+      reclaimMinutes: 2,
+    });
+    sent += batch.sent;
+    failed += batch.failed;
+    batches += 1;
+    if (batch.claimed === 0) break;
+  }
+
+  return { sent, failed, batches, resendReady: true as const };
 }
 
 export async function resendFailedOutboxForJob(
@@ -380,6 +501,25 @@ export async function resendFailedOutboxForJob(
     }
     throw new Error(error.message);
   }
+}
+
+export async function getOutboxDiagnosticsForJob(
+  admin: SupabaseClient<Database>,
+  jobId: string,
+) {
+  const { data: sample } = await admin
+    .from("bulk_import_email_outbox" as never)
+    .select("last_error, status, email")
+    .eq("job_id", jobId)
+    .not("last_error", "is", null)
+    .order("updated_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  return {
+    resendReady: resendConfigured(),
+    lastError: (sample as { last_error?: string | null } | null)?.last_error ?? null,
+  };
 }
 
 export async function countPendingOutboxForJob(

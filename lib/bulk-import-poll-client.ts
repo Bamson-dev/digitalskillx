@@ -15,6 +15,8 @@ export type BulkImportStatusJson = {
   emailsFailed?: number;
   emailsQueued?: number;
   emailsPending?: number;
+  resendReady?: boolean;
+  emailError?: string | null;
 };
 
 export type BulkImportPollSummary = {
@@ -31,6 +33,8 @@ export type BulkImportPollSummary = {
   emailsFailed?: number;
   emailsQueued?: number;
   emailsPending?: number;
+  resendReady?: boolean;
+  emailError?: string | null;
 };
 
 async function fetchBulkJobStatus(jobId: string) {
@@ -101,6 +105,8 @@ function toSummary(statusJson: BulkImportStatusJson): BulkImportPollSummary {
     emailsFailed: statusJson.emailsFailed,
     emailsQueued: statusJson.emailsQueued,
     emailsPending: statusJson.emailsPending,
+    resendReady: statusJson.resendReady,
+    emailError: statusJson.emailError,
   };
 }
 
@@ -132,13 +138,13 @@ export async function kickBulkImportJob(jobId: string) {
   }
 }
 
-async function kickBulkEmailDrain() {
+async function kickBulkEmailDrain(jobId: string) {
   try {
     const res = await fetch("/api/admin/bulk-students", {
       method: "POST",
       credentials: "include",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "drain_emails" }),
+      body: JSON.stringify({ action: "drain_emails", jobId }),
     });
     return res.ok;
   } catch {
@@ -168,7 +174,7 @@ export async function pollBulkImportJob(
     const sendingEmails = lastSummary?.phase === "sending_emails" || (lastSummary?.emailsPending ?? 0) > 0;
     kickInFlight = (
       sendingEmails && lastSummary && lastSummary.processedRows >= lastSummary.totalRows
-        ? kickBulkEmailDrain()
+        ? kickBulkEmailDrain(jobId)
         : kickBulkImportJob(jobId)
     ).finally(() => {
       kickInFlight = null;
@@ -240,7 +246,13 @@ export async function pollBulkImportJob(
     if (!waiting) previousProcessed = statusJson.processedRows;
     const emailPart =
       statusJson.phase === "sending_emails" || (statusJson.emailsPending ?? 0) > 0
-        ? ` Sending emails: ${statusJson.emailsSent ?? 0} sent, ${statusJson.emailsPending ?? 0} waiting.`
+        ? ` Sending emails: ${statusJson.emailsSent ?? 0} sent, ${statusJson.emailsPending ?? 0} waiting.${
+            statusJson.resendReady === false
+              ? " Resend is not configured on Vercel — add RESEND_API_KEY and redeploy."
+              : statusJson.emailError
+                ? ` Last error: ${statusJson.emailError.slice(0, 120)}`
+                : ""
+          }`
         : "";
     onUpdate({
       message: waiting

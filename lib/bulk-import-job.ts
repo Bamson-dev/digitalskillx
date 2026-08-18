@@ -12,8 +12,9 @@ import {
 import { runAutomations } from "@/lib/automation";
 import {
   countPendingOutboxForJob,
-  drainBulkImportEmailOutbox,
+  drainBulkImportEmailOutboxUntilBudget,
   enqueueBulkImportEmail,
+  getOutboxDiagnosticsForJob,
 } from "@/lib/bulk-import-email-outbox";
 import { bulkImportStage, timedStage } from "@/lib/bulk-import-telemetry";
 import { isMissingColumnError } from "@/lib/schema-guard";
@@ -55,6 +56,8 @@ export type BulkImportJobSummary = {
   emailsSent?: number;
   emailsFailed?: number;
   emailsPending?: number;
+  resendReady?: boolean;
+  emailError?: string | null;
   errorMessage?: string | null;
   failures: Array<{ row: number; email: string; reason: string }>;
   done: boolean;
@@ -891,7 +894,11 @@ export async function processBulkImportUntilBudget(params: {
     const pending = await countRowsByStatus(params.admin, params.jobId, "pending");
     const processing = await countRowsByStatus(params.admin, params.jobId, "processing");
     if (pending === 0 && processing === 0) {
-      await drainBulkImportEmailOutbox(params.admin, 40);
+      await drainBulkImportEmailOutboxUntilBudget(params.admin, {
+        jobId: params.jobId,
+        batchSize: 40,
+        budgetMs: Math.min(budgetMs, 85_000),
+      });
       await maybeFinalizeJobPhase(params.admin, params.jobId);
       summary = await getBulkImportJobSummary(params.admin, params.jobId);
       rounds++;
@@ -993,7 +1000,12 @@ export async function getBulkImportJobSummary(
   let processingRows = 0;
   let rowsDone = statusDone || jobRow.processed_rows >= jobRow.total_rows;
   const emailsPending = await countPendingOutboxForJob(admin, jobId);
+  const outboxDiagnostics = await getOutboxDiagnosticsForJob(admin, jobId);
   const errorMessage = publicJobErrorMessage(jobRow.error_message);
+  const emailError =
+    !outboxDiagnostics.resendReady
+      ? "Resend is not configured. Add RESEND_API_KEY in Vercel → Environment Variables, then redeploy."
+      : outboxDiagnostics.lastError;
 
   if (!options?.lite) {
     const { data: failedRows } = await admin
@@ -1022,6 +1034,8 @@ export async function getBulkImportJobSummary(
       emailsSent: jobRow.emails_sent,
       emailsFailed: jobRow.emails_failed,
       emailsPending,
+      resendReady: outboxDiagnostics.resendReady,
+      emailError,
       errorMessage,
       failures: (failedRows ?? []).map((r) => ({
         row: r.row_number,
@@ -1076,6 +1090,8 @@ export async function getBulkImportJobSummary(
     emailsSent: jobRow.emails_sent,
     emailsFailed: jobRow.emails_failed,
     emailsPending,
+    resendReady: outboxDiagnostics.resendReady,
+    emailError,
     errorMessage,
     failures,
     pendingRows,

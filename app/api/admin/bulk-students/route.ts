@@ -11,7 +11,7 @@ import {
   processBulkImportUntilBudget,
   retryFailedBulkImportRows,
 } from "@/lib/bulk-import-job";
-import { resendFailedOutboxForJob, enqueueEnrollmentNoticesForJob, drainBulkImportEmailOutbox } from "@/lib/bulk-import-email-outbox";
+import { resendFailedOutboxForJob, enqueueEnrollmentNoticesForJob, drainBulkImportEmailOutboxUntilBudget } from "@/lib/bulk-import-email-outbox";
 import { bulkImportStage } from "@/lib/bulk-import-telemetry";
 import {
   BULK_SYNC_MAX_ROWS,
@@ -94,7 +94,11 @@ export async function POST(request: NextRequest) {
 
       if (body.action === "notify_enrolled" && body.jobId) {
         const queued = await enqueueEnrollmentNoticesForJob(auth.admin, body.jobId);
-        const drain = await drainBulkImportEmailOutbox(auth.admin, 40);
+        const drain = await drainBulkImportEmailOutboxUntilBudget(auth.admin, {
+          jobId: body.jobId,
+          batchSize: 40,
+          budgetMs: 85_000,
+        });
         const origin = new URL(request.url).origin;
         const { scheduleBulkWorkerContinuation } = await import("@/lib/bulk-import-continue");
         scheduleBulkWorkerContinuation({
@@ -107,7 +111,11 @@ export async function POST(request: NextRequest) {
       }
 
       if (body.action === "drain_emails") {
-        const drain = await drainBulkImportEmailOutbox(auth.admin, 40);
+        const drain = await drainBulkImportEmailOutboxUntilBudget(auth.admin, {
+          jobId: body.jobId,
+          batchSize: 40,
+          budgetMs: 85_000,
+        });
         return NextResponse.json({ ok: true, ...drain });
       }
 
