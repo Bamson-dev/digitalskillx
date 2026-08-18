@@ -32,7 +32,7 @@ const { parseAimoneycodeSequence, assertCompleteSequence } = await import(
 const { applyCampaignGreeting, campaignGreeting } = await import(
   ts("lib/email-campaigns/greeting.ts")
 );
-const { filterEnrollmentCandidates, extractEmailsFromCsv, authorizedCampaignTestAddresses } =
+const { filterEnrollmentCandidates, extractEmailsFromCsv } =
   await import(ts("lib/email-campaigns/selection.ts"));
 const { renderCampaignEmailHtml } = await import(ts("lib/email-campaigns/render.ts"));
 const { processAimoneycodeCampaignTick } = await import(
@@ -129,13 +129,17 @@ assert.equal(canProcessCampaign("paused").ok, false);
 assert.equal(canProcessCampaign("active").ok, true);
 ok("draft and paused campaigns do not send");
 
-const allowed = authorizedCampaignTestAddresses({
-  adminEmail: "owner@digitalskillx.com",
-  extraFromEnv: "ops@digitalskillx.com, buyer@gmail.com",
-});
-assert.equal(allowed.has("owner@digitalskillx.com"), true);
-assert.equal(allowed.has("ops@digitalskillx.com"), true);
-ok("test-send allowlist is explicit");
+{
+  const actions = readFileSync(
+    join(root, "app/(admin)/admin/(panel)/email-campaigns/actions.ts"),
+    "utf8",
+  );
+  const panel = readFileSync(join(root, "components/admin/email-campaign-panel.tsx"), "utf8");
+  assert.match(actions, /isValidEmail\(to\)/);
+  assert.doesNotMatch(actions, /Customer addresses are blocked/);
+  assert.doesNotMatch(panel, /Customer addresses are rejected/);
+  ok("admin test send accepts any valid email and does not enroll");
+}
 
 function createMemoryStore(seed) {
   const campaign = { ...seed.campaign };

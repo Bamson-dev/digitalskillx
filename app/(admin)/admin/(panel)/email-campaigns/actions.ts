@@ -5,11 +5,8 @@ import { requireAdmin } from "@/lib/auth";
 import { getAdminSupabase } from "@/lib/admin-supabase";
 import { logAudit } from "@/lib/audit";
 import { sendEmail } from "@/lib/email";
-import { AIMONEYCODE_CAMPAIGN_SLUG, AIMONEYCODE_TOTAL_STEPS } from "@/lib/email-campaigns/constants";
-import {
-  authorizedCampaignTestAddresses,
-  isAuthorizedCampaignTestAddress,
-} from "@/lib/email-campaigns/selection";
+import { AIMONEYCODE_CAMPAIGN_SLUG, AIMONEYCODE_TOTAL_STEPS, isValidEmail } from "@/lib/email-campaigns/constants";
+import { isSyntheticTestRecipient } from "@/lib/email/synthetic-recipient";
 import { getAimoneycodeEmail } from "@/lib/email-campaigns/sequence";
 import { renderCampaignEmailHtml } from "@/lib/email-campaigns/render";
 import { listUnsubscribeHeader, unsubscribeUrl } from "@/lib/email-campaigns/unsubscribe";
@@ -215,15 +212,11 @@ export async function testSendAimoneycodeEmail(
     if (!Number.isInteger(step) || step < 1 || step > AIMONEYCODE_TOTAL_STEPS) {
       return { error: "Choose Email 1 through Email 30." };
     }
-
-    const allowed = authorizedCampaignTestAddresses({
-      adminEmail: adminProfile.email,
-    });
-    if (!isAuthorizedCampaignTestAddress(to, allowed)) {
-      return {
-        error:
-          "Test sends are limited to your admin email or EMAIL_CAMPAIGN_TEST_ADDRESSES. Customer addresses are blocked.",
-      };
+    if (!isValidEmail(to)) {
+      return { error: "Enter a valid email address." };
+    }
+    if (isSyntheticTestRecipient(to)) {
+      return { error: "Synthetic cert+ addresses are blocked because they bounce." };
     }
 
     const email = getAimoneycodeEmail(step);

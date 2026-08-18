@@ -223,7 +223,7 @@ export function EmailCampaignPanel({
       <Card>
         <CardHeader
           title="Test send"
-          description={`Sends one email to an authorized internal address. Default allowlist: ${adminEmail}. Customer addresses are rejected.`}
+          description="Sends one [TEST] email to any valid address you enter. This does not enroll anyone or advance the campaign. Default: your admin email."
         />
         <form action={testAction} className="grid gap-3 sm:grid-cols-2">
           <div>
@@ -242,7 +242,7 @@ export function EmailCampaignPanel({
             </select>
           </div>
           <div>
-            <Label htmlFor="test_email">Internal test address</Label>
+            <Label htmlFor="test_email">Test address</Label>
             <Input id="test_email" name="test_email" type="email" defaultValue={adminEmail} required />
           </div>
           <div className="sm:col-span-2">
