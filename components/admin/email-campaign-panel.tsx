@@ -170,7 +170,7 @@ export function EmailCampaignPanel({
       <Card>
         <CardHeader
           title="Recipient enrollment"
-          description="Choose every student who has ever been enrolled, dry-run to see the count, then enroll. Email 1 starts only after the campaign is Active."
+          description="This list includes course enrollments and every student from bulk CSV uploads. Dry-run first, then enroll. Email 1 starts only after the campaign is Active."
         />
         <form action={previewAction} className="space-y-3">
           <Label htmlFor="source">Source</Label>
@@ -180,7 +180,7 @@ export function EmailCampaignPanel({
             className="h-10 w-full rounded-lg border border-app bg-card px-3 text-sm"
             defaultValue="students"
           >
-            <option value="students">Every student who has ever been enrolled</option>
+            <option value="students">Every enrolled student and every bulk-uploaded student</option>
             <option value="buyers">Previous buyers (successful transactions)</option>
             <option value="csv">CSV / pasted emails that already exist as students</option>
           </select>

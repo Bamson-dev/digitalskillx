@@ -16,7 +16,7 @@ import type {
   SendRecord,
 } from "@/lib/email-campaigns/processor";
 import type { CandidateRecipient, SelectionPreview } from "@/lib/email-campaigns/selection";
-import { extractEmailsFromCsv, filterEnrollmentCandidates } from "@/lib/email-campaigns/selection";
+import { extractEmailsFromCsv, filterEnrollmentCandidates, uniqueCandidates } from "@/lib/email-campaigns/selection";
 
 type Admin = SupabaseClient<Database>;
 
@@ -71,6 +71,93 @@ async function listEverEnrolledStudentIds(admin: Admin): Promise<string[]> {
     if (rows.length < ENROLLMENT_PAGE) break;
   }
   return [...ids];
+}
+
+async function listAllStudentProfiles(admin: Admin): Promise<CandidateRecipient[]> {
+  const candidates: CandidateRecipient[] = [];
+  for (let from = 0; from < MAX_ENROLLMENT_SCAN; from += ENROLLMENT_PAGE) {
+    const { data, error } = await admin
+      .from("profiles")
+      .select("id, email, full_name")
+      .eq("role", "student")
+      .range(from, from + ENROLLMENT_PAGE - 1);
+    if (error) throw new Error(error.message);
+    const rows = data ?? [];
+    for (const row of rows) {
+      candidates.push({
+        email: row.email,
+        fullName: row.full_name,
+        profileId: row.id,
+      });
+    }
+    if (rows.length < ENROLLMENT_PAGE) break;
+  }
+  return candidates;
+}
+
+async function loadProfilesByEmails(admin: Admin, emails: string[]): Promise<CandidateRecipient[]> {
+  const candidates: CandidateRecipient[] = [];
+  for (let i = 0; i < emails.length; i += PROFILE_ID_PAGE) {
+    const chunk = emails.slice(i, i + PROFILE_ID_PAGE);
+    const { data, error } = await admin
+      .from("profiles")
+      .select("id, email, full_name")
+      .in("email", chunk);
+    if (error) throw new Error(error.message);
+    for (const row of data ?? []) {
+      candidates.push({
+        email: row.email,
+        fullName: row.full_name,
+        profileId: row.id,
+      });
+    }
+  }
+  return candidates;
+}
+
+async function listBulkUploadCandidates(admin: Admin): Promise<CandidateRecipient[]> {
+  const emails = new Set<string>();
+  const studentIds = new Set<string>();
+
+  for (let from = 0; from < MAX_ENROLLMENT_SCAN; from += ENROLLMENT_PAGE) {
+    const { data, error } = await admin
+      .from("bulk_import_rows")
+      .select("email, status")
+      .in("status", ["created", "enrolled", "skipped"])
+      .range(from, from + ENROLLMENT_PAGE - 1);
+    if (error) {
+      if (isMissingRelationError(error.message)) break;
+      throw new Error(error.message);
+    }
+    const rows = data ?? [];
+    for (const row of rows) {
+      const email = normalizeEmail(row.email ?? "");
+      if (email) emails.add(email);
+    }
+    if (rows.length < ENROLLMENT_PAGE) break;
+  }
+
+  for (let from = 0; from < MAX_ENROLLMENT_SCAN; from += ENROLLMENT_PAGE) {
+    const { data, error } = await admin
+      .from("bulk_import_email_outbox")
+      .select("student_id, email")
+      .range(from, from + ENROLLMENT_PAGE - 1);
+    if (error) {
+      if (isMissingRelationError(error.message)) break;
+      throw new Error(error.message);
+    }
+    const rows = data ?? [];
+    for (const row of rows) {
+      if (row.student_id) studentIds.add(row.student_id);
+      const email = normalizeEmail(row.email ?? "");
+      if (email) emails.add(email);
+    }
+    if (rows.length < ENROLLMENT_PAGE) break;
+  }
+
+  const fromIds = await loadProfilesByIds(admin, [...studentIds]);
+  const fromEmails = await loadProfilesByEmails(admin, [...emails]);
+  return [...fromIds, ...fromEmails];
 }
 
 async function loadProfilesByIds(admin: Admin, studentIds: string[]): Promise<CandidateRecipient[]> {
@@ -247,15 +334,20 @@ export async function previewStudents(
   admin: Admin,
   campaignId: string,
 ): Promise<SelectionPreview> {
-  const studentIds = await listEverEnrolledStudentIds(admin);
-  const candidates = await loadProfilesByIds(admin, studentIds);
+  const studentProfiles = await listAllStudentProfiles(admin);
+  const enrollmentIds = await listEverEnrolledStudentIds(admin);
+  const knownIds = new Set(studentProfiles.map((row) => row.profileId).filter(Boolean) as string[]);
+  const missingEnrollmentIds = enrollmentIds.filter((id) => !knownIds.has(id));
+  const fromEnrollments = await loadProfilesByIds(admin, missingEnrollmentIds);
+  const fromBulkUploads = await listBulkUploadCandidates(admin);
+  const { unique } = uniqueCandidates([...studentProfiles, ...fromEnrollments, ...fromBulkUploads]);
   const [suppressed, enrolled] = await Promise.all([
     loadSuppressedEmailSet(admin),
     loadEnrolledEmailSet(admin, campaignId),
   ]);
   return filterEnrollmentCandidates({
     source: "students",
-    candidates,
+    candidates: unique,
     suppressedEmails: suppressed,
     alreadyEnrolledEmails: enrolled,
   });

@@ -128,8 +128,10 @@ ok("recipient selection is explicit and does not auto-target every user");
   const panel = readFileSync(join(root, "components/admin/email-campaign-panel.tsx"), "utf8");
   assert.match(storeSrc, /from\("enrollments"\)/);
   assert.match(storeSrc, /listEverEnrolledStudentIds/);
-  assert.match(panel, /Every student who has ever been enrolled/);
-  ok("student enrollment source uses everyone who has ever been enrolled");
+  assert.match(storeSrc, /bulk_import_rows/);
+  assert.match(storeSrc, /listBulkUploadCandidates/);
+  assert.match(panel, /Every enrolled student and every bulk-uploaded student/);
+  ok("student enrollment source includes enrollments and bulk uploads");
 }
 
 assert.equal(canProcessCampaign("draft").ok, false);
