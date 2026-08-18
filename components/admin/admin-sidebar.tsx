@@ -13,6 +13,7 @@ import {
   ClipboardList,
   CheckSquare,
   Zap,
+  Mail,
   Megaphone,
   ShoppingBag,
   Briefcase,
@@ -47,6 +48,7 @@ const teachingNav: NavItem[] = [
   { href: "/admin/assignments", label: "Assignments", icon: ClipboardList },
   { href: "/admin/grading", label: "Grading", icon: CheckSquare },
   { href: "/admin/announcements", label: "Announcements", icon: Megaphone },
+  { href: "/admin/email-campaigns", label: "Email campaigns", icon: Mail },
 ];
 
 const insightsNav: NavItem[] = [

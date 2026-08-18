@@ -967,6 +967,62 @@ export type AuthorityArticle = {
   updated_at: string;
 };
 
+export type EmailSuppression = {
+  id: string;
+  email: string;
+  reason: "unsubscribe" | "bounce" | "complaint" | "manual";
+  source: string | null;
+  created_at: string;
+};
+
+export type EmailCampaign = {
+  id: string;
+  slug: string;
+  name: string;
+  status: "draft" | "active" | "paused";
+  total_steps: number;
+  activated_at: string | null;
+  paused_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type EmailCampaignRecipient = {
+  id: string;
+  campaign_id: string;
+  email: string;
+  profile_id: string | null;
+  full_name: string | null;
+  status: "active" | "completed" | "unsubscribed" | "failed";
+  next_step: number;
+  last_sent_step: number;
+  last_sent_at: string | null;
+  next_send_at: string;
+  enrolled_at: string;
+  completed_at: string | null;
+  unsubscribed_at: string | null;
+  failed_at: string | null;
+  last_error: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type EmailCampaignSend = {
+  id: string;
+  campaign_id: string;
+  recipient_id: string;
+  step_number: number;
+  idempotency_key: string;
+  status: "pending" | "sending" | "sent" | "failed" | "skipped";
+  attempts: number;
+  provider_message_id: string | null;
+  last_error: string | null;
+  scheduled_at: string;
+  sent_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 export type Database = {
   public: {
     Tables: {
@@ -1303,6 +1359,22 @@ export type Database = {
         AuthorityArticle,
         [Rel<"authority_articles_learning_path_id_fkey", "learning_path_id", "learning_paths", "id">]
       >;
+      email_suppressions: Table<EmailSuppression>;
+      email_campaigns: Table<EmailCampaign>;
+      email_campaign_recipients: Table<
+        EmailCampaignRecipient,
+        [
+          Rel<"email_campaign_recipients_campaign_id_fkey", "campaign_id", "email_campaigns", "id">,
+          Rel<"email_campaign_recipients_profile_id_fkey", "profile_id", "profiles", "id">,
+        ]
+      >;
+      email_campaign_sends: Table<
+        EmailCampaignSend,
+        [
+          Rel<"email_campaign_sends_campaign_id_fkey", "campaign_id", "email_campaigns", "id">,
+          Rel<"email_campaign_sends_recipient_id_fkey", "recipient_id", "email_campaign_recipients", "id">,
+        ]
+      >;
     };
     Views: Record<string, never>;
     Functions: {
@@ -1321,6 +1393,14 @@ export type Database = {
       claim_bulk_import_email_outbox: {
         Args: { p_limit?: number };
         Returns: BulkImportEmailOutbox[];
+      };
+      claim_email_campaign_sends: {
+        Args: { p_limit?: number };
+        Returns: EmailCampaignSend[];
+      };
+      reclaim_stale_email_campaign_sends: {
+        Args: { p_older_than_minutes?: number };
+        Returns: number;
       };
       claim_content_factory_jobs: {
         Args: { p_limit?: number };

@@ -6,7 +6,7 @@ const MAX_CHAIN = 250;
 /** Fire-and-forget self-invoke so Hobby (daily cron only) still drains jobs. */
 export function scheduleBulkWorkerContinuation(params: {
   origin: string;
-  path: "/api/cron/bulk-import" | "/api/cron/email-outbox";
+  path: "/api/cron/bulk-import" | "/api/cron/email-outbox" | "/api/cron/email-campaigns";
   depth?: number;
   reason?: string;
   jobId?: string;

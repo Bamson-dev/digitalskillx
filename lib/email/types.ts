@@ -3,6 +3,9 @@ export type SendEmailParams = {
   subject: string;
   html: string;
   replyTo?: string;
+  headers?: Record<string, string>;
+  idempotencyKey?: string;
+  tags?: Array<{ name: string; value: string }>;
   attachments?: Array<{
     filename: string;
     content: Buffer;

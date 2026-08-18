@@ -42,6 +42,11 @@ export async function sendViaResend(
     return { error: new Error("Email recipient is required") };
   }
 
+  const headers = {
+    ...(params.headers ?? {}),
+    ...(params.idempotencyKey ? { "Idempotency-Key": params.idempotencyKey } : {}),
+  };
+
   const resend = new Resend(apiKey);
   try {
     const { data, error } = await resend.emails.send({
@@ -50,6 +55,8 @@ export async function sendViaResend(
       subject: params.subject,
       html: params.html,
       replyTo: params.replyTo ?? sender.replyTo,
+      ...(Object.keys(headers).length > 0 ? { headers } : {}),
+      ...(params.tags?.length ? { tags: params.tags } : {}),
       attachments: params.attachments?.map((attachment) => ({
         filename: attachment.filename,
         content: attachment.content,

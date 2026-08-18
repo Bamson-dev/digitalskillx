@@ -13,6 +13,10 @@
       "schedule": "45 9 * * *"
     },
     {
+      "path": "/api/cron/email-campaigns",
+      "schedule": "30 9 * * *"
+    },
+    {
       "path": "/api/cron/checkout-abandon",
       "schedule": "20 10 * * *"
     },

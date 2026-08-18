@@ -31,6 +31,8 @@ const PUBLIC_PATHS = [
   "/admin/login",
   "/about",
   "/privacy",
+  "/unsubscribe",
+  "/api/unsubscribe",
   "/terms",
   "/refund-policy",
   "/sitemap.xml",
