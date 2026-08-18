@@ -12,14 +12,50 @@ export const metadata: Metadata = { title: "Email campaigns" };
 export default async function AdminEmailCampaignsPage() {
   const adminProfile = await requireAdmin();
   const admin = await getAdminSupabase();
-  const snapshot = await loadCampaignSnapshot(admin);
-  const emails = loadAimoneycodeSequence().map((email) => ({
-    day: email.day,
-    subject: email.subject,
-    previewText: email.previewText,
-    ctaLink: ctaUrlForStep(email.day),
-    body: email.body,
-  }));
+
+  let loadError: string | null = null;
+  let snapshot;
+  let emails: Array<{
+    day: number;
+    subject: string;
+    previewText: string;
+    ctaLink: string;
+    body: string;
+  }> = [];
+
+  try {
+    snapshot = await loadCampaignSnapshot(admin);
+  } catch (err) {
+    loadError = err instanceof Error ? err.message : "Could not load the campaign.";
+    snapshot = {
+      migrationRequired: /schema cache|does not exist|could not find the table/i.test(loadError),
+      campaign: null,
+      counts: {
+        total: 0,
+        active: 0,
+        completed: 0,
+        unsubscribed: 0,
+        failed: 0,
+        waiting: 0,
+        sent: 0,
+        sendFailed: 0,
+        nextScheduledAt: null,
+      },
+    };
+  }
+
+  try {
+    emails = loadAimoneycodeSequence().map((email) => ({
+      day: email.day,
+      subject: email.subject,
+      previewText: email.previewText,
+      ctaLink: ctaUrlForStep(email.day),
+      body: email.body,
+    }));
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Could not load campaign emails.";
+    loadError = loadError ? `${loadError} ${message}` : message;
+  }
 
   return (
     <div className="space-y-6">
@@ -30,6 +66,11 @@ export default async function AdminEmailCampaignsPage() {
           you activate it.
         </p>
       </div>
+      {loadError ? (
+        <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+          {loadError}
+        </p>
+      ) : null}
       <EmailCampaignPanel
         campaignName={snapshot.campaign?.name ?? "AI Money Code 30-Day Email Sequence"}
         status={snapshot.campaign?.status ?? "draft"}

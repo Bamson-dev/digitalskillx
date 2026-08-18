@@ -6,6 +6,7 @@ import {
   parseAimoneycodeSequence,
   type ParsedCampaignEmail,
 } from "./parse-sequence";
+import sequenceMarkdown from "../../content/aimoneycode-30-day-email-sequence.md";
 
 export type { ParsedCampaignEmail };
 
@@ -17,10 +18,22 @@ export function aimoneycodeSequenceFilePath(root = process.cwd()): string {
   return join(root, SEQUENCE_RELATIVE_PATH);
 }
 
+function readSequenceMarkdown(root = process.cwd()): string {
+  try {
+    return readFileSync(aimoneycodeSequenceFilePath(root), "utf8");
+  } catch {
+    if (typeof sequenceMarkdown === "string" && sequenceMarkdown.trim()) {
+      return sequenceMarkdown;
+    }
+    throw new Error(
+      "AI Money Code sequence copy is missing from the server bundle. Redeploy so content/aimoneycode-30-day-email-sequence.md is included.",
+    );
+  }
+}
+
 export function loadAimoneycodeSequence(root = process.cwd()): ParsedCampaignEmail[] {
   if (cached) return cached;
-  const markdown = readFileSync(aimoneycodeSequenceFilePath(root), "utf8");
-  const emails = parseAimoneycodeSequence(markdown);
+  const emails = parseAimoneycodeSequence(readSequenceMarkdown(root));
   assertCompleteSequence(emails);
   cached = emails;
   return emails;

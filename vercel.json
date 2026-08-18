@@ -24,5 +24,13 @@
       "path": "/api/cron/content-factory",
       "schedule": "5 10 * * *"
     }
-  ]
+  ],
+  "functions": {
+    "app/(admin)/admin/(panel)/email-campaigns/page.tsx": {
+      "includeFiles": "content/aimoneycode-30-day-email-sequence.md"
+    },
+    "app/api/cron/email-campaigns/route.ts": {
+      "includeFiles": "content/aimoneycode-30-day-email-sequence.md"
+    }
+  }
 }

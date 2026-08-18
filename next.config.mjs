@@ -10,6 +10,17 @@ const nextConfig = {
     },
     // Lowers peak memory during `next build` on small Docker hosts (Coolify).
     webpackBuildWorker: true,
+    outputFileTracingIncludes: {
+      "/admin/email-campaigns": ["./content/aimoneycode-30-day-email-sequence.md"],
+      "/api/cron/email-campaigns": ["./content/aimoneycode-30-day-email-sequence.md"],
+    },
+  },
+  webpack: (config) => {
+    config.module.rules.push({
+      test: /\.md$/,
+      type: "asset/source",
+    });
+    return config;
   },
   images: {
     remotePatterns: [

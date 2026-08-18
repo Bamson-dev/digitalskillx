@@ -38,6 +38,7 @@ const { renderCampaignEmailHtml } = await import(ts("lib/email-campaigns/render.
 const { processAimoneycodeCampaignTick } = await import(
   ts("lib/email-campaigns/processor.ts")
 );
+const { loadAimoneycodeSequence } = await import(ts("lib/email-campaigns/sequence.ts"));
 
 const markdown = readFileSync(
   join(root, "content/aimoneycode-30-day-email-sequence.md"),
@@ -469,6 +470,15 @@ const campaignFixture = {
   );
   assert.doesNotMatch(page, /enrollCandidates|processAimoneycodeCampaignTick/);
   ok("admin page load does not enroll or send");
+}
+
+{
+  const sequenceSrc = readFileSync(join(root, "lib/email-campaigns/sequence.ts"), "utf8");
+  const nextConfig = readFileSync(join(root, "next.config.mjs"), "utf8");
+  assert.match(sequenceSrc, /aimoneycode-30-day-email-sequence\.md/);
+  assert.match(nextConfig, /asset\/source/);
+  assert.equal(loadAimoneycodeSequence().length, 30);
+  ok("sequence copy is bundled for production and still loads 30 emails");
 }
 
 {
