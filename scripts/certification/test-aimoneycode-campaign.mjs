@@ -132,7 +132,7 @@ ok("recipient selection is explicit and does not auto-target every user");
   assert.match(storeSrc, /listBulkUploadCandidates/);
   assert.doesNotMatch(storeSrc, /bulk_import_rows/);
   assert.match(panel, /Every enrolled student and every bulk-uploaded student/);
-  assert.match(panel, /Start sending to all students/);
+  assert.match(panel, /Keep sending now/);
   ok("student enrollment source includes enrollments and bulk uploads");
 }
 
@@ -526,10 +526,24 @@ const campaignFixture = {
     "utf8",
   );
   assert.match(actions, /startSendingToAllStudents/);
-  assert.match(actions, /drainAimoneycodeCampaignUntilBudget/);
-  assert.match(actions, /waitUntil/);
+  assert.match(actions, /enrollIfEmptyAndDrain/);
+  assert.doesNotMatch(actions, /waitUntil/);
   assert.doesNotMatch(actions, /processAimoneycodeCampaignTick/);
-  ok("start sending enrolls then drains in the background");
+  ok("start sending drains in the same request when the list already exists");
+}
+
+{
+  const panel = readFileSync(join(root, "components/admin/email-campaign-panel.tsx"), "utf8");
+  const drainRoute = readFileSync(
+    join(root, "app/api/admin/email-campaigns/drain/route.ts"),
+    "utf8",
+  );
+  assert.match(panel, /\/api\/admin\/email-campaigns\/drain/);
+  assert.match(panel, /Keep sending now/);
+  assert.match(drainRoute, /requireAdminApiAuth/);
+  assert.match(drainRoute, /enrollIfEmptyAndDrain/);
+  assert.match(panel, /keepSending\(true\)/);
+  ok("admin keep-sending button drains through an authenticated API loop");
 }
 
 {
@@ -548,7 +562,9 @@ const campaignFixture = {
   assert.match(vercel, /"\*\/10 \* \* \* \*"/);
   assert.match(vercel, /"45 9 \* \* \*"/);
   const cron = readFileSync(join(root, "app/api/cron/email-campaigns/route.ts"), "utf8");
-  assert.match(cron, /drainAimoneycodeCampaignUntilBudget/);
+  const storeSrc = readFileSync(join(root, "lib/email-campaigns/store.ts"), "utf8");
+  assert.match(cron, /runLiveAimoneycodeDrain/);
+  assert.match(storeSrc, /\["pending", "sending"\]/);
   ok("campaign worker drains on www, never via protected vercel.app, and outbox cron stays daily");
 }
 

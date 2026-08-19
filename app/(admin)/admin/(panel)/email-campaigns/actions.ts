@@ -1,6 +1,5 @@
 "use server";
 
-import { waitUntil } from "@vercel/functions";
 import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/auth";
 import { getAdminSupabase } from "@/lib/admin-supabase";
@@ -12,6 +11,7 @@ import { isSyntheticTestRecipient } from "@/lib/email/synthetic-recipient";
 import { getAimoneycodeEmail } from "@/lib/email-campaigns/sequence";
 import { renderCampaignEmailHtml } from "@/lib/email-campaigns/render";
 import { listUnsubscribeHeader, unsubscribeUrl } from "@/lib/email-campaigns/unsubscribe";
+import { enrollIfEmptyAndDrain } from "@/lib/email-campaigns/live-drain";
 import {
   enrollCandidates,
   loadCampaignSnapshot,
@@ -19,14 +19,14 @@ import {
   previewCsv,
   previewStudents,
   setCampaignStatus,
-  createSupabaseCampaignStore,
 } from "@/lib/email-campaigns/store";
-import { drainAimoneycodeCampaignUntilBudget } from "@/lib/email-campaigns/processor";
 import { resendConfigured } from "@/lib/email/providers/resend";
 
 export type CampaignActionState = {
   error?: string;
   message?: string;
+  moreDue?: boolean;
+  sent?: number;
   preview?: {
     source: string;
     selected: number;
@@ -47,28 +47,6 @@ function kickCampaignProcessor(reason: string) {
   });
 }
 
-function continueSendingInBackground(admin: Awaited<ReturnType<typeof getAdminSupabase>>) {
-  waitUntil(
-    drainAimoneycodeCampaignUntilBudget({
-      store: createSupabaseCampaignStore(admin),
-      sendEmail: (mail) =>
-        sendEmail({
-          to: mail.to,
-          subject: mail.subject,
-          html: mail.html,
-          headers: mail.headers,
-          idempotencyKey: mail.idempotencyKey,
-        }),
-      limit: 40,
-      budgetMs: 100_000,
-    }).then((result) => {
-      if (result.moreDue) kickCampaignProcessor("drain_more");
-    }).catch((err) => {
-      console.error("[email-campaigns] background drain failed", err);
-    }),
-  );
-}
-
 async function requireCampaign() {
   await requireAdmin();
   const admin = await getAdminSupabase();
@@ -87,35 +65,43 @@ export async function startSendingToAllStudents(
   _formData?: FormData,
 ): Promise<CampaignActionState> {
   try {
-    const { admin, campaign } = await requireCampaign();
+    const { admin, campaign, snapshot } = await requireCampaign();
     if (!resendConfigured()) {
       return { error: "Resend is not configured. Set RESEND_API_KEY before sending." };
     }
 
-    const preview = await previewStudents(admin, campaign.id);
-    const inserted = await enrollCandidates(admin, campaign.id, preview.selected);
-    if (campaign.status !== "active") {
-      await setCampaignStatus(admin, campaign.id, "active");
-    }
+    const result = await enrollIfEmptyAndDrain({
+      admin,
+      campaign,
+      counts: snapshot.counts,
+      enrollIfEmpty: snapshot.counts.total === 0,
+      drain: true,
+      budgetMs: 90_000,
+    });
 
     await logAudit({
       action: "email_campaign_start_all_students",
       targetType: "email_campaign",
       targetId: campaign.id,
       metadata: {
-        attempted: preview.selected.length,
-        inserted,
-        alreadyEnrolled: preview.skippedAlreadyEnrolled,
+        inserted: result.inserted,
+        sent: result.drain?.sent ?? 0,
+        moreDue: result.drain?.moreDue ?? false,
         fromStatus: campaign.status,
       },
     });
 
-    continueSendingInBackground(admin);
+    if (result.drain?.moreDue) kickCampaignProcessor("admin_start_all_students");
     revalidatePath("/admin/email-campaigns");
 
-    const added = inserted > 0 ? `Added ${inserted} student(s). ` : "Everyone eligible is already on the list. ";
+    const added = result.inserted > 0 ? `Added ${result.inserted} student(s). ` : "";
+    const sent = result.drain?.sent ?? 0;
     return {
-      message: `${added}The campaign is active. Email 1 is sending from the server — you can close this page.`,
+      message: result.drain?.moreDue
+        ? `${added}Sent ${sent} email(s) this round. Still sending — keep this page open.`
+        : `${added}Sent ${sent} email(s). Caught up for now.`,
+      moreDue: result.drain?.moreDue,
+      sent,
     };
   } catch (err) {
     return { error: err instanceof Error ? err.message : "Could not start the campaign." };
@@ -197,7 +183,7 @@ export async function enrollCampaignRecipients(
     });
 
     if (campaign.status === "active") {
-      continueSendingInBackground(admin);
+      kickCampaignProcessor("admin_enroll_active");
     }
     revalidatePath("/admin/email-campaigns");
 
@@ -235,7 +221,7 @@ export async function setAimoneycodeCampaignStatus(
     });
 
     if (status === "active") {
-      continueSendingInBackground(admin);
+      kickCampaignProcessor("admin_status_active");
     }
 
     revalidatePath("/admin/email-campaigns");

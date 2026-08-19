@@ -7,7 +7,7 @@ export const OFFER_CTA_URL = "https://aimoneycode.com.ng/offer";
 
 export const STEP_INTERVAL_MS = 24 * 60 * 60 * 1000;
 export const MAX_SEND_ATTEMPTS = 8;
-export const STALE_SENDING_MINUTES = 15;
+export const STALE_SENDING_MINUTES = 2;
 
 export type CampaignStatus = "draft" | "active" | "paused";
 export type RecipientStatus = "active" | "completed" | "unsubscribed" | "failed";

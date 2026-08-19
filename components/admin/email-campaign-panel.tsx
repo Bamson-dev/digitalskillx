@@ -1,14 +1,16 @@
 "use client";
 
+import { useEffect, useRef, useState } from "react";
 import { useFormState } from "react-dom";
+import { useRouter } from "next/navigation";
 import { Card, CardHeader } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/input";
 import { SubmitButton } from "@/components/auth/submit-button";
 import {
   enrollCampaignRecipients,
   previewCampaignRecipients,
   setAimoneycodeCampaignStatus,
-  startSendingToAllStudents,
   testSendAimoneycodeEmail,
   type CampaignActionState,
 } from "@/app/(admin)/admin/(panel)/email-campaigns/actions";
@@ -35,6 +37,117 @@ type Counts = {
 };
 
 const emptyAction: CampaignActionState = {};
+
+type DrainResponse = {
+  ok?: boolean;
+  error?: string;
+  inserted?: number;
+  sent?: number;
+  failed?: number;
+  examined?: number;
+  moreDue?: boolean;
+  dueNow?: number;
+  totalSent?: number;
+  reason?: string;
+};
+
+function KeepSendingControls({
+  resendReady,
+  startLabel,
+  dueNow,
+}: {
+  resendReady: boolean;
+  startLabel: string;
+  dueNow: number;
+}) {
+  const router = useRouter();
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const running = useRef(false);
+
+  async function keepSending(skipConfirm: boolean) {
+    if (!resendReady || running.current) return;
+    if (!skipConfirm) {
+      const ok = window.confirm(
+        "This sends Email 1 to everyone still waiting. Keep this page open until it says caught up.",
+      );
+      if (!ok) return;
+    }
+
+    running.current = true;
+    setBusy(true);
+    setError(null);
+    setMessage("Sending now. Keep this page open.");
+    let sessionSent = 0;
+    let action: "start" | "drain" = "start";
+
+    try {
+      for (let round = 1; round <= 40; round++) {
+        const res = await fetch("/api/admin/email-campaigns/drain", {
+          method: "POST",
+          credentials: "include",
+          cache: "no-store",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action }),
+        });
+        const json = (await res.json().catch(() => ({}))) as DrainResponse;
+        if (!res.ok) {
+          setError(json.error ?? `Send round ${round} failed (${res.status}).`);
+          break;
+        }
+        const sent = json.sent ?? 0;
+        sessionSent += sent;
+        action = "drain";
+        setMessage(
+          json.moreDue
+            ? `Sent ${sessionSent} email(s) so far. ${json.dueNow ?? 0} still queued. Keep this page open.`
+            : `Caught up. Sent ${sessionSent} email(s) this session. Total sent: ${json.totalSent ?? sessionSent}.`,
+        );
+        router.refresh();
+        if (!json.moreDue) break;
+        if (sent === 0) {
+          setError(
+            `Stopped after a round with 0 sends. Examined ${json.examined ?? 0}. ${json.reason ?? ""}`.trim(),
+          );
+          break;
+        }
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not send.");
+    } finally {
+      running.current = false;
+      setBusy(false);
+      router.refresh();
+    }
+  }
+
+  useEffect(() => {
+    if (!resendReady || dueNow < 1) return;
+    void keepSending(true);
+    // Run once when queued mail is already waiting.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return (
+    <div className="mt-5">
+      <Button type="button" onClick={() => void keepSending(false)} disabled={!resendReady || busy}>
+        {busy ? "Sending emails…" : startLabel}
+      </Button>
+      <p className="mt-2 text-xs text-muted">
+        Keep this page open while it sends. The server also continues every 10 minutes if you leave.
+      </p>
+      {error ? (
+        <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{error}</p>
+      ) : null}
+      {message ? (
+        <p className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+          {message}
+        </p>
+      ) : null}
+    </div>
+  );
+}
 
 function ActionBanner({ state }: { state: CampaignActionState }) {
   if (!state.error && !state.message) return null;
@@ -75,7 +188,6 @@ export function EmailCampaignPanel({
   adminEmail: string;
   resendReady: boolean;
 }) {
-  const [startState, startAction] = useFormState(startSendingToAllStudents, emptyAction);
   const [previewState, previewAction] = useFormState(previewCampaignRecipients, emptyAction);
   const [enrollState, enrollAction] = useFormState(enrollCampaignRecipients, emptyAction);
   const [statusState, statusAction] = useFormState(setAimoneycodeCampaignStatus, emptyAction);
@@ -93,14 +205,14 @@ export function EmailCampaignPanel({
   }
 
   const startLabel =
-    status === "active" ? "Add new students and keep sending" : "Start sending to all students";
+    status === "active" ? "Keep sending now" : "Start sending to all students";
 
   return (
     <div className="space-y-6">
       <Card>
         <CardHeader
           title={campaignName}
-          description="One list: every enrolled student and every bulk-uploaded student. Click Start. The server sends Email 1, then one email a day for 30 days. You can close this page."
+          description="Queued Email 1s send as soon as you open this page. Keep it open until Emails sent stops climbing. After that, one email a day goes out automatically."
         />
         <dl className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 text-sm">
           <div>
@@ -157,26 +269,11 @@ export function EmailCampaignPanel({
           </div>
         </dl>
 
-        <form
-          action={startAction}
-          className="mt-5"
-          onSubmit={(event) => {
-            const ok = window.confirm(
-              "This adds every student to the 30-day sequence and starts Email 1 from the server. Continue?",
-            );
-            if (!ok) event.preventDefault();
-          }}
-        >
-          <SubmitButton disabled={!resendReady} pendingText="Adding students…">
-            {startLabel}
-          </SubmitButton>
-        </form>
-        <p className="mt-2 text-xs text-muted">
-          Activate with nobody on the list does nothing. This button adds the list and starts sending.
-        </p>
-        <div className="mt-3">
-          <ActionBanner state={startState} />
-        </div>
+        <KeepSendingControls
+          resendReady={resendReady}
+          startLabel={startLabel}
+          dueNow={counts.dueNow ?? 0}
+        />
 
         <div className="mt-4 flex flex-wrap gap-2">
           <form action={statusAction}>

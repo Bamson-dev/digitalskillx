@@ -5,6 +5,7 @@ import type { Database } from "@/types/database";
 import {
   AIMONEYCODE_CAMPAIGN_SLUG,
   AIMONEYCODE_TOTAL_STEPS,
+  STALE_SENDING_MINUTES,
   normalizeEmail,
   type CampaignStatus,
   type EnrollmentSource,
@@ -532,6 +533,7 @@ export function createSupabaseCampaignStore(admin: Admin): CampaignStore {
     },
 
     async listDueRecipients(campaignId, nowIso, limit) {
+      const fetchLimit = Math.min(Math.max(limit * 8, limit), 400);
       const { data, error } = await admin
         .from("email_campaign_recipients" as never)
         .select(
@@ -542,9 +544,21 @@ export function createSupabaseCampaignStore(admin: Admin): CampaignStore {
         .lte("next_send_at", nowIso)
         .lte("next_step", AIMONEYCODE_TOTAL_STEPS)
         .order("next_send_at", { ascending: true })
-        .limit(limit);
+        .limit(fetchLimit);
       if (error) throw new Error(error.message);
-      return ((data as Array<Record<string, unknown>> | null) ?? []).map(asRecipient);
+      const due = ((data as Array<Record<string, unknown>> | null) ?? []).map(asRecipient);
+      if (due.length === 0) return [];
+
+      const { data: inFlight, error: sendErr } = await admin
+        .from("email_campaign_sends" as never)
+        .select("recipient_id")
+        .eq("campaign_id", campaignId)
+        .in("status", ["pending", "sending"]);
+      if (sendErr) throw new Error(sendErr.message);
+      const blocked = new Set(
+        ((inFlight as Array<{ recipient_id: string }> | null) ?? []).map((row) => row.recipient_id),
+      );
+      return due.filter((row) => !blocked.has(row.id)).slice(0, limit);
     },
 
     async isEmailSuppressed(email) {
@@ -589,7 +603,7 @@ export function createSupabaseCampaignStore(admin: Admin): CampaignStore {
 
     async claimPendingSends(limit) {
       await admin.rpc("reclaim_stale_email_campaign_sends" as never, {
-        p_older_than_minutes: 15,
+        p_older_than_minutes: STALE_SENDING_MINUTES,
       } as never);
 
       const { data: rpcData, error: rpcError } = await admin.rpc(

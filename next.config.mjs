@@ -13,6 +13,7 @@ const nextConfig = {
     outputFileTracingIncludes: {
       "/admin/email-campaigns": ["./content/aimoneycode-30-day-email-sequence.md"],
       "/api/cron/email-campaigns": ["./content/aimoneycode-30-day-email-sequence.md"],
+      "/api/admin/email-campaigns/drain": ["./content/aimoneycode-30-day-email-sequence.md"],
     },
   },
   webpack: (config) => {
