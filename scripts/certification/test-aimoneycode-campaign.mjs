@@ -502,6 +502,22 @@ const campaignFixture = {
 }
 
 {
+  const cont = readFileSync(join(root, "lib/bulk-import-continue.ts"), "utf8");
+  const vercel = readFileSync(join(root, "vercel.json"), "utf8");
+  const actions = readFileSync(
+    join(root, "app/(admin)/admin/(panel)/email-campaigns/actions.ts"),
+    "utf8",
+  );
+  assert.match(cont, /www\.digitalskillx\.com/);
+  assert.match(cont, /waitUntil/);
+  assert.match(cont, /redirect: "error"/);
+  assert.match(actions, /https:\/\/www\.digitalskillx\.com/);
+  assert.match(vercel, /"\*\/10 \* \* \* \*"/);
+  assert.match(vercel, /"45 9 \* \* \*"/);
+  ok("campaign worker calls www without following apex redirects; outbox cron stays daily");
+}
+
+{
   const sequenceSrc = readFileSync(join(root, "lib/email-campaigns/sequence.ts"), "utf8");
   const nextConfig = readFileSync(join(root, "next.config.mjs"), "utf8");
   assert.match(sequenceSrc, /aimoneycode-30-day-email-sequence\.md/);

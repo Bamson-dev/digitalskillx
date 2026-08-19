@@ -27,6 +27,7 @@ export type CampaignCounts = {
   unsubscribed: number;
   failed: number;
   waiting: number;
+  dueNow: number;
   sent: number;
   sendFailed: number;
   nextScheduledAt: string | null;
@@ -45,6 +46,7 @@ const EMPTY_COUNTS: CampaignCounts = {
   unsubscribed: 0,
   failed: 0,
   waiting: 0,
+  dueNow: 0,
   sent: 0,
   sendFailed: 0,
   nextScheduledAt: null,
@@ -232,6 +234,7 @@ export async function loadCampaignCounts(admin: Admin, campaignId: string): Prom
     ) {
       const at = String(row.next_send_at);
       if (new Date(at).getTime() > now) counts.waiting += 1;
+      else counts.dueNow += 1;
       if (!counts.nextScheduledAt || at < counts.nextScheduledAt) {
         counts.nextScheduledAt = at;
       }

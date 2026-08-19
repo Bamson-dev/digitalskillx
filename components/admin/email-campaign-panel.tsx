@@ -28,6 +28,7 @@ type Counts = {
   unsubscribed: number;
   failed: number;
   waiting: number;
+  dueNow: number;
   sent: number;
   sendFailed: number;
   nextScheduledAt: string | null;
@@ -117,6 +118,10 @@ export function EmailCampaignPanel({
           <div>
             <dt className="text-muted">Active</dt>
             <dd className="font-semibold">{counts.active}</dd>
+          </div>
+          <div>
+            <dt className="text-muted">Queued to send now</dt>
+            <dd className="font-semibold">{counts.dueNow}</dd>
           </div>
           <div>
             <dt className="text-muted">Waiting for next email</dt>

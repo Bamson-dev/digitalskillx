@@ -1,7 +1,24 @@
 import "server-only";
+import { waitUntil } from "@vercel/functions";
 import { bulkImportStage } from "@/lib/bulk-import-telemetry";
 
 const MAX_CHAIN = 250;
+
+/** Apex digitalskillx.com 308s to www and strips Authorization, so cron self-calls 401. */
+export function resolveCronContinuationOrigin(passedOrigin: string): string {
+  const vercelHost = process.env.VERCEL_URL?.trim().replace(/^https?:\/\//, "").replace(/\/$/, "");
+  if (vercelHost) return `https://${vercelHost}`;
+
+  let raw = passedOrigin.trim() || "https://www.digitalskillx.com";
+  if (!/^https?:\/\//i.test(raw)) raw = `https://${raw}`;
+  try {
+    const url = new URL(raw);
+    if (url.hostname === "digitalskillx.com") url.hostname = "www.digitalskillx.com";
+    return url.origin;
+  } catch {
+    return "https://www.digitalskillx.com";
+  }
+}
 
 /** Fire-and-forget self-invoke so Hobby (daily cron only) still drains jobs. */
 export function scheduleBulkWorkerContinuation(params: {
@@ -30,37 +47,40 @@ export function scheduleBulkWorkerContinuation(params: {
     return;
   }
 
-  const url = new URL(params.path, params.origin);
+  const url = new URL(params.path, resolveCronContinuationOrigin(params.origin));
   url.searchParams.set("depth", String(depth + 1));
   if (params.jobId) url.searchParams.set("jobId", params.jobId);
 
-  // Fire immediately. A delayed timer is killed when the serverless isolate freezes
-  // after the HTTP response, which previously left imports stuck after one chunk.
-  void fetch(url.toString(), {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${secret}`,
-      "x-bulk-continue-depth": String(depth + 1),
-    },
-    cache: "no-store",
-  })
-    .then((res) => {
-      bulkImportStage("continuation_fired", {
-        ok: res.ok,
-        path: params.path,
-        depth: depth + 1,
-        status: res.status,
-        reason: params.reason,
-      });
+  // Keep the isolate alive until this request is in flight. Otherwise Vercel
+  // freezes the function after the HTTP response and the next chunk never starts.
+  waitUntil(
+    fetch(url.toString(), {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${secret}`,
+        "x-bulk-continue-depth": String(depth + 1),
+      },
+      cache: "no-store",
+      redirect: "error",
     })
-    .catch((err) => {
-      bulkImportStage("continuation_failed", {
-        ok: false,
-        path: params.path,
-        depth: depth + 1,
-        error: err instanceof Error ? err.message : String(err),
-      });
-    });
+      .then((res) => {
+        bulkImportStage("continuation_fired", {
+          ok: res.ok,
+          path: params.path,
+          depth: depth + 1,
+          status: res.status,
+          reason: params.reason,
+        });
+      })
+      .catch((err) => {
+        bulkImportStage("continuation_failed", {
+          ok: false,
+          path: params.path,
+          depth: depth + 1,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }),
+  );
 }
 
 export function continuationDepthFromRequest(request: Request) {

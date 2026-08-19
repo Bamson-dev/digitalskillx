@@ -38,6 +38,7 @@ export default async function AdminEmailCampaignsPage() {
         unsubscribed: 0,
         failed: 0,
         waiting: 0,
+        dueNow: 0,
         sent: 0,
         sendFailed: 0,
         nextScheduledAt: null,

@@ -20,7 +20,6 @@ import {
   setCampaignStatus,
 } from "@/lib/email-campaigns/store";
 import { resendConfigured } from "@/lib/email/providers/resend";
-import { siteUrl } from "@/lib/org";
 
 export type CampaignActionState = {
   error?: string;
@@ -39,7 +38,7 @@ export type CampaignActionState = {
 
 function kickCampaignProcessor(reason: string) {
   scheduleBulkWorkerContinuation({
-    origin: siteUrl(),
+    origin: "https://www.digitalskillx.com",
     path: "/api/cron/email-campaigns",
     reason,
   });

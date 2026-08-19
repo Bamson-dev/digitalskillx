@@ -44,7 +44,8 @@ export async function POST(request: NextRequest) {
     });
 
     const moreDue =
-      result.campaignStatus === "active" && (result.queued > 0 || result.sent > 0);
+      result.campaignStatus === "active" &&
+      (result.queued > 0 || result.sent > 0 || result.failed > 0 || result.examined >= 40);
     if (moreDue) {
       scheduleBulkWorkerContinuation({
         origin,
