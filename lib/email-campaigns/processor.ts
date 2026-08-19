@@ -300,3 +300,71 @@ export async function processAimoneycodeCampaignTick(params: {
   if (due.length === 0 && claimed.length === 0) result.reason = "no_due";
   return result;
 }
+
+export type DrainResult = ProcessorResult & {
+  ticks: number;
+  moreDue: boolean;
+};
+
+export async function drainAimoneycodeCampaignUntilBudget(params: {
+  store: CampaignStore;
+  sendEmail: CampaignMailer;
+  now?: Date;
+  limit?: number;
+  budgetMs?: number;
+  slug?: string;
+}): Promise<DrainResult> {
+  const budgetMs = Math.max(1_000, params.budgetMs ?? 100_000);
+  const limit = Math.max(1, Math.min(params.limit ?? 40, 100));
+  const started = Date.now();
+  const acc: DrainResult = {
+    campaignStatus: "missing",
+    examined: 0,
+    queued: 0,
+    sent: 0,
+    failed: 0,
+    skipped: 0,
+    unsubscribed: 0,
+    completed: 0,
+    ticks: 0,
+    moreDue: false,
+  };
+
+  while (Date.now() - started < budgetMs) {
+    const result = await processAimoneycodeCampaignTick({
+      store: params.store,
+      sendEmail: params.sendEmail,
+      now: params.now,
+      limit,
+      slug: params.slug,
+    });
+    acc.ticks += 1;
+    acc.campaignStatus = result.campaignStatus;
+    acc.examined += result.examined;
+    acc.queued += result.queued;
+    acc.sent += result.sent;
+    acc.failed += result.failed;
+    acc.skipped += result.skipped;
+    acc.unsubscribed += result.unsubscribed;
+    acc.completed += result.completed;
+    acc.reason = result.reason;
+
+    if (result.campaignStatus !== "active") {
+      acc.moreDue = false;
+      break;
+    }
+    if (result.reason === "no_due") {
+      acc.moreDue = false;
+      break;
+    }
+    const progressed =
+      result.sent > 0 || result.queued > 0 || result.failed > 0 || result.skipped > 0;
+    if (!progressed) {
+      acc.moreDue = result.examined > 0;
+      break;
+    }
+    acc.moreDue = true;
+  }
+
+  return acc;
+}

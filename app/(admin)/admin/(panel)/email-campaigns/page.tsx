@@ -64,8 +64,8 @@ export default async function AdminEmailCampaignsPage() {
       <div>
         <h1 className="text-2xl font-bold">Email campaigns</h1>
         <p className="mt-1 text-sm text-muted">
-          AI Money Code 30-day sequence. Choose the student list and click Start. Emails send from
-          the server — you can close this page.
+          AI Money Code 30-day sequence. Click Start once. The server keeps sending Email 1 to
+          everyone, then one email a day. You can close this page.
         </p>
       </div>
       {loadError ? (

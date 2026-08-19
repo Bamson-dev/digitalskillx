@@ -4,16 +4,18 @@ import { bulkImportStage } from "@/lib/bulk-import-telemetry";
 
 const MAX_CHAIN = 250;
 
-/** Apex digitalskillx.com 308s to www and strips Authorization, so cron self-calls 401. */
+/**
+ * Always call the public www host. Apex 308s and drops Authorization.
+ * *.vercel.app is often behind Deployment Protection, which also 401s the cron token.
+ */
 export function resolveCronContinuationOrigin(passedOrigin: string): string {
-  const vercelHost = process.env.VERCEL_URL?.trim().replace(/^https?:\/\//, "").replace(/\/$/, "");
-  if (vercelHost) return `https://${vercelHost}`;
-
   let raw = passedOrigin.trim() || "https://www.digitalskillx.com";
   if (!/^https?:\/\//i.test(raw)) raw = `https://${raw}`;
   try {
     const url = new URL(raw);
-    if (url.hostname === "digitalskillx.com") url.hostname = "www.digitalskillx.com";
+    if (url.hostname === "digitalskillx.com" || url.hostname.endsWith(".vercel.app")) {
+      return "https://www.digitalskillx.com";
+    }
     return url.origin;
   } catch {
     return "https://www.digitalskillx.com";

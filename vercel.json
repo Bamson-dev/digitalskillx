@@ -31,7 +31,8 @@
       "maxDuration": 120
     },
     "app/api/cron/email-campaigns/route.ts": {
-      "includeFiles": "content/aimoneycode-30-day-email-sequence.md"
+      "includeFiles": "content/aimoneycode-30-day-email-sequence.md",
+      "maxDuration": 120
     }
   }
 }

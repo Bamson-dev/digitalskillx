@@ -35,7 +35,7 @@ const { applyCampaignGreeting, campaignGreeting } = await import(
 const { filterEnrollmentCandidates, extractEmailsFromCsv } =
   await import(ts("lib/email-campaigns/selection.ts"));
 const { renderCampaignEmailHtml } = await import(ts("lib/email-campaigns/render.ts"));
-const { processAimoneycodeCampaignTick } = await import(
+const { processAimoneycodeCampaignTick, drainAimoneycodeCampaignUntilBudget } = await import(
   ts("lib/email-campaigns/processor.ts")
 );
 const { loadAimoneycodeSequence } = await import(ts("lib/email-campaigns/sequence.ts"));
@@ -458,6 +458,36 @@ const campaignFixture = {
 }
 
 {
+  const store = createMemoryStore({
+    nowIso,
+    campaign: campaignFixture,
+    recipients: [1, 2, 3, 4, 5].map((n) =>
+      recipientFixture({
+        id: `r${n}`,
+        email: `ada${n}@example.com`,
+        profile_id: `p${n}`,
+      }),
+    ),
+  });
+  const sent = [];
+  const result = await drainAimoneycodeCampaignUntilBudget({
+    store,
+    now,
+    limit: 2,
+    budgetMs: 10_000,
+    sendEmail: async (mail) => {
+      sent.push(mail);
+      return { messageId: `m${sent.length}` };
+    },
+  });
+  assert.equal(result.sent, 5);
+  assert.equal(sent.length, 5);
+  assert.equal(result.moreDue, false);
+  assert.ok(result.ticks >= 3);
+  ok("drain loop keeps sending until the due queue is empty");
+}
+
+{
   const dryRun = filterEnrollmentCandidates({
     source: "students",
     candidates: [{ email: "ada@example.com", fullName: "Ada", profileId: "1" }],
@@ -496,9 +526,10 @@ const campaignFixture = {
     "utf8",
   );
   assert.match(actions, /startSendingToAllStudents/);
-  assert.match(actions, /scheduleBulkWorkerContinuation/);
+  assert.match(actions, /drainAimoneycodeCampaignUntilBudget/);
+  assert.match(actions, /waitUntil/);
   assert.doesNotMatch(actions, /processAimoneycodeCampaignTick/);
-  ok("start sending enrolls then kicks the server worker instead of sending inline");
+  ok("start sending enrolls then drains in the background");
 }
 
 {
@@ -511,10 +542,14 @@ const campaignFixture = {
   assert.match(cont, /www\.digitalskillx\.com/);
   assert.match(cont, /waitUntil/);
   assert.match(cont, /redirect: "error"/);
+  assert.match(cont, /\.vercel\.app/);
+  assert.doesNotMatch(cont, /VERCEL_URL/);
   assert.match(actions, /https:\/\/www\.digitalskillx\.com/);
   assert.match(vercel, /"\*\/10 \* \* \* \*"/);
   assert.match(vercel, /"45 9 \* \* \*"/);
-  ok("campaign worker calls www without following apex redirects; outbox cron stays daily");
+  const cron = readFileSync(join(root, "app/api/cron/email-campaigns/route.ts"), "utf8");
+  assert.match(cron, /drainAimoneycodeCampaignUntilBudget/);
+  ok("campaign worker drains on www, never via protected vercel.app, and outbox cron stays daily");
 }
 
 {

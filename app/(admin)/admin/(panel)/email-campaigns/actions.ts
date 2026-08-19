@@ -1,5 +1,6 @@
 "use server";
 
+import { waitUntil } from "@vercel/functions";
 import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/auth";
 import { getAdminSupabase } from "@/lib/admin-supabase";
@@ -18,7 +19,9 @@ import {
   previewCsv,
   previewStudents,
   setCampaignStatus,
+  createSupabaseCampaignStore,
 } from "@/lib/email-campaigns/store";
+import { drainAimoneycodeCampaignUntilBudget } from "@/lib/email-campaigns/processor";
 import { resendConfigured } from "@/lib/email/providers/resend";
 
 export type CampaignActionState = {
@@ -42,6 +45,28 @@ function kickCampaignProcessor(reason: string) {
     path: "/api/cron/email-campaigns",
     reason,
   });
+}
+
+function continueSendingInBackground(admin: Awaited<ReturnType<typeof getAdminSupabase>>) {
+  waitUntil(
+    drainAimoneycodeCampaignUntilBudget({
+      store: createSupabaseCampaignStore(admin),
+      sendEmail: (mail) =>
+        sendEmail({
+          to: mail.to,
+          subject: mail.subject,
+          html: mail.html,
+          headers: mail.headers,
+          idempotencyKey: mail.idempotencyKey,
+        }),
+      limit: 40,
+      budgetMs: 100_000,
+    }).then((result) => {
+      if (result.moreDue) kickCampaignProcessor("drain_more");
+    }).catch((err) => {
+      console.error("[email-campaigns] background drain failed", err);
+    }),
+  );
 }
 
 async function requireCampaign() {
@@ -85,7 +110,7 @@ export async function startSendingToAllStudents(
       },
     });
 
-    kickCampaignProcessor("admin_start_all_students");
+    continueSendingInBackground(admin);
     revalidatePath("/admin/email-campaigns");
 
     const added = inserted > 0 ? `Added ${inserted} student(s). ` : "Everyone eligible is already on the list. ";
@@ -172,7 +197,7 @@ export async function enrollCampaignRecipients(
     });
 
     if (campaign.status === "active") {
-      kickCampaignProcessor("admin_enroll_active");
+      continueSendingInBackground(admin);
     }
     revalidatePath("/admin/email-campaigns");
 
@@ -210,7 +235,7 @@ export async function setAimoneycodeCampaignStatus(
     });
 
     if (status === "active") {
-      kickCampaignProcessor("admin_status_active");
+      continueSendingInBackground(admin);
     }
 
     revalidatePath("/admin/email-campaigns");
