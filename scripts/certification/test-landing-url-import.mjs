@@ -181,6 +181,7 @@ ok("source URL normalization is stable");
     join(root, "app/api/landing-assets/[pageId]/[filename]/route.ts"),
     "utf8",
   );
+  const middleware = readFileSync(join(root, "lib/supabase/middleware.ts"), "utf8");
   assert.match(mig, /imported_landing_pages/);
   assert.match(mig, /row level security/);
   assert.match(mig, /status = 'published'/);
@@ -192,6 +193,7 @@ ok("source URL normalization is stable");
   assert.match(patchRoute, /rateLimitedResponse/);
   assert.match(assetRoute, /requireAdminApiAuth/);
   assert.match(assetRoute, /status !== "published"/);
+  assert.match(middleware, /"\/p"/);
   ok("URL importer migration, rate limits, public /p, and draft asset auth exist");
 }
 

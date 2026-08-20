@@ -10,6 +10,7 @@ const PUBLIC_PREFIXES = [
   "/course",
   "/learn",
   "/guides",
+  "/p", // Stage 11 published imported landing pages (page itself enforces published-only)
   "/checkout",
   "/enroll",
   "/enrollment",
