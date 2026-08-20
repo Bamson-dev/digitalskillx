@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import { SalesPageView } from "@/components/marketplace/sales-page-view";
 import type {
-  ImportReport,
   SalesPageRow,
   SalesPageSchema,
   SalesPageSection,
@@ -69,7 +68,6 @@ export function CourseSalesPagePanel({ course }: { course: CoursePreview }) {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "failed">("idle");
-  const [report, setReport] = useState<ImportReport | null>(null);
   const [tab, setTab] = useState<Tab>("overview");
   const [previewViewport, setPreviewViewport] = useState<"desktop" | "tablet" | "mobile">("desktop");
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -199,33 +197,6 @@ export function CourseSalesPagePanel({ course }: { course: CoursePreview }) {
     }
   }
 
-  async function importFile(kind: "json" | "zip", file: File) {
-    setBusy(true);
-    setReport(null);
-    try {
-      const form = new FormData();
-      form.append("file", file);
-      const res = await fetch(`/api/admin/sales-pages/${course.id}/import/${kind}`, {
-        method: "POST",
-        credentials: "include",
-        body: form,
-      });
-      const json = (await res.json()) as { report?: ImportReport; error?: string };
-      if (!res.ok && !json.report) throw new Error(json.error ?? "Import failed.");
-      if (json.report) setReport(json.report);
-      await refresh();
-      toast(
-        json.report?.status === "failed" ? "Import failed — see report." : "Import complete — review draft.",
-        json.report?.status === "failed" ? "error" : "success",
-      );
-      setTab("builder");
-    } catch (err) {
-      toast(err instanceof Error ? err.message : "Import failed.", "error");
-    } finally {
-      setBusy(false);
-    }
-  }
-
   async function uploadImage(file: File): Promise<string | null> {
     setBusy(true);
     try {
@@ -328,68 +299,20 @@ export function CourseSalesPagePanel({ course }: { course: CoursePreview }) {
                   <Label>Page title</Label>
                   <Input value={title} onChange={(e) => setTitle(e.target.value)} />
                 </div>
+                <div className="rounded-lg border border-app bg-neutral-50 p-3 text-sm text-muted">
+                  WordPress JSON/ZIP import is retired. Use{" "}
+                  <a className="font-semibold text-brand underline" href="/admin/landing-pages">
+                    Landing imports
+                  </a>{" "}
+                  to paste a public URL, preserve the page visuals, and map CTAs to this course&apos;s
+                  checkout. Existing published sales pages stay live. Use the Builder tab to edit the
+                  structured course sales page.
+                </div>
                 <div className="flex flex-wrap gap-2">
-                  <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-app px-3 py-2 text-sm">
-                    Import JSON
-                    <input
-                      type="file"
-                      accept="application/json,.json"
-                      className="hidden"
-                      disabled={busy}
-                      onChange={(e) => {
-                        const f = e.target.files?.[0];
-                        if (f) void importFile("json", f);
-                        e.target.value = "";
-                      }}
-                    />
-                  </label>
-                  <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-app px-3 py-2 text-sm">
-                    Import ZIP
-                    <input
-                      type="file"
-                      accept="application/zip,.zip"
-                      className="hidden"
-                      disabled={busy}
-                      onChange={(e) => {
-                        const f = e.target.files?.[0];
-                        if (f) void importFile("zip", f);
-                        e.target.value = "";
-                      }}
-                    />
-                  </label>
                   <Button type="button" variant="outline" disabled={busy} onClick={() => void saveDraft()}>
                     {saveState === "saving" ? "Saving…" : "Save Draft"}
                   </Button>
                 </div>
-                {report ? (
-                  <div className="rounded-lg border border-app bg-neutral-50 p-4 text-sm">
-                    <p className="font-semibold">Import report</p>
-                    <ul className="mt-2 space-y-1 text-muted">
-                      <li>
-                        Format: {report.sourceFormat} ({report.sourceType})
-                      </li>
-                      <li>
-                        Sections: {report.sectionsImported}/{report.sectionsDetected}
-                      </li>
-                      <li>
-                        Assets: {report.assetsImported} imported · {report.assetsFailed} failed ·{" "}
-                        {report.assetsDetected} detected
-                      </li>
-                      <li>
-                        CTAs: {report.ctaConverted}/{report.ctaDetected} converted to DigitalSkillX purchase
-                      </li>
-                      <li>Status: {report.status}</li>
-                    </ul>
-                    {report.unsupportedElements.length > 0 ? (
-                      <p className="mt-2 text-amber-800">
-                        Unsupported: {report.unsupportedElements.length}
-                      </p>
-                    ) : null}
-                    {report.missingAssets.length > 0 ? (
-                      <p className="mt-1 text-amber-800">Missing assets: {report.missingAssets.length}</p>
-                    ) : null}
-                  </div>
-                ) : null}
               </div>
             ) : null}
 

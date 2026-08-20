@@ -25,6 +25,7 @@
     "test:seo-growth": "node --import ./scripts/certification/register-ts-ext.mjs scripts/certification/test-seo-growth.mjs",
     "test:resend-email": "node scripts/certification/test-resend-email.mjs",
     "test:aimoneycode-campaign": "node --import ./scripts/certification/register-ts-ext.mjs scripts/certification/test-aimoneycode-campaign.mjs",
+    "test:landing-url-import": "node --import ./scripts/certification/register-ts-ext.mjs scripts/certification/test-landing-url-import.mjs",
     "test:security-scan": "node scripts/certification/test-security-scan-phase6.mjs",
     "test:e2e": "playwright test",
     "test:paystack": "node scripts/certification/run-paystack-cert.mjs",

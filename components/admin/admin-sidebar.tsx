@@ -27,6 +27,7 @@ import {
   Menu,
   X,
   Factory,
+  FileDown,
 } from "lucide-react";
 import { signOutAdmin } from "@/app/(admin)/admin/actions";
 import { cn } from "@/lib/utils";
@@ -62,6 +63,7 @@ const insightsNav: NavItem[] = [
 ];
 
 const advancedNav: NavItem[] = [
+  { href: "/admin/landing-pages", label: "Landing imports", icon: FileDown },
   { href: "/admin/content-factory", label: "Content Factory", icon: Factory },
   { href: "/admin/system-health", label: "System health", icon: Activity },
   { href: "/admin/broken-lessons", label: "Broken lessons", icon: AlertTriangle },

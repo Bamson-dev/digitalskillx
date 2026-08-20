@@ -113,7 +113,38 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       }));
     }
 
-    return [...staticPages, ...coursePages, ...categoryPages, ...learnPages, ...guidePages];
+    let landingPages: MetadataRoute.Sitemap = [];
+    const { data: landings, error: landingError } = await admin
+      .from("imported_landing_pages" as never)
+      .select("slug, updated_at, published_at, status")
+      .eq("status", "published")
+      .limit(500);
+    if (landingError) {
+      // Table may not exist until migration 0047 is applied.
+      console.error("[sitemap] imported_landing_pages query failed:", landingError.message);
+    } else {
+      landingPages = ((landings as Array<{ slug: string; updated_at?: string; published_at?: string }> | null) ?? []).map(
+        (g) => ({
+          url: `${base}/p/${g.slug}`,
+          lastModified: g.updated_at
+            ? new Date(g.updated_at)
+            : g.published_at
+              ? new Date(g.published_at)
+              : new Date(),
+          changeFrequency: "weekly" as const,
+          priority: 0.7,
+        }),
+      );
+    }
+
+    return [
+      ...staticPages,
+      ...coursePages,
+      ...categoryPages,
+      ...learnPages,
+      ...guidePages,
+      ...landingPages,
+    ];
   } catch (err) {
     console.error("[sitemap] failed to load courses:", err);
     return staticPages;
