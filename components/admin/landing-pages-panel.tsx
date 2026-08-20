@@ -48,12 +48,17 @@ export function LandingPagesPanel({ courses }: { courses: CourseOption[] }) {
       error?: string;
     };
     if (json.migrationRequired) setMigrationRequired(true);
-    if (json.pages) setPages(json.pages);
+    if (Array.isArray(json.pages)) setPages(json.pages);
     if (json.error && !json.migrationRequired) setError(json.error);
   }, []);
 
   useEffect(() => {
     void refresh();
+    // Retry once — first paint can race session cookies after admin login redirect.
+    const t = window.setTimeout(() => {
+      void refresh();
+    }, 750);
+    return () => window.clearTimeout(t);
   }, [refresh]);
 
   async function importPage() {

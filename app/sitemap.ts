@@ -1,5 +1,5 @@
 import type { MetadataRoute } from "next";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { createAdminClientAsync } from "@/lib/supabase/admin";
 import { siteUrl } from "@/lib/org";
 
 /** Fetch courses at request time — build containers may not reach Supabase. */
@@ -22,12 +22,8 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const base = siteUrl();
   const staticPages = staticEntries(base);
 
-  if (!process.env.SUPABASE_SERVICE_ROLE_KEY || !process.env.NEXT_PUBLIC_SUPABASE_URL) {
-    return staticPages;
-  }
-
   try {
-    const admin = createAdminClient();
+    const admin = await createAdminClientAsync();
     const { data: courses, error } = await admin
       .from("courses")
       .select("id, updated_at")
