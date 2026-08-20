@@ -14,7 +14,7 @@
     },
     {
       "path": "/api/cron/email-campaigns",
-      "schedule": "*/10 * * * *"
+      "schedule": "55 9 * * *"
     },
     {
       "path": "/api/cron/checkout-abandon",
