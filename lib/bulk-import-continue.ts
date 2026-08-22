@@ -25,7 +25,11 @@ export function resolveCronContinuationOrigin(passedOrigin: string): string {
 /** Fire-and-forget self-invoke so Hobby (daily cron only) still drains jobs. */
 export function scheduleBulkWorkerContinuation(params: {
   origin: string;
-  path: "/api/cron/bulk-import" | "/api/cron/email-outbox" | "/api/cron/email-campaigns";
+  path:
+    | "/api/cron/bulk-import"
+    | "/api/cron/email-outbox"
+    | "/api/cron/email-campaigns"
+    | "/api/cron/webinar-follow-up";
   depth?: number;
   reason?: string;
   jobId?: string;

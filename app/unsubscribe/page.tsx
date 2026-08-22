@@ -2,19 +2,40 @@ import type { Metadata } from "next";
 import { MarketplaceNav, MarketplaceFooter } from "@/components/marketplace/marketplace-chrome";
 import { verifyUnsubscribeToken } from "@/lib/email-campaigns/unsubscribe";
 import { AIMONEYCODE_CAMPAIGN_SLUG } from "@/lib/email-campaigns/constants";
+import { createAdminClientAsync } from "@/lib/supabase/admin";
 import { UnsubscribeForm } from "@/app/unsubscribe/unsubscribe-form";
 
 export const metadata: Metadata = { title: "Unsubscribe" };
 
-export default function UnsubscribePage({
+export default async function UnsubscribePage({
   searchParams,
 }: {
   searchParams: { token?: string };
 }) {
   const token = String(searchParams.token ?? "").trim();
   const parsed = token ? verifyUnsubscribeToken(token) : null;
-  const valid =
-    Boolean(parsed) && parsed?.campaignSlug === AIMONEYCODE_CAMPAIGN_SLUG;
+
+  let valid = false;
+  let label = "marketing email sequence";
+  if (parsed?.campaignSlug === AIMONEYCODE_CAMPAIGN_SLUG) {
+    valid = true;
+    label = "AI Money Code email sequence";
+  } else if (parsed?.campaignSlug) {
+    try {
+      const admin = await createAdminClientAsync();
+      const { data } = await admin
+        .from("webinar_followup_campaigns" as never)
+        .select("name")
+        .eq("slug", parsed.campaignSlug)
+        .maybeSingle();
+      if (data) {
+        valid = true;
+        label = `${String((data as { name: string }).name)} follow-up emails`;
+      }
+    } catch {
+      valid = false;
+    }
+  }
 
   return (
     <div className="flex min-h-screen flex-col bg-white text-neutral-900">
@@ -29,8 +50,8 @@ export default function UnsubscribePage({
         ) : (
           <>
             <p className="mt-4 leading-relaxed text-neutral-600">
-              Confirm below to stop the AI Money Code email sequence. You will not be added to a
-              public list, and this does not delete your learning account.
+              Confirm below to stop the {label}. You will not be added to a public list. This does
+              not delete any DigitalSkillX learning account you may have.
             </p>
             <UnsubscribeForm token={token} />
           </>

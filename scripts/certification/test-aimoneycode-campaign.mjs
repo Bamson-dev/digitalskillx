@@ -559,8 +559,11 @@ const campaignFixture = {
   assert.match(cont, /\.vercel\.app/);
   assert.doesNotMatch(cont, /VERCEL_URL/);
   assert.match(actions, /https:\/\/www\.digitalskillx\.com/);
-  assert.match(vercel, /"\*\/10 \* \* \* \*"/);
+  // Hobby plan allows only once-daily crons; campaign drain continues via waitUntil chain.
+  assert.match(vercel, /"path": "\/api\/cron\/email-campaigns"/);
+  assert.match(vercel, /"55 9 \* \* \*"/);
   assert.match(vercel, /"45 9 \* \* \*"/);
+  assert.doesNotMatch(vercel, /"\*\/10 \* \* \* \*"/);
   const cron = readFileSync(join(root, "app/api/cron/email-campaigns/route.ts"), "utf8");
   const storeSrc = readFileSync(join(root, "lib/email-campaigns/store.ts"), "utf8");
   assert.match(cron, /runLiveAimoneycodeDrain/);

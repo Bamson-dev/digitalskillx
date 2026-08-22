@@ -28,6 +28,7 @@ import {
   X,
   Factory,
   FileDown,
+  Radio,
 } from "lucide-react";
 import { signOutAdmin } from "@/app/(admin)/admin/actions";
 import { cn } from "@/lib/utils";
@@ -50,6 +51,7 @@ const teachingNav: NavItem[] = [
   { href: "/admin/grading", label: "Grading", icon: CheckSquare },
   { href: "/admin/announcements", label: "Announcements", icon: Megaphone },
   { href: "/admin/email-campaigns", label: "Email campaigns", icon: Mail },
+  { href: "/admin/webinar-follow-up", label: "Webinar Follow-Up", icon: Radio },
 ];
 
 const insightsNav: NavItem[] = [
