@@ -154,7 +154,9 @@ new@example.com,New
   assert.match(rendered.html, /Unsubscribe/i);
   assert.match(rendered.html, /aimoneycode\.com\.ng\/reg/);
   assert.match(rendered.html, /DigitalSkillX/);
-  assert.match(rendered.html, /Continue From The Training/);
+  assert.match(rendered.html, /Enroll Now/);
+  assert.match(rendered.html, /₦49,999/);
+  assert.match(rendered.text, /782 people paid to use it/);
   assert.doesNotMatch(rendered.html, /PDIGITAL MARKETSTORE LTD/);
   ok("render includes greeting, unsubscribe, and webinar CTA for email 1");
 
@@ -165,7 +167,7 @@ new@example.com,New
     unsubscribeUrl: "https://example.com/unsubscribe?token=x",
   });
   assert.doesNotMatch(noFakeName.html, />Platform,</);
-  assert.match(noFakeName.text, /^You watched a webinar/);
+  assert.match(noFakeName.text, /^You stayed through the close/);
   assert.equal(webinarPersonalFirstName("Platform"), null);
   assert.equal(webinarPersonalFirstName("Ada Okafor"), "Ada");
   ok("org/role labels are not used as greetings; copy starts as written");

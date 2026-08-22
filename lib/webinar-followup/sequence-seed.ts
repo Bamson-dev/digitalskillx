@@ -50,25 +50,27 @@ export function buildSoftwareWithAiSequence(): SequenceEmailContent[] {
         "You stayed until the closing — here is what happens now",
         "One honest note after the webinar",
       ],
-      "No cold restart and no new pitch. Just the part of the conversation that usually never happens.",
-      `You watched a webinar about building software with AI, and you stayed through the closing — the part where the ten modules, the eight bonuses and the price were all on screen. Most people who register for something like that never even show up, so that already tells me something about you.
+      "You already saw the close. Here is the exact access you left on the screen.",
+      `You stayed through the close of the webinar. That means you already saw the offer. This email is not a new pitch. It is the same decision, written down so it does not evaporate into WhatsApp.
 
-Then it ended. Work came back. WhatsApp came back. The decision you were quietly holding moved to the back of your mind, which is where most good decisions go to die.
+**How To Build Software With AI And Get Paid For It** is the training that takes you from "I have an idea and I am not a developer" to software you can hand a client or put in front of paying users.
 
-So let me be clear about what this email is. It is **not** a fresh pitch to a stranger. We already had the conversation. You know what **How To Build Software With AI And Get Paid For It** is: ten training modules and eight bonuses that walk from "I have an idea and no technical background" to software that works, looks professional, and can actually be sold. You know the numbers too — enrollment is at ${WEBINAR_FOLLOWUP_OFFER_PRICE} while the promotional pricing runs, the regular price is ${WEBINAR_FOLLOWUP_REGULAR_PRICE}, and the full stack is valued at ${WEBINAR_FOLLOWUP_OFFER_VALUE}.
+Here is exactly what you get:
 
-What I want to do over the coming weeks is the part that almost never happens after a webinar: the follow-through.
+- 10 training modules, from setup to putting an app on the internet and into the app stores
+- 8 bonuses, including templates, an idea vault, the Get-Paid Guide, and private support
+- Lifetime access plus updates
 
-I am going to show you the proof behind the claims — a solo-built tool and exactly what its first ninety days looked like in real usage, client projects and what they paid, and published case studies from other companies that you can go and verify yourself. I am going to walk through what businesses actually pay for, how the money works, and the objections you probably did not want to type into the webinar chat.
+Enrollment is **${WEBINAR_FOLLOWUP_OFFER_PRICE}** while promotional pricing is running. Regular price is **${WEBINAR_FOLLOWUP_REGULAR_PRICE}**. Stated stack value is **${WEBINAR_FOLLOWUP_OFFER_VALUE}** — ${WEBINAR_FOLLOWUP_OFFER_PRICE} is what you pay today, not a fake crossed-out stunt.
 
-What I am not going to do is invent a countdown. There is no fake "this page disappears at midnight" in these emails, because you would see through it and you would be right to.
+What that access is for, in plain language:
 
-The only urgency here is the boring kind. Every month you stay unable to build is a month where every idea you have still needs someone else's hands, someone else's quote, and someone else's timeline.
+You can build for clients — booking systems, ecommerce, internal tools — and charge for delivery. Shade earned ₦650,000 on one ecommerce site. Chinedu earned ₦480,000 on one website, then the client came back. You can also build your own product. LeadThur was built solo with AI: 782 people paid to use it, 9,460 paid searches, ₦15,120,000 **estimated revenue** in the first 3 months. Those are not your guaranteed numbers. They are proof the skill is already being used to get paid.
 
-Read these. Argue with them. Then decide properly, with the whole picture in front of you.
+I am not inventing a midnight deadline. I am telling you the door you already walked up to is still here.
 
-If you want to look at the training registration page again while this is fresh: {{cta_url}}`,
-      "Continue From The Training",
+If you are still in, tap below and enroll while ${WEBINAR_FOLLOWUP_OFFER_PRICE} is the price on the page.`,
+      "Enroll Now — ₦49,999",
       "Warm continuation of an existing conversation, not a cold restart",
       "Phase 1 · Reopen",
     ),
@@ -96,10 +98,8 @@ You can see how seriously the industry takes this shift by watching where the mo
 
 People who learn to direct it stop waiting. Their ideas no longer need permission. When a client asks "can you add this?", the answer becomes "give me two days" instead of "let me check with my developer."
 
-That independence is the actual product here — not a certificate, not a folder of videos.
-
-The full module-by-module path is still laid out from the training page: {{cta_url}}`,
-      "See How It Works",
+That independence is the actual product here — not a certificate, not a folder of videos. Enrollment is still ${WEBINAR_FOLLOWUP_OFFER_PRICE}. Open the training page and take the seat if you are done waiting on developers.`,
+      "Stop Waiting On Developers",
       "Pain of dependency plus credible market shift as permission to act",
       "Phase 1 · Reopen",
     ),
