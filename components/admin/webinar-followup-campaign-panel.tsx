@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useFormState } from "react-dom";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -13,6 +13,7 @@ import {
   type WfuActionState,
 } from "@/app/(admin)/admin/(panel)/webinar-follow-up/actions";
 import { maskEmail } from "@/lib/webinar-followup/constants";
+import { renderWebinarFollowupEmail } from "@/lib/webinar-followup/render";
 
 type Counts = {
   total: number;
@@ -77,7 +78,10 @@ export function WebinarFollowupCampaignPanel(props: {
   const [previewStep, setPreviewStep] = useState<number | null>(null);
   const [showSequence, setShowSequence] = useState(false);
   const [showContacts, setShowContacts] = useState(false);
-  const [showSends, setShowSends] = useState(false);
+  const [showSends, setShowSends] = useState(props.status === "active");
+  const [drainMessage, setDrainMessage] = useState<string | null>(null);
+  const [drainError, setDrainError] = useState<string | null>(null);
+  const draining = useRef(false);
 
   const [csvFile, setCsvFile] = useState<File | null>(null);
   const [emailColumn, setEmailColumn] = useState("");
@@ -92,6 +96,26 @@ export function WebinarFollowupCampaignPanel(props: {
     () => props.steps.find((s) => s.stepNumber === previewStep) ?? null,
     [previewStep, props.steps],
   );
+  const previewHtml = useMemo(() => {
+    if (!preview) return "";
+    return renderWebinarFollowupEmail({
+      email: {
+        stepNumber: preview.stepNumber,
+        internalTitle: preview.internalTitle,
+        subject: preview.subject,
+        altSubjects: preview.altSubjects,
+        previewText: preview.previewText,
+        bodyText: preview.bodyText,
+        ctaLabel: preview.ctaLabel,
+        ctaUrl: preview.ctaUrl || props.offerUrl,
+        delayHours: preview.delayHours,
+        angle: preview.angle,
+        category: preview.category,
+      },
+      firstName: null,
+      campaignSlug: props.slug,
+    }).html;
+  }, [preview, props.offerUrl, props.slug]);
 
   const filteredSteps = useMemo(() => {
     const q = stepFilter.trim().toLowerCase();
@@ -104,6 +128,63 @@ export function WebinarFollowupCampaignPanel(props: {
         s.internalTitle.toLowerCase().includes(q),
     );
   }, [props.steps, stepFilter]);
+
+  async function drainDueEmails() {
+    if (draining.current || props.status !== "active" || !props.resendReady) return;
+    draining.current = true;
+    setDrainError(null);
+    setDrainMessage("Sending due emails now. Keep this page open until Total sent starts rising.");
+    let sessionSent = 0;
+    try {
+      for (let round = 1; round <= 40; round++) {
+        const res = await fetch(`/api/admin/webinar-follow-up/${props.campaignId}/drain`, {
+          method: "POST",
+          credentials: "include",
+          cache: "no-store",
+        });
+        const json = (await res.json().catch(() => ({}))) as {
+          error?: string;
+          sent?: number;
+          failed?: number;
+          moreDue?: boolean;
+          dueNow?: number;
+          totalSent?: number;
+          examined?: number;
+          reason?: string;
+        };
+        if (!res.ok) {
+          setDrainError(json.error ?? `Send round ${round} failed (${res.status}).`);
+          break;
+        }
+        sessionSent += json.sent ?? 0;
+        setDrainMessage(
+          json.moreDue
+            ? `Sent ${sessionSent} so far this session. ${json.dueNow ?? 0} still waiting. Total sent: ${json.totalSent ?? "—"}. Keep this page open.`
+            : `Caught up. Sent ${sessionSent} this session. Total sent: ${json.totalSent ?? sessionSent}.`,
+        );
+        router.refresh();
+        if (!json.moreDue) break;
+        if ((json.sent ?? 0) === 0 && (json.failed ?? 0) === 0) {
+          setDrainError(
+            `A round examined ${json.examined ?? 0} contacts but sent 0. ${json.reason ?? ""}`.trim(),
+          );
+          break;
+        }
+      }
+    } catch (err) {
+      setDrainError(err instanceof Error ? err.message : "Could not send due emails.");
+    } finally {
+      draining.current = false;
+      router.refresh();
+    }
+  }
+
+  useEffect(() => {
+    if (props.status !== "active" || props.counts.dueNow <= 0 || !props.resendReady) return;
+    void drainDueEmails();
+    // Kick once when the page loads with due contacts.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [props.status, props.campaignId]);
 
   async function importNewContacts() {
     if (!csvFile) return;
@@ -197,6 +278,26 @@ export function WebinarFollowupCampaignPanel(props: {
             ? new Date(props.counts.nextScheduledAt).toLocaleString()
             : "—"}
         </p>
+        {props.status === "active" ? (
+          <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3 text-sm space-y-2">
+            <p>
+              <strong>How to know emails are sending:</strong> <em>Total sent</em> goes up,
+              <em> Ready for next email</em> goes down, and Recent send activity shows{" "}
+              <code>sent</code>. Test emails do not count.
+            </p>
+            {props.counts.dueNow > 0 && props.counts.sent === 0 ? (
+              <p className="text-amber-800">
+                {props.counts.dueNow} contacts are waiting. Sending has not finished yet. Keep this
+                page open.
+              </p>
+            ) : null}
+            {drainMessage ? <p className="text-emerald-800">{drainMessage}</p> : null}
+            {drainError ? <p className="text-red-700">{drainError}</p> : null}
+            <Button type="button" onClick={() => void drainDueEmails()} disabled={!props.resendReady}>
+              Send due emails now
+            </Button>
+          </div>
+        ) : null}
       </section>
 
       {/* Campaign controls */}
@@ -467,7 +568,11 @@ export function WebinarFollowupCampaignPanel(props: {
                   Alts: {preview.altSubjects[0]} · {preview.altSubjects[1]}
                 </div>
                 <div className="text-muted">CTA: {preview.ctaLabel}</div>
-                <div className="whitespace-pre-wrap border-t pt-3">{preview.bodyText}</div>
+                <iframe
+                  title={`Preview email ${preview.stepNumber}`}
+                  className="mt-3 h-[520px] w-full rounded-lg border bg-white"
+                  srcDoc={previewHtml}
+                />
               </div>
             ) : null}
           </>

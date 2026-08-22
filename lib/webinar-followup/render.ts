@@ -28,9 +28,22 @@ function inlineMarkdown(text: string): string {
   return escapeHtml(text).replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
 }
 
-function bodyToHtml(body: string, displayCta: string): string {
-  const withCta = body.replace(/\{\{cta_url\}\}/gi, displayCta);
-  const paragraphs = withCta.split(/\n{2,}/);
+function linkifyDisplayUrls(html: string, href: string, display: string): string {
+  const safeHref = escapeHtml(href);
+  const safeDisplay = escapeHtml(display);
+  return html.replace(
+    /(https:\/\/aimoneycode\.com\.ng\/(?:reg|offer))/gi,
+    `<a href="${safeHref}" style="color:#b91c1c;font-weight:700;text-decoration:underline;">${safeDisplay}</a>`,
+  );
+}
+
+function prepareBody(body: string): string {
+  return body.replace(/\s*:\s*\{\{cta_url\}\}\s*/gi, ".").replace(/\{\{cta_url\}\}/gi, "").trim();
+}
+
+function bodyToHtml(body: string, trackedCta: string, displayCta: string): string {
+  const prepared = prepareBody(body);
+  const paragraphs = prepared.split(/\n{2,}/);
   return paragraphs
     .map((block) => {
       const trimmed = block.trim();
@@ -40,12 +53,12 @@ function bodyToHtml(body: string, displayCta: string): string {
           .split("\n")
           .map((l) => l.replace(/^[-*]\s+/, "").trim())
           .filter(Boolean);
-        return `<ul style="margin:0 0 16px;padding-left:20px;">${items
-          .map((item) => `<li style="margin:0 0 8px;line-height:1.6;">${inlineMarkdown(item)}</li>`)
+        return `<ul style="margin:0 0 18px;padding-left:22px;">${items
+          .map((item) => `<li style="margin:0 0 8px;line-height:1.65;font-size:16px;color:#0f172a;">${inlineMarkdown(item)}</li>`)
           .join("")}</ul>`;
       }
       const lines = trimmed.split("\n").map((l) => inlineMarkdown(l)).join("<br/>");
-      return `<p style="margin:0 0 16px;line-height:1.7;font-size:16px;color:#111827;">${lines}</p>`;
+      return `<p style="margin:0 0 16px;line-height:1.75;font-size:17px;color:#0f172a;">${linkifyDisplayUrls(lines, trackedCta, displayCta)}</p>`;
     })
     .join("");
 }
@@ -65,42 +78,60 @@ export function renderWebinarFollowupEmail(params: {
     body = `${open}\n\n${body}`;
   }
 
-  const bodyHtml = bodyToHtml(body, ctaBase);
+  const bodyHtml = bodyToHtml(body, tracked, ctaBase);
   const unsub = params.unsubscribeUrl
-    ? `<p style="margin:24px 0 0;font-size:12px;line-height:1.5;color:#6b7280;">
-        Prefer not to get these? <a href="${escapeHtml(params.unsubscribeUrl)}" style="color:#6b7280;text-decoration:underline;">Unsubscribe</a>
+    ? `<p style="margin:14px 8px 0;font-size:12px;line-height:1.6;color:#94a3b8;text-align:center;font-family:Arial,Helvetica,sans-serif;">
+        Prefer not to get these?
+        <a href="${escapeHtml(params.unsubscribeUrl)}" style="color:#64748b;text-decoration:underline;">Unsubscribe</a>
       </p>`
     : "";
 
   const html = `<!DOCTYPE html>
-<html><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
-${params.email.previewText ? `<span style="display:none;max-height:0;overflow:hidden;">${escapeHtml(params.email.previewText)}</span>` : ""}
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>${escapeHtml(params.email.subject)}</title>
 </head>
-<body style="margin:0;padding:0;background:#f8fafc;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
-  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f8fafc;padding:24px 12px;">
+<body style="margin:0;padding:0;background:#f1f5f9;font-family:Georgia,'Times New Roman',serif;color:#0f172a;">
+  ${params.email.previewText ? `<div style="display:none;max-height:0;overflow:hidden;opacity:0;">${escapeHtml(params.email.previewText)}</div>` : ""}
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f1f5f9;padding:28px 12px;">
     <tr><td align="center">
-      <table role="presentation" width="100%" style="max-width:600px;background:#ffffff;border:1px solid #e5e7eb;border-radius:8px;padding:28px 24px;">
-        <tr><td>
-          <p style="margin:0 0 20px;font-size:13px;letter-spacing:0.04em;text-transform:uppercase;color:#9ca3af;">${escapeHtml(ORG.name)}</p>
-          ${bodyHtml}
-          <p style="margin:8px 0 24px;">
-            <a href="${escapeHtml(tracked)}" style="display:inline-block;background:#111827;color:#ffffff;text-decoration:none;font-weight:700;padding:12px 20px;border-radius:6px;">
-              ${escapeHtml(params.email.ctaLabel || "See The Full Offer")}
-            </a>
-          </p>
-          <p style="margin:0;font-size:13px;color:#6b7280;">
-            Or open: <a href="${escapeHtml(tracked)}" style="color:#111827;">${escapeHtml(ctaBase)}</a>
-          </p>
-          ${unsub}
-        </td></tr>
+      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:600px;">
+        <tr>
+          <td style="padding:0 8px 16px;font-family:Arial,Helvetica,sans-serif;font-size:13px;letter-spacing:0.08em;text-transform:uppercase;color:#64748b;">
+            ${escapeHtml(ORG.platformName)}
+          </td>
+        </tr>
+        <tr>
+          <td style="background:#ffffff;border:1px solid #e2e8f0;border-radius:12px;padding:36px 32px;">
+            ${bodyHtml}
+            <table role="presentation" cellspacing="0" cellpadding="0" style="margin:8px 0 8px;">
+              <tr>
+                <td style="border-radius:8px;background:#dc2626;">
+                  <a href="${escapeHtml(tracked)}" style="display:inline-block;padding:14px 26px;font-size:15px;font-weight:700;color:#ffffff;text-decoration:none;font-family:Arial,Helvetica,sans-serif;">
+                    ${escapeHtml(params.email.ctaLabel || "See The Full Offer")}
+                  </a>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:16px 8px 0;font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:1.6;color:#94a3b8;text-align:center;">
+            ${escapeHtml(ORG.platformName)} · ${escapeHtml(ORG.location)}
+            ${unsub}
+          </td>
+        </tr>
       </table>
     </td></tr>
   </table>
-</body></html>`;
+</body>
+</html>`;
 
-  const text = `${body.replace(/\{\{cta_url\}\}/gi, ctaBase)}
+  const text = `${prepareBody(body)}
 
-${params.email.ctaLabel}: ${tracked}
+${params.email.ctaLabel}: ${ctaBase}
 ${params.unsubscribeUrl ? `\nUnsubscribe: ${params.unsubscribeUrl}` : ""}`;
 
   return { subject: params.email.subject, html, text };

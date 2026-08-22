@@ -72,6 +72,7 @@ export default async function WebinarFollowUpCampaignPage({
           delayHours: s.delayHours,
           status: s.status,
           ctaLabel: s.ctaLabel,
+          ctaUrl: s.ctaUrl,
           bodyText: s.bodyText,
           angle: s.angle,
           category: s.category,

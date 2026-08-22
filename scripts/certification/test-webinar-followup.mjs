@@ -153,10 +153,9 @@ new@example.com,New
   assert.match(rendered.html, /Ada,/);
   assert.match(rendered.html, /Unsubscribe/i);
   assert.match(rendered.html, /aimoneycode\.com\.ng\/reg/);
-  assert.match(
-    rendered.html,
-    /while this is fresh: https:\/\/aimoneycode\.com\.ng\/reg</,
-  );
+  assert.match(rendered.html, /DigitalSkillX/);
+  assert.match(rendered.html, /Continue From The Training/);
+  assert.doesNotMatch(rendered.html, /PDIGITAL MARKETSTORE LTD/);
   ok("render includes greeting, unsubscribe, and webinar CTA for email 1");
 
   const noFakeName = renderWebinarFollowupEmail({
@@ -605,6 +604,12 @@ function makeSteps(campaignId, n) {
   assert.match(panel, /\[TEST\]/);
   assert.match(importRoute, /importNewContactsOneShot/);
   assert.match(importRoute, /scheduleBulkWorkerContinuation/);
+  const drainRoute = readFileSync(
+    join(root, "app/api/admin/webinar-follow-up/[campaignId]/drain/route.ts"),
+    "utf8",
+  );
+  assert.match(drainRoute, /runLiveWebinarFollowupDrain/);
+  assert.match(panel, /Send due emails now/);
   ok("admin flow is one-click import + confirm-modal activate; no env activation lock");
 }
 
