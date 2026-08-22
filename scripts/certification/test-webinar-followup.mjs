@@ -167,7 +167,7 @@ new@example.com,New
     unsubscribeUrl: "https://example.com/unsubscribe?token=x",
   });
   assert.doesNotMatch(noFakeName.html, />Platform,</);
-  assert.match(noFakeName.text, /^You stayed through the close/);
+  assert.match(noFakeName.text, /^You stayed through the closing/);
   assert.equal(webinarPersonalFirstName("Platform"), null);
   assert.equal(webinarPersonalFirstName("Ada Okafor"), "Ada");
   ok("org/role labels are not used as greetings; copy starts as written");

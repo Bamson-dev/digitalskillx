@@ -14,7 +14,7 @@ export const WEBINAR_FOLLOWUP_REGULAR_PRICE = "₦100,000";
 export const WEBINAR_FOLLOWUP_OFFER_VALUE = "₦805,000";
 /** Exact evergreen sequence length for the first campaign. */
 export const WEBINAR_FOLLOWUP_REQUIRED_STEPS = 40;
-export const WEBINAR_FOLLOWUP_SEQUENCE_SOURCE_VERSION = "build-software-with-ai.v40.4";
+export const WEBINAR_FOLLOWUP_SEQUENCE_SOURCE_VERSION = "build-software-with-ai.v40.5";
 
 /** Steps 1–10 default to webinar/replay CTA; 11–40 default to offer. */
 export function defaultCtaUrlForStep(stepNumber: number): string {
