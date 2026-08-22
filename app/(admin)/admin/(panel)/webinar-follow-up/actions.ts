@@ -141,7 +141,7 @@ export async function testSendWebinarFollowupEmail(
     if (!isAuthorizedTestRecipient(to, adminProfile.email ?? "")) {
       return {
         error:
-          "Test sends are restricted to your admin email, the same email domain, or WEBINAR_FOLLOWUP_TEST_EMAILS.",
+          "Test sends are restricted to your admin email, the same email domain, any Gmail address, or WEBINAR_FOLLOWUP_TEST_EMAILS.",
       };
     }
 

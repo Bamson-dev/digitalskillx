@@ -76,7 +76,9 @@ ok("idempotency keys are unique per contact+step");
 assert.equal(isAuthorizedTestRecipient("admin@digitalskillx.com", "admin@digitalskillx.com"), true);
 assert.equal(isAuthorizedTestRecipient("other@customer.com", "admin@digitalskillx.com"), false);
 assert.equal(isAuthorizedTestRecipient("ops@digitalskillx.com", "admin@digitalskillx.com"), true);
-ok("test send rejects arbitrary customer addresses");
+assert.equal(isAuthorizedTestRecipient("someone@gmail.com", "admin@digitalskillx.com"), true);
+assert.equal(isAuthorizedTestRecipient("Someone.Name+tag@Gmail.COM", "admin@digitalskillx.com"), true);
+ok("test send allows Gmail and rejects arbitrary customer addresses");
 
 // ── CSV dry-run logic
 {

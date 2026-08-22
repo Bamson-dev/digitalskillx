@@ -394,7 +394,8 @@ export function WebinarFollowupCampaignPanel(props: {
       <section className="rounded-xl border border-border bg-white p-4 space-y-3">
         <h2 className="text-lg font-semibold">Send test email</h2>
         <p className="text-sm text-muted">
-          Sends <code>[TEST]</code> only to allowed addresses. Does not enroll or advance anyone.
+          Sends <code>[TEST]</code> to your admin email, any Gmail address, or another allowlisted
+          address. Does not enroll or advance anyone.
         </p>
         <form action={testAction} className="flex flex-wrap items-end gap-3">
           <input type="hidden" name="campaign_id" value={props.campaignId} />

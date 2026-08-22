@@ -92,7 +92,9 @@ export function campaignTrackingUrl(baseUrl: string, campaignSlug: string, stepN
   }
 }
 
-/** Test sends may only go to the signed-in admin or an allowlisted address. */
+const TEST_GMAIL_DOMAINS = new Set(["gmail.com", "googlemail.com"]);
+
+/** Test sends: admin, same org domain, allowlist, or any Gmail address. */
 export function isAuthorizedTestRecipient(to: string, adminEmail: string): boolean {
   const target = normalizeEmail(to);
   const admin = normalizeEmail(adminEmail);
@@ -102,9 +104,9 @@ export function isAuthorizedTestRecipient(to: string, adminEmail: string): boole
     .map((e) => normalizeEmail(e))
     .filter(Boolean);
   if (allow.includes(target)) return true;
-  // Same org domain as the admin account, never arbitrary customer domains.
   const adminDomain = admin.split("@")[1];
   const targetDomain = target.split("@")[1];
   if (adminDomain && targetDomain && adminDomain === targetDomain) return true;
+  if (targetDomain && TEST_GMAIL_DOMAINS.has(targetDomain)) return true;
   return false;
 }
