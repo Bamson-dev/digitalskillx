@@ -24,6 +24,7 @@ const {
   nextSendAtAfter,
   isAuthorizedTestRecipient,
   maskEmail,
+  webinarPersonalFirstName,
   WEBINAR_FOLLOWUP_OFFER_URL,
   WEBINAR_FOLLOWUP_DEFAULT_SLUG,
 } = await import(ts("lib/webinar-followup/constants.ts"));
@@ -152,7 +153,23 @@ new@example.com,New
   assert.match(rendered.html, /Ada,/);
   assert.match(rendered.html, /Unsubscribe/i);
   assert.match(rendered.html, /aimoneycode\.com\.ng\/reg/);
+  assert.match(
+    rendered.html,
+    /while this is fresh: https:\/\/aimoneycode\.com\.ng\/reg</,
+  );
   ok("render includes greeting, unsubscribe, and webinar CTA for email 1");
+
+  const noFakeName = renderWebinarFollowupEmail({
+    email: buildSoftwareWithAiSequence()[0],
+    firstName: "Platform",
+    campaignSlug: WEBINAR_FOLLOWUP_DEFAULT_SLUG,
+    unsubscribeUrl: "https://example.com/unsubscribe?token=x",
+  });
+  assert.doesNotMatch(noFakeName.html, />Platform,</);
+  assert.match(noFakeName.text, /^You watched a webinar/);
+  assert.equal(webinarPersonalFirstName("Platform"), null);
+  assert.equal(webinarPersonalFirstName("Ada Okafor"), "Ada");
+  ok("org/role labels are not used as greetings; copy starts as written");
 
   const renderedOffer = renderWebinarFollowupEmail({
     email: buildSoftwareWithAiSequence()[10],

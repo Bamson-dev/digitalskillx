@@ -1,6 +1,6 @@
 import { escapeHtml } from "../email/layout";
 import { ORG } from "../org";
-import { campaignTrackingUrl, WEBINAR_FOLLOWUP_OFFER_URL } from "./constants";
+import { campaignTrackingUrl, webinarPersonalFirstName, WEBINAR_FOLLOWUP_OFFER_URL } from "./constants";
 
 export type SequenceEmailContent = {
   stepNumber: number;
@@ -21,17 +21,15 @@ export type SequenceEmailContent = {
 };
 
 function greeting(firstName: string | null | undefined): string {
-  const name = (firstName ?? "").trim().split(/\s+/)[0] ?? "";
-  if (!name || /^(null|undefined|n\/a|na|-)$/i.test(name)) return "";
-  return name;
+  return webinarPersonalFirstName(firstName) ?? "";
 }
 
 function inlineMarkdown(text: string): string {
   return escapeHtml(text).replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
 }
 
-function bodyToHtml(body: string, trackedCta: string): string {
-  const withCta = body.replace(/\{\{cta_url\}\}/gi, trackedCta);
+function bodyToHtml(body: string, displayCta: string): string {
+  const withCta = body.replace(/\{\{cta_url\}\}/gi, displayCta);
   const paragraphs = withCta.split(/\n{2,}/);
   return paragraphs
     .map((block) => {
@@ -67,7 +65,7 @@ export function renderWebinarFollowupEmail(params: {
     body = `${open}\n\n${body}`;
   }
 
-  const bodyHtml = bodyToHtml(body, tracked);
+  const bodyHtml = bodyToHtml(body, ctaBase);
   const unsub = params.unsubscribeUrl
     ? `<p style="margin:24px 0 0;font-size:12px;line-height:1.5;color:#6b7280;">
         Prefer not to get these? <a href="${escapeHtml(params.unsubscribeUrl)}" style="color:#6b7280;text-decoration:underline;">Unsubscribe</a>
@@ -100,7 +98,7 @@ ${params.email.previewText ? `<span style="display:none;max-height:0;overflow:hi
   </table>
 </body></html>`;
 
-  const text = `${body.replace(/\{\{cta_url\}\}/gi, tracked)}
+  const text = `${body.replace(/\{\{cta_url\}\}/gi, ctaBase)}
 
 ${params.email.ctaLabel}: ${tracked}
 ${params.unsubscribeUrl ? `\nUnsubscribe: ${params.unsubscribeUrl}` : ""}`;

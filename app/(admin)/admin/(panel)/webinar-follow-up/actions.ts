@@ -159,7 +159,7 @@ export async function testSendWebinarFollowupEmail(
     const unsub = unsubscribeUrl(to, slug);
     const rendered = renderWebinarFollowupEmail({
       email,
-      firstName: adminProfile.full_name,
+      firstName: null,
       campaignSlug: slug,
       unsubscribeUrl: unsub,
     });

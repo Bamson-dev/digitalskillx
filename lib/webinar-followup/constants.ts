@@ -77,6 +77,18 @@ export function maskEmail(email: string): string {
   return `${local.slice(0, 2)}***@${domain}`;
 }
 
+const NOT_A_PERSONAL_NAME =
+  /^(null|undefined|n\/a|na|-|platform|admin|administrator|user|test|staff|support|info|hello|team|official|noreply|no-reply|digitalskillx|pdigital|marketstore|ltd|limited|company)$/i;
+
+/** First token only when it looks like a real given name — never org/role labels. */
+export function webinarPersonalFirstName(firstName: string | null | undefined): string | null {
+  const name = (firstName ?? "").trim().split(/\s+/)[0] ?? "";
+  if (!name || NOT_A_PERSONAL_NAME.test(name)) return null;
+  if (!/^[\p{L}][\p{L}.'’-]*$/u.test(name)) return null;
+  if (name.length > 40) return null;
+  return name;
+}
+
 export function campaignTrackingUrl(baseUrl: string, campaignSlug: string, stepNumber: number): string {
   try {
     const url = new URL(baseUrl);

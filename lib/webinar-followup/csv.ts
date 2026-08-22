@@ -1,4 +1,4 @@
-import { isValidEmail, normalizeEmail, MAX_CSV_ROWS } from "./constants";
+import { isValidEmail, normalizeEmail, MAX_CSV_ROWS, webinarPersonalFirstName } from "./constants";
 
 export type CsvColumnGuess = {
   emailColumn: string | null;
@@ -120,12 +120,7 @@ export function guessCsvColumns(headers: string[]): CsvColumnGuess {
 }
 
 function firstNameFromValue(raw: string | undefined): string | null {
-  const value = (raw ?? "").trim();
-  if (!value) return null;
-  // Prefer first token of a full name.
-  const first = value.split(/\s+/)[0]?.trim() ?? "";
-  if (!first || /^(null|undefined|n\/a|na|-)$/i.test(first)) return null;
-  return first.slice(0, 80);
+  return webinarPersonalFirstName(raw);
 }
 
 export function extractContactsFromCsv(params: {
