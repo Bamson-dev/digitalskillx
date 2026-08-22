@@ -24,6 +24,7 @@ type Counts = {
   failed: number;
   paused: number;
   sent: number;
+  sending?: number;
   sendFailed: number;
   dueNow: number;
   nextScheduledAt: string | null;
@@ -81,6 +82,7 @@ export function WebinarFollowupCampaignPanel(props: {
   const [showSends, setShowSends] = useState(props.status === "active");
   const [drainMessage, setDrainMessage] = useState<string | null>(null);
   const [drainError, setDrainError] = useState<string | null>(null);
+  const [drainBusy, setDrainBusy] = useState(false);
   const draining = useRef(false);
 
   const [csvFile, setCsvFile] = useState<File | null>(null);
@@ -130,13 +132,26 @@ export function WebinarFollowupCampaignPanel(props: {
   }, [props.steps, stepFilter]);
 
   async function drainDueEmails() {
-    if (draining.current || props.status !== "active" || !props.resendReady) return;
+    if (props.status !== "active") {
+      setDrainError("Activate the campaign first. Draft campaigns do not send.");
+      return;
+    }
+    if (!props.resendReady) {
+      setDrainError("Resend is not configured, so campaign emails cannot go out.");
+      return;
+    }
+    if (draining.current) {
+      setDrainMessage("Sending is already running. Leave this page open.");
+      return;
+    }
     draining.current = true;
+    setDrainBusy(true);
     setDrainError(null);
-    setDrainMessage("Sending due emails now. Keep this page open until Total sent starts rising.");
+    setDrainMessage("Sending due emails now. Email 1 is going out in batches.");
     let sessionSent = 0;
+    let emptyRounds = 0;
     try {
-      for (let round = 1; round <= 40; round++) {
+      for (let round = 1; round <= 80; round++) {
         const res = await fetch(`/api/admin/webinar-follow-up/${props.campaignId}/drain`, {
           method: "POST",
           credentials: "include",
@@ -159,30 +174,42 @@ export function WebinarFollowupCampaignPanel(props: {
         sessionSent += json.sent ?? 0;
         setDrainMessage(
           json.moreDue
-            ? `Sent ${sessionSent} so far this session. ${json.dueNow ?? 0} still waiting. Total sent: ${json.totalSent ?? "—"}. Keep this page open.`
-            : `Caught up. Sent ${sessionSent} this session. Total sent: ${json.totalSent ?? sessionSent}.`,
+            ? `Sent ${sessionSent} this session. ${json.dueNow ?? 0} still waiting. Total delivered: ${json.totalSent ?? "—"}. Keep this page open.`
+            : `Caught up. Sent ${sessionSent} this session. Total delivered: ${json.totalSent ?? sessionSent}.`,
         );
         router.refresh();
         if (!json.moreDue) break;
         if ((json.sent ?? 0) === 0 && (json.failed ?? 0) === 0) {
-          setDrainError(
-            `A round examined ${json.examined ?? 0} contacts but sent 0. ${json.reason ?? ""}`.trim(),
-          );
-          break;
+          emptyRounds += 1;
+          if (emptyRounds >= 8) {
+            setDrainError(
+              `Sending is waiting on in-flight rows. Examined ${json.examined ?? 0}. ${json.reason ?? "Keep the page open; stale sends retry automatically."}`.trim(),
+            );
+            await new Promise((r) => setTimeout(r, 4000));
+            emptyRounds = 0;
+          } else {
+            await new Promise((r) => setTimeout(r, 2000));
+          }
+          continue;
         }
+        emptyRounds = 0;
       }
     } catch (err) {
       setDrainError(err instanceof Error ? err.message : "Could not send due emails.");
     } finally {
       draining.current = false;
+      setDrainBusy(false);
       router.refresh();
     }
   }
 
   useEffect(() => {
-    if (props.status !== "active" || props.counts.dueNow <= 0 || !props.resendReady) return;
+    if (props.status !== "active" || !props.resendReady) return;
     void drainDueEmails();
-    // Kick once when the page loads with due contacts.
+    const timer = window.setInterval(() => {
+      if (props.status === "active") void drainDueEmails();
+    }, 20_000);
+    return () => window.clearInterval(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [props.status, props.campaignId]);
 
@@ -263,6 +290,7 @@ export function WebinarFollowupCampaignPanel(props: {
             ["Unsubscribed", props.counts.unsubscribed],
             ["Failed", props.counts.failed],
             ["Total sent", props.counts.sent],
+            ["Sending now", props.counts.sending ?? 0],
             ["Send failures", props.counts.sendFailed],
             ["Ready for next email", props.counts.dueNow],
           ].map(([label, value]) => (
@@ -293,8 +321,12 @@ export function WebinarFollowupCampaignPanel(props: {
             ) : null}
             {drainMessage ? <p className="text-emerald-800">{drainMessage}</p> : null}
             {drainError ? <p className="text-red-700">{drainError}</p> : null}
-            <Button type="button" onClick={() => void drainDueEmails()} disabled={!props.resendReady}>
-              Send due emails now
+            <Button
+              type="button"
+              onClick={() => void drainDueEmails()}
+              disabled={drainBusy}
+            >
+              {drainBusy ? "Sending…" : "Send due emails now"}
             </Button>
           </div>
         ) : null}
@@ -682,6 +714,7 @@ export function WebinarFollowupCampaignPanel(props: {
                   <th className="px-3 py-2">Step</th>
                   <th className="px-3 py-2">Status</th>
                   <th className="px-3 py-2">Attempts</th>
+                  <th className="px-3 py-2">Error</th>
                   <th className="px-3 py-2">Updated</th>
                 </tr>
               </thead>
@@ -691,6 +724,9 @@ export function WebinarFollowupCampaignPanel(props: {
                     <td className="px-3 py-2">{String(row.step_number)}</td>
                     <td className="px-3 py-2">{String(row.status)}</td>
                     <td className="px-3 py-2">{String(row.attempts)}</td>
+                    <td className="px-3 py-2 text-xs text-red-700">
+                      {row.last_error ? String(row.last_error).slice(0, 80) : "—"}
+                    </td>
                     <td className="px-3 py-2">
                       {row.updated_at ? new Date(String(row.updated_at)).toLocaleString() : "—"}
                     </td>

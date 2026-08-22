@@ -31,7 +31,7 @@ export async function runLiveWebinarFollowupDrain(
   const drain = await drainWebinarFollowupUntilBudget({
     store: createSupabaseWfuStore(admin),
     sendEmail: webinarFollowupSendMail(),
-    limit: 40,
+    limit: 60,
     budgetMs: opts?.budgetMs ?? 90_000,
     campaignId: opts?.campaignId,
   });

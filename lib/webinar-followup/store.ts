@@ -95,6 +95,7 @@ export type CampaignCounts = {
   failed: number;
   paused: number;
   sent: number;
+  sending: number;
   sendFailed: number;
   dueNow: number;
   nextScheduledAt: string | null;
@@ -122,6 +123,7 @@ const emptyCounts = (): CampaignCounts => ({
   failed: 0,
   paused: 0,
   sent: 0,
+  sending: 0,
   sendFailed: 0,
   dueNow: 0,
   nextScheduledAt: null,
@@ -223,14 +225,18 @@ export async function loadCampaignCounts(admin: Admin, campaignId: string): Prom
   }
   counts.nextScheduledAt = next;
 
-  const { data: sends } = await admin
-    .from("webinar_followup_sends" as never)
-    .select("status")
-    .eq("campaign_id", campaignId);
-  for (const row of (sends as Array<{ status: string }> | null) ?? []) {
-    if (row.status === "sent") counts.sent += 1;
-    if (row.status === "failed") counts.sendFailed += 1;
-  }
+  const countExact = async (status: string) => {
+    const { count, error: countError } = await admin
+      .from("webinar_followup_sends" as never)
+      .select("id", { count: "exact", head: true })
+      .eq("campaign_id", campaignId)
+      .eq("status", status);
+    if (countError) return 0;
+    return count ?? 0;
+  };
+  counts.sent = await countExact("sent");
+  counts.sending = await countExact("sending");
+  counts.sendFailed = await countExact("failed");
   return counts;
 }
 

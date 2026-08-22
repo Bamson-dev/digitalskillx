@@ -106,6 +106,9 @@ export function renderWebinarFollowupEmail(params: {
         <tr>
           <td style="background:#ffffff;border:1px solid #e2e8f0;border-radius:12px;padding:36px 32px;">
             ${bodyHtml}
+            <p style="margin:8px 0 18px;font-size:17px;line-height:1.7;color:#0f172a;">
+              If this still matters to you, open the next step now — the full picture is there, and the only way this becomes useful is if you act on it.
+            </p>
             <table role="presentation" cellspacing="0" cellpadding="0" style="margin:8px 0 8px;">
               <tr>
                 <td style="border-radius:8px;background:#dc2626;">

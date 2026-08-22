@@ -19,6 +19,7 @@ import {
 import { renderWebinarFollowupEmail } from "@/lib/webinar-followup/render";
 import { buildSoftwareWithAiSequence } from "@/lib/webinar-followup/sequence-seed";
 import { assertValidWebinarSequence } from "@/lib/webinar-followup/validate-sequence";
+import { runLiveWebinarFollowupDrain } from "@/lib/webinar-followup/live-drain";
 import {
   listSequenceSteps,
   seedSequenceSteps,
@@ -66,6 +67,7 @@ export async function setWebinarCampaignStatusAction(
     });
 
     if (status === "active") {
+      await runLiveWebinarFollowupDrain(admin, { budgetMs: 20_000, campaignId });
       scheduleBulkWorkerContinuation({
         origin: "https://www.digitalskillx.com",
         path: "/api/cron/webinar-follow-up",
