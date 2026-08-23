@@ -107,8 +107,6 @@ export type CampaignCounts = {
 };
 
 export type CampaignSnapshot = {
-
-export type CampaignSnapshot = {
   migrationRequired: boolean;
   campaign: (WfuCampaign & {
     description: string;
