@@ -636,7 +636,7 @@ function makeSteps(campaignId, n) {
   assert.match(continueSrc, /keepWebinarFollowupSending/);
   assert.match(continueSrc, /delayMs/);
   assert.match(vercel, /\/api\/cron\/webinar-follow-up/);
-  assert.match(vercel, /25 13 \* \* \*/);
+  assert.match(vercel, /25 10,13,16,19 \* \* \*/);
   ok("cron path and continuation support webinar follow-up");
 }
 
