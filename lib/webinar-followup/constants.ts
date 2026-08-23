@@ -16,6 +16,13 @@ export const WEBINAR_FOLLOWUP_OFFER_VALUE = "₦805,000";
 export const WEBINAR_FOLLOWUP_REQUIRED_STEPS = 40;
 export const WEBINAR_FOLLOWUP_SEQUENCE_SOURCE_VERSION = "build-software-with-ai.v40.5";
 
+export function sequenceNeedsResync(storedVersion: string | undefined | null, stepCount: number): boolean {
+  return (
+    stepCount !== WEBINAR_FOLLOWUP_REQUIRED_STEPS ||
+    (storedVersion ?? "") !== WEBINAR_FOLLOWUP_SEQUENCE_SOURCE_VERSION
+  );
+}
+
 /** Steps 1–10 default to webinar/replay CTA; 11–40 default to offer. */
 export function defaultCtaUrlForStep(stepNumber: number): string {
   return stepNumber <= 10 ? WEBINAR_FOLLOWUP_WEBINAR_URL : WEBINAR_FOLLOWUP_OFFER_URL;

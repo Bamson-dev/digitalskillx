@@ -24,6 +24,7 @@ import {
   listSequenceSteps,
   seedSequenceSteps,
   setCampaignStatus,
+  ensureSequenceFromSource,
 } from "@/lib/webinar-followup/store";
 
 export type WfuActionState = { error?: string; message?: string };
@@ -116,7 +117,7 @@ export async function seedWebinarSequenceAction(
     });
     revalidatePath(`/admin/webinar-follow-up/${campaignId}`);
     return {
-      message: `Loaded ${n} emails into the campaign. Review them anytime. Nothing is sending until you activate.`,
+      message: `Loaded ${n} emails into the campaign (${WEBINAR_FOLLOWUP_SEQUENCE_SOURCE_VERSION}). Future sends use this copy. Contacts are not restarted.`,
     };
   } catch (err) {
     return { error: err instanceof Error ? err.message : "Could not seed sequence." };
@@ -146,6 +147,7 @@ export async function testSendWebinarFollowupEmail(
       };
     }
 
+    await ensureSequenceFromSource(admin, campaignId);
     const steps = await listSequenceSteps(admin, campaignId);
     const email = steps.find((s) => s.stepNumber === step);
     if (!email) return { error: `Step ${step} is not loaded yet. Load the sequence first.` };

@@ -3,7 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 import { sendEmail } from "@/lib/email";
 import { drainWebinarFollowupUntilBudget, type DrainResult } from "./processor";
-import { createSupabaseWfuStore, loadCampaignCounts, type CampaignCounts } from "./store";
+import { createSupabaseWfuStore, ensureSequenceFromSource, loadCampaignCounts, type CampaignCounts } from "./store";
 
 type Admin = SupabaseClient<Database>;
 
@@ -27,14 +27,25 @@ export function webinarFollowupSendMail() {
 export async function runLiveWebinarFollowupDrain(
   admin: Admin,
   opts?: { budgetMs?: number; campaignId?: string },
-): Promise<DrainResult & { counts: CampaignCounts | null }> {
+): Promise<DrainResult & { counts: CampaignCounts | null; sequenceSynced?: boolean }> {
+  const store = createSupabaseWfuStore(admin);
+  let sequenceSynced = false;
+  if (opts?.campaignId) {
+    sequenceSynced = await ensureSequenceFromSource(admin, opts.campaignId);
+  } else {
+    const campaigns = await store.listActiveCampaigns();
+    for (const campaign of campaigns) {
+      if (await ensureSequenceFromSource(admin, campaign.id)) sequenceSynced = true;
+    }
+  }
+
   const drain = await drainWebinarFollowupUntilBudget({
-    store: createSupabaseWfuStore(admin),
+    store,
     sendEmail: webinarFollowupSendMail(),
     limit: 60,
     budgetMs: opts?.budgetMs ?? 90_000,
     campaignId: opts?.campaignId,
   });
   const counts = opts?.campaignId ? await loadCampaignCounts(admin, opts.campaignId) : null;
-  return { ...drain, counts };
+  return { ...drain, counts, sequenceSynced };
 }

@@ -763,4 +763,17 @@ function makeSteps(campaignId, n) {
   ok("all 40 primary subjects are unique");
 }
 
+{
+  const { sequenceNeedsResync, WEBINAR_FOLLOWUP_SEQUENCE_SOURCE_VERSION } = await import(
+    ts("lib/webinar-followup/constants.ts")
+  );
+  assert.equal(sequenceNeedsResync("build-software-with-ai.v40.4", 40), true);
+  assert.equal(sequenceNeedsResync("", 40), true);
+  assert.equal(sequenceNeedsResync(WEBINAR_FOLLOWUP_SEQUENCE_SOURCE_VERSION, 39), true);
+  assert.equal(sequenceNeedsResync(WEBINAR_FOLLOWUP_SEQUENCE_SOURCE_VERSION, 40), false);
+  const liveDrain = readFileSync(join(root, "lib/webinar-followup/live-drain.ts"), "utf8");
+  assert.match(liveDrain, /ensureSequenceFromSource/);
+  ok("stale sequence copy is detected and live drain reseeds from source");
+}
+
 console.log(`\n${passed} webinar follow-up checks passed`);

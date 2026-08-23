@@ -6,6 +6,8 @@ import {
   normalizeEmail,
   STALE_SENDING_MINUTES,
   WEBINAR_FOLLOWUP_REQUIRED_STEPS,
+  WEBINAR_FOLLOWUP_SEQUENCE_SOURCE_VERSION,
+  sequenceNeedsResync,
   lagosDayStartUtc,
   type CampaignStatus,
   type ContactStatus,
@@ -308,6 +310,25 @@ export async function seedSequenceSteps(
     .update({ total_steps: WEBINAR_FOLLOWUP_REQUIRED_STEPS } as never)
     .eq("id", campaignId);
   return validated.length;
+}
+
+/** Upsert the 40 source emails when the DB copy is missing or on an older version. Does not restart contacts. */
+export async function ensureSequenceFromSource(admin: Admin, campaignId: string): Promise<boolean> {
+  const { data, error } = await admin
+    .from("webinar_followup_sequence_steps" as never)
+    .select("step_number, body_html")
+    .eq("campaign_id", campaignId)
+    .order("step_number", { ascending: true });
+  if (error) {
+    if (isMissingRelationError(error.message)) return false;
+    throw new Error(error.message);
+  }
+  const rows = (data as Array<{ step_number: number; body_html: string }> | null) ?? [];
+  const firstMeta = parseStepMeta(rows.find((r) => r.step_number === 1)?.body_html);
+  if (!sequenceNeedsResync(firstMeta?.sourceVersion, rows.length)) return false;
+  const { buildSoftwareWithAiSequence } = await import("./sequence-seed");
+  await seedSequenceSteps(admin, campaignId, buildSoftwareWithAiSequence());
+  return true;
 }
 
 export async function setCampaignStatus(
