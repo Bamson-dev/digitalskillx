@@ -47,13 +47,14 @@ export default async function WebinarFollowUpIndexPage() {
               <th className="px-4 py-3">Contacts</th>
               <th className="px-4 py-3">Active</th>
               <th className="px-4 py-3">Sent</th>
+              <th className="px-4 py-3">Today</th>
               <th className="px-4 py-3" />
             </tr>
           </thead>
           <tbody>
             {campaigns.length === 0 ? (
               <tr>
-                <td colSpan={6} className="px-4 py-8 text-muted">
+                <td colSpan={7} className="px-4 py-8 text-muted">
                   No campaigns yet. Apply migration 0048 to seed the first draft campaign.
                 </td>
               </tr>
@@ -68,6 +69,19 @@ export default async function WebinarFollowUpIndexPage() {
                   <td className="px-4 py-3">{c.counts.total}</td>
                   <td className="px-4 py-3">{c.counts.active}</td>
                   <td className="px-4 py-3">{c.counts.sent}</td>
+                  <td className="px-4 py-3">
+                    {c.status === "active" && c.counts.dueNow === 0 && (c.counts.sending ?? 0) === 0 ? (
+                      <span className="font-medium text-emerald-700">
+                        Sent ({c.counts.sentToday})
+                      </span>
+                    ) : c.status === "active" && c.counts.dueNow > 0 ? (
+                      <span className="font-medium text-amber-800">
+                        Sending {c.counts.sentToday} / {c.counts.dueNow} due
+                      </span>
+                    ) : (
+                      c.counts.sentToday
+                    )}
+                  </td>
                   <td className="px-4 py-3 text-right">
                     <Link
                       href={`/admin/webinar-follow-up/${c.id}`}

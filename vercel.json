@@ -21,6 +21,18 @@
       "schedule": "25 10 * * *"
     },
     {
+      "path": "/api/cron/webinar-follow-up",
+      "schedule": "25 13 * * *"
+    },
+    {
+      "path": "/api/cron/webinar-follow-up",
+      "schedule": "25 16 * * *"
+    },
+    {
+      "path": "/api/cron/webinar-follow-up",
+      "schedule": "25 19 * * *"
+    },
+    {
       "path": "/api/cron/checkout-abandon",
       "schedule": "20 10 * * *"
     },

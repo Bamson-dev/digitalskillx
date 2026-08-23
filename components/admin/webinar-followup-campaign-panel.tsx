@@ -28,6 +28,8 @@ type Counts = {
   sendFailed: number;
   dueNow: number;
   nextScheduledAt: string | null;
+  sentToday?: number;
+  lastSentAt?: string | null;
 };
 
 type Step = {
@@ -140,62 +142,37 @@ export function WebinarFollowupCampaignPanel(props: {
       setDrainError("Resend is not configured, so campaign emails cannot go out.");
       return;
     }
-    if (draining.current) {
-      setDrainMessage("Sending is already running. Leave this page open.");
-      return;
-    }
+    if (draining.current) return;
     draining.current = true;
     setDrainBusy(true);
     setDrainError(null);
-    setDrainMessage("Sending due emails now. Email 1 is going out in batches.");
-    let sessionSent = 0;
-    let emptyRounds = 0;
+    setDrainMessage("Kicking the server sender. You can close this page — sending continues automatically.");
     try {
-      for (let round = 1; round <= 80; round++) {
-        const res = await fetch(`/api/admin/webinar-follow-up/${props.campaignId}/drain`, {
-          method: "POST",
-          credentials: "include",
-          cache: "no-store",
-        });
-        const json = (await res.json().catch(() => ({}))) as {
-          error?: string;
-          sent?: number;
-          failed?: number;
-          moreDue?: boolean;
-          dueNow?: number;
-          totalSent?: number;
-          examined?: number;
-          reason?: string;
-        };
-        if (!res.ok) {
-          setDrainError(json.error ?? `Send round ${round} failed (${res.status}).`);
-          break;
-        }
-        sessionSent += json.sent ?? 0;
-        setDrainMessage(
-          json.moreDue
-            ? `Sent ${sessionSent} this session. ${json.dueNow ?? 0} still waiting. Total delivered: ${json.totalSent ?? "—"}. Keep this page open.`
-            : `Caught up. Sent ${sessionSent} this session. Total delivered: ${json.totalSent ?? sessionSent}.`,
-        );
-        router.refresh();
-        if (!json.moreDue) break;
-        if ((json.sent ?? 0) === 0 && (json.failed ?? 0) === 0) {
-          emptyRounds += 1;
-          if (emptyRounds >= 8) {
-            setDrainError(
-              `Sending is waiting on in-flight rows. Examined ${json.examined ?? 0}. ${json.reason ?? "Keep the page open; stale sends retry automatically."}`.trim(),
-            );
-            await new Promise((r) => setTimeout(r, 4000));
-            emptyRounds = 0;
-          } else {
-            await new Promise((r) => setTimeout(r, 2000));
-          }
-          continue;
-        }
-        emptyRounds = 0;
+      const res = await fetch(`/api/admin/webinar-follow-up/${props.campaignId}/drain`, {
+        method: "POST",
+        credentials: "include",
+        cache: "no-store",
+      });
+      const json = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        sent?: number;
+        moreDue?: boolean;
+        dueNow?: number;
+        totalSent?: number;
+        sentToday?: number;
+      };
+      if (!res.ok) {
+        setDrainError(json.error ?? `Send kick failed (${res.status}).`);
+        return;
       }
+      setDrainMessage(
+        json.moreDue
+          ? `Server is sending. ${json.sentToday ?? 0} delivered today, ${json.dueNow ?? 0} still due. Close the page if you want — it keeps going.`
+          : `Today's due emails are caught up. ${json.sentToday ?? 0} delivered today. Total delivered: ${json.totalSent ?? "—"}.`,
+      );
+      router.refresh();
     } catch (err) {
-      setDrainError(err instanceof Error ? err.message : "Could not send due emails.");
+      setDrainError(err instanceof Error ? err.message : "Could not kick sending.");
     } finally {
       draining.current = false;
       setDrainBusy(false);
@@ -204,14 +181,10 @@ export function WebinarFollowupCampaignPanel(props: {
   }
 
   useEffect(() => {
-    if (props.status !== "active" || !props.resendReady) return;
-    void drainDueEmails();
-    const timer = window.setInterval(() => {
-      if (props.status === "active") void drainDueEmails();
-    }, 20_000);
+    if (props.status !== "active") return;
+    const timer = window.setInterval(() => router.refresh(), 12_000);
     return () => window.clearInterval(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [props.status, props.campaignId]);
+  }, [props.status, props.campaignId, router]);
 
   async function importNewContacts() {
     if (!csvFile) return;
@@ -253,6 +226,14 @@ export function WebinarFollowupCampaignPanel(props: {
 
   const archived = props.status === "archived";
   const canActivate = props.steps.length === 40 && props.status !== "active";
+  const sentToday = props.counts.sentToday ?? 0;
+  const dueNow = props.counts.dueNow;
+  const sendingNow = props.counts.sending ?? 0;
+  const todayDone = props.status === "active" && dueNow === 0 && sendingNow === 0;
+  const todayBusy = props.status === "active" && (dueNow > 0 || sendingNow > 0);
+  const lastSentLabel = props.counts.lastSentAt
+    ? new Date(props.counts.lastSentAt).toLocaleString("en-NG", { timeZone: "Africa/Lagos" })
+    : null;
 
   return (
     <div className="space-y-8">
@@ -272,6 +253,43 @@ export function WebinarFollowupCampaignPanel(props: {
           Status: <span className="font-semibold capitalize">{props.status}</span>
         </div>
       </div>
+
+      {props.status === "active" ? (
+        <div
+          className={`rounded-xl border px-4 py-4 ${
+            todayDone
+              ? "border-emerald-300 bg-emerald-50"
+              : todayBusy
+                ? "border-amber-300 bg-amber-50"
+                : "border-slate-200 bg-slate-50"
+          }`}
+        >
+          <p className="text-xs uppercase tracking-wide text-muted">Today&apos;s emails (Lagos)</p>
+          {todayDone ? (
+            <p className="mt-1 text-xl font-semibold text-emerald-800">
+              Today&apos;s emails have been sent
+            </p>
+          ) : todayBusy ? (
+            <p className="mt-1 text-xl font-semibold text-amber-900">
+              Sending today&apos;s emails automatically
+            </p>
+          ) : (
+            <p className="mt-1 text-xl font-semibold text-slate-800">Nothing due right now</p>
+          )}
+          <p className="mt-2 text-sm">
+            <strong>{sentToday}</strong> delivered today · <strong>{dueNow}</strong> still due ·{" "}
+            <strong>{sendingNow}</strong> in flight
+            {lastSentLabel ? ` · last send ${lastSentLabel}` : ""}
+          </p>
+          <p className="mt-1 text-xs text-muted">
+            Sending runs on the server. You can close this page. It keeps going until today&apos;s
+            due emails are done, then waits for the next 24-hour step.
+            {props.counts.nextScheduledAt
+              ? ` Next batch: ${new Date(props.counts.nextScheduledAt).toLocaleString("en-NG", { timeZone: "Africa/Lagos" })}.`
+              : ""}
+          </p>
+        </div>
+      ) : null}
 
       {props.migrationRequired ? (
         <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
@@ -293,6 +311,7 @@ export function WebinarFollowupCampaignPanel(props: {
             ["Sending now", props.counts.sending ?? 0],
             ["Send failures", props.counts.sendFailed],
             ["Ready for next email", props.counts.dueNow],
+            ["Sent today", props.counts.sentToday ?? 0],
           ].map(([label, value]) => (
             <div key={String(label)} className="rounded-xl border border-border bg-white px-4 py-3">
               <div className="text-xs text-muted">{label}</div>
@@ -309,16 +328,9 @@ export function WebinarFollowupCampaignPanel(props: {
         {props.status === "active" ? (
           <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3 text-sm space-y-2">
             <p>
-              <strong>How to know emails are sending:</strong> <em>Total sent</em> goes up,
-              <em> Ready for next email</em> goes down, and Recent send activity shows{" "}
-              <code>sent</code>. Test emails do not count.
+              Green banner above = today is done. Amber = still sending. This page refreshes on its
+              own. Test emails do not count.
             </p>
-            {props.counts.dueNow > 0 && props.counts.sent === 0 ? (
-              <p className="text-amber-800">
-                {props.counts.dueNow} contacts are waiting. Sending has not finished yet. Keep this
-                page open.
-              </p>
-            ) : null}
             {drainMessage ? <p className="text-emerald-800">{drainMessage}</p> : null}
             {drainError ? <p className="text-red-700">{drainError}</p> : null}
             <Button
@@ -326,7 +338,7 @@ export function WebinarFollowupCampaignPanel(props: {
               onClick={() => void drainDueEmails()}
               disabled={drainBusy}
             >
-              {drainBusy ? "Sending…" : "Send due emails now"}
+              {drainBusy ? "Starting…" : "Send due emails now"}
             </Button>
           </div>
         ) : null}

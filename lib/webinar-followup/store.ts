@@ -6,6 +6,7 @@ import {
   normalizeEmail,
   STALE_SENDING_MINUTES,
   WEBINAR_FOLLOWUP_REQUIRED_STEPS,
+  lagosDayStartUtc,
   type CampaignStatus,
   type ContactStatus,
   type SendStatus,
@@ -99,7 +100,11 @@ export type CampaignCounts = {
   sendFailed: number;
   dueNow: number;
   nextScheduledAt: string | null;
+  sentToday: number;
+  lastSentAt: string | null;
 };
+
+export type CampaignSnapshot = {
 
 export type CampaignSnapshot = {
   migrationRequired: boolean;
@@ -127,6 +132,8 @@ const emptyCounts = (): CampaignCounts => ({
   sendFailed: 0,
   dueNow: 0,
   nextScheduledAt: null,
+  sentToday: 0,
+  lastSentAt: null,
 });
 
 export async function listWebinarCampaigns(admin: Admin): Promise<{
@@ -237,6 +244,27 @@ export async function loadCampaignCounts(admin: Admin, campaignId: string): Prom
   counts.sent = await countExact("sent");
   counts.sending = await countExact("sending");
   counts.sendFailed = await countExact("failed");
+
+  const dayStart = lagosDayStartUtc().toISOString();
+  const { count: sentToday } = await admin
+    .from("webinar_followup_sends" as never)
+    .select("id", { count: "exact", head: true })
+    .eq("campaign_id", campaignId)
+    .eq("status", "sent")
+    .gte("sent_at", dayStart);
+  counts.sentToday = sentToday ?? 0;
+
+  const { data: lastSent } = await admin
+    .from("webinar_followup_sends" as never)
+    .select("sent_at")
+    .eq("campaign_id", campaignId)
+    .eq("status", "sent")
+    .not("sent_at", "is", null)
+    .order("sent_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  counts.lastSentAt = lastSent ? String((lastSent as { sent_at: string }).sent_at) : null;
+
   return counts;
 }
 

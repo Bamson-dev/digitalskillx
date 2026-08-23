@@ -22,6 +22,10 @@ export function resolveCronContinuationOrigin(passedOrigin: string): string {
   }
 }
 
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 /** Fire-and-forget self-invoke so Hobby (daily cron only) still drains jobs. */
 export function scheduleBulkWorkerContinuation(params: {
   origin: string;
@@ -33,6 +37,7 @@ export function scheduleBulkWorkerContinuation(params: {
   depth?: number;
   reason?: string;
   jobId?: string;
+  delayMs?: number;
 }) {
   const secret = process.env.CRON_SECRET?.trim();
   const depth = params.depth ?? 0;
@@ -50,6 +55,15 @@ export function scheduleBulkWorkerContinuation(params: {
       path: params.path,
       depth,
     });
+    if (params.path === "/api/cron/webinar-follow-up") {
+      scheduleBulkWorkerContinuation({
+        origin: params.origin,
+        path: params.path,
+        depth: 0,
+        reason: "wfu_chain_reset",
+        delayMs: 8_000,
+      });
+    }
     return;
   }
 
@@ -57,14 +71,13 @@ export function scheduleBulkWorkerContinuation(params: {
   url.searchParams.set("depth", String(depth + 1));
   if (params.jobId) url.searchParams.set("jobId", params.jobId);
 
-  // Keep the isolate alive until this request is in flight. Otherwise Vercel
-  // freezes the function after the HTTP response and the next chunk never starts.
-  waitUntil(
+  const nextDepth = depth + 1;
+  const fire = () =>
     fetch(url.toString(), {
       method: "POST",
       headers: {
         Authorization: `Bearer ${secret}`,
-        "x-bulk-continue-depth": String(depth + 1),
+        "x-bulk-continue-depth": String(nextDepth),
       },
       cache: "no-store",
       redirect: "error",
@@ -73,7 +86,7 @@ export function scheduleBulkWorkerContinuation(params: {
         bulkImportStage("continuation_fired", {
           ok: res.ok,
           path: params.path,
-          depth: depth + 1,
+          depth: nextDepth,
           status: res.status,
           reason: params.reason,
         });
@@ -82,11 +95,46 @@ export function scheduleBulkWorkerContinuation(params: {
         bulkImportStage("continuation_failed", {
           ok: false,
           path: params.path,
-          depth: depth + 1,
+          depth: nextDepth,
           error: err instanceof Error ? err.message : String(err),
         });
-      }),
-  );
+      });
+
+  const delayMs = Math.max(0, params.delayMs ?? 0);
+  // Keep the isolate alive until this request is in flight. Otherwise Vercel
+  // freezes the function after the HTTP response and the next chunk never starts.
+  waitUntil(delayMs > 0 ? sleep(delayMs).then(fire) : fire());
+}
+
+/** Keep draining webinar follow-up even if one continuation request fails. */
+export function keepWebinarFollowupSending(params: {
+  moreDue: boolean;
+  depth?: number;
+  reason: string;
+}) {
+  if (!params.moreDue) return;
+  const origin = "https://www.digitalskillx.com";
+  const depth = params.depth ?? 0;
+  scheduleBulkWorkerContinuation({
+    origin,
+    path: "/api/cron/webinar-follow-up",
+    depth,
+    reason: params.reason,
+  });
+  scheduleBulkWorkerContinuation({
+    origin,
+    path: "/api/cron/webinar-follow-up",
+    depth,
+    reason: `${params.reason}_retry_8s`,
+    delayMs: 8_000,
+  });
+  scheduleBulkWorkerContinuation({
+    origin,
+    path: "/api/cron/webinar-follow-up",
+    depth,
+    reason: `${params.reason}_retry_45s`,
+    delayMs: 45_000,
+  });
 }
 
 export function continuationDepthFromRequest(request: Request) {

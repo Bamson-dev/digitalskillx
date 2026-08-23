@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { requireAdminApiAuth } from "@/lib/admin-api-auth";
 import { logAudit } from "@/lib/audit";
-import { scheduleBulkWorkerContinuation } from "@/lib/bulk-import-continue";
+import { keepWebinarFollowupSending } from "@/lib/bulk-import-continue";
 import { resendConfigured } from "@/lib/email/providers/resend";
 import { runLiveWebinarFollowupDrain } from "@/lib/webinar-followup/live-drain";
 import { loadCampaignSnapshot } from "@/lib/webinar-followup/store";
@@ -36,13 +36,10 @@ export async function POST(
     campaignId: snapshot.campaign.id,
   });
 
-  if (drain.moreDue) {
-    scheduleBulkWorkerContinuation({
-      origin: "https://www.digitalskillx.com",
-      path: "/api/cron/webinar-follow-up",
-      reason: "admin_wfu_drain_more",
-    });
-  }
+  keepWebinarFollowupSending({
+    moreDue: drain.moreDue,
+    reason: "admin_wfu_drain_more",
+  });
 
   await logAudit({
     action: "webinar_followup_admin_drain",
@@ -60,6 +57,7 @@ export async function POST(
     moreDue: drain.moreDue,
     dueNow: drain.counts?.dueNow ?? snapshot.counts.dueNow,
     totalSent: drain.counts?.sent ?? snapshot.counts.sent,
+    sentToday: drain.counts?.sentToday ?? snapshot.counts.sentToday,
     reason: drain.reason,
   });
 }

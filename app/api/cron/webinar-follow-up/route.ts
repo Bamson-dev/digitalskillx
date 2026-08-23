@@ -5,7 +5,7 @@ import { createAdminClientAsync } from "@/lib/supabase/admin";
 import { runLiveWebinarFollowupDrain } from "@/lib/webinar-followup/live-drain";
 import {
   continuationDepthFromRequest,
-  scheduleBulkWorkerContinuation,
+  keepWebinarFollowupSending,
 } from "@/lib/bulk-import-continue";
 
 export const dynamic = "force-dynamic";
@@ -28,14 +28,11 @@ export async function POST(request: NextRequest) {
 
   try {
     const result = await runLiveWebinarFollowupDrain(admin, { budgetMs: 100_000 });
-    if (result.moreDue) {
-      scheduleBulkWorkerContinuation({
-        origin: "https://www.digitalskillx.com",
-        path: "/api/cron/webinar-follow-up",
-        depth,
-        reason: "more_wfu_due",
-      });
-    }
+    keepWebinarFollowupSending({
+      moreDue: result.moreDue,
+      depth,
+      reason: "more_wfu_due",
+    });
 
     return NextResponse.json({ ok: true, depth, chained: result.moreDue, ...result });
   } catch (err) {

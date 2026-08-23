@@ -27,6 +27,7 @@ const {
   webinarPersonalFirstName,
   WEBINAR_FOLLOWUP_OFFER_URL,
   WEBINAR_FOLLOWUP_DEFAULT_SLUG,
+  lagosDayStartUtc,
 } = await import(ts("lib/webinar-followup/constants.ts"));
 
 const {
@@ -72,6 +73,12 @@ ok("idempotency keys are unique per contact+step");
   const a = nextSendAtAfter(new Date("2026-08-21T10:00:00Z"), 24);
   assert.equal(a.toISOString(), "2026-08-22T10:00:00.000Z");
   ok("per-step delay drives next_send_at");
+}
+
+{
+  const start = lagosDayStartUtc(new Date("2026-08-23T00:30:00Z"));
+  assert.equal(start.toISOString(), "2026-08-22T23:00:00.000Z");
+  ok("today's send window starts at Lagos midnight");
 }
 
 assert.equal(isAuthorizedTestRecipient("admin@digitalskillx.com", "admin@digitalskillx.com"), true);
@@ -605,13 +612,14 @@ function makeSteps(campaignId, n) {
   assert.match(panel, /Activate Campaign/);
   assert.match(panel, /\[TEST\]/);
   assert.match(importRoute, /importNewContactsOneShot/);
-  assert.match(importRoute, /scheduleBulkWorkerContinuation/);
+  assert.match(importRoute, /keepWebinarFollowupSending/);
   const drainRoute = readFileSync(
     join(root, "app/api/admin/webinar-follow-up/[campaignId]/drain/route.ts"),
     "utf8",
   );
   assert.match(drainRoute, /runLiveWebinarFollowupDrain/);
   assert.match(panel, /Send due emails now/);
+  assert.match(panel, /Today's emails have been sent|Today&apos;s emails have been sent/);
   ok("admin flow is one-click import + confirm-modal activate; no env activation lock");
 }
 
@@ -625,8 +633,10 @@ function makeSteps(campaignId, n) {
 {
   const continueSrc = readFileSync(join(root, "lib/bulk-import-continue.ts"), "utf8");
   const vercel = readFileSync(join(root, "vercel.json"), "utf8");
-  assert.match(continueSrc, /webinar-follow-up/);
+  assert.match(continueSrc, /keepWebinarFollowupSending/);
+  assert.match(continueSrc, /delayMs/);
   assert.match(vercel, /\/api\/cron\/webinar-follow-up/);
+  assert.match(vercel, /25 13 \* \* \*/);
   ok("cron path and continuation support webinar follow-up");
 }
 

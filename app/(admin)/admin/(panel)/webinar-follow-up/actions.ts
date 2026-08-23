@@ -7,7 +7,7 @@ import { logAudit } from "@/lib/audit";
 import { sendEmail } from "@/lib/email";
 import { isSyntheticTestRecipient } from "@/lib/email/synthetic-recipient";
 import { listUnsubscribeHeader, unsubscribeUrl } from "@/lib/email-campaigns/unsubscribe";
-import { scheduleBulkWorkerContinuation } from "@/lib/bulk-import-continue";
+import { keepWebinarFollowupSending } from "@/lib/bulk-import-continue";
 import {
   isAuthorizedTestRecipient,
   isValidEmail,
@@ -68,9 +68,8 @@ export async function setWebinarCampaignStatusAction(
 
     if (status === "active") {
       await runLiveWebinarFollowupDrain(admin, { budgetMs: 20_000, campaignId });
-      scheduleBulkWorkerContinuation({
-        origin: "https://www.digitalskillx.com",
-        path: "/api/cron/webinar-follow-up",
+      keepWebinarFollowupSending({
+        moreDue: true,
         depth: 0,
         reason: "wfu_campaign_activated",
       });

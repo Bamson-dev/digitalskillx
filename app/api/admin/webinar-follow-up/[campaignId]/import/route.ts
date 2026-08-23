@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { requireAdminApiAuth } from "@/lib/admin-api-auth";
 import { rateLimitedResponse } from "@/lib/api-rate-limit";
 import { logAudit } from "@/lib/audit";
-import { scheduleBulkWorkerContinuation } from "@/lib/bulk-import-continue";
+import { keepWebinarFollowupSending } from "@/lib/bulk-import-continue";
 import { MAX_CSV_BYTES, type CampaignStatus } from "@/lib/webinar-followup/constants";
 import {
   extractContactsFromCsv,
@@ -91,9 +91,8 @@ export async function POST(
 
   // If campaign is active and new contacts are due for Email 1, drain via continuation.
   if (snapshot.campaign.status === "active" && result.enrolled > 0) {
-    scheduleBulkWorkerContinuation({
-      origin: "https://www.digitalskillx.com",
-      path: "/api/cron/webinar-follow-up",
+    keepWebinarFollowupSending({
+      moreDue: true,
       depth: 0,
       reason: "wfu_import_new_contacts",
     });

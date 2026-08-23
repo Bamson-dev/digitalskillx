@@ -89,6 +89,21 @@ export function webinarPersonalFirstName(firstName: string | null | undefined): 
   return name;
 }
 
+/** Start of calendar day in Africa/Lagos (WAT, UTC+1). Used for "today's emails" counts. */
+export function lagosDayStartUtc(now = new Date()): Date {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Africa/Lagos",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(now);
+  const year = parts.find((p) => p.type === "year")?.value;
+  const month = parts.find((p) => p.type === "month")?.value;
+  const day = parts.find((p) => p.type === "day")?.value;
+  if (!year || !month || !day) return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  return new Date(`${year}-${month}-${day}T00:00:00+01:00`);
+}
+
 export function campaignTrackingUrl(baseUrl: string, campaignSlug: string, stepNumber: number): string {
   try {
     const url = new URL(baseUrl);
