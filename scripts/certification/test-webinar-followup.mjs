@@ -138,7 +138,9 @@ new@example.com,New
   assert.ok(emails.slice(1).every((e) => e.delayHours === 24));
   assert.ok(emails.slice(0, 10).every((e) => e.ctaUrl.includes("/reg")));
   assert.ok(emails.slice(10).every((e) => e.ctaUrl.includes("/offer")));
-  assert.match(emails[0].bodyText, /webinar|closing|offer|modules|bonuses/i);
+  assert.match(emails[0].bodyText, /webinar|WebinarJam|registered/i);
+  assert.ok(emails.slice(0, 10).every((e) => !e.bodyText.includes("₦49,999")));
+  assert.ok(emails.every((e) => e.bodyText.trim().length >= 500));
   assert.match(
     emails.map((e) => e.bodyText).join("\n"),
     /What PromptEarn is \*\*not\*\* proof of/i,
@@ -161,9 +163,8 @@ new@example.com,New
   assert.match(rendered.html, /Unsubscribe/i);
   assert.match(rendered.html, /aimoneycode\.com\.ng\/reg/);
   assert.match(rendered.html, /DigitalSkillX/);
-  assert.match(rendered.html, /Enroll Now/);
-  assert.match(rendered.html, /₦49,999/);
-  assert.match(rendered.text, /782 people paid to use it/);
+  assert.doesNotMatch(rendered.html, /₦49,999/);
+  assert.match(rendered.text, /WebinarJam has already done its own follow-up/);
   assert.doesNotMatch(rendered.html, /PDIGITAL MARKETSTORE LTD/);
   ok("render includes greeting, unsubscribe, and webinar CTA for email 1");
 
@@ -174,7 +175,7 @@ new@example.com,New
     unsubscribeUrl: "https://example.com/unsubscribe?token=x",
   });
   assert.doesNotMatch(noFakeName.html, />Platform,</);
-  assert.match(noFakeName.text, /^You stayed through the closing/);
+  assert.match(noFakeName.text, /^If you are still on this list/);
   assert.equal(webinarPersonalFirstName("Platform"), null);
   assert.equal(webinarPersonalFirstName("Ada Okafor"), "Ada");
   ok("org/role labels are not used as greetings; copy starts as written");
@@ -760,6 +761,19 @@ function makeSteps(campaignId, n) {
 {
   const subjects = new Set(buildSoftwareWithAiSequence().map((e) => e.subject));
   assert.equal(subjects.size, 40);
+  const emails = buildSoftwareWithAiSequence();
+  const cta1to10 = new Set(emails.slice(0, 10).map((e) => e.ctaLabel));
+  assert.equal(cta1to10.size, 10);
+  for (const email of emails) {
+    const rendered = renderWebinarFollowupEmail({
+      email,
+      campaignSlug: WEBINAR_FOLLOWUP_DEFAULT_SLUG,
+      unsubscribeUrl: "https://example.com/unsubscribe?token=x",
+    });
+    assert.match(rendered.html, /Unsubscribe/i);
+    assert.match(rendered.text, /Unsubscribe/i);
+  }
+  assert.match(emails.map((e) => e.bodyText).join("\n"), /782 people paid to use it/);
   ok("all 40 primary subjects are unique");
 }
 
