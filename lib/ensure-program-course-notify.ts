@@ -2,6 +2,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database, NotificationType } from "@/types/database";
 import { isMissingRelationError } from "@/lib/schema-guard";
+import { formatPostgrestError } from "@/lib/postgrest-error";
 
 export function isMissingEnumValueError(message: string | null | undefined) {
   if (!message) return false;
@@ -37,7 +38,7 @@ export async function loadProgramCourseDeliveries(
     if (isMissingRelationError(error.message)) {
       return { tracking: false, studentIds: new Set() };
     }
-    throw new Error(error.message);
+    throw new Error(formatPostgrestError(error));
   }
   return {
     tracking: true,
@@ -51,7 +52,7 @@ export async function clearProgramCourseDeliveries(
 ) {
   const { error } = await admin.from("program_course_publish_deliveries").delete().eq("course_id", courseId);
   if (error && !isMissingRelationError(error.message)) {
-    throw new Error(error.message);
+    throw new Error(formatPostgrestError(error));
   }
 }
 
@@ -71,7 +72,7 @@ export async function recordProgramCourseDeliveries(
     );
     if (error) {
       if (isMissingRelationError(error.message)) return false;
-      throw new Error(error.message);
+      throw new Error(formatPostgrestError(error));
     }
   }
   return true;

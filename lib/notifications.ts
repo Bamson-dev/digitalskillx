@@ -5,6 +5,46 @@ import {
   fallbackNotificationType,
   isMissingEnumValueError,
 } from "@/lib/ensure-program-course-notify";
+import { formatPostgrestError } from "@/lib/postgrest-error";
+
+const NOTIFY_BATCH = 40;
+
+function buildNotificationRow(params: {
+  studentId: string;
+  type: NotificationType;
+  message: string;
+  title?: string;
+  linkUrl?: string;
+}) {
+  const message = params.message.trim() || "A new course is available on DigitalSkillX.";
+  return {
+    student_id: params.studentId,
+    type: params.type,
+    title: params.title?.trim()?.slice(0, 200) || null,
+    message: message.slice(0, 2000),
+    link_url: params.linkUrl?.trim()?.slice(0, 500) || null,
+  };
+}
+
+async function insertNotificationRows(
+  rows: ReturnType<typeof buildNotificationRow>[],
+  preferredType: NotificationType,
+) {
+  const supabase = await createAdminClientAsync();
+  const { error } = await supabase.from("notifications").insert(rows);
+  if (!error) return;
+
+  if (isMissingEnumValueError(error.message)) {
+    const fallbackType = fallbackNotificationType(preferredType);
+    const { error: fallbackError } = await supabase.from("notifications").insert(
+      rows.map((row) => ({ ...row, type: fallbackType })),
+    );
+    if (fallbackError) throw new Error(formatPostgrestError(fallbackError));
+    return;
+  }
+
+  throw new Error(formatPostgrestError(error));
+}
 
 /**
  * Create an in-app notification for a student (PRD §14.1). Uses the admin
@@ -17,53 +57,27 @@ export async function notify(params: {
   title?: string;
   linkUrl?: string;
 }) {
-  const supabase = await createAdminClientAsync();
-  const rows = [
-    {
-      student_id: params.studentId,
-      type: params.type,
-      title: params.title ?? null,
-      message: params.message,
-      link_url: params.linkUrl ?? null,
-    },
-  ];
-  const { error } = await supabase.from("notifications").insert(rows);
-  if (error && isMissingEnumValueError(error.message)) {
-    const { error: fallbackError } = await supabase.from("notifications").insert([
-      {
-        ...rows[0],
-        type: fallbackNotificationType(params.type),
-      },
-    ]);
-    if (fallbackError) throw new Error(fallbackError.message);
-    return;
-  }
-  if (error) throw new Error(error.message);
+  await insertNotificationRows([buildNotificationRow(params)], params.type);
 }
 
 export async function notifyMany(
   studentIds: string[],
   params: Omit<Parameters<typeof notify>[0], "studentId">,
 ) {
-  if (studentIds.length === 0) return;
-  const supabase = await createAdminClientAsync();
-  const rows = studentIds.map((studentId) => ({
-    student_id: studentId,
-    type: params.type,
-    title: params.title ?? null,
-    message: params.message,
-    link_url: params.linkUrl ?? null,
-  }));
-  const { error } = await supabase.from("notifications").insert(rows);
-  if (error && isMissingEnumValueError(error.message)) {
-    const { error: fallbackError } = await supabase.from("notifications").insert(
-      rows.map((row) => ({
-        ...row,
-        type: fallbackNotificationType(params.type),
-      })),
+  const unique = [...new Set(studentIds.filter(Boolean))];
+  if (unique.length === 0) return;
+
+  for (let i = 0; i < unique.length; i += NOTIFY_BATCH) {
+    const slice = unique.slice(i, i + NOTIFY_BATCH);
+    const rows = slice.map((studentId) =>
+      buildNotificationRow({
+        studentId,
+        type: params.type,
+        message: params.message,
+        title: params.title,
+        linkUrl: params.linkUrl,
+      }),
     );
-    if (fallbackError) throw new Error(fallbackError.message);
-    return;
+    await insertNotificationRows(rows, params.type);
   }
-  if (error) throw new Error(error.message);
 }
