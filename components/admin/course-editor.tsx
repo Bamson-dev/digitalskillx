@@ -158,9 +158,9 @@ export function CourseEditor({
 function sortModules(list: ModuleWithLessons[]) {
   return [...list]
     .sort((a, b) => a.position - b.position)
-    .map((module) => ({
-      ...module,
-      lessons: [...(module.lessons ?? [])].sort((a, b) => a.position - b.position),
+    .map((courseModule) => ({
+      ...courseModule,
+      lessons: [...(courseModule.lessons ?? [])].sort((a, b) => a.position - b.position),
     }));
 }
 
@@ -187,18 +187,18 @@ function CurriculumCard({
     startTransition(async () => {
       await persistCurriculumLayout(
         courseId,
-        next.map((module) => ({
-          moduleId: module.id,
-          lessonIds: module.lessons.map((lesson) => lesson.id),
+        next.map((courseModule) => ({
+          moduleId: courseModule.id,
+          lessonIds: courseModule.lessons.map((lesson) => lesson.id),
         })),
       );
     });
   }
 
   function findLesson(lessonId: string) {
-    for (const module of layout) {
-      const index = module.lessons.findIndex((lesson) => lesson.id === lessonId);
-      if (index >= 0) return { module, index, lesson: module.lessons[index] };
+    for (const courseModule of layout) {
+      const index = courseModule.lessons.findIndex((lesson) => lesson.id === lessonId);
+      if (index >= 0) return { courseModule, index, lesson: courseModule.lessons[index] };
     }
     return null;
   }
@@ -206,9 +206,12 @@ function CurriculumCard({
   function moveLesson(lessonId: string, targetModuleId: string, insertIndex: number) {
     const found = findLesson(lessonId);
     if (!found) return;
-    const next = layout.map((module) => ({ ...module, lessons: [...module.lessons] }));
-    const source = next.find((module) => module.id === found.module.id);
-    const target = next.find((module) => module.id === targetModuleId);
+    const next = layout.map((courseModule) => ({
+      ...courseModule,
+      lessons: [...courseModule.lessons],
+    }));
+    const source = next.find((courseModule) => courseModule.id === found.courseModule.id);
+    const target = next.find((courseModule) => courseModule.id === targetModuleId);
     if (!source || !target) return;
     const [moved] = source.lessons.splice(found.index, 1);
     let index = insertIndex;
@@ -220,8 +223,8 @@ function CurriculumCard({
 
   function moveModule(sourceId: string, targetId: string) {
     if (sourceId === targetId) return;
-    const from = layout.findIndex((module) => module.id === sourceId);
-    const to = layout.findIndex((module) => module.id === targetId);
+    const from = layout.findIndex((courseModule) => courseModule.id === sourceId);
+    const to = layout.findIndex((courseModule) => courseModule.id === targetId);
     if (from < 0 || to < 0) return;
     const next = [...layout];
     const [moved] = next.splice(from, 1);
@@ -256,11 +259,11 @@ function CurriculumCard({
         description="Add modules and lessons. Drag a lesson into any module or any position. Drag modules to reorder them."
       />
       <div className="space-y-4">
-        {layout.map((module) => (
+        {layout.map((courseModule) => (
           <ModuleBlock
-            key={module.id}
+            key={courseModule.id}
             courseId={courseId}
-            module={module}
+            courseModule={courseModule}
             lessonAttachments={lessonAttachments}
             dragging={dragging}
             dropHint={dropHint}
@@ -272,7 +275,7 @@ function CurriculumCard({
               setDropHint(null);
             }}
             onLessonDragOver={(index) => {
-              if (dragging?.type === "lesson") setDropHint({ moduleId: module.id, index });
+              if (dragging?.type === "lesson") setDropHint({ moduleId: courseModule.id, index });
             }}
             onDropOnLesson={(event, lessonId) => {
               event.preventDefault();
@@ -281,11 +284,11 @@ function CurriculumCard({
               setDropHint(null);
               if (!data) return;
               if (data.type === "module") {
-                moveModule(data.id, module.id);
+                moveModule(data.id, courseModule.id);
                 return;
               }
-              const at = module.lessons.findIndex((lesson) => lesson.id === lessonId);
-              moveLesson(data.id, module.id, at < 0 ? module.lessons.length : at);
+              const at = courseModule.lessons.findIndex((lesson) => lesson.id === lessonId);
+              moveLesson(data.id, courseModule.id, at < 0 ? courseModule.lessons.length : at);
             }}
             onDropOnModule={(event, atEnd) => {
               event.preventDefault();
@@ -294,12 +297,12 @@ function CurriculumCard({
               setDropHint(null);
               if (!data) return;
               if (data.type === "module") {
-                moveModule(data.id, module.id);
+                moveModule(data.id, courseModule.id);
                 return;
               }
-              moveLesson(data.id, module.id, atEnd ? module.lessons.length : 0);
+              moveLesson(data.id, courseModule.id, atEnd ? courseModule.lessons.length : 0);
             }}
-            onMoveLesson={(lessonId, toIndex) => moveLesson(lessonId, module.id, toIndex)}
+            onMoveLesson={(lessonId, toIndex) => moveLesson(lessonId, courseModule.id, toIndex)}
           />
         ))}
       </div>
@@ -317,7 +320,7 @@ function CurriculumCard({
 
 function ModuleBlock({
   courseId,
-  module,
+  courseModule,
   lessonAttachments,
   dragging,
   dropHint,
@@ -331,7 +334,7 @@ function ModuleBlock({
   onMoveLesson,
 }: {
   courseId: string;
-  module: ModuleWithLessons;
+  courseModule: ModuleWithLessons;
   lessonAttachments: Record<string, AttachmentDisplay[]>;
   dragging: { type: "lesson" | "module"; id: string } | null;
   dropHint: { moduleId: string; index: number } | null;
@@ -345,14 +348,15 @@ function ModuleBlock({
   onMoveLesson: (lessonId: string, toIndex: number) => void;
 }) {
   const router = useRouter();
-  const lessons = module.lessons ?? [];
+  const lessons = courseModule.lessons ?? [];
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
   const [bulkError, setBulkError] = useState<string | null>(null);
   const [bulkPending, startBulk] = useTransition();
+  const lessonIdsKey = lessons.map((lesson) => lesson.id).join(",");
 
   useEffect(() => {
     setSelectedIds(new Set());
-  }, [module.id, lessons.map((lesson) => lesson.id).join(",")]);
+  }, [courseModule.id, lessonIdsKey]);
 
   function toggleLessonSelection(lessonId: string, checked: boolean) {
     setSelectedIds((prev) => {
@@ -371,7 +375,7 @@ function ModuleBlock({
     const ids = [...selectedIds];
     if (ids.length === 0) return;
     const label = ids.length === 1 ? "1 lesson" : `${ids.length} lessons`;
-    if (!confirm(`Delete ${label} from "${module.title}"? This cannot be undone.`)) return;
+    if (!confirm(`Delete ${label} from "${courseModule.title}"? This cannot be undone.`)) return;
 
     setBulkError(null);
     startBulk(async () => {
@@ -386,12 +390,12 @@ function ModuleBlock({
   }
 
   const acceptingLesson = dragging?.type === "lesson";
-  const isDropTarget = dropHint?.moduleId === module.id;
+  const isDropTarget = dropHint?.moduleId === courseModule.id;
 
   return (
     <div
       className={`rounded-lg border ${
-        dragging?.type === "module" && dragging.id !== module.id
+        dragging?.type === "module" && dragging.id !== courseModule.id
           ? "border-dashed border-brand"
           : "border-app"
       }`}
@@ -417,22 +421,22 @@ function ModuleBlock({
       >
         <div
           draggable
-          onDragStart={(event) => onModuleDragStart(event, module.id)}
+          onDragStart={(event) => onModuleDragStart(event, courseModule.id)}
           onDragEnd={onDragEnd}
           className="cursor-grab rounded p-1 text-muted hover:bg-brand-50 active:cursor-grabbing"
-          aria-label={`Drag to reorder module ${module.title}`}
+          aria-label={`Drag to reorder module ${courseModule.title}`}
         >
           <GripVertical className="h-4 w-4" />
         </div>
         <form action={renameModule} method="post" className="flex min-w-0 flex-1 items-center gap-2">
-          <input type="hidden" name="id" value={module.id} />
+          <input type="hidden" name="id" value={courseModule.id} />
           <input type="hidden" name="course_id" value={courseId} />
-          <Input name="title" defaultValue={module.title} className="h-8 min-w-0" />
+          <Input name="title" defaultValue={courseModule.title} className="h-8 min-w-0" />
           <Button size="sm" variant="ghost" type="submit">
             Rename
           </Button>
         </form>
-        <DeleteModuleButton courseId={courseId} moduleId={module.id} moduleTitle={module.title} />
+        <DeleteModuleButton courseId={courseId} moduleId={courseModule.id} moduleTitle={courseModule.title} />
       </div>
 
       {lessons.length > 0 ? (
@@ -505,7 +509,7 @@ function ModuleBlock({
       </div>
 
       <form action={createLesson} className="flex gap-2 p-3" onDragOver={(event) => event.preventDefault()}>
-        <input type="hidden" name="module_id" value={module.id} />
+        <input type="hidden" name="module_id" value={courseModule.id} />
         <input type="hidden" name="course_id" value={courseId} />
         <Input name="title" placeholder="New lesson title" className="h-8" />
         <Select name="lesson_type" className="h-8 w-40">
