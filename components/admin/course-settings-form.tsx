@@ -284,13 +284,13 @@ export function CourseSettingsForm({
             <option value="archived">Archived</option>
           </Select>
           <p className="mt-1 text-xs text-muted">
-            Publishing (when not Coming soon) emails and notifies every paid DigitalSkillX student
+            Publishing (when not Coming soon) emails and notifies enrolled DigitalSkillX students
             with the title, full description, and course details.
           </p>
           <label className="mt-2 flex items-start gap-2 text-sm">
             <input type="checkbox" name="notify_paid_students" className="mt-1" />
             <span>
-              Also notify paid students now (use if publish already happened and nothing was sent)
+              Resend publish notification now (ignores previous send log for this course)
             </span>
           </label>
         </div>
@@ -436,7 +436,7 @@ export function CourseSettingsForm({
           <AdminSaveButton label={saveLabel}>
             <Save className="h-4 w-4" /> {saveLabel}
           </AdminSaveButton>
-          <AdminInlineFeedback state={{ error: state.error }} />
+          <AdminInlineFeedback state={state} />
         </div>
       </form>
     </Card>

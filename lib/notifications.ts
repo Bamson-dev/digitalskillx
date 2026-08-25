@@ -29,7 +29,7 @@ export async function notifyMany(
 ) {
   if (studentIds.length === 0) return;
   const supabase = await createAdminClientAsync();
-  await supabase.from("notifications").insert(
+  const { error } = await supabase.from("notifications").insert(
     studentIds.map((studentId) => ({
       student_id: studentId,
       type: params.type,
@@ -38,4 +38,15 @@ export async function notifyMany(
       link_url: params.linkUrl ?? null,
     })),
   );
+  if (error) {
+    if (
+      error.message.includes("program_course_added") ||
+      error.message.includes("invalid input value for enum")
+    ) {
+      throw new Error(
+        "In-app notification type missing. Run sql/apply-program-course-notify.sql in Supabase.",
+      );
+    }
+    throw new Error(error.message);
+  }
 }

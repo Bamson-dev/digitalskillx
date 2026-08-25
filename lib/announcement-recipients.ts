@@ -52,6 +52,45 @@ export async function resolveAnnouncementRecipients(
   return [...byId.values()];
 }
 
+/** Students to notify on course publish: paid/granted access plus anyone enrolled on the platform. */
+export async function resolveCoursePublishRecipients(
+  admin: SupabaseClient<Database>,
+): Promise<AnnouncementRecipient[]> {
+  const paid = await resolvePaidStudentRecipients(admin);
+  const byId = new Map(paid.map((row) => [row.id, row]));
+
+  for (let from = 0; from < 50_000; from += 1000) {
+    const { data, error } = await admin
+      .from("enrollments")
+      .select("student_id")
+      .range(from, from + 999);
+    if (error) throw new Error(error.message);
+    const rows = data ?? [];
+    if (rows.length === 0) break;
+
+    const missingIds = [...new Set(rows.map((row) => row.student_id))].filter((id) => !byId.has(id));
+    if (missingIds.length > 0) {
+      for (let i = 0; i < missingIds.length; i += 1000) {
+        const slice = missingIds.slice(i, i + 1000);
+        const { data: profiles, error: profileError } = await admin
+          .from("profiles")
+          .select("id, email, full_name")
+          .in("id", slice)
+          .eq("role", "student")
+          .eq("is_suspended", false);
+        if (profileError) throw new Error(profileError.message);
+        for (const row of profiles ?? []) {
+          if (!row.email?.trim()) continue;
+          byId.set(row.id, row);
+        }
+      }
+    }
+    if (rows.length < 1000) break;
+  }
+
+  return [...byId.values()];
+}
+
 /** Students who paid or were granted a paid DigitalSkillX course (not free self-enroll only). */
 export async function resolvePaidStudentRecipients(
   admin: SupabaseClient<Database>,

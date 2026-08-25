@@ -24,7 +24,7 @@ export function useFormStateSaveUx(
   useEffect(() => {
     if (state.message && state.message !== lastMessage.current) {
       lastMessage.current = state.message;
-      toast(options.successToast, "success");
+      toast(state.message, "success");
       setLabel("Saved");
       const t = window.setTimeout(() => setLabel(idleLabel), 2000);
       return () => window.clearTimeout(t);

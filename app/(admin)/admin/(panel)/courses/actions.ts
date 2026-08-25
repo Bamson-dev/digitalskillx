@@ -1,5 +1,6 @@
 "use server";
 
+import { waitUntil } from "@vercel/functions";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { isRedirectError } from "next/dist/client/components/redirect";
@@ -18,7 +19,7 @@ import {
   normalizeTelegramCommunityUrl,
   normalizeWhatsAppCommunityUrl,
 } from "@/lib/course-community";
-import { notifyProgramStudentsOfNewCourse } from "@/lib/course-program-notify";
+import { notifyProgramStudentsOfNewCourse, sendProgramCoursePublishEmails } from "@/lib/course-program-notify";
 import type { CourseVisibility, EnrollmentType, LessonType } from "@/types/database";
 
 export type LessonAttachmentState = {
@@ -250,7 +251,7 @@ export async function updateCourseSettings(
     let notifyNote = "";
     if ((!wasPublished && nowPublished && !isComingSoon) || (forceNotify && nowPublished && !isComingSoon)) {
       try {
-        const result = await notifyProgramStudentsOfNewCourse({
+        const courseRow = {
           id,
           title,
           category_id: categoryId,
@@ -259,12 +260,27 @@ export async function updateCourseSettings(
           learning_outcomes: outcomes,
           instructor_name: String(formData.get("instructor_name") ?? "").trim() || null,
           price_ngn: Number.isFinite(priceNgn) && priceNgn >= 0 ? Math.round(priceNgn) : 0,
+        };
+        const result = await notifyProgramStudentsOfNewCourse(courseRow, {
+          forceResend: forceNotify,
+          sendEmails: false,
         });
         if (result.notified > 0) {
-          notifyNote =
-            result.emailsSent > 0
-              ? ` Notified ${result.notified} paid student(s); ${result.emailsSent} email(s) sent.`
-              : ` In-app notified ${result.notified} paid student(s), but 0 emails sent — check Resend/email config or system_email_failures.`;
+          waitUntil(
+            sendProgramCoursePublishEmails({
+              course: courseRow,
+              toNotify: result.toNotify,
+              programName: result.programName,
+              courseUrl: result.courseUrl,
+              shortDescription: result.shortDescription,
+              longDescription: result.longDescription,
+            }).then((emailsSent) => {
+              console.info(
+                `[course-program-notify] background emails for ${id}: ${emailsSent}/${result.notified}`,
+              );
+            }),
+          );
+          notifyNote = ` Notified ${result.notified} student(s) in-app; emails are sending in the background.`;
         } else {
           notifyNote = ` No new notifications sent${result.reason ? ` — ${result.reason}` : "."}`;
         }
