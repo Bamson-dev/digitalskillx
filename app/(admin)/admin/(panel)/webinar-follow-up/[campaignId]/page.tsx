@@ -42,7 +42,9 @@ export default async function WebinarFollowUpCampaignPage({
   }
 
   const campaign = snapshot.campaign;
-  await ensureSequenceFromSource(admin, campaign.id);
+  void ensureSequenceFromSource(admin, campaign.id).catch((err) => {
+    console.error("webinar sequence resync skipped:", err);
+  });
   const [steps, imports, contacts, sends, sendsByStep] = await Promise.all([
     listSequenceSteps(admin, campaign.id),
     listImports(admin, campaign.id),

@@ -10,14 +10,10 @@ export default function GlobalError({
   error: Error & { digest?: string };
   reset: () => void;
 }) {
+  void reset;
   useEffect(() => {
     Sentry.captureException(error);
-    const stale =
-      /ChunkLoadError|Loading chunk|Failed to fetch dynamically imported module/i.test(
-        `${error.name} ${error.message}`,
-      );
-    if (!stale) return;
-    const key = "dsx-global-chunk-reload";
+    const key = "dsx-global-error-reload";
     if (sessionStorage.getItem(key) === "1") return;
     sessionStorage.setItem(key, "1");
     window.location.reload();
@@ -31,10 +27,13 @@ export default function GlobalError({
           <p className="mt-2 text-sm text-neutral-600">An unexpected error occurred. Please try again.</p>
           <button
             type="button"
-            onClick={reset}
+            onClick={() => {
+              sessionStorage.removeItem("dsx-global-error-reload");
+              window.location.assign("/admin/dashboard");
+            }}
             className="mt-6 rounded-lg bg-neutral-900 px-5 py-2.5 text-sm font-semibold text-white"
           >
-            Try again
+            Reload admin
           </button>
         </div>
       </body>

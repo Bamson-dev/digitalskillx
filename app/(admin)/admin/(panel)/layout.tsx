@@ -1,6 +1,7 @@
 import { requireAdmin } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { warmIntegrationSecretsFromAdminSession } from "@/lib/integration-secrets-cache";
+import { AdminErrorBoundary } from "@/components/admin/admin-error-boundary";
 import { AdminShell } from "@/components/admin/admin-sidebar";
 
 export default async function AdminPanelLayout({
@@ -10,9 +11,15 @@ export default async function AdminPanelLayout({
 }) {
   const admin = await requireAdmin();
   const supabase = createClient();
-  await warmIntegrationSecretsFromAdminSession(supabase);
+  try {
+    await warmIntegrationSecretsFromAdminSession(supabase);
+  } catch {
+    // Secrets warming must not take down the whole admin chrome.
+  }
 
   return (
-    <AdminShell adminName={admin.full_name ?? admin.email}>{children}</AdminShell>
+    <AdminErrorBoundary>
+      <AdminShell adminName={admin.full_name ?? admin.email}>{children}</AdminShell>
+    </AdminErrorBoundary>
   );
 }

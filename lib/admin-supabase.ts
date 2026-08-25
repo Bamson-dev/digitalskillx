@@ -14,6 +14,10 @@ export async function getAdminSupabase() {
   await requireAdmin();
   await ensureAdminProfileSession();
   await bootstrapRuntimeSecrets();
-  await ensureStorageBuckets();
+  try {
+    await ensureStorageBuckets();
+  } catch (err) {
+    console.error("ensureStorageBuckets skipped:", err);
+  }
   return createAdminClientAsync(createClient());
 }

@@ -15,7 +15,8 @@ async function ensureStorageBucketsInner() {
   const { data: existing, error: listError } = await admin.storage.listBuckets();
 
   if (listError) {
-    throw new Error(`Could not list storage buckets: ${listError.message}`);
+    console.error("Could not list storage buckets:", listError.message);
+    return;
   }
 
   const existingIds = new Set((existing ?? []).map((bucket) => bucket.id));
