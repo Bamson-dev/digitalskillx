@@ -153,6 +153,21 @@ new@example.com,New
 }
 
 {
+  const joined = buildSoftwareWithAiSequence()
+    .map((e) => `${e.subject}\n${e.bodyText}`)
+    .join("\n");
+  for (const banned of [
+    "You know the loop",
+    "That's a speed limit",
+    "That's the market",
+    "The most expensive sentence",
+  ]) {
+    assert.doesNotMatch(joined, new RegExp(banned.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  }
+  ok("seed has none of the banned AI-cadence phrases");
+}
+
+{
   const rendered = renderWebinarFollowupEmail({
     email: buildSoftwareWithAiSequence()[0],
     firstName: "Ada",

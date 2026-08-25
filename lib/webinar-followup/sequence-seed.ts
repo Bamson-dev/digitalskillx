@@ -49,18 +49,20 @@ export function buildSoftwareWithAiSequence(): SequenceEmailContent[] {
         "A quieter note, now that the reminder sequence is finished",
         "If you registered and then life happened",
       ],
-      "This is not another reminder from the webinar platform. I wanted to pick the conversation up myself.",
-      `If you are still on this list, it is because you registered for the Build Software With AI webinar, or you at least walked far enough into that funnel that your email ended up here. I am not writing as if we met yesterday in a random advert.
+      "WebinarJam has already done its own follow-up. This is me, writing after those reminders stopped.",
+      `If you are still on this list, it is because you registered for the Build Software With AI webinar, or you walked far enough into that funnel that your email ended up here.
 
-WebinarJam has already done its own follow-up. Those emails have finished. This is a different sequence, from me, and I would rather start honestly than pretend we are still in the middle of a live event.
+WebinarJam has already done its own follow-up. Those emails have finished. This sequence is different. It is from me, after that reminder run ended, and I would rather start like a person picking up a conversation than like a stranger who bought a list.
 
-A lot of people register, watch twenty minutes, get a phone call, and never return. Some watch the close and still sit on the decision. Some never opened it at all, which is also common, and not a moral failure. The webinar is still there. It is the place I actually explained the skill, the work, and what the training contains, without trying to squeeze that into one sales paragraph.
+Plenty of people register, watch twenty minutes, get a phone call, and never go back. Some watch to the end and still sit on it. Some have not opened the recording at all. That is ordinary. It is not a character test.
 
-I am not going to ask you for money in this email. If you have not sat through the session properly, paying would be a strange first move. Watch it when you have a quiet hour. Take notes on the parts that annoy you, because those are usually the parts that apply.
+The webinar is still there. That recording is where I actually explained the skill, the work, and what the training contains. An email cannot do that job.
 
-If you already watched it, watch the sections you skipped. Most of the useful detail sits in the middle, where it is less exciting and more practical.
+I will not ask you for money in this one. If you have not sat through the session, paying first would be a strange move. Find a quiet hour. Watch it. Write down the parts that annoy you. Those are usually the parts that apply.
 
-I will keep writing after this. For today, the useful action is simply to go through the training session again, with attention.`,
+If you already watched, go back to the middle. The useful detail is rarely in the opening.
+
+I will keep writing after this. For today, just go through the session again with attention.`,
       "Watch the webinar properly",
       "Natural continuation after WebinarJam, no payment ask",
       "Phase 1 · Webinar re-engagement",
@@ -74,16 +76,16 @@ I will keep writing after this. For today, the useful action is simply to go thr
         "Why people postpone a skill that would have helped last year",
         "Waiting until things settle usually means waiting forever",
       ],
-      "A lot of people in this funnel are not confused. They are waiting. That has a cost too.",
-      `I keep meeting people who already agree this skill matters, and then they wait for a calmer month. The shop is busy. School fees are close. They want to finish one more client job first. None of those reasons is foolish. The problem is that the calendar almost never opens a clean four-week hole labelled “learn to build software.”
+      "A lot of people in this funnel already agree the skill matters. They are waiting for a calmer month.",
+      `I keep meeting people who already agree this skill matters, then they wait for a calmer month. The shop is busy. School fees are close. They want to finish one more client job first. None of those reasons is foolish. The calendar still almost never opens a clean four-week hole labelled “learn to build software.”
 
-What actually happens is that another year passes, and the same WhatsApp notes are still full of ideas, and the same businesses around them are still paying someone else to build the website, the booking page, the inventory sheet that should have been a small app.
+What happens instead is another year. The same WhatsApp notes still hold the same ideas. The same businesses around them still pay someone else for the website, the booking page, the inventory sheet that should have been a small app.
 
-I am not saying you should abandon your life for a course. I am saying postponement is a decision, even when it feels like indecision. You already spent time registering for the webinar. That was a small bet that this topic was worth an evening. The expensive version of that bet is leaving the session unwatched while you wait to feel ready.
+You do not have to abandon your life for a course. You do have to notice that postponement is still a decision, even when it feels like you have not decided. You already spent time registering for the webinar. That was a small bet that this topic was worth an evening. Leaving the session unwatched while you wait to feel ready is the expensive version of that same bet.
 
-If you watch it this week, you may still decide it is not for you. That is a cleaner outcome than carrying a half-finished curiosity for six months.
+If you watch it this week, you may still decide it is not for you. That is cleaner than carrying a half-finished curiosity for six months.
 
-When you have a stretch of time that is merely “good enough,” not perfect, go through the webinar. The session is built to give you the picture first. Decisions after that are easier.`,
+When you have a stretch of time that is merely good enough, not perfect, go through the webinar. The session is there to give you the picture first. Decisions after that are easier.`,
       "Go through the session this week",
       "Cost of waiting as the reason to watch",
       "Phase 1 · Webinar re-engagement",
@@ -97,16 +99,16 @@ When you have a stretch of time that is merely “good enough,” not perfect, g
         "What usually sits between the idea and something a client can click",
         "Why “I have an app idea” is not the same as being able to ship",
       ],
-      "Most people in this audience do not lack ideas. They lack a way to turn one into working software.",
-      `Open the notes on your phone and you will probably find at least one thing that would actually help a real business: a salon booking page that does not live in a group chat, a simple stock list for a shop, a way for a church or school to collect registrations without paper. The idea is rarely the rare part.
+      "Most people in this audience already have ideas. The missing piece is a way to turn one into working software.",
+      `Open the notes on your phone. You will probably find at least one thing that would actually help a real business: a salon booking page that does not live in a group chat, a simple stock list for a shop, a way for a church or school to collect registrations without paper. Ideas are not the rare part.
 
-The rare part is the stretch between “I can describe this” and “somebody can use it on their phone.” That stretch used to mean finding a developer, explaining the thing badly, getting a quote that shocked you, then either abandoning it or paying and waiting. A lot of people quietly conclude they are “not technical” when what they actually lack is a method for directing the build.
+The rare stretch is the one between “I can describe this” and “somebody can use it on their phone.” For years that stretch meant finding a developer, explaining the thing badly, getting a quote that shocked you, then either abandoning it or paying and waiting. A lot of people quietly conclude they are “not technical” when what they actually lack is a method for directing the build.
 
-The webinar walks through that gap on purpose. I spend time on what it looks like to go from a messy idea to something specified enough that tools can help you build it, and then what it takes to put it where users can reach it. That is more useful than another pep talk about believing in yourself.
+The webinar walks through that gap on purpose. I spend time on what it looks like to go from a messy idea to something specified enough that tools can help you build it, then what it takes to put it where users can reach it. That is more useful than another pep talk about believing in yourself.
 
-If you have an idea you have been sitting on, watch the session with that idea in mind. Pause when I talk about blueprints and write down who the first user would be, and what version one would refuse to include. You do not need a company name. You need one person and one job the software should do.
+If you have an idea you have been sitting on, watch the session with that idea in mind. Pause when I talk about blueprints. Write down who the first user would be, and what version one would refuse to include. You do not need a company name. You need one person and one job the software should do.
 
-I am still not asking you to buy anything. I am asking you to give the webinar a serious watch while that idea is still yours, not a vague future project.`,
+Still no payment ask. Just a serious watch while that idea is still yours, not a vague future project.`,
       "Watch it with one idea in mind",
       "Idea-to-execution gap as the reason to watch",
       "Phase 1 · Webinar re-engagement",
@@ -123,11 +125,11 @@ I am still not asking you to buy anything. I am asking you to give the webinar a
       "I want to be precise about what changed, because the internet has already oversold this.",
       `Five years ago, if you were not a developer, “I will just build the app myself” was usually a joke. You could learn HTML on YouTube and still be nowhere near a product a stranger would pay for. Custom software meant a team, or a long apprenticeship, or both.
 
-What changed is not that software became magic, or that you never have to think. What changed is that a large part of the typing can be done by tools if you can describe the outcome, check the result, and keep going when the first attempt is wrong. Professional engineers are already working this way. Cursor, the AI-native editor from Anysphere, grew as fast as it did because people who already knew how to build started directing machines instead of writing every line by hand. That is market context, not a promise about your income.
+Software did not become magic, and you still have to think. A large part of the typing can now be done by tools if you can describe the outcome, check the result, and keep going when the first attempt is wrong. Professional engineers are already working this way. Cursor, the AI-native editor from Anysphere, grew as fast as it did because people who already knew how to build started directing machines instead of writing every line by hand. That is market context. It is not a promise about your income.
 
-The webinar is where I show what that looks like for someone who does not already live in code. I also show the parts that still hurt: setup, judgement, finishing, putting the thing on the internet. If you only watch highlight clips on Twitter, you will think the job is prompting. If you watch the session, you will see the job is closer to managing a very fast junior who needs clear instructions.
+The webinar is where I show what that looks like for someone who does not already live in code. I also show the parts that still hurt: setup, judgement, finishing, putting the thing on the internet. Highlight clips on Twitter make the job look like prompting. The session is closer to managing a very fast junior who needs clear instructions.
 
-If that distinction still feels abstract, that is exactly why the recording exists. Watch it once through. You can decide later whether the full training is for you.`,
+If that still feels abstract, that is why the recording exists. Watch it once through. You can decide later whether the full training is for you.`,
       "See what I actually showed in the webinar",
       "Market shift explained as a reason to watch, not to pay",
       "Phase 1 · Webinar re-engagement",
@@ -227,16 +229,16 @@ If you watch nothing else, watch the parts where I talk about ordinary software 
       "What it costs when every change needs someone else's calendar",
       [
         "Quotes, waiting, and the small change that puts you back in the queue",
-        "This is not an attack on developers. It is a description of dependency.",
+        "Developers are not the enemy. Living on their calendar for every idea is the tax.",
       ],
-      "Good developers earn what they charge. The issue is needing one for every thought you have.",
-      `If you have ever tried to get a custom site or a small system built, you know the shape of it. You explain. You wait for a quote. The number is higher than you hoped, so you negotiate or you freeze. If you go ahead, you wait again. Then you want one extra field, or a mobile view that does not cut off the button, and you are back in the queue. If the person goes quiet, the project goes quiet with them.
+      "Good developers earn what they charge. The hard part is needing one for every thought you have.",
+      `If you have ever tried to get a custom site or a small system built, you already know this story. You explain. You wait for a quote. The number is higher than you hoped, so you negotiate or you freeze. If you go ahead, you wait again. Then you want one extra field, or a mobile view that does not cut off the button, and you are back in the queue. If the person goes quiet, the project goes quiet with them.
 
-None of that means developers are the enemy. A competent one is expensive because the work is real. The problem is living in a state where you cannot move an idea without hiring permission and a timeline you do not control. For a business owner, that tax repeats. For someone who wants to build for others, it is the same tax wearing a different shirt.
+Developers are not the enemy. A competent one is expensive because the work is real. The tax is living in a state where you cannot move an idea without someone else's calendar. For a business owner, that tax repeats. For someone who wants to build for others, it is the same tax wearing a different shirt.
 
-The webinar is partly about reducing that dependency — not by pretending you will never collaborate with engineers, but by being able to produce working software yourself, or at least a version one you can show.
+The webinar is partly about reducing that dependency. You may still collaborate with engineers. You should also be able to produce working software yourself, or at least a version one you can show.
 
-Watch it with a recent quote in mind, if you have one. Compare the feeling of waiting with the feeling of being able to try. I will talk about prices of the full training later. This email is still about whether you understand the problem well enough to sit through the session.`,
+Watch it with a recent quote in mind, if you have one. Compare waiting with being able to try. I will talk about the price of the full training later. This email is still about whether you understand the problem well enough to sit through the session.`,
       "Watch before you request another quote",
       "Developer dependency as the reason to watch",
       "Phase 1 · Webinar re-engagement",
@@ -368,7 +370,7 @@ A spreadsheet doing bookings is a product brief. A group chat doing orders is a 
 
 This is why the training includes turning a noticed problem into a blueprint, then into something that lives on a phone. It is also why the **App Idea Vault** bonus exists for dry weeks — practice starting points — while your unfair advantage is still the industry you already understand.
 
-I am not telling you every shop owner will hire you tomorrow. I am telling you the raw material is local and visible if you watch people work for fifteen minutes instead of asking them to describe their process, which they will tidy up in the telling.
+Every shop owner will not hire you tomorrow. The raw material is still local and visible if you watch people work for fifteen minutes instead of asking them to describe their process, which they will tidy up in the telling.
 
 If that way of seeing felt true in the webinar, the offer is the structured way to act on it. ${WEBINAR_FOLLOWUP_OFFER_PRICE} on the page.`,
       "Open the offer if this is the work you want",
@@ -409,7 +411,7 @@ Look at the offer with that choice in mind, not with a fantasy of doing everythi
         "Cursor as market context, not a personal income forecast",
         "If the people who can already code are directing machines, the rest of us should at least understand the shift",
       ],
-      "I am not asking you to become a Silicon Valley engineer. I am asking you not to ignore where the work is going.",
+      "You do not have to become a Silicon Valley engineer. You should not ignore where the work is going.",
       `I mentioned Cursor earlier. I want to be careful with it.
 
 Cursor is an editor built around AI assistance. It became one of the fastest-growing developer tools because people whose job was already “write software” started doing that job with a model in the loop. That does not mean your first client will pay Silicon Valley rates. It means the direction of travel is not a webinar gimmick. The people who can already build are not waiting for permission.
@@ -439,7 +441,7 @@ I want that last figure to stay honest. It is **estimated**, modelled from paid 
 
 681 active out of 782 who paid is the useful line. People kept using it. 9,460 paid searches against 2,035 trials means they tested, then bought more. 107 in a week means it spread without a giant ad budget, which is what happens when you save someone an afternoon.
 
-I am not saying you will match this in ninety days. Markets differ. Execution differs. I am saying one person, one narrow problem, AI-assisted, no permission from a fund, and the usage is real.
+You will not automatically match this in ninety days. Markets differ. Execution differs. What this does show is one person, one narrow problem, AI-assisted, no permission from a fund, and usage that is real.
 
 That path is what the build-and-ship modules are for. If you want them in order, with support, the offer is ${WEBINAR_FOLLOWUP_OFFER_PRICE}.`,
       "See the curriculum behind this kind of build",
@@ -485,7 +487,7 @@ If you want the training that includes that business half, it is on the offer pa
 
 What happened next matters more than the round number. The same work opened a second conversation: **turning that website into an app.** That is how client relationships compound when the first delivery holds. You are not always hunting a stranger. You are extending something that already exists.
 
-I am not promising you ₦650,000. I am describing a type of job that exists in this market, at a fee many times the promotional price of the training, for someone who can make a shop look trustworthy and a checkout that works.
+₦650,000 is not a promise. It is a type of job that exists in this market, at a fee many times the promotional price of the training, for someone who can make a shop look trustworthy and a checkout that works.
 
 That is why **Making Your App Look Good** and **Making Your App Actually Work** are not decorative modules. A cheap-looking store loses sales. A checkout that fails once can lose the referral and the app job.
 
@@ -512,7 +514,7 @@ That is also how the economics improve. The first project includes a lot of unpa
 
 What earns it is rarely brilliance. You said the scope, you delivered, it kept working, you replied, you did not vanish when something broke. **Making Your App Actually Work**, **Making Your App Remember Things**, and **Your Safety Net** exist for that unglamorous part. The **Get-Paid Guide** covers saying the scope out loud so you are not trapped in endless extras.
 
-I am not promising you Chinedu’s outcome. I am telling you what repeat business looks like when the work holds. The offer is ${WEBINAR_FOLLOWUP_OFFER_PRICE} if you want that taught as a path, not as a highlight.`,
+Chinedu’s outcome is not a promise. It is what repeat business looks like when the work holds. The offer is ${WEBINAR_FOLLOWUP_OFFER_PRICE} if you want that taught as a path, not as a highlight.`,
       "See how delivery is taught",
       "Complete Chinedu story: return client as the point",
       "Phase 3 · Proof",
@@ -556,7 +558,7 @@ Read the Lovable write-up if you like checking sources. Then look at the offer i
 
 Those are Bolt’s published figures about Ryplix. I have not audited Ryplix’s books.
 
-Two weeks used to be a quarter plus a team. Recurring monthly revenue is also a different shape from Shade’s one-time ecommerce fee. I am not stacking these to say you will do both. I am showing that compressed timelines and monthly revenue exist in public case studies when the work is specified.
+Two weeks used to be a quarter plus a team. Recurring monthly revenue is also a different shape from Shade’s one-time ecommerce fee. These examples are not stacked so you will copy both. They show that compressed timelines and monthly revenue exist in public case studies when the work is specified.
 
 The part beginners miss: speed is usually clarity. Point a builder at a foggy brief and you get a mess quickly. **The Idea-To-Blueprint System** sits early in our order for that reason.
 
@@ -740,7 +742,7 @@ If this fear is rational — it is — the offer is where recovery is taught, no
 
 People who already know you: family business, church, old job, someone on your street. Trust exists. You prove capability once. Businesses you can visit: “you track deliveries by hand; I can build that.” Narrow positioning: booking and records for small clinics is easier to refer than “I build software.” Marketplaces once you have something to show — **Software Marketplace Guide**. Repeat work, like Chinedu’s second website after ₦480,000.
 
-The **Get-Paid Guide** is the conversation: approach, scope, a number. I am not promising a roster in thirty days. I am telling you the paths are boring and available without a personal brand.
+The **Get-Paid Guide** is the conversation: approach, scope, a number. A full roster in thirty days is not the claim. The paths are boring and available without a personal brand.
 
 If “no clients” is the fear, look at those modules on the offer rather than waiting to feel famous. ${WEBINAR_FOLLOWUP_OFFER_PRICE}.`,
       "See the Get-Paid Guide",
@@ -811,7 +813,7 @@ No fake seats. No fake midnight. The cost of another delayed year is the part I 
 
 **5. Making Your App Look Good.** Layout, mobile, when to stop. Shade’s ecommerce fee was not won on invisible elegance. People judge in seconds.
 
-Stated training value across all ten modules is **₦450,000** in the stack. You pay **${WEBINAR_FOLLOWUP_OFFER_PRICE}** on promo for the whole programme including bonuses. I am not handing you ₦450,000 in cash. I am telling you what we value that ordered teaching at if you tried to assemble it yourself.
+Stated training value across all ten modules is **₦450,000** in the stack. You pay **${WEBINAR_FOLLOWUP_OFFER_PRICE}** on promo for the whole programme including bonuses. That ₦450,000 is not cash in your account. It is what we value that ordered teaching at if you tried to assemble it yourself.
 
 Tomorrow: the second half, where demos become software somebody will pay for twice.`,
       "See modules one to five on the offer",
@@ -926,7 +928,7 @@ Useful comparisons remain a developer quote, one client invoice in the ranges I 
         "₦49,999 against that pattern, without pretending quotes will vanish from the earth",
       ],
       "You may still hire specialists. The question is whether you must hire them for every thought.",
-      `I am not arguing that professional engineers should be unemployed. I am arguing that depending on a quote for every booking page, every internal list, every “can we add this field” is a slow way to live if you have already decided you want to build.
+      `Professional engineers should keep their work. Depending on a quote for every booking page, every internal list, every “can we add this field” is still a slow way to live if you have already decided you want to build.
 
 Enrollment at **${WEBINAR_FOLLOWUP_OFFER_PRICE}** is a one-time promotional price for a skill you can reuse. A developer relationship is ongoing by nature. Both can be rational. They are not the same purchase.
 
