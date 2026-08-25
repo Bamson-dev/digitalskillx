@@ -242,13 +242,16 @@ export async function updateCourseSettings(
 
     const wasPublished = before.visibility === "published";
     const nowPublished = visibility === "published";
-    if (!wasPublished && nowPublished && categoryId && !isComingSoon) {
+    if (!wasPublished && nowPublished && !isComingSoon) {
       void notifyProgramStudentsOfNewCourse({
         id,
         title,
         category_id: categoryId,
         short_description: shortDescription,
         description,
+        learning_outcomes: outcomes,
+        instructor_name: String(formData.get("instructor_name") ?? "").trim() || null,
+        price_ngn: Number.isFinite(priceNgn) && priceNgn >= 0 ? Math.round(priceNgn) : 0,
       }).catch((err) => {
         console.error("[course-program-notify] failed after publish:", err);
       });

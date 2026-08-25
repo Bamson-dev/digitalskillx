@@ -273,8 +273,7 @@ export function CourseSettingsForm({
             ))}
           </Select>
           <p className="mt-1 text-xs text-muted">
-            Students enrolled in other courses in this category are notified by email and in-app
-            alert when you publish a new course here.
+            Optional grouping. Publishing still notifies every paid DigitalSkillX student.
           </p>
         </div>
         <div>
@@ -284,6 +283,10 @@ export function CourseSettingsForm({
             <option value="published">Published</option>
             <option value="archived">Archived</option>
           </Select>
+          <p className="mt-1 text-xs text-muted">
+            Publishing (when not Coming soon) emails and notifies every paid DigitalSkillX student
+            with the title, full description, and course details.
+          </p>
         </div>
         <div>
           <Label>Enrollment</Label>

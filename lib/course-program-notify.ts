@@ -1,13 +1,14 @@
 import "server-only";
-import { createAdminClient } from "@/lib/supabase/admin";
 import { createAdminClientAsync } from "@/lib/supabase/admin";
 import { sendEmail } from "@/lib/email";
 import { emailTemplates } from "@/lib/email/templates";
 import { notifyMany } from "@/lib/notifications";
-import { resolveAnnouncementRecipients, stripHtmlPreview } from "@/lib/announcement-recipients";
+import {
+  resolvePaidStudentRecipients,
+  stripHtmlPreview,
+} from "@/lib/announcement-recipients";
 import { studentFirstName } from "@/lib/student-name";
 import { siteUrl } from "@/lib/org";
-import { isMissingColumnError } from "@/lib/schema-guard";
 import type { Json } from "@/types/database";
 
 export type ProgramCourseNotifyRow = {
@@ -16,6 +17,9 @@ export type ProgramCourseNotifyRow = {
   category_id: string | null;
   short_description?: string | null;
   description?: string | null;
+  learning_outcomes?: string[] | null;
+  instructor_name?: string | null;
+  price_ngn?: number | null;
 };
 
 async function logProgramCourseEmailFailure(params: {
@@ -39,43 +43,23 @@ async function logProgramCourseEmailFailure(params: {
 }
 
 /**
- * Notify students enrolled in other courses of the same program (category)
- * when a new course is first published.
+ * Notify every paid DigitalSkillX student when a course is first published.
  */
 export async function notifyProgramStudentsOfNewCourse(course: ProgramCourseNotifyRow) {
-  if (!course.category_id) return { notified: 0, emailsSent: 0 };
+  const admin = await createAdminClientAsync();
 
-  const admin = createAdminClient();
-
-  const { data: category, error: categoryError } = await admin
-    .from("course_categories")
-    .select("name")
-    .eq("id", course.category_id)
-    .single();
-  if (categoryError) throw new Error(categoryError.message);
-  const programName = category?.name?.trim() || "your program";
-
-  const { data: siblings, error: siblingsError } = await admin
-    .from("courses")
-    .select("id")
-    .eq("category_id", course.category_id)
-    .eq("visibility", "published")
-    .neq("id", course.id);
-  if (siblingsError) {
-    if (isMissingColumnError(siblingsError.message)) {
-      console.error("[course-program-notify] schema drift:", siblingsError.message);
-      return { notified: 0, emailsSent: 0 };
-    }
-    throw new Error(siblingsError.message);
+  let programName = "DigitalSkillX";
+  if (course.category_id) {
+    const { data: category, error: categoryError } = await admin
+      .from("course_categories")
+      .select("name")
+      .eq("id", course.category_id)
+      .maybeSingle();
+    if (categoryError) throw new Error(categoryError.message);
+    if (category?.name?.trim()) programName = category.name.trim();
   }
 
-  const siblingIds = (siblings ?? []).map((row) => row.id);
-  if (siblingIds.length === 0) return { notified: 0, emailsSent: 0 };
-
-  const recipients = await resolveAnnouncementRecipients(admin, {
-    audience: "courses",
-    courseIds: siblingIds,
-  });
+  const recipients = await resolvePaidStudentRecipients(admin);
   if (recipients.length === 0) return { notified: 0, emailsSent: 0 };
 
   const { data: enrolledInNew, error: enrolledError } = await admin
@@ -110,78 +94,100 @@ export async function notifyProgramStudentsOfNewCourse(course: ProgramCourseNoti
   if (toNotify.length === 0) return { notified: 0, emailsSent: 0 };
 
   const courseUrl = `${siteUrl()}/course/${course.id}`;
-  const descriptionPreview = stripHtmlPreview(
-    course.short_description ?? course.description ?? "",
-    200,
+  const longDescription = stripHtmlPreview(course.description ?? "", 4_000);
+  const shortDescription = stripHtmlPreview(
+    course.short_description ?? "",
+    400,
   );
+  const inAppMessage = [shortDescription || longDescription.slice(0, 280), `Open ${course.title} in your dashboard.`]
+    .filter(Boolean)
+    .join(" ");
 
-  await notifyMany(
-    toNotify.map((recipient) => recipient.id),
-    {
-      type: "program_course_added",
-      title: course.title,
-      message: `New course in ${programName}`,
-      linkUrl: `/course/${course.id}`,
-    },
-  );
+  for (let i = 0; i < toNotify.length; i += 200) {
+    await notifyMany(
+      toNotify.slice(i, i + 200).map((recipient) => recipient.id),
+      {
+        type: "program_course_added",
+        title: `New course: ${course.title}`,
+        message: inAppMessage,
+        linkUrl: `/course/${course.id}`,
+      },
+    );
+  }
 
   let emailsSent = 0;
-  await Promise.allSettled(
-    toNotify.map(async (recipient) => {
-      const tpl = emailTemplates.programCourseAdded({
-        firstName: studentFirstName(recipient.full_name ?? ""),
-        programName,
-        courseTitle: course.title,
-        description: descriptionPreview,
-        url: courseUrl,
-      });
+  const outcomes = (course.learning_outcomes ?? []).map((row) => row.trim()).filter(Boolean);
 
-      const result = await sendEmail({
-        to: recipient.email,
-        subject: tpl.subject,
-        html: tpl.html,
-      });
+  for (let i = 0; i < toNotify.length; i += 40) {
+    const batch = toNotify.slice(i, i + 40);
+    const results = await Promise.allSettled(
+      batch.map(async (recipient) => {
+        const tpl = emailTemplates.programCourseAdded({
+          firstName: studentFirstName(recipient.full_name ?? ""),
+          programName,
+          courseTitle: course.title,
+          shortDescription,
+          description: longDescription,
+          instructorName: course.instructor_name?.trim() || "",
+          outcomes,
+          priceLabel:
+            typeof course.price_ngn === "number" && course.price_ngn > 0
+              ? `₦${course.price_ngn.toLocaleString("en-NG")}`
+              : "",
+          url: courseUrl,
+        });
 
-      if ("messageId" in result && result.messageId) {
-        emailsSent += 1;
-        return;
-      }
+        const result = await sendEmail({
+          to: recipient.email,
+          subject: tpl.subject,
+          html: tpl.html,
+        });
 
-      const errorMessage =
-        "skipped" in result && result.skipped
-          ? result.error instanceof Error
-            ? result.error.message
-            : "Email delivery is not configured."
-          : "error" in result && result.error
+        if ("messageId" in result && result.messageId) {
+          emailsSent += 1;
+          return;
+        }
+
+        const errorMessage =
+          "skipped" in result && result.skipped
             ? result.error instanceof Error
               ? result.error.message
-              : String(result.error)
-            : "Email send failed.";
+              : "Email delivery is not configured."
+            : "error" in result && result.error
+              ? result.error instanceof Error
+                ? result.error.message
+                : String(result.error)
+              : "Email send failed.";
 
-      console.error(
-        `[course-program-notify] email failed for ${recipient.email} (${course.id}):`,
-        errorMessage,
-      );
+        console.error(
+          `[course-program-notify] email failed for ${recipient.email} (${course.id}):`,
+          errorMessage,
+        );
 
-      await logProgramCourseEmailFailure({
-        recipient: recipient.email,
-        subject: tpl.subject,
-        payload: {
-          course_id: course.id,
-          student_id: recipient.id,
-          category_id: course.category_id,
-        },
-        errorMessage,
-      });
-    }),
-  );
+        await logProgramCourseEmailFailure({
+          recipient: recipient.email,
+          subject: tpl.subject,
+          payload: {
+            course_id: course.id,
+            student_id: recipient.id,
+            category_id: course.category_id,
+          },
+          errorMessage,
+        });
+      }),
+    );
+    void results;
+  }
 
-  await admin.from("program_course_publish_deliveries").insert(
-    toNotify.map((recipient) => ({
-      course_id: course.id,
-      student_id: recipient.id,
-    })),
-  );
+  for (let i = 0; i < toNotify.length; i += 200) {
+    const slice = toNotify.slice(i, i + 200);
+    await admin.from("program_course_publish_deliveries").insert(
+      slice.map((recipient) => ({
+        course_id: course.id,
+        student_id: recipient.id,
+      })),
+    );
+  }
 
   return { notified: toNotify.length, emailsSent };
 }

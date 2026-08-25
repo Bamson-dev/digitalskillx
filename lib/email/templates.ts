@@ -102,18 +102,35 @@ export const emailTemplates = {
     firstName: string;
     programName: string;
     courseTitle: string;
+    shortDescription: string;
     description: string;
+    instructorName: string;
+    outcomes: string[];
+    priceLabel: string;
     url: string;
-  }) => ({
-    subject: `New course in ${p.programName}: ${p.courseTitle}`,
-    html: shell(
-      `New course in ${p.programName}`,
-      `Hi ${p.firstName}, a new course <b>${p.courseTitle}</b> has been added to <b>${p.programName}</b>.${
-        p.description ? `<br/><br/>${p.description}` : ""
-      }`,
-      { label: "View course", url: p.url },
-    ),
-  }),
+  }) => {
+    const outcomeHtml = p.outcomes.length
+      ? `<br/><br/><b>What you will learn</b><ul style="margin:8px 0 0;padding-left:18px;">${p.outcomes
+          .map((item) => `<li>${item}</li>`)
+          .join("")}</ul>`
+      : "";
+    const instructorHtml = p.instructorName
+      ? `<br/><br/><b>Instructor:</b> ${p.instructorName}`
+      : "";
+    const priceHtml = p.priceLabel ? `<br/><b>Price:</b> ${p.priceLabel}` : "";
+    const shortHtml = p.shortDescription ? `<br/><br/>${p.shortDescription}` : "";
+    const longHtml = p.description ? `<br/><br/>${p.description.replace(/\n/g, "<br/>")}` : "";
+    return {
+      subject: `New DigitalSkillX course: ${p.courseTitle}`,
+      html: shell(
+        p.courseTitle,
+        `Hi ${p.firstName}, a new course is now live on DigitalSkillX${
+          p.programName && p.programName !== "DigitalSkillX" ? ` in <b>${p.programName}</b>` : ""
+        }.${shortHtml}${longHtml}${outcomeHtml}${instructorHtml}${priceHtml}`,
+        { label: "View the course", url: p.url },
+      ),
+    };
+  },
 
   inactivity: (p: { name: string; url: string }) => ({
     subject: "We miss you at DigitalSkillX",

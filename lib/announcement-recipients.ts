@@ -52,6 +52,61 @@ export async function resolveAnnouncementRecipients(
   return [...byId.values()];
 }
 
+/** Students who paid or were granted a paid DigitalSkillX course (not free self-enroll only). */
+export async function resolvePaidStudentRecipients(
+  admin: SupabaseClient<Database>,
+): Promise<AnnouncementRecipient[]> {
+  const studentIds = new Set<string>();
+  const pageSize = 1000;
+
+  for (let from = 0; from < 50_000; from += pageSize) {
+    const { data, error } = await admin
+      .from("transactions")
+      .select("student_id")
+      .eq("status", "success")
+      .not("student_id", "is", null)
+      .range(from, from + pageSize - 1);
+    if (error) throw new Error(error.message);
+    const rows = data ?? [];
+    for (const row of rows) {
+      if (row.student_id) studentIds.add(row.student_id);
+    }
+    if (rows.length < pageSize) break;
+  }
+
+  for (let from = 0; from < 50_000; from += pageSize) {
+    const { data, error } = await admin
+      .from("enrollments")
+      .select("student_id")
+      .in("source", ["purchase", "admin", "enrollment_link"])
+      .range(from, from + pageSize - 1);
+    if (error) throw new Error(error.message);
+    const rows = data ?? [];
+    for (const row of rows) studentIds.add(row.student_id);
+    if (rows.length < pageSize) break;
+  }
+
+  const ids = [...studentIds];
+  if (ids.length === 0) return [];
+
+  const byId = new Map<string, AnnouncementRecipient>();
+  for (let i = 0; i < ids.length; i += pageSize) {
+    const slice = ids.slice(i, i + pageSize);
+    const { data: profiles, error: profileError } = await admin
+      .from("profiles")
+      .select("id, email, full_name")
+      .in("id", slice)
+      .eq("role", "student")
+      .eq("is_suspended", false);
+    if (profileError) throw new Error(profileError.message);
+    for (const row of profiles ?? []) {
+      if (!row.email?.trim()) continue;
+      byId.set(row.id, row);
+    }
+  }
+  return [...byId.values()];
+}
+
 export function stripHtmlPreview(html: string, maxLength = 160) {
   const text = html
     .replace(/<br\s*\/?>/gi, " ")
