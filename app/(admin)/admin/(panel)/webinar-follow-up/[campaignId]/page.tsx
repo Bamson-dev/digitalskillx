@@ -12,6 +12,7 @@ import {
   listSendsByStep,
   listSequenceSteps,
   loadCampaignSnapshot,
+  ensureSequenceFromSource,
 } from "@/lib/webinar-followup/store";
 
 export const metadata: Metadata = { title: "Webinar Follow-Up Campaign" };
@@ -41,6 +42,7 @@ export default async function WebinarFollowUpCampaignPage({
   }
 
   const campaign = snapshot.campaign;
+  await ensureSequenceFromSource(admin, campaign.id);
   const [steps, imports, contacts, sends, sendsByStep] = await Promise.all([
     listSequenceSteps(admin, campaign.id),
     listImports(admin, campaign.id),

@@ -1,5 +1,5 @@
 // DigitalSkillX service worker (PRD §17).
-const CACHE = "digitalskillx-v1";
+const CACHE = "digitalskillx-v2";
 const OFFLINE_URLS = ["/", "/dashboard"];
 
 self.addEventListener("install", (event) => {
@@ -22,6 +22,8 @@ self.addEventListener("activate", (event) => {
 self.addEventListener("fetch", (event) => {
   const req = event.request;
   if (req.method !== "GET") return;
+  const url = new URL(req.url);
+  if (url.pathname.startsWith("/admin") || url.pathname.startsWith("/_next")) return;
   if (req.mode === "navigate") {
     event.respondWith(
       fetch(req)

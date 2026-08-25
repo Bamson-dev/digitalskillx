@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { useMemo, useRef, useState, useTransition } from "react";
 import { useFormState } from "react-dom";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -180,11 +180,6 @@ export function WebinarFollowupCampaignPanel(props: {
     }
   }
 
-  useEffect(() => {
-    if (props.status !== "active") return;
-    const timer = window.setInterval(() => router.refresh(), 12_000);
-    return () => window.clearInterval(timer);
-  }, [props.status, props.campaignId, router]);
 
   async function importNewContacts() {
     if (!csvFile) return;
@@ -418,12 +413,13 @@ export function WebinarFollowupCampaignPanel(props: {
             <span className="text-xs text-muted">Required before first activation.</span>
           </form>
         ) : (
-          <form action={seedAction}>
+          <form action={seedAction} className="flex flex-wrap items-center gap-2">
             <input type="hidden" name="campaign_id" value={props.campaignId} />
             <input type="hidden" name="force" value="1" />
-            <button type="submit" className="text-xs text-muted underline">
-              Re-sync sequence from source (advanced)
-            </button>
+            <SubmitButton pendingText="Loading new emails…">Load latest emails into campaign</SubmitButton>
+            <span className="text-xs text-muted">
+              Updates copy for unsent emails. Contacts keep their current step.
+            </span>
           </form>
         )}
         {statusState.error ? <p className="text-sm text-red-700">{statusState.error}</p> : null}

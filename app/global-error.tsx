@@ -12,6 +12,15 @@ export default function GlobalError({
 }) {
   useEffect(() => {
     Sentry.captureException(error);
+    const stale =
+      /ChunkLoadError|Loading chunk|Failed to fetch dynamically imported module/i.test(
+        `${error.name} ${error.message}`,
+      );
+    if (!stale) return;
+    const key = "dsx-global-chunk-reload";
+    if (sessionStorage.getItem(key) === "1") return;
+    sessionStorage.setItem(key, "1");
+    window.location.reload();
   }, [error]);
 
   return (
