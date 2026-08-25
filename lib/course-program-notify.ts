@@ -132,17 +132,16 @@ export async function notifyProgramStudentsOfNewCourse(
     .filter(Boolean)
     .join(" ");
 
-  for (let i = 0; i < toNotify.length; i += 200) {
-    await notifyMany(
-      toNotify.slice(i, i + 200).map((recipient) => recipient.id),
-      {
-        type: "program_course_added",
-        title: `New course: ${course.title}`,
-        message: inAppMessage,
-        linkUrl: `/course/${course.id}`,
-      },
-    );
-  }
+  await notifyMany(
+    toNotify.map((recipient) => recipient.id),
+    {
+      type: "program_course_added",
+      title: `New course: ${course.title}`,
+      message: inAppMessage,
+      linkUrl: `/course/${course.id}`,
+    },
+    { admin },
+  );
 
   const tracked = await recordProgramCourseDeliveries(
     admin,

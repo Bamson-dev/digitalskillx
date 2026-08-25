@@ -47,6 +47,9 @@
     },
     "app/api/admin/webinar-follow-up/[campaignId]/drain/route.ts": {
       "maxDuration": 120
+    },
+    "app/api/admin/courses/[courseId]/notify-publish/route.ts": {
+      "maxDuration": 120
     }
   }
 }

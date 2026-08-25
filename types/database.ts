@@ -1420,6 +1420,10 @@ export type Database = {
         };
         Returns: Json;
       };
+      list_course_publish_recipients: {
+        Args: Record<string, never>;
+        Returns: { id: string; email: string; full_name: string | null }[];
+      };
     };
     Enums: {
       user_role: UserRole;

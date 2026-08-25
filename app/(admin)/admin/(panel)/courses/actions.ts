@@ -19,7 +19,7 @@ import {
   normalizeTelegramCommunityUrl,
   normalizeWhatsAppCommunityUrl,
 } from "@/lib/course-community";
-import { notifyProgramStudentsOfNewCourse, sendProgramCoursePublishEmails } from "@/lib/course-program-notify";
+import { notifyProgramStudentsOfNewCourse } from "@/lib/course-program-notify";
 import type { CourseVisibility, EnrollmentType, LessonType } from "@/types/database";
 
 export type LessonAttachmentState = {
@@ -250,56 +250,37 @@ export async function updateCourseSettings(
     const forceNotify = formData.get("notify_paid_students") === "on";
     let notifyNote = "";
     if ((!wasPublished && nowPublished && !isComingSoon) || (forceNotify && nowPublished && !isComingSoon)) {
+      const courseRow = {
+        id,
+        title,
+        category_id: categoryId,
+        short_description: shortDescription,
+        description,
+        learning_outcomes: outcomes,
+        instructor_name: String(formData.get("instructor_name") ?? "").trim() || null,
+        price_ngn: Number.isFinite(priceNgn) && priceNgn >= 0 ? Math.round(priceNgn) : 0,
+      };
       try {
-        const courseRow = {
-          id,
-          title,
-          category_id: categoryId,
-          short_description: shortDescription,
-          description,
-          learning_outcomes: outcomes,
-          instructor_name: String(formData.get("instructor_name") ?? "").trim() || null,
-          price_ngn: Number.isFinite(priceNgn) && priceNgn >= 0 ? Math.round(priceNgn) : 0,
-        };
-        const result = await notifyProgramStudentsOfNewCourse(courseRow, {
-          forceResend: forceNotify,
-          sendEmails: false,
-        });
-        if (result.notified > 0) {
-          try {
-            waitUntil(
-              sendProgramCoursePublishEmails({
-                course: courseRow,
-                toNotify: result.toNotify,
-                programName: result.programName,
-                courseUrl: result.courseUrl,
-                shortDescription: result.shortDescription,
-                longDescription: result.longDescription,
-              }).then((emailsSent) => {
-                console.info(
-                  `[course-program-notify] background emails for ${id}: ${emailsSent}/${result.notified}`,
-                );
-              }),
-            );
-          } catch (backgroundErr) {
-            console.error("[course-program-notify] could not queue background emails:", backgroundErr);
-          }
-          notifyNote = ` Notified ${result.notified} student(s) in-app; emails are sending in the background.${
-            result.schemaNote ? ` ${result.schemaNote}` : ""
-          }`;
-        } else {
-          notifyNote = ` No new notifications sent${result.reason ? ` — ${result.reason}` : "."}${
-            result.schemaNote ? ` ${result.schemaNote}` : ""
-          }`;
-        }
-      } catch (err) {
-        console.error("[course-program-notify] failed after publish:", err);
-        const detail = err instanceof Error ? err.message : "unknown error";
-        return {
-          error: `Course saved, but notifications failed: ${detail}`,
-          message: `Course settings saved, but notifications failed: ${detail}`,
-          thumbnail_url: thumbnailUrl,
-        };
+        waitUntil(
+          notifyProgramStudentsOfNewCourse(courseRow, {
+            forceResend: forceNotify,
+            sendEmails: true,
+          })
+            .then((result) => {
+              console.info(
+                `[course-program-notify] background ${id}: notified=${result.notified} emails=${result.emailsSent}${result.reason ? ` reason=${result.reason}` : ""}`,
+              );
+            })
+            .catch((err) => {
+              console.error("[course-program-notify] background job failed:", err);
+            }),
+        );
+        notifyNote =
+          " Student notifications are sending in the background — check in-app notifications and email in about a minute.";
+      } catch (queueErr) {
+        console.error("[course-program-notify] could not queue background job:", queueErr);
+        notifyNote =
+          " Course saved, but could not queue notifications. Check Resend publish notification and save again.";
       }
     } else if (nowPublished && isComingSoon) {
       notifyNote = " Coming soon courses do not notify students until that flag is off.";

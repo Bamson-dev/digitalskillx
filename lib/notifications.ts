@@ -1,6 +1,8 @@
 import "server-only";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { createAdminClientAsync } from "@/lib/supabase/admin";
-import type { NotificationType } from "@/types/database";
+import type { Database, NotificationType } from "@/types/database";
+import { chunkArray } from "@/lib/chunk-array";
 import {
   fallbackNotificationType,
   isMissingEnumValueError,
@@ -8,6 +10,7 @@ import {
 import { formatPostgrestError } from "@/lib/postgrest-error";
 
 const NOTIFY_BATCH = 40;
+const NOTIFY_PARALLEL = 3;
 
 function buildNotificationRow(params: {
   studentId: string;
@@ -29,8 +32,9 @@ function buildNotificationRow(params: {
 async function insertNotificationRows(
   rows: ReturnType<typeof buildNotificationRow>[],
   preferredType: NotificationType,
+  admin?: SupabaseClient<Database>,
 ) {
-  const supabase = await createAdminClientAsync();
+  const supabase = admin ?? (await createAdminClientAsync());
   const { error } = await supabase.from("notifications").insert(rows);
   if (!error) return;
 
@@ -63,21 +67,26 @@ export async function notify(params: {
 export async function notifyMany(
   studentIds: string[],
   params: Omit<Parameters<typeof notify>[0], "studentId">,
+  options?: { admin?: SupabaseClient<Database> },
 ) {
   const unique = [...new Set(studentIds.filter(Boolean))];
   if (unique.length === 0) return;
 
-  for (let i = 0; i < unique.length; i += NOTIFY_BATCH) {
-    const slice = unique.slice(i, i + NOTIFY_BATCH);
-    const rows = slice.map((studentId) =>
-      buildNotificationRow({
-        studentId,
-        type: params.type,
-        message: params.message,
-        title: params.title,
-        linkUrl: params.linkUrl,
+  const batches = chunkArray(unique, NOTIFY_BATCH);
+  for (let i = 0; i < batches.length; i += NOTIFY_PARALLEL) {
+    await Promise.all(
+      batches.slice(i, i + NOTIFY_PARALLEL).map((slice) => {
+        const rows = slice.map((studentId) =>
+          buildNotificationRow({
+            studentId,
+            type: params.type,
+            message: params.message,
+            title: params.title,
+            linkUrl: params.linkUrl,
+          }),
+        );
+        return insertNotificationRows(rows, params.type, options?.admin);
       }),
     );
-    await insertNotificationRows(rows, params.type);
   }
 }

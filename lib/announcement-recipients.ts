@@ -38,21 +38,6 @@ async function loadStudentProfiles(
   return [...byId.values()];
 }
 
-async function collectEnrollmentStudentIds(admin: SupabaseClient<Database>) {
-  const ids = new Set<string>();
-  for (let from = 0; from < 50_000; from += PAGE) {
-    const { data, error } = await admin
-      .from("enrollments")
-      .select("student_id")
-      .range(from, from + PAGE - 1);
-    if (error) throw new Error(formatPostgrestError(error));
-    const rows = data ?? [];
-    for (const row of rows) ids.add(row.student_id);
-    if (rows.length < PAGE) break;
-  }
-  return ids;
-}
-
 async function collectPaidTransactionStudentIds(admin: SupabaseClient<Database>) {
   const ids = new Set<string>();
   for (let from = 0; from < 50_000; from += PAGE) {
@@ -105,14 +90,55 @@ export async function resolveAnnouncementRecipients(
   return loadStudentProfiles(admin, [...studentIds]);
 }
 
-/** Students to notify on course publish: anyone with a successful payment or any enrollment. */
+async function resolveCoursePublishRecipientsViaRpc(
+  admin: SupabaseClient<Database>,
+): Promise<AnnouncementRecipient[] | null> {
+  const { data, error } = await admin.rpc("list_course_publish_recipients");
+  if (error) {
+    const msg = error.message.toLowerCase();
+    if (
+      msg.includes("does not exist") ||
+      msg.includes("could not find the function") ||
+      error.code === "PGRST202"
+    ) {
+      return null;
+    }
+    throw new Error(formatPostgrestError(error));
+  }
+  return (data ?? []).filter((row) => row.email?.trim()) as AnnouncementRecipient[];
+}
+
+/** Fast fallback: active students with email (no full enrollments table scan). */
+async function resolveCoursePublishRecipientsViaProfiles(
+  admin: SupabaseClient<Database>,
+): Promise<AnnouncementRecipient[]> {
+  const recipients: AnnouncementRecipient[] = [];
+  for (let from = 0; from < 50_000; from += PAGE) {
+    const { data, error } = await admin
+      .from("profiles")
+      .select("id, email, full_name")
+      .eq("role", "student")
+      .eq("is_suspended", false)
+      .not("email", "is", null)
+      .order("created_at", { ascending: true })
+      .range(from, from + PAGE - 1);
+    if (error) throw new Error(formatPostgrestError(error));
+    const rows = data ?? [];
+    for (const row of rows) {
+      if (row.email?.trim()) recipients.push(row);
+    }
+    if (rows.length < PAGE) break;
+  }
+  return recipients;
+}
+
+/** Students to notify on course publish: enrolled or paid (RPC), else active students. */
 export async function resolveCoursePublishRecipients(
   admin: SupabaseClient<Database>,
 ): Promise<AnnouncementRecipient[]> {
-  const studentIds = new Set<string>();
-  for (const id of await collectPaidTransactionStudentIds(admin)) studentIds.add(id);
-  for (const id of await collectEnrollmentStudentIds(admin)) studentIds.add(id);
-  return loadStudentProfiles(admin, [...studentIds]);
+  const viaRpc = await resolveCoursePublishRecipientsViaRpc(admin);
+  if (viaRpc) return viaRpc;
+  return resolveCoursePublishRecipientsViaProfiles(admin);
 }
 
 /** Students who paid or were granted a paid DigitalSkillX course (not free self-enroll only). */
