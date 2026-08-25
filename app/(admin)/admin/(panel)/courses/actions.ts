@@ -266,29 +266,40 @@ export async function updateCourseSettings(
           sendEmails: false,
         });
         if (result.notified > 0) {
-          waitUntil(
-            sendProgramCoursePublishEmails({
-              course: courseRow,
-              toNotify: result.toNotify,
-              programName: result.programName,
-              courseUrl: result.courseUrl,
-              shortDescription: result.shortDescription,
-              longDescription: result.longDescription,
-            }).then((emailsSent) => {
-              console.info(
-                `[course-program-notify] background emails for ${id}: ${emailsSent}/${result.notified}`,
-              );
-            }),
-          );
-          notifyNote = ` Notified ${result.notified} student(s) in-app; emails are sending in the background.`;
+          try {
+            waitUntil(
+              sendProgramCoursePublishEmails({
+                course: courseRow,
+                toNotify: result.toNotify,
+                programName: result.programName,
+                courseUrl: result.courseUrl,
+                shortDescription: result.shortDescription,
+                longDescription: result.longDescription,
+              }).then((emailsSent) => {
+                console.info(
+                  `[course-program-notify] background emails for ${id}: ${emailsSent}/${result.notified}`,
+                );
+              }),
+            );
+          } catch (backgroundErr) {
+            console.error("[course-program-notify] could not queue background emails:", backgroundErr);
+          }
+          notifyNote = ` Notified ${result.notified} student(s) in-app; emails are sending in the background.${
+            result.schemaNote ? ` ${result.schemaNote}` : ""
+          }`;
         } else {
-          notifyNote = ` No new notifications sent${result.reason ? ` — ${result.reason}` : "."}`;
+          notifyNote = ` No new notifications sent${result.reason ? ` — ${result.reason}` : "."}${
+            result.schemaNote ? ` ${result.schemaNote}` : ""
+          }`;
         }
       } catch (err) {
         console.error("[course-program-notify] failed after publish:", err);
-        notifyNote = ` Course saved, but notifications failed: ${
-          err instanceof Error ? err.message : "unknown error"
-        }`;
+        const detail = err instanceof Error ? err.message : "unknown error";
+        return {
+          error: `Course saved, but notifications failed: ${detail}`,
+          message: `Course settings saved, but notifications failed: ${detail}`,
+          thumbnail_url: thumbnailUrl,
+        };
       }
     } else if (nowPublished && isComingSoon) {
       notifyNote = " Coming soon courses do not notify students until that flag is off.";

@@ -4,6 +4,12 @@ import { sendEmail } from "@/lib/email";
 import { emailTemplates } from "@/lib/email/templates";
 import { notifyMany } from "@/lib/notifications";
 import {
+  clearProgramCourseDeliveries,
+  loadProgramCourseDeliveries,
+  programCourseNotifySchemaHint,
+  recordProgramCourseDeliveries,
+} from "@/lib/ensure-program-course-notify";
+import {
   resolveCoursePublishRecipients,
   stripHtmlPreview,
   type AnnouncementRecipient,
@@ -27,6 +33,7 @@ export type ProgramCourseNotifyResult = {
   notified: number;
   emailsSent: number;
   reason?: string;
+  schemaNote?: string;
   toNotify: AnnouncementRecipient[];
   programName: string;
   courseUrl: string;
@@ -89,26 +96,17 @@ export async function notifyProgramStudentsOfNewCourse(
     };
   }
 
-  const { data: existingDeliveries, error: deliveryError } = await admin
-    .from("program_course_publish_deliveries")
-    .select("student_id")
-    .eq("course_id", course.id);
-  if (deliveryError) {
-    if (
-      deliveryError.message.includes("program_course_publish_deliveries") &&
-      deliveryError.message.includes("does not exist")
-    ) {
-      throw new Error(
-        "Delivery table missing. Run sql/apply-program-course-notify.sql in Supabase, then save again.",
-      );
-    }
-    throw new Error(deliveryError.message);
+  const deliveries = await loadProgramCourseDeliveries(admin, course.id);
+  const schemaNote = programCourseNotifySchemaHint(deliveries.tracking) ?? undefined;
+
+  if (options?.forceResend && deliveries.tracking) {
+    await clearProgramCourseDeliveries(admin, course.id);
+    deliveries.studentIds.clear();
   }
 
-  const alreadyNotified = new Set((existingDeliveries ?? []).map((row) => row.student_id));
   const toNotify = options?.forceResend
     ? recipients
-    : recipients.filter((recipient) => !alreadyNotified.has(recipient.id));
+    : recipients.filter((recipient) => !deliveries.studentIds.has(recipient.id));
 
   const courseUrl = `${siteUrl()}/course/${course.id}`;
   const longDescription = stripHtmlPreview(course.description ?? "", 4_000);
@@ -120,7 +118,8 @@ export async function notifyProgramStudentsOfNewCourse(
       emailsSent: 0,
       reason: options?.forceResend
         ? "No students matched the publish notification audience."
-        : "All eligible students were already notified for this course. Check the box and save again to resend.",
+        : "All eligible students were already notified for this course. Check Resend and save again.",
+      schemaNote,
       toNotify: [],
       programName,
       courseUrl,
@@ -145,34 +144,11 @@ export async function notifyProgramStudentsOfNewCourse(
     );
   }
 
-  if (options?.forceResend && alreadyNotified.size > 0) {
-    const { error: clearError } = await admin
-      .from("program_course_publish_deliveries")
-      .delete()
-      .eq("course_id", course.id);
-    if (clearError) throw new Error(clearError.message);
-  }
-
-  for (let i = 0; i < toNotify.length; i += 200) {
-    const slice = toNotify.slice(i, i + 200);
-    const { error: insertError } = await admin.from("program_course_publish_deliveries").insert(
-      slice.map((recipient) => ({
-        course_id: course.id,
-        student_id: recipient.id,
-      })),
-    );
-    if (insertError) {
-      if (
-        insertError.message.includes("program_course_added") ||
-        insertError.message.includes("invalid input value for enum")
-      ) {
-        throw new Error(
-          "Notification type missing. Run sql/apply-program-course-notify.sql in Supabase, then save again.",
-        );
-      }
-      throw new Error(insertError.message);
-    }
-  }
+  const tracked = await recordProgramCourseDeliveries(
+    admin,
+    course.id,
+    toNotify.map((recipient) => recipient.id),
+  );
 
   let emailsSent = 0;
   if (options?.sendEmails !== false) {
@@ -190,6 +166,7 @@ export async function notifyProgramStudentsOfNewCourse(
     notified: toNotify.length,
     emailsSent,
     reason: undefined,
+    schemaNote: tracked ? schemaNote : schemaNote ?? programCourseNotifySchemaHint(false) ?? undefined,
     toNotify,
     programName,
     courseUrl,
