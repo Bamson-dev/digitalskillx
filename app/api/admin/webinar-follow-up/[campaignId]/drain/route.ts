@@ -37,7 +37,7 @@ export async function POST(
   });
 
   keepWebinarFollowupSending({
-    moreDue: drain.moreDue,
+    moreDue: drain.moreDue || (drain.counts?.dueNow ?? 0) > 0 || (drain.counts?.sending ?? 0) > 0,
     reason: "admin_wfu_drain_more",
   });
 

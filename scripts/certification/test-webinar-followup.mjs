@@ -649,10 +649,16 @@ function makeSteps(campaignId, n) {
 {
   const continueSrc = readFileSync(join(root, "lib/bulk-import-continue.ts"), "utf8");
   const vercel = readFileSync(join(root, "vercel.json"), "utf8");
+  const cronRoute = readFileSync(join(root, "app/api/cron/webinar-follow-up/route.ts"), "utf8");
+  const storeSrc = readFileSync(join(root, "lib/webinar-followup/store.ts"), "utf8");
+  const liveDrain = readFileSync(join(root, "lib/webinar-followup/live-drain.ts"), "utf8");
   assert.match(continueSrc, /keepWebinarFollowupSending/);
   assert.match(continueSrc, /delayMs/);
   assert.match(vercel, /\/api\/cron\/webinar-follow-up/);
   assert.match(vercel, /25 10 \* \* \*/);
+  assert.match(cronRoute, /wfu_drain_error/);
+  assert.match(storeSrc, /\.range\(from, to\)/);
+  assert.match(liveDrain, /leftover/);
   ok("cron path and continuation support webinar follow-up");
 }
 

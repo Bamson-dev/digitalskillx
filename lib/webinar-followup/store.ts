@@ -678,21 +678,6 @@ export function createSupabaseWfuStore(admin: Admin): WfuStore {
     },
 
     async listDueContacts(campaignId, nowIso, limit) {
-      const fetchLimit = Math.min(Math.max(limit * 8, limit), 400);
-      const { data, error } = await admin
-        .from("webinar_followup_contacts" as never)
-        .select(
-          "id, campaign_id, email, normalized_email, first_name, status, current_step, last_sent_step, next_send_at",
-        )
-        .eq("campaign_id", campaignId)
-        .eq("status", "active")
-        .lte("next_send_at", nowIso)
-        .order("next_send_at", { ascending: true })
-        .limit(fetchLimit);
-      if (error) throw new Error(error.message);
-      const due = ((data as Array<Record<string, unknown>> | null) ?? []).map(asContact);
-      if (due.length === 0) return [];
-
       const { data: inFlight, error: sendErr } = await admin
         .from("webinar_followup_sends" as never)
         .select("contact_id")
@@ -702,7 +687,34 @@ export function createSupabaseWfuStore(admin: Admin): WfuStore {
       const blocked = new Set(
         ((inFlight as Array<{ contact_id: string }> | null) ?? []).map((row) => row.contact_id),
       );
-      return due.filter((row) => !blocked.has(row.id)).slice(0, limit);
+
+      const picked: WfuContact[] = [];
+      const pageSize = 400;
+      let from = 0;
+      while (picked.length < limit && from < 8_000) {
+        const to = from + pageSize - 1;
+        const { data, error } = await admin
+          .from("webinar_followup_contacts" as never)
+          .select(
+            "id, campaign_id, email, normalized_email, first_name, status, current_step, last_sent_step, next_send_at",
+          )
+          .eq("campaign_id", campaignId)
+          .eq("status", "active")
+          .lte("next_send_at", nowIso)
+          .order("next_send_at", { ascending: true })
+          .range(from, to);
+        if (error) throw new Error(error.message);
+        const page = ((data as Array<Record<string, unknown>> | null) ?? []).map(asContact);
+        if (page.length === 0) break;
+        for (const row of page) {
+          if (blocked.has(row.id)) continue;
+          picked.push(row);
+          if (picked.length >= limit) break;
+        }
+        if (page.length < pageSize) break;
+        from += pageSize;
+      }
+      return picked;
     },
 
     async getStep(campaignId, stepNumber) {
@@ -760,9 +772,30 @@ export function createSupabaseWfuStore(admin: Admin): WfuStore {
     },
 
     async claimPendingSends(limit) {
-      await admin.rpc("reclaim_stale_webinar_followup_sends" as never, {
-        p_older_than_minutes: STALE_SENDING_MINUTES,
-      } as never);
+      const cutoff = new Date(Date.now() - STALE_SENDING_MINUTES * 60_000).toISOString();
+      const { error: rpcReclaimErr } = await admin.rpc(
+        "reclaim_stale_webinar_followup_sends" as never,
+        { p_older_than_minutes: STALE_SENDING_MINUTES } as never,
+      );
+      if (rpcReclaimErr) {
+        await admin
+          .from("webinar_followup_sends" as never)
+          .update({
+            status: "pending",
+            last_error: "reclaimed_stale_sending",
+          } as never)
+          .eq("status", "sending")
+          .or(`updated_at.lt.${cutoff},updated_at.is.null`);
+      } else {
+        await admin
+          .from("webinar_followup_sends" as never)
+          .update({
+            status: "pending",
+            last_error: "reclaimed_stale_sending",
+          } as never)
+          .eq("status", "sending")
+          .is("updated_at", null);
+      }
 
       const { data: rpcData, error: rpcError } = await admin.rpc(
         "claim_webinar_followup_sends" as never,

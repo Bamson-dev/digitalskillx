@@ -37,6 +37,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: true, depth, chained: result.moreDue, ...result });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    return NextResponse.json({ ok: false, error: message }, { status: 500 });
+    keepWebinarFollowupSending({
+      moreDue: true,
+      depth,
+      reason: "wfu_drain_error",
+    });
+    return NextResponse.json({ ok: false, error: message, depth }, { status: 500 });
   }
 }

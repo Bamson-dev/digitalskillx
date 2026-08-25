@@ -46,6 +46,22 @@ export async function runLiveWebinarFollowupDrain(
     budgetMs: opts?.budgetMs ?? 90_000,
     campaignId: opts?.campaignId,
   });
-  const counts = opts?.campaignId ? await loadCampaignCounts(admin, opts.campaignId) : null;
-  return { ...drain, counts, sequenceSynced };
+  let leftover = false;
+  let counts: CampaignCounts | null = null;
+  if (opts?.campaignId) {
+    counts = await loadCampaignCounts(admin, opts.campaignId);
+    leftover = counts.sending > 0 || counts.dueNow > 0;
+  } else {
+    const campaigns = await store.listActiveCampaigns();
+    for (const campaign of campaigns) {
+      const c = await loadCampaignCounts(admin, campaign.id);
+      if (c.sending > 0 || c.dueNow > 0) leftover = true;
+    }
+  }
+  return {
+    ...drain,
+    counts,
+    sequenceSynced,
+    moreDue: drain.moreDue || leftover,
+  };
 }
