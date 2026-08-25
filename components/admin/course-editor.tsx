@@ -29,7 +29,7 @@ import {
   deleteModule,
   createLesson,
   updateLesson,
-  reorderLessons,
+  persistCurriculumLayout,
 } from "@/app/(admin)/admin/(panel)/courses/actions";
 
 function LessonSaveButton() {
@@ -155,6 +155,15 @@ export function CourseEditor({
   );
 }
 
+function sortModules(list: ModuleWithLessons[]) {
+  return [...list]
+    .sort((a, b) => a.position - b.position)
+    .map((module) => ({
+      ...module,
+      lessons: [...(module.lessons ?? [])].sort((a, b) => a.position - b.position),
+    }));
+}
+
 function CurriculumCard({
   courseId,
   modules,
@@ -164,15 +173,134 @@ function CurriculumCard({
   modules: ModuleWithLessons[];
   lessonAttachments: Record<string, AttachmentDisplay[]>;
 }) {
+  const [layout, setLayout] = useState(() => sortModules(modules));
+  const [dragging, setDragging] = useState<{ type: "lesson" | "module"; id: string } | null>(null);
+  const [dropHint, setDropHint] = useState<{ moduleId: string; index: number } | null>(null);
+  const [isPending, startTransition] = useTransition();
+
+  useEffect(() => {
+    setLayout(sortModules(modules));
+  }, [modules]);
+
+  function persist(next: ModuleWithLessons[]) {
+    setLayout(next);
+    startTransition(async () => {
+      await persistCurriculumLayout(
+        courseId,
+        next.map((module) => ({
+          moduleId: module.id,
+          lessonIds: module.lessons.map((lesson) => lesson.id),
+        })),
+      );
+    });
+  }
+
+  function findLesson(lessonId: string) {
+    for (const module of layout) {
+      const index = module.lessons.findIndex((lesson) => lesson.id === lessonId);
+      if (index >= 0) return { module, index, lesson: module.lessons[index] };
+    }
+    return null;
+  }
+
+  function moveLesson(lessonId: string, targetModuleId: string, insertIndex: number) {
+    const found = findLesson(lessonId);
+    if (!found) return;
+    const next = layout.map((module) => ({ ...module, lessons: [...module.lessons] }));
+    const source = next.find((module) => module.id === found.module.id);
+    const target = next.find((module) => module.id === targetModuleId);
+    if (!source || !target) return;
+    const [moved] = source.lessons.splice(found.index, 1);
+    let index = insertIndex;
+    if (source.id === target.id && found.index < index) index -= 1;
+    index = Math.max(0, Math.min(index, target.lessons.length));
+    target.lessons.splice(index, 0, { ...moved, module_id: target.id });
+    persist(next);
+  }
+
+  function moveModule(sourceId: string, targetId: string) {
+    if (sourceId === targetId) return;
+    const from = layout.findIndex((module) => module.id === sourceId);
+    const to = layout.findIndex((module) => module.id === targetId);
+    if (from < 0 || to < 0) return;
+    const next = [...layout];
+    const [moved] = next.splice(from, 1);
+    next.splice(to, 0, moved);
+    persist(next);
+  }
+
+  function onLessonDragStart(event: React.DragEvent, lessonId: string) {
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("text/plain", `lesson:${lessonId}`);
+    setDragging({ type: "lesson", id: lessonId });
+  }
+
+  function onModuleDragStart(event: React.DragEvent, moduleId: string) {
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("text/plain", `module:${moduleId}`);
+    setDragging({ type: "module", id: moduleId });
+  }
+
+  function payload(event: React.DragEvent) {
+    const raw = event.dataTransfer.getData("text/plain");
+    if (raw.startsWith("lesson:")) return { type: "lesson" as const, id: raw.slice(7) };
+    if (raw.startsWith("module:")) return { type: "module" as const, id: raw.slice(7) };
+    if (dragging) return dragging;
+    return null;
+  }
+
   return (
     <Card id="course-curriculum">
       <CardHeader
         title="Curriculum"
-        description="Add modules and lessons. Drag to reorder. Use the trash icon or multi-select to remove lessons."
+        description="Add modules and lessons. Drag a lesson into any module or any position. Drag modules to reorder them."
       />
       <div className="space-y-4">
-        {modules.map((m) => (
-          <ModuleBlock key={m.id} courseId={courseId} module={m} lessonAttachments={lessonAttachments} />
+        {layout.map((module) => (
+          <ModuleBlock
+            key={module.id}
+            courseId={courseId}
+            module={module}
+            lessonAttachments={lessonAttachments}
+            dragging={dragging}
+            dropHint={dropHint}
+            isPending={isPending}
+            onLessonDragStart={onLessonDragStart}
+            onModuleDragStart={onModuleDragStart}
+            onDragEnd={() => {
+              setDragging(null);
+              setDropHint(null);
+            }}
+            onLessonDragOver={(index) => {
+              if (dragging?.type === "lesson") setDropHint({ moduleId: module.id, index });
+            }}
+            onDropOnLesson={(event, lessonId) => {
+              event.preventDefault();
+              const data = payload(event);
+              setDragging(null);
+              setDropHint(null);
+              if (!data) return;
+              if (data.type === "module") {
+                moveModule(data.id, module.id);
+                return;
+              }
+              const at = module.lessons.findIndex((lesson) => lesson.id === lessonId);
+              moveLesson(data.id, module.id, at < 0 ? module.lessons.length : at);
+            }}
+            onDropOnModule={(event, atEnd) => {
+              event.preventDefault();
+              const data = payload(event);
+              setDragging(null);
+              setDropHint(null);
+              if (!data) return;
+              if (data.type === "module") {
+                moveModule(data.id, module.id);
+                return;
+              }
+              moveLesson(data.id, module.id, atEnd ? module.lessons.length : 0);
+            }}
+            onMoveLesson={(lessonId, toIndex) => moveLesson(lessonId, module.id, toIndex)}
+          />
         ))}
       </div>
 
@@ -191,23 +319,40 @@ function ModuleBlock({
   courseId,
   module,
   lessonAttachments,
+  dragging,
+  dropHint,
+  isPending,
+  onLessonDragStart,
+  onModuleDragStart,
+  onDragEnd,
+  onLessonDragOver,
+  onDropOnLesson,
+  onDropOnModule,
+  onMoveLesson,
 }: {
   courseId: string;
   module: ModuleWithLessons;
   lessonAttachments: Record<string, AttachmentDisplay[]>;
+  dragging: { type: "lesson" | "module"; id: string } | null;
+  dropHint: { moduleId: string; index: number } | null;
+  isPending: boolean;
+  onLessonDragStart: (event: React.DragEvent, lessonId: string) => void;
+  onModuleDragStart: (event: React.DragEvent, moduleId: string) => void;
+  onDragEnd: () => void;
+  onLessonDragOver: (index: number) => void;
+  onDropOnLesson: (event: React.DragEvent, lessonId: string) => void;
+  onDropOnModule: (event: React.DragEvent, atEnd: boolean) => void;
+  onMoveLesson: (lessonId: string, toIndex: number) => void;
 }) {
   const router = useRouter();
-  const initialLessons = [...(module.lessons ?? [])].sort((a, b) => a.position - b.position);
-  const [lessons, setLessons] = useState(initialLessons);
-  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const lessons = module.lessons ?? [];
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
   const [bulkError, setBulkError] = useState<string | null>(null);
-  const [isPending, startTransition] = useTransition();
+  const [bulkPending, startBulk] = useTransition();
 
   useEffect(() => {
-    setLessons([...(module.lessons ?? [])].sort((a, b) => a.position - b.position));
     setSelectedIds(new Set());
-  }, [module.id, module.lessons]);
+  }, [module.id, lessons.map((lesson) => lesson.id).join(",")]);
 
   function toggleLessonSelection(lessonId: string, checked: boolean) {
     setSelectedIds((prev) => {
@@ -229,7 +374,7 @@ function ModuleBlock({
     if (!confirm(`Delete ${label} from "${module.title}"? This cannot be undone.`)) return;
 
     setBulkError(null);
-    startTransition(async () => {
+    startBulk(async () => {
       try {
         await deleteLessonsViaApi(courseId, ids);
         setSelectedIds(new Set());
@@ -240,52 +385,45 @@ function ModuleBlock({
     });
   }
 
-  function persistOrder(nextLessons: Lesson[]) {
-    setLessons(nextLessons);
-    startTransition(async () => {
-      await reorderLessons(
-        courseId,
-        module.id,
-        nextLessons.map((lesson) => lesson.id),
-      );
-    });
-  }
-
-  function moveLesson(fromIndex: number, toIndex: number) {
-    if (toIndex < 0 || toIndex >= lessons.length || fromIndex === toIndex) return;
-    const next = [...lessons];
-    const [moved] = next.splice(fromIndex, 1);
-    next.splice(toIndex, 0, moved);
-    persistOrder(next);
-  }
-
-  function handleDragStart(event: React.DragEvent, lessonId: string) {
-    event.dataTransfer.effectAllowed = "move";
-    event.dataTransfer.setData("text/plain", lessonId);
-    setDraggingId(lessonId);
-  }
-
-  function handleDragOver(event: React.DragEvent) {
-    event.preventDefault();
-    event.dataTransfer.dropEffect = "move";
-  }
-
-  function handleDrop(event: React.DragEvent, targetId: string) {
-    event.preventDefault();
-    const sourceId = event.dataTransfer.getData("text/plain");
-    setDraggingId(null);
-    if (!sourceId || sourceId === targetId) return;
-
-    const fromIndex = lessons.findIndex((lesson) => lesson.id === sourceId);
-    const toIndex = lessons.findIndex((lesson) => lesson.id === targetId);
-    if (fromIndex < 0 || toIndex < 0) return;
-    moveLesson(fromIndex, toIndex);
-  }
+  const acceptingLesson = dragging?.type === "lesson";
+  const isDropTarget = dropHint?.moduleId === module.id;
 
   return (
-    <div className="rounded-lg border border-app">
-      <div className="flex items-center gap-2 border-b border-app bg-brand-50/50 p-3">
-        <GripVertical className="h-4 w-4 text-muted" aria-hidden />
+    <div
+      className={`rounded-lg border ${
+        dragging?.type === "module" && dragging.id !== module.id
+          ? "border-dashed border-brand"
+          : "border-app"
+      }`}
+      onDragOver={(event) => {
+        event.preventDefault();
+        event.dataTransfer.dropEffect = "move";
+        if (acceptingLesson) onLessonDragOver(lessons.length);
+      }}
+      onDrop={(event) => onDropOnModule(event, true)}
+    >
+      <div
+        className="flex items-center gap-2 border-b border-app bg-brand-50/50 p-3"
+        onDragOver={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          event.dataTransfer.dropEffect = "move";
+          if (acceptingLesson) onLessonDragOver(0);
+        }}
+        onDrop={(event) => {
+          event.stopPropagation();
+          onDropOnModule(event, false);
+        }}
+      >
+        <div
+          draggable
+          onDragStart={(event) => onModuleDragStart(event, module.id)}
+          onDragEnd={onDragEnd}
+          className="cursor-grab rounded p-1 text-muted hover:bg-brand-50 active:cursor-grabbing"
+          aria-label={`Drag to reorder module ${module.title}`}
+        >
+          <GripVertical className="h-4 w-4" />
+        </div>
         <form action={renameModule} method="post" className="flex min-w-0 flex-1 items-center gap-2">
           <input type="hidden" name="id" value={module.id} />
           <input type="hidden" name="course_id" value={courseId} />
@@ -313,16 +451,24 @@ function ModuleBlock({
               size="sm"
               variant="danger"
               type="button"
-              disabled={isPending}
+              disabled={bulkPending}
               onClick={deleteSelectedLessons}
             >
               <Trash2 className="h-4 w-4" /> Delete selected ({selectedIds.size})
             </Button>
           ) : (
-            <span>Check lessons, then delete with the red trash icon.</span>
+            <span>Drag a lesson here from any module. Check lessons to delete.</span>
           )}
         </div>
-      ) : null}
+      ) : (
+        <div
+          className={`px-3 py-6 text-center text-sm ${
+            isDropTarget ? "bg-brand-50 text-brand" : "text-muted"
+          }`}
+        >
+          Drop a lesson here, or add one below.
+        </div>
+      )}
       {bulkError ? <p className="px-3 py-2 text-xs text-red-600">{bulkError}</p> : null}
 
       <div className="divide-y divide-[rgb(var(--border))]">
@@ -335,21 +481,30 @@ function ModuleBlock({
             index={index}
             isFirst={index === 0}
             isLast={index === lessons.length - 1}
-            isDragging={draggingId === lesson.id}
-            isPending={isPending}
+            isDragging={dragging?.type === "lesson" && dragging.id === lesson.id}
+            dropBefore={isDropTarget && dropHint?.index === index}
+            isPending={isPending || bulkPending}
             selected={selectedIds.has(lesson.id)}
             onToggleSelect={(checked) => toggleLessonSelection(lesson.id, checked)}
-            onMoveUp={() => moveLesson(index, index - 1)}
-            onMoveDown={() => moveLesson(index, index + 1)}
-            onDragStart={(event) => handleDragStart(event, lesson.id)}
-            onDragOver={handleDragOver}
-            onDrop={(event) => handleDrop(event, lesson.id)}
-            onDragEnd={() => setDraggingId(null)}
+            onMoveUp={() => onMoveLesson(lesson.id, Math.max(0, index - 1))}
+            onMoveDown={() => onMoveLesson(lesson.id, index + 2)}
+            onDragStart={(event) => onLessonDragStart(event, lesson.id)}
+            onDragOver={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              event.dataTransfer.dropEffect = "move";
+              onLessonDragOver(index);
+            }}
+            onDrop={(event) => {
+              event.stopPropagation();
+              onDropOnLesson(event, lesson.id);
+            }}
+            onDragEnd={onDragEnd}
           />
         ))}
       </div>
 
-      <form action={createLesson} className="flex gap-2 p-3">
+      <form action={createLesson} className="flex gap-2 p-3" onDragOver={(event) => event.preventDefault()}>
         <input type="hidden" name="module_id" value={module.id} />
         <input type="hidden" name="course_id" value={courseId} />
         <Input name="title" placeholder="New lesson title" className="h-8" />
@@ -376,6 +531,7 @@ function LessonRow({
   isFirst,
   isLast,
   isDragging,
+  dropBefore,
   isPending,
   selected,
   onToggleSelect,
@@ -393,6 +549,7 @@ function LessonRow({
   isFirst: boolean;
   isLast: boolean;
   isDragging: boolean;
+  dropBefore?: boolean;
   isPending: boolean;
   selected: boolean;
   onToggleSelect: (checked: boolean) => void;
@@ -411,28 +568,32 @@ function LessonRow({
     <div
       onDragOver={onDragOver}
       onDrop={onDrop}
-      className={`${isDragging ? "bg-brand-50/80" : ""} ${isPending ? "opacity-80" : ""} ${selected ? "bg-red-50/40" : ""}`}
+      className={`${isDragging ? "bg-brand-50/80 opacity-60" : ""} ${isPending ? "opacity-80" : ""} ${selected ? "bg-red-50/40" : ""} ${dropBefore ? "border-t-2 border-brand" : ""}`}
     >
-      <div className="flex items-center gap-1 px-2 py-2">
+      <div
+        draggable
+        onDragStart={onDragStart}
+        onDragEnd={onDragEnd}
+        className="flex cursor-grab items-center gap-1 px-2 py-2 active:cursor-grabbing"
+      >
         <input
           type="checkbox"
           checked={selected}
           onChange={(event) => onToggleSelect(event.target.checked)}
+          onMouseDown={(event) => event.stopPropagation()}
+          onClick={(event) => event.stopPropagation()}
           className="h-4 w-4 shrink-0 rounded border-neutral-300 text-brand focus:ring-brand"
           aria-label={`Select ${lesson.title}`}
         />
 
         <div
-          draggable
-          onDragStart={onDragStart}
-          onDragEnd={onDragEnd}
-          className="cursor-grab rounded p-1 text-muted hover:bg-brand-50 active:cursor-grabbing"
-          aria-label={`Drag to reorder lesson ${index + 1}`}
+          className="rounded p-1 text-muted hover:bg-brand-50"
+          aria-hidden
         >
           <GripVertical className="h-4 w-4" />
         </div>
 
-        <div className="flex flex-col">
+        <div className="flex flex-col" onMouseDown={(event) => event.stopPropagation()}>
           <button
             type="button"
             onClick={onMoveUp}
@@ -490,16 +651,19 @@ function LessonRow({
           <ChevronDown className={`h-4 w-4 shrink-0 transition-transform ${open ? "rotate-180" : ""}`} />
         </button>
 
-        <DeleteLessonButton
-          courseId={courseId}
-          lessonId={lesson.id}
-          lessonTitle={lesson.title}
-          variant="icon"
-        />
+        <div onMouseDown={(event) => event.stopPropagation()} onClick={(event) => event.stopPropagation()}>
+          <DeleteLessonButton
+            courseId={courseId}
+            lessonId={lesson.id}
+            lessonTitle={lesson.title}
+            variant="icon"
+          />
+        </div>
       </div>
 
       {open ? (
-        <form action={updateLesson} className="grid gap-3 border-t border-app bg-card p-3 sm:grid-cols-2">
+        <div className="border-t border-app bg-card">
+          <form action={updateLesson} className="grid gap-3 p-3 sm:grid-cols-2">
           <input type="hidden" name="id" value={lesson.id} />
           <input type="hidden" name="course_id" value={courseId} />
           <div className="sm:col-span-2">
@@ -579,12 +743,6 @@ function LessonRow({
             </div>
           </div>
 
-          <LessonAttachmentsPanel
-            courseId={courseId}
-            lessonId={lesson.id}
-            attachments={attachments}
-          />
-
           <div className="flex flex-wrap items-center justify-between gap-3 sm:col-span-2">
             <div className="flex flex-wrap items-center gap-3">
               <LessonSaveButton />
@@ -596,7 +754,16 @@ function LessonRow({
               </Link>
             </div>
           </div>
-        </form>
+          </form>
+
+          <div className="border-t border-app p-3">
+            <LessonAttachmentsPanel
+              courseId={courseId}
+              lessonId={lesson.id}
+              attachments={attachments}
+            />
+          </div>
+        </div>
       ) : null}
     </div>
   );

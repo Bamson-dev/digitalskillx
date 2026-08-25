@@ -4,13 +4,10 @@ import { createAdminClientAsync } from "@/lib/supabase/admin";
 import { bootstrapRuntimeSecrets } from "@/lib/bootstrap-runtime-secrets";
 import { rateLimitedResponse } from "@/lib/api-rate-limit";
 import { checkStudentCourseEnrollment } from "@/lib/student-enrollments";
+import { getContaboIntegrationStatus, getStorageService } from "@/lib/storage";
 
 /**
- * Issues a short-lived signed URL for a private resource file (PRD §18, §20).
- *
- * Access must match lesson pages: enrolled students (after enrollment sync) and
- * admins. Do not rely only on session RLS `is_enrolled(auth.uid())`, because
- * enrollments may be linked under a synced student id.
+ * Streams a private resource file (Contabo/server storage preferred, Supabase fallback).
  */
 export async function GET(
   request: NextRequest,
@@ -30,7 +27,7 @@ export async function GET(
 
   const { data: resource } = await admin
     .from("resources")
-    .select("id, course_id, file_url, download_allowed, is_archived")
+    .select("id, course_id, file_url, download_allowed, is_archived, title")
     .eq("id", params.id)
     .maybeSingle();
 
@@ -55,15 +52,36 @@ export async function GET(
     }
   }
 
-  // Absolute URLs are returned as-is; otherwise treat as a private-bucket path.
   if (/^https?:\/\//.test(resource.file_url)) {
     return NextResponse.redirect(resource.file_url);
+  }
+
+  const contabo = getContaboIntegrationStatus();
+  if (contabo.configured) {
+    try {
+      const storage = getStorageService();
+      const body = await storage.download(resource.file_url);
+      const meta = await storage.getMetadata(resource.file_url).catch(() => null);
+      const filename = (resource.title || "download").replace(/[^\w.\- ]+/g, "_");
+      const contentType =
+        meta?.contentType ||
+        (/\.pdf$/i.test(resource.file_url) ? "application/pdf" : "application/octet-stream");
+      return new NextResponse(new Uint8Array(body), {
+        headers: {
+          "Content-Type": contentType,
+          "Content-Disposition": `attachment; filename="${filename}"`,
+          "Cache-Control": "private, max-age=60",
+        },
+      });
+    } catch (err) {
+      console.error("[resources-download] Contabo read failed, trying Supabase:", err);
+    }
   }
 
   const { data, error } = await admin.storage
     .from("private-files")
     .createSignedUrl(resource.file_url, 3600);
-  if (error || !data) return new NextResponse("Unable to sign URL", { status: 500 });
+  if (error || !data) return new NextResponse("Unable to fetch file from storage", { status: 500 });
 
   return NextResponse.redirect(data.signedUrl);
 }

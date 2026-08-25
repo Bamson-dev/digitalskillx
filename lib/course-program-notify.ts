@@ -60,14 +60,13 @@ export async function notifyProgramStudentsOfNewCourse(course: ProgramCourseNoti
   }
 
   const recipients = await resolvePaidStudentRecipients(admin);
-  if (recipients.length === 0) return { notified: 0, emailsSent: 0 };
-
-  const { data: enrolledInNew, error: enrolledError } = await admin
-    .from("enrollments")
-    .select("student_id")
-    .eq("course_id", course.id);
-  if (enrolledError) throw new Error(enrolledError.message);
-  const alreadyInNewCourse = new Set((enrolledInNew ?? []).map((row) => row.student_id));
+  if (recipients.length === 0) {
+    return {
+      notified: 0,
+      emailsSent: 0,
+      reason: "No paid students found (successful payment or paid/admin enrollment).",
+    };
+  }
 
   const { data: existingDeliveries, error: deliveryError } = await admin
     .from("program_course_publish_deliveries")
@@ -78,20 +77,26 @@ export async function notifyProgramStudentsOfNewCourse(course: ProgramCourseNoti
       deliveryError.message.includes("program_course_publish_deliveries") &&
       deliveryError.message.includes("does not exist")
     ) {
-      console.error(
-        "[course-program-notify] delivery table missing — run sql/apply-program-course-notify.sql",
+      throw new Error(
+        "Delivery table missing. Run sql/apply-program-course-notify.sql in Supabase, then publish again.",
       );
-      return { notified: 0, emailsSent: 0 };
     }
     throw new Error(deliveryError.message);
   }
 
   const alreadyNotified = new Set((existingDeliveries ?? []).map((row) => row.student_id));
-  const toNotify = recipients.filter(
-    (recipient) =>
-      !alreadyInNewCourse.has(recipient.id) && !alreadyNotified.has(recipient.id),
-  );
-  if (toNotify.length === 0) return { notified: 0, emailsSent: 0 };
+  // Notify every paid student who has not already been notified for this course.
+  const toNotify = recipients.filter((recipient) => !alreadyNotified.has(recipient.id));
+  if (toNotify.length === 0) {
+    return {
+      notified: 0,
+      emailsSent: 0,
+      reason:
+        recipients.length === 0
+          ? "No paid students found (successful payment or paid/admin enrollment)."
+          : "All paid students were already notified for this course.",
+    };
+  }
 
   const courseUrl = `${siteUrl()}/course/${course.id}`;
   const longDescription = stripHtmlPreview(course.description ?? "", 4_000);
@@ -189,5 +194,5 @@ export async function notifyProgramStudentsOfNewCourse(course: ProgramCourseNoti
     );
   }
 
-  return { notified: toNotify.length, emailsSent };
+  return { notified: toNotify.length, emailsSent, reason: undefined as string | undefined };
 }

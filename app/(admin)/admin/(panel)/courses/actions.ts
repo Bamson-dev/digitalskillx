@@ -242,25 +242,45 @@ export async function updateCourseSettings(
 
     const wasPublished = before.visibility === "published";
     const nowPublished = visibility === "published";
-    if (!wasPublished && nowPublished && !isComingSoon) {
-      void notifyProgramStudentsOfNewCourse({
-        id,
-        title,
-        category_id: categoryId,
-        short_description: shortDescription,
-        description,
-        learning_outcomes: outcomes,
-        instructor_name: String(formData.get("instructor_name") ?? "").trim() || null,
-        price_ngn: Number.isFinite(priceNgn) && priceNgn >= 0 ? Math.round(priceNgn) : 0,
-      }).catch((err) => {
+    const forceNotify = formData.get("notify_paid_students") === "on";
+    let notifyNote = "";
+    if ((!wasPublished && nowPublished && !isComingSoon) || (forceNotify && nowPublished && !isComingSoon)) {
+      try {
+        const result = await notifyProgramStudentsOfNewCourse({
+          id,
+          title,
+          category_id: categoryId,
+          short_description: shortDescription,
+          description,
+          learning_outcomes: outcomes,
+          instructor_name: String(formData.get("instructor_name") ?? "").trim() || null,
+          price_ngn: Number.isFinite(priceNgn) && priceNgn >= 0 ? Math.round(priceNgn) : 0,
+        });
+        if (result.notified > 0) {
+          notifyNote =
+            result.emailsSent > 0
+              ? ` Notified ${result.notified} paid student(s); ${result.emailsSent} email(s) sent.`
+              : ` In-app notified ${result.notified} paid student(s), but 0 emails sent — check Resend/email config or system_email_failures.`;
+        } else {
+          notifyNote = ` No new notifications sent${result.reason ? ` — ${result.reason}` : "."}`;
+        }
+      } catch (err) {
         console.error("[course-program-notify] failed after publish:", err);
-      });
+        notifyNote = ` Course saved, but notifications failed: ${
+          err instanceof Error ? err.message : "unknown error"
+        }`;
+      }
+    } else if (nowPublished && isComingSoon) {
+      notifyNote = " Coming soon courses do not notify students until that flag is off.";
     }
 
     revalidatePath(`/admin/courses/${id}`);
     revalidatePath(`/course/${id}`);
     revalidatePath(`/courses/${id}`);
-    return { message: "Course settings saved.", thumbnail_url: thumbnailUrl };
+    return {
+      message: `Course settings saved.${notifyNote}`,
+      thumbnail_url: thumbnailUrl,
+    };
   } catch (err) {
     return { error: err instanceof Error ? err.message : "Could not save course settings." };
   }
@@ -420,6 +440,53 @@ export async function deleteLessons(courseId: string, lessonIds: string[]) {
   revalidatePath(`/admin/courses/${courseId}`);
 }
 
+export async function persistCurriculumLayout(
+  courseId: string,
+  layout: Array<{ moduleId: string; lessonIds: string[] }>,
+) {
+  const supabase = await getAdminSupabase();
+  if (!courseId || layout.length === 0) return;
+
+  const { data: courseModules, error: moduleError } = await supabase
+    .from("modules")
+    .select("id")
+    .eq("course_id", courseId);
+  if (moduleError) throw new Error(moduleError.message);
+  const allowedModules = new Set((courseModules ?? []).map((row) => row.id));
+  if (layout.some((row) => !allowedModules.has(row.moduleId))) {
+    throw new Error("One or more modules do not belong to this course.");
+  }
+
+  const { data: courseLessons, error: lessonError } = await supabase
+    .from("lessons")
+    .select("id")
+    .in("module_id", [...allowedModules]);
+  if (lessonError) throw new Error(lessonError.message);
+  const allowedLessons = new Set((courseLessons ?? []).map((row) => row.id));
+  const seen = new Set<string>();
+  for (const row of layout) {
+    for (const lessonId of row.lessonIds) {
+      if (!allowedLessons.has(lessonId)) throw new Error("Lesson does not belong to this course.");
+      if (seen.has(lessonId)) throw new Error("Duplicate lesson in curriculum layout.");
+      seen.add(lessonId);
+    }
+  }
+
+  const moduleUpdates = layout.map((row, position) =>
+    supabase.from("modules").update({ position }).eq("id", row.moduleId).eq("course_id", courseId),
+  );
+  const lessonUpdates = layout.flatMap((row) =>
+    row.lessonIds.map((id, position) =>
+      supabase.from("lessons").update({ module_id: row.moduleId, position }).eq("id", id),
+    ),
+  );
+  const results = await Promise.all([...moduleUpdates, ...lessonUpdates]);
+  const failed = results.find((r) => r.error);
+  if (failed?.error) throw new Error(failed.error.message);
+
+  revalidatePath(`/admin/courses/${courseId}`);
+}
+
 export async function reorderLessons(
   courseId: string,
   moduleId: string,
@@ -428,7 +495,7 @@ export async function reorderLessons(
   const supabase = await getAdminSupabase();
 
   const updates = lessonIds.map((id, position) =>
-    supabase.from("lessons").update({ position }).eq("id", id).eq("module_id", moduleId),
+    supabase.from("lessons").update({ position, module_id: moduleId }).eq("id", id),
   );
   const results = await Promise.all(updates);
   const failed = results.find((r) => r.error);

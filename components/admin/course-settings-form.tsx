@@ -287,6 +287,12 @@ export function CourseSettingsForm({
             Publishing (when not Coming soon) emails and notifies every paid DigitalSkillX student
             with the title, full description, and course details.
           </p>
+          <label className="mt-2 flex items-start gap-2 text-sm">
+            <input type="checkbox" name="notify_paid_students" className="mt-1" />
+            <span>
+              Also notify paid students now (use if publish already happened and nothing was sent)
+            </span>
+          </label>
         </div>
         <div>
           <Label>Enrollment</Label>

@@ -1,23 +1,16 @@
 "use client";
 
-import { useState } from "react";
-import { useFormState } from "react-dom";
+import { useEffect, useRef, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { FileText, Link2, Paperclip, Trash2, Upload } from "lucide-react";
 import { Label, Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { SubmitButton } from "@/components/auth/submit-button";
-import {
-  addLessonAttachment,
-  deleteLessonResource,
-  type LessonAttachmentState,
-} from "@/app/(admin)/admin/(panel)/courses/actions";
+import { deleteLessonResource } from "@/app/(admin)/admin/(panel)/courses/actions";
 import {
   attachmentKind,
   attachmentKindLabel,
   type AttachmentDisplay,
 } from "@/lib/lesson-attachments-shared";
-
-const initial: LessonAttachmentState = {};
 
 function AttachmentIcon({ kind }: { kind: ReturnType<typeof attachmentKind> }) {
   const className = "h-5 w-5 shrink-0";
@@ -34,22 +27,77 @@ function AttachmentIcon({ kind }: { kind: ReturnType<typeof attachmentKind> }) {
 export function LessonAttachmentsPanel({
   courseId,
   lessonId,
-  attachments,
+  attachments: initialAttachments,
 }: {
   courseId: string;
   lessonId: string;
   attachments: AttachmentDisplay[];
 }) {
+  const router = useRouter();
+  const formRef = useRef<HTMLFormElement>(null);
   const [mode, setMode] = useState<"file" | "link">("file");
-  const [state, action] = useFormState(addLessonAttachment, initial);
+  const [attachments, setAttachments] = useState(initialAttachments);
+  const [error, setError] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+
+  const attachmentKey = initialAttachments.map((row) => row.id).join("|");
+  useEffect(() => {
+    setAttachments(initialAttachments);
+    // Sync after server refresh / lesson switch — keyed by attachment ids.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional key sync
+  }, [lessonId, attachmentKey]);
+
+  async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    event.stopPropagation();
+    setError(null);
+    setMessage(null);
+
+    const form = event.currentTarget;
+    const data = new FormData(form);
+    data.set("course_id", courseId);
+    data.set("mode", mode);
+
+    startTransition(async () => {
+      try {
+        const res = await fetch(`/api/admin/lessons/${lessonId}/attachments`, {
+          method: "POST",
+          credentials: "include",
+          body: data,
+        });
+        const json = (await res.json().catch(() => ({}))) as {
+          error?: string;
+          message?: string;
+          attachment?: AttachmentDisplay;
+        };
+        if (!res.ok) {
+          setError(json.error ?? `Upload failed (${res.status})`);
+          return;
+        }
+        if (json.attachment) {
+          setAttachments((prev) => [...prev, json.attachment!]);
+        }
+        setMessage(json.message ?? "Attachment uploaded to server storage.");
+        form.reset();
+        router.refresh();
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Could not upload file.");
+      }
+    });
+  }
 
   return (
-    <div className="sm:col-span-2 rounded-xl border border-dashed border-app bg-surface-muted/30 p-4">
+    <div
+      className="rounded-xl border border-dashed border-app bg-surface-muted/30 p-4"
+      onClick={(event) => event.stopPropagation()}
+      onMouseDown={(event) => event.stopPropagation()}
+    >
       <div className="mb-3 flex items-start justify-between gap-3">
         <div>
           <h4 className="text-sm font-semibold text-neutral-900">Lesson attachments</h4>
           <p className="mt-1 text-xs text-muted">
-            Add PDFs, documents, or links students can download below the video.
+            PDFs and files upload to server storage. Students download them under the lesson.
           </p>
         </div>
         {attachments.length > 0 ? (
@@ -111,11 +159,12 @@ export function LessonAttachmentsPanel({
         </button>
       </div>
 
-      <form action={action} className="grid gap-3 sm:grid-cols-2" encType="multipart/form-data">
-        <input type="hidden" name="course_id" value={courseId} />
-        <input type="hidden" name="lesson_id" value={lessonId} />
-        <input type="hidden" name="mode" value={mode} />
-
+      <form
+        ref={formRef}
+        onSubmit={onSubmit}
+        className="grid gap-3 sm:grid-cols-2"
+        encType="multipart/form-data"
+      >
         <div className="sm:col-span-2">
           <Label htmlFor={`attachment-title-${lessonId}`}>Display name</Label>
           <Input
@@ -136,7 +185,9 @@ export function LessonAttachmentsPanel({
               accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip,application/pdf"
               required
             />
-            <p className="mt-1 text-xs text-muted">PDF, Word, Excel, PowerPoint, TXT, or ZIP · max 10 MB</p>
+            <p className="mt-1 text-xs text-muted">
+              PDF, Word, Excel, PowerPoint, TXT, or ZIP · max 25 MB · stored on the server
+            </p>
           </div>
         ) : (
           <div className="sm:col-span-2">
@@ -151,20 +202,20 @@ export function LessonAttachmentsPanel({
           </div>
         )}
 
-        <div className="sm:col-span-2 flex items-center gap-3">
-          <SubmitButton size="sm" variant="outline" pendingText="Adding…">
+        <div className="sm:col-span-2 flex flex-wrap items-center gap-3">
+          <Button type="submit" size="sm" variant="outline" disabled={pending}>
             {mode === "file" ? (
               <>
-                <Upload className="h-4 w-4" /> Add file
+                <Upload className="h-4 w-4" /> {pending ? "Uploading to server…" : "Upload to server"}
               </>
             ) : (
               <>
-                <Link2 className="h-4 w-4" /> Add link
+                <Link2 className="h-4 w-4" /> {pending ? "Adding…" : "Add link"}
               </>
             )}
-          </SubmitButton>
-          {state.error ? <p className="text-sm text-red-600">{state.error}</p> : null}
-          {state.message ? <p className="text-sm text-green-700">{state.message}</p> : null}
+          </Button>
+          {error ? <p className="text-sm text-red-600">{error}</p> : null}
+          {message ? <p className="text-sm text-green-700">{message}</p> : null}
         </div>
       </form>
     </div>
