@@ -160,19 +160,34 @@ export function WebinarFollowupCampaignPanel(props: {
         dueNow?: number;
         totalSent?: number;
         sentToday?: number;
+        kicked?: boolean;
       };
       if (!res.ok) {
+        // Proxy 504 used to happen when this request drained for ~90s. Cron may still be sending.
+        if (res.status === 502 || res.status === 504) {
+          setDrainError(null);
+          setDrainMessage(
+            "Gateway timed out on the kick reply, but the server sender may already be running. Wait a minute and refresh — Sent today / Ready for next email should move.",
+          );
+          router.refresh();
+          return;
+        }
         setDrainError(json.error ?? `Send kick failed (${res.status}).`);
         return;
       }
       setDrainMessage(
-        json.moreDue
+        json.moreDue || json.kicked
           ? `Server is sending. ${json.sentToday ?? 0} delivered today, ${json.dueNow ?? 0} still due. Close the page if you want — it keeps going.`
           : `Today's due emails are caught up. ${json.sentToday ?? 0} delivered today. Total delivered: ${json.totalSent ?? "—"}.`,
       );
       router.refresh();
     } catch (err) {
-      setDrainError(err instanceof Error ? err.message : "Could not kick sending.");
+      setDrainError(null);
+      setDrainMessage(
+        "Could not confirm the kick reply, but you can refresh in a minute — the daily cron and sender chain may still be draining due emails.",
+      );
+      console.error("[wfu-drain-ui]", err);
+      router.refresh();
     } finally {
       draining.current = false;
       setDrainBusy(false);

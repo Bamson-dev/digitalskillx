@@ -6,7 +6,7 @@ const nextConfig = {
   productionBrowserSourceMaps: false,
   experimental: {
     serverActions: {
-      bodySizeLimit: "12mb",
+      bodySizeLimit: "25mb",
     },
     // Lowers peak memory during `next build` on small Docker hosts (Coolify).
     webpackBuildWorker: true,

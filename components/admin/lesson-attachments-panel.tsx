@@ -1,11 +1,14 @@
 "use client";
 
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { FileText, Link2, Paperclip, Trash2, Upload } from "lucide-react";
 import { Label, Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { deleteLessonResource } from "@/app/(admin)/admin/(panel)/courses/actions";
+import {
+  addLessonAttachment,
+  deleteLessonResource,
+} from "@/app/(admin)/admin/(panel)/courses/actions";
 import {
   attachmentKind,
   attachmentKindLabel,
@@ -35,11 +38,12 @@ export function LessonAttachmentsPanel({
 }) {
   const router = useRouter();
   const formRef = useRef<HTMLFormElement>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
   const [mode, setMode] = useState<"file" | "link">("file");
   const [attachments, setAttachments] = useState(initialAttachments);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
-  const [pending, startTransition] = useTransition();
+  const [pending, setPending] = useState(false);
 
   const attachmentKey = initialAttachments.map((row) => row.id).join("|");
   useEffect(() => {
@@ -57,34 +61,40 @@ export function LessonAttachmentsPanel({
     const form = event.currentTarget;
     const data = new FormData(form);
     data.set("course_id", courseId);
+    data.set("lesson_id", lessonId);
     data.set("mode", mode);
 
-    startTransition(async () => {
-      try {
-        const res = await fetch(`/api/admin/lessons/${lessonId}/attachments`, {
-          method: "POST",
-          credentials: "include",
-          body: data,
-        });
-        const json = (await res.json().catch(() => ({}))) as {
-          error?: string;
-          message?: string;
-          attachment?: AttachmentDisplay;
-        };
-        if (!res.ok) {
-          setError(json.error ?? `Upload failed (${res.status})`);
-          return;
-        }
-        if (json.attachment) {
-          setAttachments((prev) => [...prev, json.attachment!]);
-        }
-        setMessage(json.message ?? "Attachment uploaded to server storage.");
-        form.reset();
-        router.refresh();
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Could not upload file.");
+    if (mode === "file") {
+      const picked = fileRef.current?.files?.[0];
+      if (!picked || picked.size <= 0) {
+        setError("Choose a PDF or document file first.");
+        return;
       }
-    });
+      data.set("file", picked);
+    }
+
+    setPending(true);
+    try {
+      const result = await addLessonAttachment({}, data);
+      if (result.error) {
+        setError(result.error);
+        return;
+      }
+      if (result.attachment) {
+        setAttachments((prev) => {
+          if (prev.some((row) => row.id === result.attachment!.id)) return prev;
+          return [...prev, result.attachment!];
+        });
+      }
+      setMessage(result.message ?? "Attachment uploaded to server storage.");
+      form.reset();
+      if (fileRef.current) fileRef.current.value = "";
+      router.refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not upload file.");
+    } finally {
+      setPending(false);
+    }
   }
 
   return (
@@ -97,7 +107,8 @@ export function LessonAttachmentsPanel({
         <div>
           <h4 className="text-sm font-semibold text-neutral-900">Lesson attachments</h4>
           <p className="mt-1 text-xs text-muted">
-            PDFs and files upload to server storage. Students download them under the lesson.
+            Choose a file, then click <strong>Upload to server</strong> — not Save lesson. Files
+            are stored on the server for student download.
           </p>
         </div>
         {attachments.length > 0 ? (
@@ -170,7 +181,7 @@ export function LessonAttachmentsPanel({
           <Input
             id={`attachment-title-${lessonId}`}
             name="title"
-            placeholder={mode === "file" ? "e.g. Lesson workbook PDF" : "e.g. Google Doc template"}
+            placeholder={mode === "file" ? "e.g. App Idea Vault" : "e.g. Google Doc template"}
             required
           />
         </div>
@@ -178,12 +189,14 @@ export function LessonAttachmentsPanel({
         {mode === "file" ? (
           <div className="sm:col-span-2">
             <Label htmlFor={`attachment-file-${lessonId}`}>File</Label>
-            <Input
+            <input
+              ref={fileRef}
               id={`attachment-file-${lessonId}`}
               name="file"
               type="file"
               accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.zip,application/pdf"
               required
+              className="block w-full text-sm file:mr-3 file:rounded-md file:border-0 file:bg-brand file:px-3 file:py-2 file:text-sm file:font-medium file:text-white hover:file:bg-brand-700"
             />
             <p className="mt-1 text-xs text-muted">
               PDF, Word, Excel, PowerPoint, TXT, or ZIP · max 25 MB · stored on the server

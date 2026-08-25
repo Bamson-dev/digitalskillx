@@ -21,7 +21,11 @@ import {
 import { notifyProgramStudentsOfNewCourse } from "@/lib/course-program-notify";
 import type { CourseVisibility, EnrollmentType, LessonType } from "@/types/database";
 
-export type LessonAttachmentState = { error?: string; message?: string };
+export type LessonAttachmentState = {
+  error?: string;
+  message?: string;
+  attachment?: { id: string; title: string; file_url: string; file_type: string | null };
+};
 export type CourseResourceState = { error?: string; message?: string };
 export type CourseSettingsState = {
   error?: string;
@@ -537,23 +541,30 @@ export async function addLessonAttachment(
       fileType = inferAttachmentType(file);
     }
 
-    const { error } = await supabase.from("resources").insert({
-      course_id: courseId,
-      lesson_id: lessonId,
-      title,
-      file_url: fileUrl,
-      file_type: fileType,
-    });
+    const { data, error } = await supabase
+      .from("resources")
+      .insert({
+        course_id: courseId,
+        lesson_id: lessonId,
+        title,
+        file_url: fileUrl,
+        file_type: fileType,
+      })
+      .select("id, title, file_url, file_type")
+      .single();
     if (error) return { error: error.message };
 
     await logAudit({
       action: "lesson_attachment_added",
       targetType: "lesson",
       targetId: lessonId,
-      metadata: { title, file_type: fileType },
+      metadata: { title, file_type: fileType, storage_path: fileUrl },
     });
     revalidatePath(`/admin/courses/${courseId}`);
-    return { message: "Attachment added." };
+    return {
+      message: mode === "link" ? "Link added." : "Attachment uploaded to server storage.",
+      attachment: data,
+    };
   } catch (err) {
     return {
       error: err instanceof Error ? err.message : "Could not add attachment.",

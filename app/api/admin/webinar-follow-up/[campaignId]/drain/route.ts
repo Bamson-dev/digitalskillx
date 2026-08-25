@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { waitUntil } from "@vercel/functions";
 import { requireAdminApiAuth } from "@/lib/admin-api-auth";
 import { logAudit } from "@/lib/audit";
 import { keepWebinarFollowupSending } from "@/lib/bulk-import-continue";
@@ -10,6 +11,10 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 export const maxDuration = 120;
 
+/**
+ * Admin "Send due emails now" — return immediately so the browser does not 504.
+ * Heavy draining continues via waitUntil + cron self-chain.
+ */
 export async function POST(
   _request: NextRequest,
   { params }: { params: { campaignId: string } },
@@ -31,33 +36,56 @@ export async function POST(
     );
   }
 
-  const drain = await runLiveWebinarFollowupDrain(auth.admin, {
-    budgetMs: 90_000,
-    campaignId: snapshot.campaign.id,
-  });
+  const campaignId = snapshot.campaign.id;
+  const dueNow = snapshot.counts.dueNow ?? 0;
+  const sending = snapshot.counts.sending ?? 0;
+  const moreDue = dueNow > 0 || sending > 0;
 
+  // Kick cron chain first — works even if this request is cut short by the proxy.
   keepWebinarFollowupSending({
-    moreDue: drain.moreDue || (drain.counts?.dueNow ?? 0) > 0 || (drain.counts?.sending ?? 0) > 0,
-    reason: "admin_wfu_drain_more",
+    moreDue: true,
+    reason: "admin_wfu_kick",
   });
 
-  await logAudit({
-    action: "webinar_followup_admin_drain",
-    targetType: "webinar_followup_campaign",
-    targetId: snapshot.campaign.id,
-    metadata: { sent: drain.sent, failed: drain.failed, moreDue: drain.moreDue },
-  });
+  waitUntil(
+    (async () => {
+      try {
+        const drain = await runLiveWebinarFollowupDrain(auth.admin, {
+          budgetMs: 90_000,
+          campaignId,
+        });
+        keepWebinarFollowupSending({
+          moreDue:
+            drain.moreDue || (drain.counts?.dueNow ?? 0) > 0 || (drain.counts?.sending ?? 0) > 0,
+          reason: "admin_wfu_drain_more",
+        });
+        await logAudit({
+          action: "webinar_followup_admin_drain",
+          targetType: "webinar_followup_campaign",
+          targetId: campaignId,
+          metadata: { sent: drain.sent, failed: drain.failed, moreDue: drain.moreDue },
+        });
+      } catch (err) {
+        console.error("[wfu-admin-drain] background drain failed:", err);
+        keepWebinarFollowupSending({
+          moreDue: true,
+          reason: "admin_wfu_drain_error",
+        });
+      }
+    })(),
+  );
 
   return NextResponse.json({
     ok: true,
-    sent: drain.sent,
-    failed: drain.failed,
-    examined: drain.examined,
-    queued: drain.queued,
-    moreDue: drain.moreDue,
-    dueNow: drain.counts?.dueNow ?? snapshot.counts.dueNow,
-    totalSent: drain.counts?.sent ?? snapshot.counts.sent,
-    sentToday: drain.counts?.sentToday ?? snapshot.counts.sentToday,
-    reason: drain.reason,
+    kicked: true,
+    sent: 0,
+    failed: 0,
+    examined: 0,
+    queued: 0,
+    moreDue,
+    dueNow,
+    totalSent: snapshot.counts.sent,
+    sentToday: snapshot.counts.sentToday,
+    reason: "kicked",
   });
 }

@@ -14,7 +14,8 @@ export function AiAssistant() {
   const [messages, setMessages] = useState<Message[]>([
     {
       role: "assistant",
-      content: "Ask me about your DigitalSkillX courses, lessons, or what to study next.",
+      content:
+        "Ask me about DigitalSkillX courses, products, or what to study next — I’ll only recommend what’s on this platform.",
     },
   ]);
   const [input, setInput] = useState("");
@@ -24,6 +25,14 @@ export function AiAssistant() {
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
   }, [messages, open]);
+
+  function pageContext() {
+    const lessonMatch = pathname.match(/^\/lessons\/([^/]+)/);
+    if (lessonMatch?.[1]) return { lessonId: lessonMatch[1] };
+    const courseMatch = pathname.match(/^\/(?:courses|course)\/([^/]+)/);
+    if (courseMatch?.[1]) return { courseId: courseMatch[1] };
+    return {};
+  }
 
   async function send() {
     const text = input.trim();
@@ -36,7 +45,7 @@ export function AiAssistant() {
       const res = await fetch("/api/ai/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: next }),
+        body: JSON.stringify({ messages: next, ...pageContext() }),
       });
       const json = await res.json();
       setMessages([
