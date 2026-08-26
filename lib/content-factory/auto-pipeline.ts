@@ -122,8 +122,8 @@ export async function autoPublishReadyLearningPaths(
     .select("id, learning_path_id, result_snapshot, status")
     .eq("status", "waiting_review")
     .not("learning_path_id", "is", null)
-    .order("updated_at", { ascending: true })
-    .limit(Math.max(1, Math.min(10, limit)));
+    .order("updated_at", { ascending: false })
+    .limit(Math.max(5, Math.min(20, limit * 4)));
   if (error) {
     if (isMissingRelationError(error.message)) return { published: 0, skipped: 0, errors: [] };
     throw new Error(error.message);
@@ -134,6 +134,7 @@ export async function autoPublishReadyLearningPaths(
   const errors: string[] = [];
 
   for (const job of jobs ?? []) {
+    if (published >= limit) break;
     const pathId = job.learning_path_id;
     if (!pathId) {
       skipped += 1;
@@ -156,7 +157,9 @@ export async function autoPublishReadyLearningPaths(
 
     const review = asStoredQualityReview(path.quality_breakdown);
     const qualityStatus =
-      snap.qualityStatus || review?.status || (path.quality_score != null && path.quality_score >= minScore ? "passed" : null);
+      snap.qualityStatus ||
+      review?.status ||
+      (path.quality_score != null && path.quality_score >= minScore ? "passed" : null);
     const qualityScore =
       typeof snap.qualityScore === "number"
         ? snap.qualityScore
