@@ -2749,8 +2749,11 @@ console.log("\nAll Content Factory Phase 1 + Stage 1–7 offline checks passed."
   const checkoutUi = read("components/learn/learn-certificate-checkout.tsx");
   assert.match(panel, /you completed this learning path/i);
   assert.match(panel, /DigitalSkillX Certificate of Completion/);
-  assert.match(panel, /Certificate price/);
+  assert.match(panel, /become eligible for your DigitalSkillX certificate/i);
+  assert.doesNotMatch(panel, /Certificate price/);
   assert.match(checkoutUi, /Get My Certificate/);
+  assert.match(checkoutUi, /formatNaira\(priceNgn\)/);
+  assert.doesNotMatch(checkoutUi, /Get My Certificate · \$\{formatNaira/);
   assert.doesNotMatch(panel, /verified you watched/);
   assert.doesNotMatch(panel, /from\(\"lesson_progress\"\)/);
   console.log("PASS: S8-4 completion detection + certificate CTA");
@@ -2760,7 +2763,8 @@ console.log("\nAll Content Factory Phase 1 + Stage 1–7 offline checks passed."
   const checkout = read("lib/learn-certificate-checkout.ts");
   const init = read("app/api/payments/initialize/route.ts");
   assert.match(init, /learningPathId/);
-  assert.match(checkout, /nairaToKobo\(path.certificate_price_ngn/);
+  assert.match(checkout, /nairaToKobo\(priceNgn\)/);
+  assert.match(checkout, /learnCertificateUsdFromNgn\(priceNgn\)/);
   assert.doesNotMatch(checkout, /body.price|body.amount/);
   assert.match(checkout, /initializeTransaction/);
   console.log("PASS: S8-5–6 certificate checkout + server-side pricing");

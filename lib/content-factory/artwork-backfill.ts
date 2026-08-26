@@ -51,21 +51,20 @@ export async function backfillMissingLearningPathArtwork(
         source === "manual" ||
         (!status && Boolean(path.artwork_public_url)));
 
-    if (hasUsable || status === "category_fallback") {
-      // category_fallback still counts as handled (UI shows gradient); skip regen spam.
-      if (hasUsable || status === "category_fallback") {
-        skipped += 1;
-        continue;
-      }
+    // Keep valid covers. Category-only rows (no public URL) may still upgrade via YouTube/AI.
+    if (hasUsable) {
+      skipped += 1;
+      continue;
     }
 
-    // Blank / failed / missing / processing stuck — attempt pipeline.
+    // Blank / failed / missing / processing stuck / category without URL — attempt pipeline.
     if (
       path.artwork_public_url &&
       status !== "failed" &&
       status !== "missing" &&
       status !== "processing" &&
-      status !== "retrying"
+      status !== "retrying" &&
+      status !== "category_fallback"
     ) {
       skipped += 1;
       continue;
@@ -89,6 +88,21 @@ export async function backfillMissingLearningPathArtwork(
         youtubeThumb = meta?.thumbnailUrl ?? null;
       } catch (err) {
         errors.push(err instanceof Error ? err.message : String(err));
+      }
+    }
+    if (!youtubeThumb) {
+      const { data: lesson } = await admin
+        .from("learning_path_lessons")
+        .select("thumbnail_url, youtube_video_id")
+        .eq("learning_path_id", path.id)
+        .order("position", { ascending: true })
+        .limit(1)
+        .maybeSingle();
+      const lessonThumb = lesson?.thumbnail_url?.trim() || null;
+      const videoId = lesson?.youtube_video_id?.trim() || null;
+      if (lessonThumb) youtubeThumb = lessonThumb;
+      else if (videoId && /^[\w-]{11}$/.test(videoId)) {
+        youtubeThumb = `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
       }
     }
 
