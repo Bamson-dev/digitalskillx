@@ -207,9 +207,12 @@ export function ContentFactoryPanel() {
       });
       const json = (await res.json()) as { error?: string; runId?: string };
       if (!res.ok) throw new Error(json.error ?? "Discovery failed");
-      toast("Discovery run queued. No learning path will be generated.");
+      toast("Discovery started. Tutorials will be built and published automatically when they pass quality checks.");
       setTopic("");
       await loadJobs();
+      // Poll while the pipeline works so the admin list stays fresh.
+      window.setTimeout(() => void loadJobs(), 8_000);
+      window.setTimeout(() => void loadJobs(), 25_000);
     } catch (err) {
       toast(err instanceof Error ? err.message : "Discovery failed", "error");
     } finally {
@@ -437,10 +440,11 @@ export function ContentFactoryPanel() {
             placeholder={"Digital marketing\nPython\nExcel"}
           />
           <Button type="button" disabled={busy || !topic.trim()} onClick={() => void createDiscovery()}>
-            Discover playlists
+            Discover &amp; publish tutorials
           </Button>
           <p className="text-xs text-muted">
-            One topic per line. Creates candidates only. Does not generate or publish.
+            One topic per line. Finds YouTube playlists, qualifies them, builds learning paths, and
+            publishes passing ones to /learn automatically.
           </p>
         </div>
 

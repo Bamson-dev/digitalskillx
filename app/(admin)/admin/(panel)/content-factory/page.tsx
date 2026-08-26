@@ -31,7 +31,8 @@ export default async function AdminContentFactoryPage() {
       <div>
         <h1 className="text-2xl font-bold">Content Factory</h1>
         <p className="mt-1 text-sm text-muted">
-          Import a YouTube playlist, generate a free learning path, then approve for public publishing.
+          Enter a topic to discover YouTube tutorials, auto-build learning paths, and publish them
+          to the free Learn library when quality checks pass.
         </p>
       </div>
       <ContentFactoryPanel />

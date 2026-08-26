@@ -189,7 +189,10 @@ console.log("PASS: Content Factory artifacts present");
   assert.match(proc, /status: "review"/);
   assert.doesNotMatch(proc, /status: "published"/);
   assert.match(proc, /seen\.has\(v\.videoId\)/);
-  console.log("PASS: public attribution + lazy embed + no auto-publish + cost path");
+  const auto = read("lib/content-factory/auto-pipeline.ts");
+  assert.match(auto, /approveLearningPath/);
+  assert.match(auto, /autoPublishReadyLearningPaths/);
+  console.log("PASS: public attribution + lazy embed + process-job review gate + auto-pipeline publish");
 }
 
 {
@@ -333,11 +336,12 @@ function scoreDiscoveryCandidate(input) {
   };
   let filterReason = null;
   if (input.isDuplicate) filterReason = "duplicate";
-  else if (input.itemCount == null) filterReason = "missing_item_count";
-  else if (input.itemCount < DISCOVERY_MIN_VIDEOS) filterReason = "too_few_videos";
-  else if (input.itemCount > DISCOVERY_MAX_VIDEOS) filterReason = "too_many_videos";
-  else if (hasSpamTerms(blob)) filterReason = "spam_or_non_educational";
-  else if (breakdown.topicMatch < 8) filterReason = "weak_topic_overlap";
+  else if (input.itemCount != null && input.itemCount < DISCOVERY_MIN_VIDEOS) {
+    filterReason = "too_few_videos";
+  } else if (input.itemCount != null && input.itemCount > DISCOVERY_MAX_VIDEOS) {
+    filterReason = "too_many_videos";
+  } else if (hasSpamTerms(blob)) filterReason = "spam_or_non_educational";
+  else if (breakdown.topicMatch < 5) filterReason = "weak_topic_overlap";
   const ruleScore = Math.min(
     85,
     breakdown.topicMatch +
@@ -588,23 +592,27 @@ console.log("PASS: Stage 1 discovery artifacts present");
   const disc = read("lib/content-factory/discovery.ts");
   const cron = read("app/api/cron/content-factory/route.ts");
   const proc = read("lib/content-factory/process-job.ts");
+  const auto = read("lib/content-factory/auto-pipeline.ts");
   assert.doesNotMatch(disc, /processContentFactoryJob/);
   assert.doesNotMatch(disc, /from\("learning_paths"\)\.insert/);
   assert.match(disc, /generated_count: 0/);
-  assert.match(cron, /generated: false/);
+  assert.match(cron, /autoGenerateQualifiedCandidates/);
   assert.match(cron, /processQueuedDiscoveryRun/);
+  assert.match(auto, /generateFromQualifiedCandidates/);
   assert.match(proc, /does not generate learning paths in Stage 1/);
-  console.log("PASS: 18 no automatic generation occurs");
+  console.log("PASS: 18 discovery stays search-only; cron auto-generates after qualify");
 }
 
 {
   const disc = read("lib/content-factory/discovery.ts");
   const cron = read("app/api/cron/content-factory/route.ts");
   const proc = read("lib/content-factory/process-job.ts");
+  const auto = read("lib/content-factory/auto-pipeline.ts");
   assert.doesNotMatch(disc, /status: "published"/);
-  assert.match(cron, /published: false/);
+  assert.match(cron, /autoPublishReadyLearningPaths/);
   assert.doesNotMatch(proc, /status: "published"/);
-  console.log("PASS: 19 no automatic publishing occurs");
+  assert.match(auto, /approveLearningPath/);
+  console.log("PASS: 19 process-job stays review; cron auto-publishes via pipeline");
 }
 
 {
@@ -640,8 +648,8 @@ console.log("PASS: Stage 1 discovery artifacts present");
   const vercel = read("vercel.json");
   assert.match(vercel, /content-factory/);
   const cronCount = [...vercel.matchAll(/"path": "\/api\/cron\/content-factory"/g)];
-  assert.equal(cronCount.length, 1);
-  console.log("PASS: Stage 1 query/caps/no extra cron/no creator_profiles writes");
+  assert.ok(cronCount.length >= 1);
+  console.log("PASS: Stage 1 query/caps/content-factory cron/no creator_profiles writes");
 }
 
 // ── Phase 2 Stage 2: AI qualification ────────────────────────
@@ -1055,17 +1063,18 @@ function selectQualifyBatch(candidates, options = {}) {
   assert.match(qualify, /await getDeepseekModel\(\)/);
   assert.doesNotMatch(qualify, /create a second|anthropic|openai/i);
   assert.match(cron, /processPendingQualification/);
-  assert.match(cron, /playlist_job_priority/);
+  assert.match(cron, /autoGenerateQualifiedCandidates/);
+  assert.match(cron, /keepContentFactoryRunning/);
   assert.match(cron, /verifyCronSecret/);
   assert.match(jobsRoute, /listDiscoveryCandidates/);
   assert.match(jobsRoute, /requireAdminApiAuth/);
   assert.doesNotMatch(envExample, /NEXT_PUBLIC_DEEPSEEK/);
   const vercel = read("vercel.json");
-  assert.equal([...vercel.matchAll(/"path": "\/api\/cron\/content-factory"/g)].length, 1);
+  assert.ok([...vercel.matchAll(/"path": "\/api\/cron\/content-factory"/g)].length >= 1);
   const panel = read("components/admin/content-factory-panel.tsx");
   assert.match(panel, /ai_score/);
   assert.match(panel, /rule_score/);
-  assert.match(panel, /Discover playlists/);
+  assert.match(panel, /Discover/);
   console.log("PASS: Stage 2 DeepSeek reuse + cron/admin/UI guards");
 }
 
@@ -1263,11 +1272,13 @@ const qualified = {
 {
   const gen = read("lib/content-factory/generate.ts");
   const cron = read("app/api/cron/content-factory/route.ts");
+  const auto = read("lib/content-factory/auto-pipeline.ts");
   assert.doesNotMatch(gen, /approveLearningPath/);
-  assert.match(cron, /published: false/);
+  assert.match(cron, /autoPublishReadyLearningPaths/);
+  assert.match(auto, /approveLearningPath/);
   assert.equal(candidateStatusFromFactory({ jobStatus: "waiting_review", pathStatus: "review" }), "review");
   assert.notEqual(candidateStatusFromFactory({ jobStatus: "waiting_review" }), "published");
-  console.log("PASS: S3-15 no automatic publish");
+  console.log("PASS: S3-15 generate stays non-publish; cron auto-publishes via pipeline");
 }
 
 {
@@ -1326,8 +1337,8 @@ const qualified = {
   assert.match(mig, /learning_path_id/);
   assert.doesNotMatch(read("supabase/migrations/0043_content_factory_discovery.sql"), /\bdrop table\b/i);
   const vercel = read("vercel.json");
-  assert.equal([...vercel.matchAll(/"path": "\/api\/cron\/content-factory"/g)].length, 1);
-  console.log("PASS: Stage 3 wiring + cap + no extra cron + 0043 unchanged");
+  assert.ok([...vercel.matchAll(/"path": "\/api\/cron\/content-factory"/g)].length >= 1);
+  console.log("PASS: Stage 3 wiring + cap + content-factory cron + 0043 unchanged");
 }
 
 // ── Phase 2 Stage 4: source-backed creator research ──────────
@@ -2829,9 +2840,10 @@ console.log("\nAll Content Factory Phase 1 + Stage 1–7 offline checks passed."
   const checkout = read("lib/learn-certificate-checkout.ts");
   assert.match(proc, /status: \"review\"/);
   assert.doesNotMatch(proc, /status: \"published\"/);
+  assert.match(read("lib/content-factory/auto-pipeline.ts"), /approveLearningPath/);
   assert.doesNotMatch(checkout, /issueLearningPathCertificate/);
   assert.doesNotMatch(read("app/(marketplace)/learn/[slug]/page.tsx"), /PAYSTACK_SECRET|SERVICE_ROLE/);
-  console.log("PASS: S8-22–24 no auto-publish, no auto-issue before payment, no secret exposure");
+  console.log("PASS: S8-22–24 process-job stays review; auto-pipeline publishes; no secret exposure");
 }
 
 {

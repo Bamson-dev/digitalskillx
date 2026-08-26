@@ -136,11 +136,12 @@ export function scoreDiscoveryCandidate(input: {
 
   let filterReason: string | null = null;
   if (input.isDuplicate) filterReason = "duplicate";
-  else if (input.itemCount == null) filterReason = "missing_item_count";
-  else if (input.itemCount < DISCOVERY_MIN_VIDEOS) filterReason = "too_few_videos";
-  else if (input.itemCount > DISCOVERY_MAX_VIDEOS) filterReason = "too_many_videos";
-  else if (hasSpamTerms(blob)) filterReason = "spam_or_non_educational";
-  else if (breakdown.topicMatch < 8) filterReason = "weak_topic_overlap";
+  else if (input.itemCount != null && input.itemCount < DISCOVERY_MIN_VIDEOS) {
+    filterReason = "too_few_videos";
+  } else if (input.itemCount != null && input.itemCount > DISCOVERY_MAX_VIDEOS) {
+    filterReason = "too_many_videos";
+  } else if (hasSpamTerms(blob)) filterReason = "spam_or_non_educational";
+  else if (breakdown.topicMatch < 5) filterReason = "weak_topic_overlap";
 
   const ruleScore = filterReason
     ? Math.min(

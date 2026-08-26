@@ -21,21 +21,17 @@ import {
 } from "@/lib/content-factory/blocks";
 import { rateLimitedResponse } from "@/lib/api-rate-limit";
 import type { ContentFactoryInputType } from "@/lib/content-factory/shared";
+import { keepContentFactoryRunning } from "@/lib/bulk-import-continue";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-function kickContentFactoryCron(origin: string) {
-  const secret = process.env.CRON_SECRET?.trim();
-  if (!secret) return;
-  const cronUrl = new URL("/api/cron/content-factory", origin);
-  setTimeout(() => {
-    void fetch(cronUrl.toString(), {
-      method: "GET",
-      headers: { Authorization: `Bearer ${secret}` },
-      cache: "no-store",
-    }).catch(() => undefined);
-  }, 500);
+function kickContentFactoryCron() {
+  keepContentFactoryRunning({
+    moreWork: true,
+    depth: 0,
+    reason: "admin_content_factory_kick",
+  });
 }
 
 export async function GET(request: NextRequest) {
@@ -117,7 +113,7 @@ export async function POST(request: NextRequest) {
         adminId: auth.user.id,
         candidateIds: body.candidateIds,
       });
-      if (result.created.length) kickContentFactoryCron(request.nextUrl.origin);
+      if (result.created.length) kickContentFactoryCron();
       return NextResponse.json(result);
     } catch (err) {
       return NextResponse.json(
@@ -216,7 +212,7 @@ export async function POST(request: NextRequest) {
           topic: body.inputValue,
           targetGenerate: body.targetGenerate,
         });
-        kickContentFactoryCron(request.nextUrl.origin);
+        kickContentFactoryCron();
         return NextResponse.json({
           runId: run.id,
           status: run.status,
@@ -231,7 +227,7 @@ export async function POST(request: NextRequest) {
         topics: body.inputValue,
         targetGenerate: body.targetGenerate,
       });
-      kickContentFactoryCron(request.nextUrl.origin);
+      kickContentFactoryCron();
       const first = result.created[0]!;
       return NextResponse.json({
         runId: first.id,
@@ -248,7 +244,7 @@ export async function POST(request: NextRequest) {
       inputType: body.inputType,
       inputValue: body.inputValue,
     });
-    kickContentFactoryCron(request.nextUrl.origin);
+    kickContentFactoryCron();
     return NextResponse.json({ job });
   } catch (err) {
     return NextResponse.json(

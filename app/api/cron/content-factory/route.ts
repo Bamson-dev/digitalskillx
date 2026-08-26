@@ -1,4 +1,13 @@
 import { NextResponse, type NextRequest } from "next/server";
+import {
+  continuationDepthFromRequest,
+  keepContentFactoryRunning,
+} from "@/lib/bulk-import-continue";
+import {
+  autoGenerateQualifiedCandidates,
+  autoPublishReadyLearningPaths,
+  contentFactoryHasPendingWork,
+} from "@/lib/content-factory/auto-pipeline";
 import { verifyCronSecret } from "@/lib/cron-auth";
 import { bootstrapRuntimeSecrets } from "@/lib/bootstrap-runtime-secrets";
 import { createAdminClientAsync } from "@/lib/supabase/admin";
@@ -28,7 +37,7 @@ export const runtime = "nodejs";
 export const maxDuration = 300;
 
 /**
- * Process pending Content Factory jobs.
+ * Process Content Factory discovery → qualify → generate → publish.
  * Auth: Authorization: Bearer $CRON_SECRET
  */
 export async function GET(request: NextRequest) {
@@ -43,12 +52,10 @@ export async function GET(request: NextRequest) {
 
   await bootstrapRuntimeSecrets();
   const admin = await createAdminClientAsync();
-
-  // Publishing is admin-only (human approval gate). Cron must not publish paths.
+  const depth = continuationDepthFromRequest(request);
 
   const discovery = await processQueuedDiscoveryRun(admin);
 
-  // Requeue infrastructure/AI failures that never created a path (e.g. DeepSeek 403).
   const { data: failedJobs } = await admin
     .from("content_factory_jobs")
     .select("id, error_message, attempts")
@@ -78,7 +85,6 @@ export async function GET(request: NextRequest) {
       );
   }
 
-  // Reclaim jobs stuck in processing (worker crash / timeout).
   const staleBefore = new Date(Date.now() - 20 * 60 * 1000).toISOString();
   await admin
     .from("content_factory_jobs")
@@ -110,6 +116,21 @@ export async function GET(request: NextRequest) {
     .lt("claimed_at", staleBefore)
     .gte("attempts", FACTORY_RETRY_MAX_ATTEMPTS);
 
+  // Always try qualify so discovery is not starved by pending playlist jobs.
+  let qualification = await processPendingQualification(admin);
+  if (
+    qualification &&
+    "qualified_count" in qualification &&
+    Number(qualification.qualified_count ?? 0) > 0
+  ) {
+    await autoGenerateQualifiedCandidates(admin, {
+      runId: "runId" in qualification ? String(qualification.runId) : undefined,
+    });
+  }
+
+  const autoGenerate = await autoGenerateQualifiedCandidates(admin);
+  let autoPublish = await autoPublishReadyLearningPaths(admin, 3);
+
   const { data: claimed, error } = await admin.rpc("claim_content_factory_jobs", { p_limit: 1 });
   if (error) {
     if (isMissingRelationError(error.message)) {
@@ -122,6 +143,13 @@ export async function GET(request: NextRequest) {
   }
 
   const jobs = (claimed ?? []) as ContentFactoryJob[];
+  let jobProcessed: {
+    processed: number;
+    jobId?: string;
+    job?: unknown;
+    generated?: boolean;
+  } = { processed: 0 };
+
   if (jobs.length) {
     const job = jobs[0]!;
     await processContentFactoryJob(admin, job.id);
@@ -131,42 +159,53 @@ export async function GET(request: NextRequest) {
       .select(JOB_SUMMARY)
       .eq("id", job.id)
       .maybeSingle();
-    return NextResponse.json({
-      ok: true,
+    if (processed?.status === "waiting_review") {
+      autoPublish = await autoPublishReadyLearningPaths(admin, 1);
+    }
+    jobProcessed = {
       processed: 1,
       jobId: job.id,
       job: processed,
       generated: processed?.status === "waiting_review" || processed?.status === "completed",
-      published: false,
-      discovery,
-      qualification: { skipped: true, reason: "playlist_job_priority" },
-      counters: {
-        jobsProcessed: 1,
-        jobsFailed: processed?.status === "failed" ? 1 : 0,
-        discoveryRunsProcessed: discovery && "processed" in discovery && discovery.processed ? 1 : 0,
-        candidatesQualified: 0,
-        candidatesGenerated: processed?.status === "waiting_review" || processed?.status === "completed" ? 1 : 0,
-        qualityChecksCompleted: processed?.status === "waiting_review" || processed?.status === "completed" ? 1 : 0,
-      },
-      jobs: await recentJobs(admin),
-    });
+    };
   }
 
-  const qualification = await processPendingQualification(admin);
+  const moreWork =
+    (await contentFactoryHasPendingWork(admin)) ||
+    autoGenerate.created > 0 ||
+    Boolean(discovery && "processed" in discovery && discovery.processed) ||
+    jobProcessed.processed > 0 ||
+    Boolean(qualification && "processed" in qualification && qualification.processed);
+  keepContentFactoryRunning({
+    moreWork,
+    depth,
+    reason: "content_factory_continue",
+  });
+
   return NextResponse.json({
     ok: true,
-    processed: 0,
-    generated: false,
-    published: false,
+    depth,
+    chained: moreWork,
+    processed: jobProcessed.processed,
+    jobId: jobProcessed.jobId,
+    job: jobProcessed.job,
+    generated: Boolean(jobProcessed.generated) || autoGenerate.created > 0,
+    published: autoPublish.published > 0,
     discovery,
     qualification,
+    autoGenerate,
+    autoPublish,
     counters: {
-      jobsProcessed: 0,
+      jobsProcessed: jobProcessed.processed,
       jobsFailed: 0,
       discoveryRunsProcessed: discovery && "processed" in discovery && discovery.processed ? 1 : 0,
-      candidatesQualified: "qualified_count" in (qualification ?? {}) ? Number((qualification as { qualified_count?: number }).qualified_count ?? 0) : 0,
-      candidatesGenerated: 0,
-      qualityChecksCompleted: 0,
+      candidatesQualified:
+        qualification && "qualified_count" in qualification
+          ? Number(qualification.qualified_count ?? 0)
+          : 0,
+      candidatesGenerated: autoGenerate.created + (jobProcessed.generated ? 1 : 0),
+      qualityChecksCompleted: jobProcessed.generated ? 1 : 0,
+      autoPublished: autoPublish.published,
     },
     jobs: await recentJobs(admin),
   });

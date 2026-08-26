@@ -33,7 +33,8 @@ export function scheduleBulkWorkerContinuation(params: {
     | "/api/cron/bulk-import"
     | "/api/cron/email-outbox"
     | "/api/cron/email-campaigns"
-    | "/api/cron/webinar-follow-up";
+    | "/api/cron/webinar-follow-up"
+    | "/api/cron/content-factory";
   depth?: number;
   reason?: string;
   jobId?: string;
@@ -55,12 +56,12 @@ export function scheduleBulkWorkerContinuation(params: {
       path: params.path,
       depth,
     });
-    if (params.path === "/api/cron/webinar-follow-up") {
+    if (params.path === "/api/cron/webinar-follow-up" || params.path === "/api/cron/content-factory") {
       scheduleBulkWorkerContinuation({
         origin: params.origin,
         path: params.path,
         depth: 0,
-        reason: "wfu_chain_reset",
+        reason: params.path === "/api/cron/content-factory" ? "cf_chain_reset" : "wfu_chain_reset",
         delayMs: 8_000,
       });
     }
@@ -155,6 +156,37 @@ export function nudgeWebinarFollowupIfNeeded(params: {
     moreDue: true,
     depth: 0,
     reason: params.reason,
+  });
+}
+
+/** Keep Content Factory discovery → qualify → generate → publish draining. */
+export function keepContentFactoryRunning(params: {
+  moreWork: boolean;
+  depth?: number;
+  reason: string;
+}) {
+  if (!params.moreWork) return;
+  const origin = "https://www.digitalskillx.com";
+  const depth = params.depth ?? 0;
+  scheduleBulkWorkerContinuation({
+    origin,
+    path: "/api/cron/content-factory",
+    depth,
+    reason: params.reason,
+  });
+  scheduleBulkWorkerContinuation({
+    origin,
+    path: "/api/cron/content-factory",
+    depth,
+    reason: `${params.reason}_retry_2s`,
+    delayMs: 2_000,
+  });
+  scheduleBulkWorkerContinuation({
+    origin,
+    path: "/api/cron/content-factory",
+    depth,
+    reason: `${params.reason}_retry_12s`,
+    delayMs: 12_000,
   });
 }
 
