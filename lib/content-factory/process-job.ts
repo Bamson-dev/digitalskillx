@@ -178,6 +178,7 @@ export async function processContentFactoryJob(admin: Admin, jobId: string): Pro
     );
     const videoById = new Map(usable.map((v) => [v.videoId, v] as const));
 
+    const insertedVideoIds = new Set<string>();
     for (let si = 0; si < structure.sections.length; si++) {
       const section = structure.sections[si]!;
       const { data: sectionRow, error: sectionError } = await admin
@@ -193,6 +194,7 @@ export async function processContentFactoryJob(admin: Admin, jobId: string): Pro
 
       let position = 0;
       for (const videoId of section.lessonVideoIds) {
+        if (insertedVideoIds.has(videoId)) continue;
         const video = videoById.get(videoId);
         if (!video) continue;
         const summary = summaryById.get(videoId);
@@ -213,7 +215,11 @@ export async function processContentFactoryJob(admin: Admin, jobId: string): Pro
             sourceDescription: video.description.slice(0, 2000),
           },
         });
-        if (lessonError) throw new Error(lessonError.message);
+        if (lessonError) {
+          if (/duplicate|unique/i.test(lessonError.message)) continue;
+          throw new Error(lessonError.message);
+        }
+        insertedVideoIds.add(videoId);
       }
     }
 
