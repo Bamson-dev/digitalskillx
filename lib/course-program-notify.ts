@@ -132,23 +132,7 @@ export async function notifyProgramStudentsOfNewCourse(
     .filter(Boolean)
     .join(" ");
 
-  await notifyMany(
-    toNotify.map((recipient) => recipient.id),
-    {
-      type: "program_course_added",
-      title: `New course: ${course.title}`,
-      message: inAppMessage,
-      linkUrl: `/course/${course.id}`,
-    },
-    { admin },
-  );
-
-  const tracked = await recordProgramCourseDeliveries(
-    admin,
-    course.id,
-    toNotify.map((recipient) => recipient.id),
-  );
-
+  // Emails first — if in-app notify fails, Resend still receives the batch.
   let emailsSent = 0;
   if (options?.sendEmails !== false) {
     emailsSent = await sendProgramCoursePublishEmails({
@@ -160,6 +144,27 @@ export async function notifyProgramStudentsOfNewCourse(
       longDescription,
     });
   }
+
+  try {
+    await notifyMany(
+      toNotify.map((recipient) => recipient.id),
+      {
+        type: "program_course_added",
+        title: `New course: ${course.title}`,
+        message: inAppMessage,
+        linkUrl: `/course/${course.id}`,
+      },
+      { admin },
+    );
+  } catch (err) {
+    console.error("[course-program-notify] in-app notify failed after emails:", err);
+  }
+
+  const tracked = await recordProgramCourseDeliveries(
+    admin,
+    course.id,
+    toNotify.map((recipient) => recipient.id),
+  );
 
   return {
     notified: toNotify.length,
@@ -185,9 +190,9 @@ export async function sendProgramCoursePublishEmails(params: {
   const outcomes = (params.course.learning_outcomes ?? []).map((row) => row.trim()).filter(Boolean);
   let emailsSent = 0;
 
-  for (let i = 0; i < params.toNotify.length; i += 40) {
-    const batch = params.toNotify.slice(i, i + 40);
-    const results = await Promise.allSettled(
+  for (let i = 0; i < params.toNotify.length; i += 25) {
+    const batch = params.toNotify.slice(i, i + 25);
+    const results = await Promise.all(
       batch.map(async (recipient) => {
         const tpl = emailTemplates.programCourseAdded({
           firstName: studentFirstName(recipient.full_name ?? ""),
@@ -208,11 +213,14 @@ export async function sendProgramCoursePublishEmails(params: {
           to: recipient.email,
           subject: tpl.subject,
           html: tpl.html,
+          tags: [
+            { name: "type", value: "program_course_added" },
+            { name: "course_id", value: params.course.id.replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 50) },
+          ],
         });
 
         if ("messageId" in result && result.messageId) {
-          emailsSent += 1;
-          return;
+          return { ok: true as const };
         }
 
         const errorMessage =
@@ -241,9 +249,10 @@ export async function sendProgramCoursePublishEmails(params: {
           },
           errorMessage,
         });
+        return { ok: false as const };
       }),
     );
-    void results;
+    emailsSent += results.filter((row) => row.ok).length;
   }
 
   return emailsSent;

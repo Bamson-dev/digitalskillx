@@ -1,6 +1,5 @@
 "use server";
 
-import { waitUntil } from "@vercel/functions";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { isRedirectError } from "next/dist/client/components/redirect";
@@ -19,7 +18,7 @@ import {
   normalizeTelegramCommunityUrl,
   normalizeWhatsAppCommunityUrl,
 } from "@/lib/course-community";
-import { notifyProgramStudentsOfNewCourse } from "@/lib/course-program-notify";
+import { scheduleCoursePublishNotify } from "@/lib/schedule-course-publish-notify";
 import type { CourseVisibility, EnrollmentType, LessonType } from "@/types/database";
 
 export type LessonAttachmentState = {
@@ -250,38 +249,13 @@ export async function updateCourseSettings(
     const forceNotify = formData.get("notify_paid_students") === "on";
     let notifyNote = "";
     if ((!wasPublished && nowPublished && !isComingSoon) || (forceNotify && nowPublished && !isComingSoon)) {
-      const courseRow = {
-        id,
-        title,
-        category_id: categoryId,
-        short_description: shortDescription,
-        description,
-        learning_outcomes: outcomes,
-        instructor_name: String(formData.get("instructor_name") ?? "").trim() || null,
-        price_ngn: Number.isFinite(priceNgn) && priceNgn >= 0 ? Math.round(priceNgn) : 0,
-      };
-      try {
-        waitUntil(
-          notifyProgramStudentsOfNewCourse(courseRow, {
-            forceResend: forceNotify,
-            sendEmails: true,
-          })
-            .then((result) => {
-              console.info(
-                `[course-program-notify] background ${id}: notified=${result.notified} emails=${result.emailsSent}${result.reason ? ` reason=${result.reason}` : ""}`,
-              );
-            })
-            .catch((err) => {
-              console.error("[course-program-notify] background job failed:", err);
-            }),
-        );
-        notifyNote =
-          " Student notifications are sending in the background — check in-app notifications and email in about a minute.";
-      } catch (queueErr) {
-        console.error("[course-program-notify] could not queue background job:", queueErr);
-        notifyNote =
-          " Course saved, but could not queue notifications. Check Resend publish notification and save again.";
-      }
+      const queued = scheduleCoursePublishNotify({
+        courseId: id,
+        forceResend: forceNotify,
+      });
+      notifyNote = queued
+        ? " Student emails and in-app notifications are being sent now — check Resend in about a minute."
+        : " Course saved, but could not start notifications (CRON_SECRET missing on server).";
     } else if (nowPublished && isComingSoon) {
       notifyNote = " Coming soon courses do not notify students until that flag is off.";
     }

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Unit checks for course publish notify helpers + optional timing smoke on save.
+ * Live test: admin login + force course publish notify via API (awaits Resend).
  * Usage: node scripts/test-course-publish-notify.mjs [baseUrl]
  */
 import { execFileSync } from "node:child_process";
@@ -51,16 +51,20 @@ function loadEnvFile(name) {
 }
 
 function curl(args) {
-  return execFileSync("curl", ["-sL", ...args], { encoding: "utf8", maxBuffer: 10 * 1024 * 1024 });
+  return execFileSync("curl", ["-sL", "--max-time", "120", ...args], {
+    encoding: "utf8",
+    maxBuffer: 10 * 1024 * 1024,
+  });
 }
 
-async function optionalSaveTimingSmoke(base) {
+function liveNotifySmoke(base) {
   loadEnvFile(".env.test");
   loadEnvFile(".env.local");
   const email = process.env.TEST_ADMIN_EMAIL ?? "admin@digitalskillx.com";
   const password = process.env.TEST_ADMIN_PASSWORD ?? process.env.ADMIN_PASSWORD;
+  const cron = process.env.CRON_SECRET?.trim();
   if (!password) {
-    console.log("SKIP: save timing smoke (set TEST_ADMIN_PASSWORD)");
+    console.log("SKIP: notify smoke (set TEST_ADMIN_PASSWORD)");
     return;
   }
 
@@ -81,65 +85,57 @@ async function optionalSaveTimingSmoke(base) {
 
   const listHtml = curl(["-b", jar, `${base}/admin/courses`]);
   const courseId = listHtml.match(/\/admin\/courses\/([0-9a-f-]{36})/i)?.[1];
-  if (!courseId) {
-    console.log("SKIP: save timing smoke (no course id)");
-    return;
-  }
-
-  const pageUrl = `${base}/admin/courses/${courseId}`;
-  const html = curl(["-b", jar, pageUrl]);
-  const actionId = html.match(/"\$ACTION_ID_([0-9a-f]+)"/i)?.[1];
-  if (!actionId) {
-    console.log("SKIP: save timing smoke (no action id)");
-    return;
-  }
-
-  const title = html.match(/name="title"[^>]*value="([^"]*)"/)?.[1] ?? "Test course";
-  const body = new URLSearchParams({
-    id: courseId,
-    title,
-    description: "",
-    category_id: "",
-    price_ngn: "0",
-    price_usd: "0",
-    required_completion_pct: "100",
-    learning_outcomes: "",
-    certificate_template_override: "",
-    thumbnail_url: "",
-    visibility: "published",
-  }).toString();
+  assert(courseId, "no course id on /admin/courses");
 
   const started = Date.now();
-  const response = curl([
+  const sessionBody = curl([
     "-b",
     jar,
     "-X",
     "POST",
-    pageUrl,
-    "-H",
-    "Content-Type: application/x-www-form-urlencoded",
-    "-H",
-    `Next-Action: ${actionId}`,
-    "-d",
-    body,
+    `${base}/api/admin/courses/${courseId}/notify-publish?force=1`,
   ]);
-  const elapsedMs = Date.now() - started;
+  console.log("SESSION notify:", sessionBody.slice(0, 800), `(${Date.now() - started}ms)`);
 
-  assert(elapsedMs < 20_000, `save took ${elapsedMs}ms — expected under 20s (background notify)`);
+  let payload;
+  try {
+    payload = JSON.parse(sessionBody);
+  } catch {
+    assert(false, `notify response not JSON: ${sessionBody.slice(0, 400)}`);
+  }
+
+  assert(payload.ok === true, `notify not ok: ${sessionBody.slice(0, 400)}`);
+  assert(typeof payload.emailsSent === "number", "emailsSent missing — deploy may be stale");
   assert(
-    /Course settings saved/i.test(response) || /sending in the background/i.test(response),
-    "save response missing success message",
+    payload.emailsSent > 0 || payload.notified > 0 || Boolean(payload.reason),
+    `no send evidence: ${sessionBody.slice(0, 400)}`,
   );
-  console.log(`PASS: course save returned in ${elapsedMs}ms`);
+  console.log(
+    `PASS: notify course ${courseId} notified=${payload.notified} emailsSent=${payload.emailsSent}`,
+  );
+
+  if (cron) {
+    const cronBody = curl([
+      "-X",
+      "POST",
+      "-H",
+      `Authorization: Bearer ${cron}`,
+      `${base}/api/admin/courses/${courseId}/notify-publish?force=1`,
+    ]);
+    console.log("CRON notify:", cronBody.slice(0, 500));
+    const cronPayload = JSON.parse(cronBody);
+    assert(cronPayload.ok === true || cronPayload.error, "cron notify unexpected");
+    if (cronPayload.ok) console.log("PASS: cron auth notify works");
+  }
 }
 
 async function main() {
   testChunkArray();
   const base = process.argv[2];
   if (base) {
-    await optionalSaveTimingSmoke(base.replace(/\/$/, ""));
+    liveNotifySmoke(base.replace(/\/$/, ""));
   } else {
-    console.log("SKIP: save timing smoke (pass baseUrl to run)");
+    console.log("SKIP: live notify smoke (pass baseUrl to run)");
   }
   console.log("=== ALL PASSED ===");
 }

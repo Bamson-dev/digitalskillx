@@ -120,7 +120,6 @@ async function resolveCoursePublishRecipientsViaProfiles(
       .eq("role", "student")
       .eq("is_suspended", false)
       .not("email", "is", null)
-      .order("created_at", { ascending: true })
       .range(from, from + PAGE - 1);
     if (error) throw new Error(formatPostgrestError(error));
     const rows = data ?? [];
