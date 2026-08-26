@@ -66,7 +66,9 @@ async function recountRun(admin: Admin, runId: string, extra?: {
     error_message?: string | null;
     completed_at?: string | null;
   } = {
-    discovered_count,
+    // Keep "found" as total candidates in the run so the admin UI does not
+    // drop to 0 after everything moves out of status=discovered.
+    discovered_count: Math.max(discovered_count, candidates.length),
     filtered_count,
     qualified_count,
     generated_count: candidates.filter((c) => isGeneratedCandidate(c)).length,

@@ -105,7 +105,7 @@ export async function findTopicCooldownRun(
   const since = new Date(Date.now() - hours * 60 * 60 * 1000).toISOString();
   const { data, error } = await admin
     .from("content_factory_discovery_runs")
-    .select("id, topic, status, created_at")
+    .select("id, topic, status, target_generate, created_at")
     .in("status", ["queued", "running", "completed"])
     .gte("created_at", since)
     .order("created_at", { ascending: false })
@@ -121,7 +121,13 @@ export async function findTopicCooldownRun(
 export async function createDiscoveryRun(
   admin: SupabaseClient<Database>,
   params: { adminId: string; topic: string; targetGenerate?: number },
-) {
+): Promise<{
+  id: string;
+  status: string;
+  topic: string;
+  target_generate: number;
+  reused?: boolean;
+}> {
   if (!contentFactoryEnabled()) {
     throw new Error("Content Factory is disabled.");
   }
@@ -131,11 +137,16 @@ export async function createDiscoveryRun(
   });
   if ("error" in validated) throw new Error(validated.error);
 
+  // Reuse today's search instead of hard-failing — show results and keep generating.
   const cooldown = await findTopicCooldownRun(admin, validated.topic);
   if (cooldown) {
-    throw new Error(
-      `Topic "${validated.topic}" was already searched within the last ${cooldownHours()} hours.`,
-    );
+    return {
+      id: cooldown.id,
+      status: cooldown.status,
+      topic: cooldown.topic,
+      target_generate: Number(cooldown.target_generate ?? validated.targetGenerate),
+      reused: true,
+    };
   }
 
   const used = await countRecentDiscoverySearches(admin, undefined, { includeQueued: true });

@@ -205,14 +205,51 @@ export function ContentFactoryPanel() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ inputType: "topic", inputValue: topic }),
       });
-      const json = (await res.json()) as { error?: string; runId?: string };
+      const json = (await res.json()) as {
+        error?: string;
+        runId?: string;
+        reused?: boolean;
+        topic?: string;
+        status?: string;
+        created?: DiscoveryRun[];
+      };
       if (!res.ok) throw new Error(json.error ?? "Discovery failed");
-      toast("Discovery started. Tutorials will be built and published automatically when they pass quality checks.");
+      toast(
+        json.reused
+          ? "Showing today's search for this topic. Building any remaining tutorials now."
+          : "Discovery started. Tutorials will appear here and on /learn as they pass quality checks.",
+      );
       setTopic("");
       await loadJobs();
-      // Poll while the pipeline works so the admin list stays fresh.
+      const runFromList =
+        (json.runId
+          ? (await (async () => {
+              const listRes = await fetch("/api/admin/content-factory/jobs");
+              const listJson = (await listRes.json()) as { discoveryRuns?: DiscoveryRun[] };
+              return (listJson.discoveryRuns ?? []).find((r) => r.id === json.runId) ?? null;
+            })())
+          : null) ??
+        (json.created?.[0]
+          ? {
+              id: json.created[0].id,
+              topic: json.created[0].topic ?? json.topic ?? topic,
+              status: json.created[0].status ?? json.status ?? "queued",
+              target_generate: json.created[0].target_generate ?? 20,
+              discovered_count: json.created[0].discovered_count ?? 0,
+              filtered_count: json.created[0].filtered_count ?? 0,
+              qualified_count: json.created[0].qualified_count ?? 0,
+              generated_count: json.created[0].generated_count ?? 0,
+              error_message: json.created[0].error_message ?? null,
+            }
+          : null);
+      if (runFromList) {
+        await openRun(runFromList);
+      }
       window.setTimeout(() => void loadJobs(), 8_000);
-      window.setTimeout(() => void loadJobs(), 25_000);
+      window.setTimeout(() => {
+        void loadJobs();
+        if (runFromList) void openRun(runFromList);
+      }, 25_000);
     } catch (err) {
       toast(err instanceof Error ? err.message : "Discovery failed", "error");
     } finally {
@@ -494,7 +531,7 @@ export function ContentFactoryPanel() {
                   <span className="font-medium">{run.topic}</span>
                   <span className="mt-0.5 block text-xs text-muted">
                     {run.status} · found {run.discovered_count} · filtered {run.filtered_count} · qualified{" "}
-                    {run.qualified_count ?? 0}
+                    {run.qualified_count ?? 0} · generated {run.generated_count ?? 0}
                   </span>
                   {run.error_message ? (
                     <span className="mt-0.5 block text-xs text-red-600">{run.error_message}</span>
@@ -544,8 +581,8 @@ export function ContentFactoryPanel() {
                 {selectedRun.run.generated_count ?? 0}
               </p>
               <p className="mt-1 text-xs text-muted">
-                Generate sends qualified candidates into the existing Content Factory. Max 3 per run.
-                Paths stay in review until you approve.
+                Qualified playlists are built and published to /learn automatically when they pass
+                quality checks. You can also generate up to 3 manually below.
               </p>
               <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
                 <Input

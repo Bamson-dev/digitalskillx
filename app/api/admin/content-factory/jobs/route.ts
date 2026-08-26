@@ -218,6 +218,7 @@ export async function POST(request: NextRequest) {
           status: run.status,
           topic: run.topic,
           targetGenerate: run.target_generate,
+          reused: Boolean(run.reused),
           created: [run],
           skipped: [],
         });
@@ -234,6 +235,7 @@ export async function POST(request: NextRequest) {
         status: first.status,
         topic: first.topic,
         targetGenerate: first.target_generate,
+        reused: Boolean((first as { reused?: boolean }).reused),
         created: result.created,
         skipped: result.skipped,
       });

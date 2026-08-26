@@ -555,10 +555,11 @@ console.log("PASS: Stage 1 discovery artifacts present");
   const envExample = read(".env.example");
   assert.match(disc, /findTopicCooldownRun/);
   assert.match(disc, /CONTENT_FACTORY_TOPIC_COOLDOWN_HOURS/);
-  assert.match(disc, /already searched within the last/);
+  assert.match(disc, /reused: true/);
+  assert.doesNotMatch(disc, /already searched within the last/);
   assert.match(envExample, /CONTENT_FACTORY_TOPIC_COOLDOWN_HOURS=24/);
   assert.equal(DISCOVERY_TOPIC_COOLDOWN_HOURS, 24);
-  console.log("PASS: 15 topic cooldown enforced");
+  console.log("PASS: 15 topic cooldown reuses prior run");
 }
 
 {
@@ -2188,8 +2189,9 @@ function matchesCandidateFilters(row, filters) {
 {
   const disc = read("lib/content-factory/discovery.ts");
   assert.match(disc, /findTopicCooldownRun/);
-  assert.match(disc, /already searched within the last/);
-  console.log("PASS: S6-3 topic cooldown");
+  assert.match(disc, /reused: true/);
+  assert.doesNotMatch(disc, /already searched within the last/);
+  console.log("PASS: S6-3 topic cooldown reuses prior run");
 }
 
 {
