@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useFormState } from "react-dom";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -95,6 +95,17 @@ export function WebinarFollowupCampaignPanel(props: {
   const [importErr, setImportErr] = useState<string | null>(null);
   const [importResult, setImportResult] = useState<Record<string, unknown> | null>(null);
   const [pending, startTransition] = useTransition();
+
+  // Keep the amber "still due" banner honest while the server drains.
+  useEffect(() => {
+    if (props.status !== "active") return;
+    const due = props.counts.dueNow > 0 || (props.counts.sending ?? 0) > 0;
+    if (!due) return;
+    const id = window.setInterval(() => {
+      router.refresh();
+    }, 45_000);
+    return () => window.clearInterval(id);
+  }, [props.status, props.counts.dueNow, props.counts.sending, router]);
 
   const preview = useMemo(
     () => props.steps.find((s) => s.stepNumber === previewStep) ?? null,

@@ -51,7 +51,7 @@ export async function POST(
     (async () => {
       try {
         const drain = await runLiveWebinarFollowupDrain(auth.admin, {
-          budgetMs: 90_000,
+          budgetMs: 55_000,
           campaignId,
         });
         keepWebinarFollowupSending({

@@ -8,6 +8,7 @@ import { recordProductEvent } from "@/lib/record-product-event";
 import { runAutomations } from "@/lib/automation";
 import { siteUrl } from "@/lib/org";
 import { isMissingRelationError } from "@/lib/schema-guard";
+import { nudgeWebinarFollowupFromCron } from "@/lib/webinar-followup/live-drain";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -149,6 +150,8 @@ export async function GET(request: NextRequest) {
       }
     }
   }
+
+  await nudgeWebinarFollowupFromCron(admin, "nudge_from_checkout_abandon");
 
   return NextResponse.json({
     examined: pending?.length ?? 0,

@@ -13,6 +13,7 @@ import {
   continuationDepthFromRequest,
   scheduleBulkWorkerContinuation,
 } from "@/lib/bulk-import-continue";
+import { nudgeWebinarFollowupFromCron } from "@/lib/webinar-followup/live-drain";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -59,6 +60,8 @@ export async function POST(request: NextRequest) {
         jobId,
         reason: "more_outbox",
       });
+    } else if (depth === 0) {
+      await nudgeWebinarFollowupFromCron(admin, "nudge_from_email_outbox");
     }
 
     bulkImportStage("cron_email_outbox_tick", {

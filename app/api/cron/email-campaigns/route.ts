@@ -7,6 +7,7 @@ import {
   continuationDepthFromRequest,
   scheduleBulkWorkerContinuation,
 } from "@/lib/bulk-import-continue";
+import { nudgeWebinarFollowupFromCron } from "@/lib/webinar-followup/live-drain";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -35,6 +36,8 @@ export async function POST(request: NextRequest) {
         depth,
         reason: "more_campaign_due",
       });
+    } else if (depth === 0) {
+      await nudgeWebinarFollowupFromCron(admin, "nudge_from_email_campaigns");
     }
 
     return NextResponse.json({ ok: true, depth, chained: result.moreDue, ...result });

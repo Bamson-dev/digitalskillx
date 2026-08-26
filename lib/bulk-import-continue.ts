@@ -106,7 +106,11 @@ export function scheduleBulkWorkerContinuation(params: {
   waitUntil(delayMs > 0 ? sleep(delayMs).then(fire) : fire());
 }
 
-/** Keep draining webinar follow-up even if one continuation request fails. */
+/**
+ * Keep draining webinar follow-up even if one continuation request fails.
+ * Retries must fit inside remaining waitUntil budget after the drain
+ * (Hobby maxDuration is 120s — a 45s delay after a long drain never fires).
+ */
 export function keepWebinarFollowupSending(params: {
   moreDue: boolean;
   depth?: number;
@@ -125,15 +129,32 @@ export function keepWebinarFollowupSending(params: {
     origin,
     path: "/api/cron/webinar-follow-up",
     depth,
-    reason: `${params.reason}_retry_8s`,
-    delayMs: 8_000,
+    reason: `${params.reason}_retry_2s`,
+    delayMs: 2_000,
   });
   scheduleBulkWorkerContinuation({
     origin,
     path: "/api/cron/webinar-follow-up",
     depth,
-    reason: `${params.reason}_retry_45s`,
-    delayMs: 45_000,
+    reason: `${params.reason}_retry_12s`,
+    delayMs: 12_000,
+  });
+}
+
+/**
+ * Opportunistic wake from other daily crons so a dead self-chain recovers
+ * before the next dedicated webinar cron (Hobby is once/day per path).
+ */
+export function nudgeWebinarFollowupIfNeeded(params: {
+  dueNow: number;
+  sending: number;
+  reason: string;
+}) {
+  if (params.dueNow <= 0 && params.sending <= 0) return;
+  keepWebinarFollowupSending({
+    moreDue: true,
+    depth: 0,
+    reason: params.reason,
   });
 }
 

@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { runAutomations } from "@/lib/automation";
 import { processIdleReminderEmails } from "@/lib/system-email-triggers";
 import { verifyCronSecret } from "@/lib/cron-auth";
+import { nudgeWebinarFollowupFromCron } from "@/lib/webinar-followup/live-drain";
 
 export const dynamic = "force-dynamic";
 
@@ -37,6 +38,7 @@ export async function GET(request: NextRequest) {
   }
 
   const emailResult = await processIdleReminderEmails(days);
+  await nudgeWebinarFollowupFromCron(admin, "nudge_from_inactivity");
 
   return NextResponse.json({
     inactivityDays: days,

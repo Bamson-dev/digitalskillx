@@ -2,10 +2,36 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 import { sendEmail } from "@/lib/email";
+import { nudgeWebinarFollowupIfNeeded } from "@/lib/bulk-import-continue";
 import { drainWebinarFollowupUntilBudget, type DrainResult } from "./processor";
 import { createSupabaseWfuStore, ensureSequenceFromSource, loadCampaignCounts, type CampaignCounts } from "./store";
 
 type Admin = SupabaseClient<Database>;
+
+/** Peek active campaigns and kick the auto-drain chain if anything is waiting. */
+export async function nudgeWebinarFollowupFromCron(
+  admin: Admin,
+  reason: string,
+): Promise<{ dueNow: number; sending: number; nudged: boolean }> {
+  const store = createSupabaseWfuStore(admin);
+  let dueNow = 0;
+  let sending = 0;
+  try {
+    const campaigns = await store.listActiveCampaigns();
+    for (const campaign of campaigns) {
+      const counts = await loadCampaignCounts(admin, campaign.id);
+      dueNow += counts.dueNow;
+      sending += counts.sending;
+    }
+  } catch {
+    return { dueNow: 0, sending: 0, nudged: false };
+  }
+  const nudged = dueNow > 0 || sending > 0;
+  if (nudged) {
+    nudgeWebinarFollowupIfNeeded({ dueNow, sending, reason });
+  }
+  return { dueNow, sending, nudged };
+}
 
 export function webinarFollowupSendMail() {
   return (mail: {

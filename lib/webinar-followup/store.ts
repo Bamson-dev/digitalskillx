@@ -678,15 +678,29 @@ export function createSupabaseWfuStore(admin: Admin): WfuStore {
     },
 
     async listDueContacts(campaignId, nowIso, limit) {
+      // Only block contacts that are mid-send or in backoff. Claimable
+      // pending rows (scheduled_at <= now) must stay visible so the same
+      // tick can queue + claim them; otherwise UI "due" stalls forever.
       const { data: inFlight, error: sendErr } = await admin
         .from("webinar_followup_sends" as never)
-        .select("contact_id")
+        .select("contact_id, status, scheduled_at")
         .eq("campaign_id", campaignId)
         .in("status", ["pending", "sending"]);
       if (sendErr) throw new Error(sendErr.message);
-      const blocked = new Set(
-        ((inFlight as Array<{ contact_id: string }> | null) ?? []).map((row) => row.contact_id),
-      );
+      const blocked = new Set<string>();
+      for (const row of (inFlight as Array<{
+        contact_id: string;
+        status: string;
+        scheduled_at: string | null;
+      }> | null) ?? []) {
+        if (row.status === "sending") {
+          blocked.add(row.contact_id);
+          continue;
+        }
+        if (row.scheduled_at && row.scheduled_at > nowIso) {
+          blocked.add(row.contact_id);
+        }
+      }
 
       const picked: WfuContact[] = [];
       const pageSize = 400;
