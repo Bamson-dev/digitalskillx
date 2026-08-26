@@ -316,26 +316,24 @@ export default async function StudentDetailPage({
           title="Device login protection"
           description="Paid programs are capped at 4 devices by default. Raise the limit or reset devices when a student needs help."
         />
-        <div className="px-6 pb-6">
-          <StudentDeviceAccessPanel
-            studentId={student.id}
-            paidProgramAccess={paidProgramAccess}
-            activeDeviceCount={activeDeviceCount}
-            maxDevices={maxDevices}
-            sessions={deviceSessions.map((s) => ({
-              id: s.id,
-              browser: s.browser,
-              os: s.os,
-              device: s.device,
-              city: s.city,
-              country: s.country,
-              lastActiveAt: s.last_active_at,
-              isCurrent: s.is_current,
-            }))}
-            resetDevicesAction={resetStudentDevices}
-            updateMaxDevicesAction={updateStudentMaxDevices}
-          />
-        </div>
+        <StudentDeviceAccessPanel
+          studentId={student.id}
+          paidProgramAccess={paidProgramAccess}
+          activeDeviceCount={activeDeviceCount}
+          maxDevices={maxDevices}
+          sessions={deviceSessions.map((s) => ({
+            id: s.id,
+            browser: s.browser,
+            os: s.os,
+            device: s.device,
+            city: s.city,
+            country: s.country,
+            lastActiveAt: s.last_active_at,
+            isCurrent: s.is_current,
+          }))}
+          resetDevicesAction={resetStudentDevices}
+          updateMaxDevicesAction={updateStudentMaxDevices}
+        />
       </Card>
 
       <div className="grid gap-6 lg:grid-cols-2">

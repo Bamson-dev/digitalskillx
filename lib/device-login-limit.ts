@@ -24,26 +24,32 @@ function normalizeMaxDevices(raw: number | null | undefined) {
   return Math.min(50, Math.max(1, Math.round(raw)));
 }
 
-/** True when the student has paid / admin / link access (not free self-enroll only). */
+/** True when the student has access to at least one paid course (price > 0) or a successful payment. */
 export async function studentHasPaidProgramAccess(
   admin: SupabaseClient<Database>,
   studentId: string,
 ): Promise<boolean> {
-  const { count: paidEnrollments, error: enrollError } = await admin
-    .from("enrollments")
-    .select("*", { count: "exact", head: true })
-    .eq("student_id", studentId)
-    .neq("source", "self");
-  if (enrollError) throw new Error(formatPostgrestError(enrollError));
-  if ((paidEnrollments ?? 0) > 0) return true;
-
   const { count: paidTx, error: txError } = await admin
     .from("transactions")
     .select("*", { count: "exact", head: true })
     .eq("student_id", studentId)
     .eq("status", "success");
   if (txError) throw new Error(formatPostgrestError(txError));
-  return (paidTx ?? 0) > 0;
+  if ((paidTx ?? 0) > 0) return true;
+
+  const { data: enrollments, error: enrollError } = await admin
+    .from("enrollments")
+    .select("course_id, course:courses(price_ngn, price_usd)")
+    .eq("student_id", studentId);
+  if (enrollError) throw new Error(formatPostgrestError(enrollError));
+
+  for (const row of enrollments ?? []) {
+    const course = Array.isArray(row.course) ? row.course[0] : row.course;
+    const ngn = typeof course?.price_ngn === "number" ? course.price_ngn : 0;
+    const usd = typeof course?.price_usd === "number" ? course.price_usd : 0;
+    if (ngn > 0 || usd > 0) return true;
+  }
+  return false;
 }
 
 export async function getStudentMaxDevices(
