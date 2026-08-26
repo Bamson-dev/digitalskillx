@@ -15,7 +15,10 @@ export type LoginSession = {
 export async function runStudentLogin(params: {
   email: string;
   password: string;
-}): Promise<{ ok: true; session: LoginSession } | { ok: false; error: string }> {
+}): Promise<
+  | { ok: true; session: LoginSession; userId: string; role: string }
+  | { ok: false; error: string }
+> {
   const email = params.email.trim().toLowerCase();
   const password = params.password;
   if (!email || !password) {
@@ -84,7 +87,7 @@ export async function runStudentLogin(params: {
 
     const { data: verified, error: verifyError } = await admin
       .from("profiles")
-      .select("id, is_suspended")
+      .select("id, is_suspended, role")
       .eq("id", data.user.id)
       .maybeSingle();
     if (verifyError) throw new Error(verifyError.message);
@@ -113,16 +116,18 @@ export async function runStudentLogin(params: {
         email,
       });
     }
+
+    return {
+      ok: true,
+      userId: data.user.id,
+      role: verified.role,
+      session: {
+        access_token: data.session.access_token,
+        refresh_token: data.session.refresh_token,
+      },
+    };
   } catch (err) {
     const message = err instanceof Error ? err.message : "Could not load your profile.";
     return { ok: false, error: message };
   }
-
-  return {
-    ok: true,
-    session: {
-      access_token: data.session.access_token,
-      refresh_token: data.session.refresh_token,
-    },
-  };
 }

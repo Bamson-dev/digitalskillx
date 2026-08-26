@@ -1,8 +1,9 @@
 "use client";
 
 import { useRef } from "react";
-import { Ban, CheckCircle2, KeyRound, Trash2 } from "lucide-react";
+import { Ban, CheckCircle2, KeyRound, MonitorSmartphone, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 
 type Props = {
   studentId: string;
@@ -37,7 +38,6 @@ export function StudentAdminToolbar({
           size="sm"
           type="button"
           onClick={() => {
-            const verb = isSuspended ? "unsuspend" : "suspend";
             if (
               confirm(
                 isSuspended
@@ -102,6 +102,126 @@ export function StudentAdminToolbar({
           <Trash2 className="h-4 w-4" /> Delete account
         </Button>
       </form>
+    </div>
+  );
+}
+
+type DeviceSession = {
+  id: string;
+  browser: string | null;
+  os: string | null;
+  device: string | null;
+  city: string | null;
+  country: string | null;
+  lastActiveAt: string;
+  isCurrent: boolean;
+};
+
+export function StudentDeviceAccessPanel({
+  studentId,
+  paidProgramAccess,
+  activeDeviceCount,
+  maxDevices,
+  sessions,
+  resetDevicesAction,
+  updateMaxDevicesAction,
+}: {
+  studentId: string;
+  paidProgramAccess: boolean;
+  activeDeviceCount: number;
+  maxDevices: number;
+  sessions: DeviceSession[];
+  resetDevicesAction: (formData: FormData) => void | Promise<void>;
+  updateMaxDevicesAction: (formData: FormData) => void | Promise<void>;
+}) {
+  const resetRef = useRef<HTMLFormElement>(null);
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="text-sm font-medium text-neutral-900">
+            {activeDeviceCount} active device{activeDeviceCount === 1 ? "" : "s"}
+            {paidProgramAccess ? (
+              <span className="font-normal text-muted"> · limit {maxDevices}</span>
+            ) : (
+              <span className="font-normal text-muted"> · free access (no device limit)</span>
+            )}
+          </p>
+          <p className="mt-1 text-xs text-muted">
+            Paid programs allow up to {maxDevices} devices by default. Free-only students are not
+            limited. Reset clears all device logins so the student can sign in again.
+          </p>
+        </div>
+        <form ref={resetRef} action={resetDevicesAction}>
+          <input type="hidden" name="id" value={studentId} />
+          <Button
+            variant="outline"
+            size="sm"
+            type="button"
+            onClick={() => {
+              if (
+                confirm(
+                  "Reset all device logins for this student?\n\nThey will be signed out everywhere and can log in again on new devices (up to their max).",
+                )
+              ) {
+                resetRef.current?.requestSubmit();
+              }
+            }}
+          >
+            <MonitorSmartphone className="h-4 w-4" /> Reset devices
+          </Button>
+        </form>
+      </div>
+
+      {paidProgramAccess ? (
+        <form action={updateMaxDevicesAction} className="flex flex-wrap items-end gap-2">
+          <input type="hidden" name="id" value={studentId} />
+          <div>
+            <label htmlFor="max_devices" className="mb-1 block text-xs font-medium text-muted">
+              Max devices (1–50)
+            </label>
+            <Input
+              id="max_devices"
+              name="max_devices"
+              type="number"
+              min={1}
+              max={50}
+              defaultValue={maxDevices}
+              className="w-28"
+              required
+            />
+          </div>
+          <Button type="submit" size="sm" variant="outline">
+            Save max
+          </Button>
+        </form>
+      ) : null}
+
+      {sessions.length === 0 ? (
+        <p className="text-sm text-muted">No active device sessions recorded.</p>
+      ) : (
+        <ul className="divide-y divide-app rounded-lg border border-app">
+          {sessions.map((s) => (
+            <li key={s.id} className="flex items-start justify-between gap-3 px-3 py-2.5 text-sm">
+              <div className="min-w-0">
+                <p className="font-medium text-neutral-900">
+                  {s.browser ?? "Browser"} on {s.os ?? "device"}
+                  {s.isCurrent ? (
+                    <span className="ml-2 text-xs font-normal text-green-700">current</span>
+                  ) : null}
+                </p>
+                <p className="text-xs text-muted">
+                  {[s.device, s.city, s.country].filter(Boolean).join(" · ") || "—"}
+                </p>
+              </div>
+              <p className="shrink-0 text-xs text-muted">
+                {new Date(s.lastActiveAt).toLocaleString()}
+              </p>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }

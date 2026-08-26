@@ -543,3 +543,57 @@ export async function addAdminNote(formData: FormData) {
   });
   revalidatePath(`/admin/students/${studentId}`);
 }
+
+export async function resetStudentDevices(formData: FormData) {
+  await requireAdmin();
+  const admin = await getAdminSupabase();
+  const id = String(formData.get("id") ?? "").trim();
+  if (!id) throw new Error("Missing student id.");
+
+  const { revokeAllAccountSessions } = await import("@/lib/account-sessions");
+  await revokeAllAccountSessions(admin, { userId: id });
+
+  await logAudit({
+    action: "student_devices_reset",
+    targetType: "profile",
+    targetId: id,
+  });
+  revalidatePath(`/admin/students/${id}`);
+  redirect(`/admin/students/${id}?devices_reset=1`);
+}
+
+export async function updateStudentMaxDevices(formData: FormData) {
+  await requireAdmin();
+  const admin = await getAdminSupabase();
+  const id = String(formData.get("id") ?? "").trim();
+  const raw = String(formData.get("max_devices") ?? "").trim();
+  if (!id) throw new Error("Missing student id.");
+
+  const maxDevices = Number(raw);
+  if (!Number.isFinite(maxDevices) || maxDevices < 1 || maxDevices > 50) {
+    throw new Error("Max devices must be a number between 1 and 50.");
+  }
+
+  const { error } = await admin
+    .from("profiles")
+    .update({ max_devices: Math.round(maxDevices) })
+    .eq("id", id)
+    .eq("role", "student");
+  if (error) {
+    if (error.message.toLowerCase().includes("max_devices")) {
+      throw new Error(
+        "max_devices column is missing. Run sql/apply-paid-device-login-limit.sql in Supabase, then try again.",
+      );
+    }
+    throw new Error(error.message);
+  }
+
+  await logAudit({
+    action: "student_max_devices_updated",
+    targetType: "profile",
+    targetId: id,
+    metadata: { max_devices: Math.round(maxDevices) },
+  });
+  revalidatePath(`/admin/students/${id}`);
+  redirect(`/admin/students/${id}?max_devices_updated=1`);
+}

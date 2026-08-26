@@ -17,6 +17,7 @@ export type AccountSessionRow = {
   id: string;
   user_id: string;
   session_token_hash: string;
+  device_key: string | null;
   browser: string | null;
   os: string | null;
   device: string | null;
@@ -118,17 +119,35 @@ export async function trackAccountSession(
   params: {
     userId: string;
     accessToken: string;
+    deviceKey?: string | null;
     meta: SessionClientMeta;
   },
 ) {
   const tokenHash = hashToken(params.accessToken);
+  const deviceKey = params.deviceKey?.trim() || null;
   const parsed = parseUserAgent(params.meta.userAgent);
 
-  const { data: existing } = await admin
-    .from("account_sessions")
-    .select("*")
-    .eq("session_token_hash", tokenHash)
-    .maybeSingle();
+  let existing: AccountSessionRow | null = null;
+  if (deviceKey) {
+    const { data } = await admin
+      .from("account_sessions")
+      .select("*")
+      .eq("user_id", params.userId)
+      .eq("device_key", deviceKey)
+      .is("revoked_at", null)
+      .order("last_active_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    existing = (data as AccountSessionRow | null) ?? null;
+  }
+  if (!existing) {
+    const { data } = await admin
+      .from("account_sessions")
+      .select("*")
+      .eq("session_token_hash", tokenHash)
+      .maybeSingle();
+    existing = (data as AccountSessionRow | null) ?? null;
+  }
 
   const { data: recent } = await admin
     .from("account_sessions")
@@ -168,6 +187,8 @@ export async function trackAccountSession(
     await admin
       .from("account_sessions")
       .update({
+        session_token_hash: tokenHash,
+        device_key: deviceKey ?? existing.device_key,
         browser: parsed.browser,
         os: parsed.os,
         device: parsed.device,
@@ -180,12 +201,14 @@ export async function trackAccountSession(
         is_current: true,
         flagged_impossible_travel: existing.flagged_impossible_travel || Boolean(flagged),
         last_active_at: new Date().toISOString(),
+        revoked_at: null,
       })
       .eq("id", existing.id);
   } else {
     await admin.from("account_sessions").insert({
       user_id: params.userId,
       session_token_hash: tokenHash,
+      device_key: deviceKey,
       browser: parsed.browser,
       os: parsed.os,
       device: parsed.device,

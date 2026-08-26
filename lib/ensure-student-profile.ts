@@ -80,6 +80,7 @@ export function studentProfileFromUser(user: {
     tags: [],
     last_active_at: null,
     welcome_email_sent_at: null,
+    max_devices: null,
     created_at: now,
     updated_at: now,
   };

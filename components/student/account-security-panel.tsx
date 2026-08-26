@@ -65,7 +65,8 @@ export function AccountSecurityPanel() {
     <section id="security" className="rounded-xl border border-surface-border bg-white p-6 shadow-card">
       <h2 className="font-semibold text-neutral-900">Account security</h2>
       <p className="mt-2 text-sm text-neutral-600">
-        Active devices signed into your account. Sign out anything you do not recognize.
+        Active devices signed into your account. Paid programs allow up to 4 devices — sign out
+        anything you do not recognize. Contact support if you need a device reset.
       </p>
 
       {loading ? (

@@ -13,13 +13,19 @@ import { Button } from "@/components/ui/button";
 import { formatDate } from "@/lib/utils";
 import { courseCompletionPct } from "@/lib/progress";
 import { StudentProfileForm } from "@/components/admin/student-profile-form";
-import { StudentAdminToolbar, StudentEnrollmentList } from "@/components/admin/student-manage-panel";
+import {
+  StudentAdminToolbar,
+  StudentDeviceAccessPanel,
+  StudentEnrollmentList,
+} from "@/components/admin/student-manage-panel";
 import { AdminCertificatePanel } from "@/components/admin/admin-certificate-panel";
 import { certificateRecipientName } from "@/lib/certificates";
 import {
   suspendStudent,
   deleteStudent,
   resetStudentPassword,
+  resetStudentDevices,
+  updateStudentMaxDevices,
   enrollStudent,
   unenrollStudent,
   setStudentTags,
@@ -28,6 +34,13 @@ import {
 import { getCustomerTimeline, getCustomerValue } from "@/lib/customer-crm";
 import { listTagCatalog } from "@/lib/tag-catalog";
 import { logAudit } from "@/lib/audit";
+import {
+  countActiveDevices,
+  DEFAULT_PAID_MAX_DEVICES,
+  getStudentMaxDevices,
+  studentHasPaidProgramAccess,
+} from "@/lib/device-login-limit";
+import { listAccountSessions } from "@/lib/account-sessions";
 
 export const metadata: Metadata = { title: "Customer" };
 
@@ -36,7 +49,13 @@ export default async function StudentDetailPage({
   searchParams,
 }: {
   params: { id: string };
-  searchParams: { enrolled?: string; already_enrolled?: string; cert_issued?: string };
+  searchParams: {
+    enrolled?: string;
+    already_enrolled?: string;
+    cert_issued?: string;
+    devices_reset?: string;
+    max_devices_updated?: string;
+  };
 }) {
   await requireAdmin();
   const supabase = await getAdminSupabase();
@@ -61,6 +80,19 @@ export default async function StudentDetailPage({
   const lastAccessAt = student.last_active_at ?? lastSignInAt;
   const hasLoggedIn = Boolean(lastSignInAt || student.last_active_at);
   const enrollmentStudentIds = [...new Set([params.id, authUserId].filter(Boolean))] as string[];
+
+  let paidProgramAccess = false;
+  let maxDevices = DEFAULT_PAID_MAX_DEVICES;
+  let activeDeviceCount = 0;
+  let deviceSessions: Awaited<ReturnType<typeof listAccountSessions>> = [];
+  try {
+    paidProgramAccess = await studentHasPaidProgramAccess(supabase, params.id);
+    maxDevices = await getStudentMaxDevices(supabase, params.id);
+    activeDeviceCount = await countActiveDevices(supabase, params.id);
+    deviceSessions = await listAccountSessions(supabase, params.id);
+  } catch (err) {
+    console.error("[StudentDetailPage] device access load failed", err);
+  }
 
   const [{ data: enrollments }, { data: allCourses }, { data: notes }, { data: certs }, value, timeline, catalogTags, { data: purchases }, { data: auditRows }] =
     await Promise.all([
@@ -196,6 +228,16 @@ export default async function StudentDetailPage({
               Certificate issued. The student was emailed a PDF copy and can view it under Certificates.
             </p>
           ) : null}
+          {searchParams.devices_reset === "1" ? (
+            <p className="rounded-lg bg-green-50 px-3 py-2 text-sm text-green-800">
+              Device logins reset. The student can sign in again on new devices (up to their max).
+            </p>
+          ) : null}
+          {searchParams.max_devices_updated === "1" ? (
+            <p className="rounded-lg bg-green-50 px-3 py-2 text-sm text-green-800">
+              Max device limit updated for this student.
+            </p>
+          ) : null}
         </div>
         <StudentAdminToolbar
           studentId={student.id}
@@ -268,6 +310,33 @@ export default async function StudentDetailPage({
           </div>
         </Card>
       </div>
+
+      <Card>
+        <CardHeader
+          title="Device login protection"
+          description="Paid programs are capped at 4 devices by default. Raise the limit or reset devices when a student needs help."
+        />
+        <div className="px-6 pb-6">
+          <StudentDeviceAccessPanel
+            studentId={student.id}
+            paidProgramAccess={paidProgramAccess}
+            activeDeviceCount={activeDeviceCount}
+            maxDevices={maxDevices}
+            sessions={deviceSessions.map((s) => ({
+              id: s.id,
+              browser: s.browser,
+              os: s.os,
+              device: s.device,
+              city: s.city,
+              country: s.country,
+              lastActiveAt: s.last_active_at,
+              isCurrent: s.is_current,
+            }))}
+            resetDevicesAction={resetStudentDevices}
+            updateMaxDevicesAction={updateStudentMaxDevices}
+          />
+        </div>
+      </Card>
 
       <div className="grid gap-6 lg:grid-cols-2">
         <Card>

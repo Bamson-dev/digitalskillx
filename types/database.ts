@@ -115,6 +115,8 @@ export type Profile = Timestamps & {
   tags: string[];
   last_active_at: string | null;
   welcome_email_sent_at: string | null;
+  /** Paid-program device login cap override. Null = platform default (4). */
+  max_devices: number | null;
   updated_at: string;
 };
 
@@ -603,6 +605,7 @@ export type AccountSession = {
   id: string;
   user_id: string;
   session_token_hash: string;
+  device_key: string | null;
   browser: string | null;
   os: string | null;
   device: string | null;
