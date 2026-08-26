@@ -265,7 +265,7 @@ export async function processContentFactoryJob(admin: Admin, jobId: string): Pro
         creatorName: creator.display_name,
         category: structure.category,
       });
-      if (art) {
+      if (art?.publicUrl) {
         hasArtwork = true;
         await admin
           .from("learning_paths")
@@ -281,6 +281,25 @@ export async function processContentFactoryJob(admin: Admin, jobId: string): Pro
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       structure.warnings.push(`Artwork failed: ${message}`);
+    }
+
+    // Always show a cover on /learn — fall back to the playlist/video thumbnail.
+    if (!hasArtwork) {
+      const fallbackUrl =
+        meta.thumbnailUrl ||
+        usable.find((v) => Boolean(v.thumbnail))?.thumbnail ||
+        null;
+      if (fallbackUrl) {
+        await admin
+          .from("learning_paths")
+          .update({
+            artwork_public_url: fallbackUrl,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", path.id);
+        hasArtwork = true;
+        structure.warnings.push("Using YouTube playlist thumbnail as cover (OpenAI artwork unavailable).");
+      }
     }
 
     await updateJobProgress(admin, jobId, { phase: "quality", progress: 90 });

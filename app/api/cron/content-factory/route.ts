@@ -8,6 +8,7 @@ import {
   autoPublishReadyLearningPaths,
   contentFactoryHasPendingWork,
 } from "@/lib/content-factory/auto-pipeline";
+import { backfillMissingLearningPathArtwork } from "@/lib/content-factory/artwork-backfill";
 import { verifyCronSecret } from "@/lib/cron-auth";
 import { bootstrapRuntimeSecrets } from "@/lib/bootstrap-runtime-secrets";
 import { createAdminClientAsync } from "@/lib/supabase/admin";
@@ -130,6 +131,7 @@ export async function GET(request: NextRequest) {
 
   const autoGenerate = await autoGenerateQualifiedCandidates(admin);
   let autoPublish = await autoPublishReadyLearningPaths(admin, 3);
+  const artworkBackfill = await backfillMissingLearningPathArtwork(admin, 8);
 
   const { data: claimed, error } = await admin.rpc("claim_content_factory_jobs", { p_limit: 1 });
   if (error) {
@@ -195,6 +197,7 @@ export async function GET(request: NextRequest) {
     qualification,
     autoGenerate,
     autoPublish,
+    artworkBackfill,
     counters: {
       jobsProcessed: jobProcessed.processed,
       jobsFailed: 0,
@@ -206,6 +209,7 @@ export async function GET(request: NextRequest) {
       candidatesGenerated: autoGenerate.created + (jobProcessed.generated ? 1 : 0),
       qualityChecksCompleted: jobProcessed.generated ? 1 : 0,
       autoPublished: autoPublish.published,
+      artworkBackfilled: artworkBackfill.updated,
     },
     jobs: await recentJobs(admin),
   });
