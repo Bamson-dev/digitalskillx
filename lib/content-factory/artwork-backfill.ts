@@ -7,6 +7,37 @@ import { isMissingRelationError, isMissingColumnError } from "@/lib/schema-guard
 
 type Admin = SupabaseClient<Database>;
 
+async function resolveYoutubeThumbnailForPath(
+  admin: Admin,
+  path: { id: string; source_playlist_id?: string | null },
+): Promise<string | null> {
+  const playlistId = path.source_playlist_id?.trim();
+  if (playlistId) {
+    try {
+      const meta = await fetchPlaylistMeta(playlistId);
+      if (meta?.thumbnailUrl?.trim()) return meta.thumbnailUrl.trim();
+    } catch {
+      // fall through to first-lesson thumbnail
+    }
+  }
+
+  const { data: lesson } = await admin
+    .from("learning_path_lessons")
+    .select("thumbnail_url, youtube_video_id")
+    .eq("learning_path_id", path.id)
+    .order("position", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+
+  const lessonThumb = lesson?.thumbnail_url?.trim();
+  if (lessonThumb) return lessonThumb;
+
+  const videoId = lesson?.youtube_video_id?.trim();
+  if (videoId) return `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
+
+  return null;
+}
+
 /**
  * Fill blank /learn covers for published paths.
  * Priority: OpenAI → YouTube thumbnail → category_fallback status (UI gradient).
@@ -81,29 +112,10 @@ export async function backfillMissingLearningPathArtwork(
     }
 
     let youtubeThumb: string | null = null;
-    const playlistId = path.source_playlist_id?.trim();
-    if (playlistId) {
-      try {
-        const meta = await fetchPlaylistMeta(playlistId);
-        youtubeThumb = meta?.thumbnailUrl ?? null;
-      } catch (err) {
-        errors.push(err instanceof Error ? err.message : String(err));
-      }
-    }
-    if (!youtubeThumb) {
-      const { data: lesson } = await admin
-        .from("learning_path_lessons")
-        .select("thumbnail_url, youtube_video_id")
-        .eq("learning_path_id", path.id)
-        .order("position", { ascending: true })
-        .limit(1)
-        .maybeSingle();
-      const lessonThumb = lesson?.thumbnail_url?.trim() || null;
-      const videoId = lesson?.youtube_video_id?.trim() || null;
-      if (lessonThumb) youtubeThumb = lessonThumb;
-      else if (videoId && /^[\w-]{11}$/.test(videoId)) {
-        youtubeThumb = `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
-      }
+    try {
+      youtubeThumb = await resolveYoutubeThumbnailForPath(admin, path);
+    } catch (err) {
+      errors.push(err instanceof Error ? err.message : String(err));
     }
 
     try {
@@ -167,13 +179,10 @@ async function backfillLegacy(admin: Admin, limit: number) {
       if (creator?.display_name) creatorName = creator.display_name;
     }
     let youtubeThumb: string | null = null;
-    if (path.source_playlist_id?.trim()) {
-      try {
-        const meta = await fetchPlaylistMeta(path.source_playlist_id.trim());
-        youtubeThumb = meta?.thumbnailUrl ?? null;
-      } catch (err) {
-        errors.push(err instanceof Error ? err.message : String(err));
-      }
+    try {
+      youtubeThumb = await resolveYoutubeThumbnailForPath(admin, path);
+    } catch (err) {
+      errors.push(err instanceof Error ? err.message : String(err));
     }
     try {
       const fields = await applyLearningPathArtworkPipeline({
