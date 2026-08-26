@@ -40,6 +40,7 @@ export async function POST(request: NextRequest) {
       currency?: CurrencyCode;
       email?: string;
       fullName?: string;
+      completedLessonNumbers?: string[];
       attribution?: Record<string, string>;
     };
     try {
@@ -63,7 +64,9 @@ export async function POST(request: NextRequest) {
     }
 
     const requestedCurrency: CurrencyCode = body.currency === "USD" ? "USD" : "NGN";
-    if (requestedCurrency === "USD") {
+    // Learning-path certificates may use fixed regional USD when Paystack USD is enabled.
+    // All other commerce stays NGN-only until global USD support ships.
+    if (requestedCurrency === "USD" && !body.learningPathId) {
       return jsonError("USD payments are not available yet", 400);
     }
 
@@ -92,6 +95,10 @@ export async function POST(request: NextRequest) {
           learningPathId: body.learningPathId,
           email: body.email,
           fullName: body.fullName,
+          completedLessonNumbers: Array.isArray(body.completedLessonNumbers)
+            ? body.completedLessonNumbers.map(String)
+            : undefined,
+          currency: requestedCurrency,
         },
       });
     }

@@ -11,6 +11,7 @@ import {
   sanitizeLibraryQuery,
 } from "@/lib/content-factory/library-shared";
 import { MarketplaceNav, MarketplaceFooter } from "@/components/marketplace/marketplace-chrome";
+import { LearnCover } from "@/components/learn/learn-cover";
 import { siteUrl } from "@/lib/org";
 
 export const revalidate = 300;
@@ -167,21 +168,7 @@ export default async function LearnIndexPage({ searchParams }: { searchParams: S
               href={`/learn/${path.slug}`}
               className="group min-w-0 overflow-hidden rounded-2xl border border-app bg-white transition hover:border-brand focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
             >
-              <div className="aspect-[16/10] bg-neutral-100">
-                {path.artwork_public_url ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={path.artwork_public_url}
-                    alt=""
-                    className="h-full w-full object-cover"
-                    loading="lazy"
-                  />
-                ) : (
-                  <div className="flex h-full items-center justify-center px-4 text-center text-sm text-muted">
-                    {path.category || "Free learning path"}
-                  </div>
-                )}
-              </div>
+              <LearnCover path={path} />
               <div className="space-y-1 p-4">
                 <p className="text-xs uppercase tracking-wide text-muted">{path.category || "Skills"}</p>
                 <h2 className="font-semibold group-hover:text-brand">{path.title}</h2>

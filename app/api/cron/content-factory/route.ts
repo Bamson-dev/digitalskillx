@@ -132,6 +132,17 @@ export async function GET(request: NextRequest) {
   const autoGenerate = await autoGenerateQualifiedCandidates(admin);
   let autoPublish = await autoPublishReadyLearningPaths(admin, 3);
   const artworkBackfill = await backfillMissingLearningPathArtwork(admin, 8);
+  let certificatePricingBackfill: unknown = null;
+  try {
+    const { backfillLearningPathCertificatePricing } = await import(
+      "@/lib/learn-certificate-defaults"
+    );
+    certificatePricingBackfill = await backfillLearningPathCertificatePricing(admin, 40);
+  } catch (err) {
+    certificatePricingBackfill = {
+      error: err instanceof Error ? err.message : String(err),
+    };
+  }
 
   const { data: claimed, error } = await admin.rpc("claim_content_factory_jobs", { p_limit: 1 });
   if (error) {
@@ -198,6 +209,7 @@ export async function GET(request: NextRequest) {
     autoGenerate,
     autoPublish,
     artworkBackfill,
+    certificatePricingBackfill,
     counters: {
       jobsProcessed: jobProcessed.processed,
       jobsFailed: 0,

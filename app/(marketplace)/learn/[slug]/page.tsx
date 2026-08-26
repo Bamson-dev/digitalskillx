@@ -28,6 +28,7 @@ import { LearnCertificateReturn } from "@/components/learn/learn-certificate-ret
 import { LearnCategoryHub } from "@/components/learn/learn-category-hub";
 import { MarketplaceNav, MarketplaceFooter } from "@/components/marketplace/marketplace-chrome";
 import { siteUrl } from "@/lib/org";
+import { resolveFinalCertificatePrice } from "@/lib/learn-certificate-pricing";
 
 export const revalidate = 300;
 
@@ -355,7 +356,11 @@ export default async function LearnPathPage({ params }: Props) {
                           ) : (
                             <p className="mt-2 text-xs text-muted">Original YouTube link unavailable.</p>
                           )}
-                          <LessonProgressToggle slug={path.slug} lessonId={String(number)} />
+                          <LessonProgressToggle
+                            slug={path.slug}
+                            pathId={path.id}
+                            lessonId={String(number)}
+                          />
                         </li>
                       ))}
                     </ol>
@@ -371,7 +376,15 @@ export default async function LearnPathPage({ params }: Props) {
               creatorName={creator?.display_name ?? null}
               lessonIds={numberedLessons.flatMap((group) => group.lessons.map(({ number }) => String(number)))}
               certificateEnabled={path.certificate_enabled === true}
-              certificatePriceNgn={path.certificate_price_ngn ?? null}
+              certificatePriceNgn={resolveFinalCertificatePrice({
+                mode: (path as { certificate_pricing_mode?: string | null }).certificate_pricing_mode,
+                recommendedPriceNgn: (path as { certificate_recommended_price_ngn?: number | null })
+                  .certificate_recommended_price_ngn,
+                fixedPriceNgn: path.certificate_price_ngn ?? null,
+              })}
+              certificatePricingMode={
+                (path as { certificate_pricing_mode?: string | null }).certificate_pricing_mode ?? null
+              }
               recommendedCourse={recommendedCourse ?? null}
             />
           </div>

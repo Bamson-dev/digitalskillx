@@ -88,6 +88,9 @@ type Detail = {
     quality_breakdown?: unknown;
     warnings: unknown;
     artwork_public_url: string | null;
+    artwork_status?: string | null;
+    artwork_source?: string | null;
+    artwork_error?: string | null;
     certificate_enabled?: boolean;
     certificate_price_ngn?: number | null;
     recommended_course_id?: string | null;
@@ -888,6 +891,20 @@ export function ContentFactoryPanel() {
                     alt=""
                     className="mt-3 max-h-48 rounded-lg border border-app object-cover"
                   />
+                ) : (
+                  <p className="mt-3 text-xs text-muted">No cover URL yet — category fallback will show on /learn.</p>
+                )}
+                <p className="mt-2 text-xs text-muted">
+                  Artwork status:{" "}
+                  {(selected.path as { artwork_status?: string | null }).artwork_status || "unknown"}
+                  {(selected.path as { artwork_source?: string | null }).artwork_source
+                    ? ` · source: ${(selected.path as { artwork_source?: string | null }).artwork_source}`
+                    : ""}
+                </p>
+                {(selected.path as { artwork_error?: string | null }).artwork_error ? (
+                  <p className="mt-1 text-xs text-amber-800">
+                    {(selected.path as { artwork_error?: string | null }).artwork_error}
+                  </p>
                 ) : null}
               </section>
             ) : null}

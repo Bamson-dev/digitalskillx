@@ -787,6 +787,19 @@ export type LearningPath = {
   quality_breakdown: Json;
   artwork_storage_path: string | null;
   artwork_public_url: string | null;
+  artwork_status?:
+    | "generated"
+    | "processing"
+    | "retrying"
+    | "source_thumbnail"
+    | "category_fallback"
+    | "failed"
+    | "missing"
+    | null;
+  artwork_source?: "openai" | "youtube" | "category" | "manual" | null;
+  artwork_error?: string | null;
+  artwork_updated_at?: string | null;
+  estimated_duration_seconds?: number | null;
   source_playlist_id: string | null;
   source_playlist_url: string | null;
   source_playlist_title: string | null;
@@ -798,6 +811,9 @@ export type LearningPath = {
   seo_description: string | null;
   certificate_enabled?: boolean;
   certificate_price_ngn?: number | null;
+  certificate_pricing_mode?: "automatic" | "fixed" | "free";
+  certificate_recommended_price_ngn?: number | null;
+  certificate_price_reason?: string | null;
   recommended_course_id?: string | null;
   certificate_template_override?: string | null;
   published_course_id: string | null;
@@ -976,6 +992,16 @@ export type EmailSuppression = {
   reason: "unsubscribe" | "bounce" | "complaint" | "manual";
   source: string | null;
   created_at: string;
+};
+
+export type LearningPathProgress = {
+  id: string;
+  learning_path_id: string;
+  lesson_id: string;
+  student_id: string | null;
+  device_key: string | null;
+  completed_at: string;
+  updated_at: string;
 };
 
 export type EmailCampaign = {
@@ -1334,6 +1360,14 @@ export type Database = {
       learning_path_sources: Table<
         LearningPathSource,
         [Rel<"learning_path_sources_learning_path_id_fkey", "learning_path_id", "learning_paths", "id">]
+      >;
+      learning_path_progress: Table<
+        LearningPathProgress,
+        [
+          Rel<"learning_path_progress_learning_path_id_fkey", "learning_path_id", "learning_paths", "id">,
+          Rel<"learning_path_progress_lesson_id_fkey", "lesson_id", "learning_path_lessons", "id">,
+          Rel<"learning_path_progress_student_id_fkey", "student_id", "profiles", "id">,
+        ]
       >;
       content_factory_jobs: Table<
         ContentFactoryJob,

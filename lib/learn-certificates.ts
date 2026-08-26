@@ -16,6 +16,7 @@ import { DEFAULT_CERTIFICATE_TEMPLATE_KEY, normalizeCertificateTemplateKey } fro
 import { isMissingColumnError } from "@/lib/schema-guard";
 import { pathCertificateOfferable } from "@/lib/content-factory/library-shared";
 import { isUniqueViolation } from "@/lib/learn-certificate-shared";
+import { resolveFinalCertificatePrice } from "@/lib/learn-certificate-pricing";
 
 type Admin = SupabaseClient<Database>;
 
@@ -34,15 +35,35 @@ export function readLearningPathIdFromPaystackData(paystackData: unknown): strin
 export async function loadPublishedPathCertificateOffer(admin: Admin, pathId: string) {
   const { data, error } = await admin
     .from("learning_paths")
-    .select("id, slug, title, status, certificate_enabled, certificate_price_ngn, certificate_template_override")
+    .select(
+      "id, slug, title, status, certificate_enabled, certificate_price_ngn, certificate_pricing_mode, certificate_recommended_price_ngn, certificate_template_override",
+    )
     .eq("id", pathId)
     .maybeSingle();
   if (error) {
-    if (isMissingColumnError(error.message)) return null;
+    if (isMissingColumnError(error.message)) {
+      const legacy = await admin
+        .from("learning_paths")
+        .select("id, slug, title, status, certificate_enabled, certificate_price_ngn, certificate_template_override")
+        .eq("id", pathId)
+        .maybeSingle();
+      if (legacy.error) {
+        if (isMissingColumnError(legacy.error.message)) return null;
+        throw new Error(legacy.error.message);
+      }
+      if (!legacy.data || !pathCertificateOfferable(legacy.data)) return null;
+      return { ...legacy.data, certificate_pricing_mode: "fixed" as const, certificate_recommended_price_ngn: null };
+    }
     throw new Error(error.message);
   }
   if (!data || !pathCertificateOfferable(data)) return null;
-  return data;
+  const sellingPrice = resolveFinalCertificatePrice({
+    mode: (data as { certificate_pricing_mode?: string | null }).certificate_pricing_mode,
+    recommendedPriceNgn: (data as { certificate_recommended_price_ngn?: number | null })
+      .certificate_recommended_price_ngn,
+    fixedPriceNgn: data.certificate_price_ngn,
+  });
+  return { ...data, certificate_price_ngn: sellingPrice };
 }
 
 export async function issueLearningPathCertificate(params: {

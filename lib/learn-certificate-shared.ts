@@ -1,6 +1,11 @@
 /** Pure Stage 8 certificate-offer helpers (no secrets, no I/O). */
 
 import { isCertificateTemplateKey } from "./certificate-templates";
+import {
+  LEARN_CERTIFICATE_PRICE_TIERS,
+  resolveFinalCertificatePrice,
+  type LearnCertificatePricingMode,
+} from "./learn-certificate-pricing";
 
 export const PATH_CERTIFICATE_ATTRIBUTION =
   "Lessons embed original YouTube videos. DigitalSkillX organizes public educational content into a learning path and does not claim a partnership with the creator.";
@@ -8,6 +13,8 @@ export const PATH_CERTIFICATE_ATTRIBUTION =
 export type CertificateOfferPatch = {
   certificate_enabled: boolean;
   certificate_price_ngn: number | null;
+  certificate_pricing_mode: LearnCertificatePricingMode;
+  certificate_recommended_price_ngn?: number | null;
   recommended_course_id: string | null;
   certificate_template_override: string | null;
 };
@@ -26,10 +33,17 @@ export type LearningPathCertificateRow = {
   status: string;
   certificate_enabled: boolean;
   certificate_price_ngn: number | null;
+  certificate_pricing_mode: LearnCertificatePricingMode;
+  certificate_recommended_price_ngn: number | null;
+  certificate_price_reason: string | null;
   recommended_course_id: string | null;
   recommended_course_title: string | null;
   certificate_template_override: string | null;
   certificates_issued: number;
+  artwork_status?: string | null;
+  artwork_source?: string | null;
+  artwork_public_url?: string | null;
+  artwork_error?: string | null;
 };
 
 export type LearningPathCertificateMetrics = {
@@ -66,6 +80,17 @@ export function parseCertificateOfferPatch(
   }
   const body = input as Record<string, unknown>;
   const certificate_enabled = body.certificate_enabled === true;
+
+  let certificate_pricing_mode: LearnCertificatePricingMode = "automatic";
+  if (typeof body.certificate_pricing_mode === "string") {
+    const mode = body.certificate_pricing_mode.trim().toLowerCase();
+    if (mode === "automatic" || mode === "fixed" || mode === "free") {
+      certificate_pricing_mode = mode;
+    } else {
+      return { ok: false, error: "Pricing mode must be automatic, fixed, or free." };
+    }
+  }
+
   let certificate_price_ngn: number | null = null;
   if (body.certificate_price_ngn === null || body.certificate_price_ngn === "") {
     certificate_price_ngn = null;
@@ -79,8 +104,34 @@ export function parseCertificateOfferPatch(
   if (certificate_price_ngn != null && certificate_price_ngn < 0) {
     return { ok: false, error: "Certificate price cannot be negative." };
   }
-  if (certificate_enabled && !(typeof certificate_price_ngn === "number" && certificate_price_ngn > 0)) {
-    return { ok: false, error: "Enable a certificate only when a price greater than 0 NGN is set." };
+
+  if (certificate_enabled) {
+    if (certificate_pricing_mode === "free") {
+      certificate_price_ngn = 0;
+    } else if (certificate_price_ngn == null || certificate_price_ngn <= 0) {
+      return { ok: false, error: "Enable a certificate only when a price greater than 0 NGN is set." };
+    } else if (certificate_pricing_mode === "fixed") {
+      if (
+        !LEARN_CERTIFICATE_PRICE_TIERS.includes(
+          certificate_price_ngn as (typeof LEARN_CERTIFICATE_PRICE_TIERS)[number],
+        )
+      ) {
+        return {
+          ok: false,
+          error: "Fixed certificate price must be one of ₦2,000, ₦3,000, ₦5,000, or ₦7,500.",
+        };
+      }
+    } else {
+      // automatic: snap messy amounts to approved tiers
+      certificate_price_ngn = resolveFinalCertificatePrice({
+        mode: "automatic",
+        recommendedPriceNgn: certificate_price_ngn,
+        fixedPriceNgn: certificate_price_ngn,
+      });
+      if (!(certificate_price_ngn > 0)) {
+        return { ok: false, error: "Enable a certificate only when a price greater than 0 NGN is set." };
+      }
+    }
   }
 
   let recommended_course_id: string | null = null;
@@ -104,6 +155,7 @@ export function parseCertificateOfferPatch(
     value: {
       certificate_enabled,
       certificate_price_ngn,
+      certificate_pricing_mode,
       recommended_course_id,
       certificate_template_override,
     },

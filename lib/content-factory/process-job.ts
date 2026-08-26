@@ -8,7 +8,8 @@ import {
   generateLearningPathQuizzes,
   scoreLearningPathQuality,
 } from "@/lib/content-factory/ai-pipeline";
-import { generateAndStoreLearningPathArtwork } from "@/lib/content-factory/artwork";
+import { applyLearningPathArtworkPipeline } from "@/lib/content-factory/artwork-apply";
+import { applyCertificateDefaultsForPath } from "@/lib/learn-certificate-defaults";
 import { uniqueLearningPathSlug, updateJobProgress } from "@/lib/content-factory/jobs";
 import { researchAndUpsertCreator } from "@/lib/content-factory/creator-research";
 import { reviewGeneratedLearningPath } from "@/lib/content-factory/quality";
@@ -257,49 +258,70 @@ export async function processContentFactoryJob(admin: Admin, jobId: string): Pro
 
     await updateJobProgress(admin, jobId, { phase: "artwork", progress: 80 });
 
+    const durationTotal = usable.reduce(
+      (sum, v) => sum + (typeof v.durationSeconds === "number" ? v.durationSeconds : 0),
+      0,
+    );
+    if (durationTotal > 0) {
+      await admin
+        .from("learning_paths")
+        .update({
+          estimated_duration_seconds: durationTotal,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", path.id);
+    }
+
     let hasArtwork = false;
     try {
-      const art = await generateAndStoreLearningPathArtwork({
+      const youtubeThumb =
+        meta.thumbnailUrl ||
+        usable.find((v) => Boolean(v.thumbnail))?.thumbnail ||
+        null;
+      const art = await applyLearningPathArtworkPipeline({
+        admin,
         learningPathId: path.id,
         title: structure.title,
-        creatorName: creator.display_name,
         category: structure.category,
+        creatorName: creator.display_name,
+        description: structure.description,
+        shortDescription: structure.short_description,
+        difficulty: structure.difficulty,
+        learningObjectives: structure.learning_objectives,
+        tags: structure.tags,
+        youtubeThumbnailUrl: youtubeThumb,
       });
-      if (art?.publicUrl) {
-        hasArtwork = true;
-        await admin
-          .from("learning_paths")
-          .update({
-            artwork_storage_path: art.storagePath,
-            artwork_public_url: art.publicUrl,
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", path.id);
-      } else {
-        structure.warnings.push("Artwork skipped: OPENAI_API_KEY not configured.");
+      hasArtwork =
+        Boolean(art.artwork_public_url) ||
+        art.artwork_status === "generated" ||
+        art.artwork_status === "source_thumbnail" ||
+        art.artwork_status === "category_fallback";
+      if (art.artwork_status === "source_thumbnail") {
+        structure.warnings.push(
+          "Using YouTube playlist thumbnail as cover (OpenAI artwork unavailable).",
+        );
+      } else if (art.artwork_status === "category_fallback") {
+        structure.warnings.push(
+          art.artwork_error
+            ? `Artwork unavailable; category cover will be used. ${art.artwork_error}`
+            : "Artwork unavailable; category cover will be used.",
+        );
+      } else if (art.artwork_error) {
+        structure.warnings.push(`Artwork: ${art.artwork_error}`);
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       structure.warnings.push(`Artwork failed: ${message}`);
     }
 
-    // Always show a cover on /learn — fall back to the playlist/video thumbnail.
-    if (!hasArtwork) {
-      const fallbackUrl =
-        meta.thumbnailUrl ||
-        usable.find((v) => Boolean(v.thumbnail))?.thumbnail ||
-        null;
-      if (fallbackUrl) {
-        await admin
-          .from("learning_paths")
-          .update({
-            artwork_public_url: fallbackUrl,
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", path.id);
-        hasArtwork = true;
-        structure.warnings.push("Using YouTube playlist thumbnail as cover (OpenAI artwork unavailable).");
-      }
+    try {
+      await applyCertificateDefaultsForPath(admin, path.id, {
+        enableIfUnset: true,
+        overwriteAutomaticOnly: true,
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      structure.warnings.push(`Certificate pricing defaults skipped: ${message}`);
     }
 
     await updateJobProgress(admin, jobId, { phase: "quality", progress: 90 });

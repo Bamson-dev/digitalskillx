@@ -3,9 +3,17 @@
  * (matches Next/bundler resolution for offline certification scripts).
  */
 import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
+import { dirname, join } from "node:path";
+
+const stubServerOnly = pathToFileURL(
+  join(dirname(fileURLToPath(import.meta.url)), "stubs/server-only.mjs"),
+).href;
 
 export async function resolve(specifier, context, nextResolve) {
+  if (specifier === "server-only") {
+    return { url: stubServerOnly, shortCircuit: true };
+  }
   if (
     (specifier.startsWith("./") || specifier.startsWith("../")) &&
     !/\.[cm]?[jt]sx?$/.test(specifier) &&

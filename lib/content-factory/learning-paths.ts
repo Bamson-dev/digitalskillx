@@ -55,6 +55,8 @@ export type PublishedLibraryPath = {
   difficulty: "beginner" | "intermediate" | "advanced";
   tags: string[];
   artwork_public_url: string | null;
+  artwork_storage_path?: string | null;
+  artwork_status?: string | null;
   quality_score: number | null;
   published_at: string | null;
   creator_profile_id: string | null;
@@ -62,6 +64,8 @@ export type PublishedLibraryPath = {
 };
 
 const LIBRARY_LIST_SELECT =
+  "id, slug, title, short_description, category, difficulty, tags, artwork_public_url, artwork_storage_path, artwork_status, quality_score, published_at, creator_profile_id";
+const LIBRARY_LIST_SELECT_LEGACY =
   "id, slug, title, short_description, category, difficulty, tags, artwork_public_url, quality_score, published_at, creator_profile_id";
 
 export async function listPublishedLearningLibrary(
@@ -100,7 +104,35 @@ export async function listPublishedLearningLibrary(
   }
 
   const bounded = needsMemoryFilter ? query.limit(200) : query.range(from, to);
-  const { data, error, count } = await bounded;
+  let { data, error, count } = await bounded;
+  if (error && /artwork_status|artwork_storage_path|column/i.test(error.message)) {
+    let legacyQuery = client
+      .from("learning_paths")
+      .select(LIBRARY_LIST_SELECT_LEGACY, { count: "exact" })
+      .eq("status", "published")
+      .order("published_at", { ascending: false });
+    if (q) {
+      const { data: creators } = await client
+        .from("creator_profiles")
+        .select("id")
+        .ilike("display_name", `%${q}%`)
+        .limit(20);
+      const creatorIds = (creators ?? []).map((row) => row.id);
+      const parts = [
+        `title.ilike.%${q}%`,
+        `short_description.ilike.%${q}%`,
+        `category.ilike.%${q}%`,
+        `description.ilike.%${q}%`,
+      ];
+      if (creatorIds.length) parts.push(`creator_profile_id.in.(${creatorIds.join(",")})`);
+      legacyQuery = legacyQuery.or(parts.join(","));
+    }
+    const legacyBounded = needsMemoryFilter ? legacyQuery.limit(200) : legacyQuery.range(from, to);
+    const legacy = await legacyBounded;
+    data = legacy.data as typeof data;
+    error = legacy.error;
+    count = legacy.count;
+  }
   if (error) throw new Error(error.message);
 
   let paths = (data ?? []) as PublishedLibraryPath[];
@@ -234,6 +266,16 @@ export async function approveLearningPath(
     .select("*")
     .single();
   if (error) throw new Error(error.message);
+
+  try {
+    const { applyCertificateDefaultsForPath } = await import("@/lib/learn-certificate-defaults");
+    await applyCertificateDefaultsForPath(admin, pathId, {
+      enableIfUnset: true,
+      overwriteAutomaticOnly: true,
+    });
+  } catch {
+    /* certificate columns may be missing on older DBs */
+  }
 
   if (path.factory_job_id) {
     await admin

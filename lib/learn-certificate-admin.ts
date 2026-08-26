@@ -82,22 +82,45 @@ export async function saveLearningPathCertificateOffer(
     .update({
       certificate_enabled: update.certificate_enabled,
       certificate_price_ngn: update.certificate_price_ngn,
+      certificate_pricing_mode: update.certificate_pricing_mode,
       recommended_course_id: update.recommended_course_id,
       certificate_template_override: update.certificate_template_override,
       updated_at: update.updated_at,
     })
     .eq("id", pathId)
     .select(
-      "id, title, slug, status, certificate_enabled, certificate_price_ngn, recommended_course_id, certificate_template_override",
+      "id, title, slug, status, certificate_enabled, certificate_price_ngn, certificate_pricing_mode, certificate_recommended_price_ngn, certificate_price_reason, recommended_course_id, certificate_template_override, artwork_status, artwork_source, artwork_public_url, artwork_error",
     )
     .single();
 
   if (result.error) {
     if (isMissingColumnError(result.error.message)) {
-      return {
-        error: "Learning path certificates are not enabled on this database yet.",
-        status: 503 as const,
-      };
+      const legacy = await admin
+        .from("learning_paths")
+        .update({
+          certificate_enabled: update.certificate_enabled,
+          certificate_price_ngn: update.certificate_price_ngn,
+          recommended_course_id: update.recommended_course_id,
+          certificate_template_override: update.certificate_template_override,
+          updated_at: update.updated_at,
+        })
+        .eq("id", pathId)
+        .select(
+          "id, title, slug, status, certificate_enabled, certificate_price_ngn, recommended_course_id, certificate_template_override",
+        )
+        .single();
+      if (legacy.error) {
+        if (isMissingColumnError(legacy.error.message)) {
+          return {
+            error: "Learning path certificates are not enabled on this database yet.",
+            status: 503 as const,
+          };
+        }
+        throw new Error(legacy.error.message);
+      }
+      revalidatePath("/learn");
+      revalidatePath(`/learn/${path.slug}`);
+      return { path: legacy.data, status: 200 as const };
     }
     throw new Error(result.error.message);
   }
@@ -118,7 +141,7 @@ export async function listLearningPathCertificateOps(admin: Admin): Promise<{
   const pathsQuery = await admin
     .from("learning_paths")
     .select(
-      "id, title, slug, status, certificate_enabled, certificate_price_ngn, recommended_course_id, certificate_template_override",
+      "id, title, slug, status, certificate_enabled, certificate_price_ngn, certificate_pricing_mode, certificate_recommended_price_ngn, certificate_price_reason, recommended_course_id, certificate_template_override, artwork_status, artwork_source, artwork_public_url, artwork_error",
     )
     .in("status", ["published", "review", "draft"])
     .order("updated_at", { ascending: false })
@@ -126,10 +149,58 @@ export async function listLearningPathCertificateOps(admin: Admin): Promise<{
 
   if (pathsQuery.error) {
     if (isMissingColumnError(pathsQuery.error.message)) {
+      const legacy = await admin
+        .from("learning_paths")
+        .select(
+          "id, title, slug, status, certificate_enabled, certificate_price_ngn, recommended_course_id, certificate_template_override",
+        )
+        .in("status", ["published", "review", "draft"])
+        .order("updated_at", { ascending: false })
+        .limit(80);
+      if (legacy.error) {
+        if (isMissingColumnError(legacy.error.message)) {
+          return { paths: [], courses, metrics: emptyMetrics() };
+        }
+        throw new Error(legacy.error.message);
+      }
+      const issuedByPath = new Map<string, number>();
+      const certsQuery = await admin
+        .from("certificates")
+        .select("id, learning_path_id, is_valid")
+        .not("learning_path_id", "is", null)
+        .eq("is_valid", true)
+        .limit(2000);
+      if (!certsQuery.error) {
+        for (const row of certsQuery.data ?? []) {
+          const pathId = (row as { learning_path_id?: string | null }).learning_path_id;
+          if (!pathId) continue;
+          issuedByPath.set(pathId, (issuedByPath.get(pathId) ?? 0) + 1);
+        }
+      }
+      const metrics = await loadCertificateMetrics(
+        admin,
+        new Map((legacy.data ?? []).map((path) => [path.id, path.title])),
+      );
       return {
-        paths: [],
         courses,
-        metrics: emptyMetrics(),
+        metrics,
+        paths: (legacy.data ?? []).map((path) => ({
+          id: path.id,
+          title: path.title,
+          slug: path.slug,
+          status: path.status,
+          certificate_enabled: path.certificate_enabled === true,
+          certificate_price_ngn: path.certificate_price_ngn ?? null,
+          certificate_pricing_mode: "automatic" as const,
+          certificate_recommended_price_ngn: null,
+          certificate_price_reason: null,
+          recommended_course_id: path.recommended_course_id ?? null,
+          recommended_course_title: path.recommended_course_id
+            ? courseTitle.get(path.recommended_course_id) ?? null
+            : null,
+          certificate_template_override: path.certificate_template_override ?? null,
+          certificates_issued: issuedByPath.get(path.id) ?? 0,
+        })),
       };
     }
     throw new Error(pathsQuery.error.message);
@@ -142,8 +213,15 @@ export async function listLearningPathCertificateOps(admin: Admin): Promise<{
     status: string;
     certificate_enabled?: boolean | null;
     certificate_price_ngn?: number | null;
+    certificate_pricing_mode?: string | null;
+    certificate_recommended_price_ngn?: number | null;
+    certificate_price_reason?: string | null;
     recommended_course_id?: string | null;
     certificate_template_override?: string | null;
+    artwork_status?: string | null;
+    artwork_source?: string | null;
+    artwork_public_url?: string | null;
+    artwork_error?: string | null;
   }>;
 
   const issuedByPath = new Map<string, number>();
@@ -175,12 +253,22 @@ export async function listLearningPathCertificateOps(admin: Admin): Promise<{
       status: path.status,
       certificate_enabled: path.certificate_enabled === true,
       certificate_price_ngn: path.certificate_price_ngn ?? null,
+      certificate_pricing_mode:
+        path.certificate_pricing_mode === "fixed" || path.certificate_pricing_mode === "free"
+          ? path.certificate_pricing_mode
+          : "automatic",
+      certificate_recommended_price_ngn: path.certificate_recommended_price_ngn ?? null,
+      certificate_price_reason: path.certificate_price_reason ?? null,
       recommended_course_id: path.recommended_course_id ?? null,
       recommended_course_title: path.recommended_course_id
         ? courseTitle.get(path.recommended_course_id) ?? null
         : null,
       certificate_template_override: path.certificate_template_override ?? null,
       certificates_issued: issuedByPath.get(path.id) ?? 0,
+      artwork_status: path.artwork_status ?? null,
+      artwork_source: path.artwork_source ?? null,
+      artwork_public_url: path.artwork_public_url ?? null,
+      artwork_error: path.artwork_error ?? null,
     })),
   };
 }

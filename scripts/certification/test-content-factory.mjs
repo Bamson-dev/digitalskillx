@@ -2747,9 +2747,9 @@ console.log("\nAll Content Factory Phase 1 + Stage 1–7 offline checks passed."
   assert.match(shared, /isComplete: total > 0 && completed === total/);
   const panel = read("components/learn/learn-completion-panel.tsx");
   const checkoutUi = read("components/learn/learn-certificate-checkout.tsx");
-  assert.match(panel, /You completed this learning path/);
-  assert.match(panel, /Get your DigitalSkillX certificate/);
-  assert.match(panel, /Certificate includes/);
+  assert.match(panel, /you completed this learning path/i);
+  assert.match(panel, /DigitalSkillX Certificate of Completion/);
+  assert.match(panel, /Certificate price/);
   assert.match(checkoutUi, /Get My Certificate/);
   assert.doesNotMatch(panel, /verified you watched/);
   assert.doesNotMatch(panel, /from\(\"lesson_progress\"\)/);
@@ -2843,7 +2843,10 @@ console.log("\nAll Content Factory Phase 1 + Stage 1–7 offline checks passed."
   assert.match(proc, /status: \"review\"/);
   assert.doesNotMatch(proc, /status: \"published\"/);
   assert.match(read("lib/content-factory/auto-pipeline.ts"), /approveLearningPath/);
-  assert.doesNotMatch(checkout, /issueLearningPathCertificate/);
+  // Free certificates may issue after completion verification; paid still use Paystack.
+  assert.match(checkout, /pricingMode === \"free\"/);
+  assert.match(checkout, /initializeTransaction/);
+  assert.match(checkout, /issueLearningPathCertificate/);
   assert.doesNotMatch(read("app/(marketplace)/learn/[slug]/page.tsx"), /PAYSTACK_SECRET|SERVICE_ROLE/);
   console.log("PASS: S8-22–24 process-job stays review; auto-pipeline publishes; no secret exposure");
 }

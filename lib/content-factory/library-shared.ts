@@ -268,12 +268,19 @@ export function summarizeLearnCompletion(progress: Record<string, boolean>, less
 export function pathCertificateOfferable(path: {
   certificate_enabled?: boolean | null;
   certificate_price_ngn?: number | null;
+  certificate_pricing_mode?: string | null;
+  certificate_recommended_price_ngn?: number | null;
   status?: string | null;
 }) {
-  return (
-    path.status === "published" &&
-    path.certificate_enabled === true &&
-    typeof path.certificate_price_ngn === "number" &&
-    path.certificate_price_ngn > 0
-  );
+  if (path.status !== "published" || path.certificate_enabled !== true) return false;
+  const mode = (path.certificate_pricing_mode || "automatic").toLowerCase();
+  if (mode === "free") return true;
+  const price =
+    typeof path.certificate_price_ngn === "number" && path.certificate_price_ngn > 0
+      ? path.certificate_price_ngn
+      : typeof path.certificate_recommended_price_ngn === "number" &&
+          path.certificate_recommended_price_ngn > 0
+        ? path.certificate_recommended_price_ngn
+        : null;
+  return typeof price === "number" && price > 0;
 }

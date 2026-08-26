@@ -3,7 +3,15 @@
 import { useEffect, useState } from "react";
 import { LEARN_PROGRESS_EVENT, learnProgressStorageKey } from "@/lib/content-factory/library-shared";
 
-export function LessonProgressToggle({ slug, lessonId }: { slug: string; lessonId: string }) {
+export function LessonProgressToggle({
+  slug,
+  pathId,
+  lessonId,
+}: {
+  slug: string;
+  pathId: string;
+  lessonId: string;
+}) {
   const [done, setDone] = useState(false);
 
   useEffect(() => {
@@ -17,16 +25,30 @@ export function LessonProgressToggle({ slug, lessonId }: { slug: string; lessonI
   }, [slug, lessonId]);
 
   function toggle() {
+    const nextDone = !done;
     try {
       const raw = window.localStorage.getItem(learnProgressStorageKey(slug));
       const parsed = raw ? (JSON.parse(raw) as Record<string, boolean>) : {};
-      const next = { ...parsed, [lessonId]: !done };
+      const next = { ...parsed, [lessonId]: nextDone };
       window.localStorage.setItem(learnProgressStorageKey(slug), JSON.stringify(next));
       window.dispatchEvent(new CustomEvent(LEARN_PROGRESS_EVENT, { detail: { slug } }));
-      setDone(!done);
+      setDone(nextDone);
     } catch {
-      setDone((prev) => !prev);
+      setDone(nextDone);
     }
+
+    void fetch("/api/learn/progress", {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        learningPathId: pathId,
+        lessonNumber: lessonId,
+        completed: nextDone,
+      }),
+    }).catch(() => {
+      /* local progress remains usable if sync fails */
+    });
   }
 
   return (

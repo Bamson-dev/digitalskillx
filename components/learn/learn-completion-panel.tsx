@@ -10,7 +10,6 @@ import {
   summarizeLearnCompletion,
 } from "@/lib/content-factory/library-shared";
 import { PATH_CERTIFICATE_ATTRIBUTION } from "@/lib/learn-certificate-shared";
-import { formatNaira } from "@/lib/currency";
 import { LearnCertificateCheckout } from "@/components/learn/learn-certificate-checkout";
 
 export type RecommendedLearnCourse = {
@@ -27,6 +26,7 @@ export function LearnCompletionPanel({
   lessonIds,
   certificateEnabled,
   certificatePriceNgn,
+  certificatePricingMode,
   recommendedCourse,
 }: {
   slug: string;
@@ -36,6 +36,7 @@ export function LearnCompletionPanel({
   lessonIds: string[];
   certificateEnabled: boolean;
   certificatePriceNgn: number | null;
+  certificatePricingMode?: string | null;
   recommendedCourse: RecommendedLearnCourse | null;
 }) {
   const [progress, setProgress] = useState<Record<string, boolean>>({});
@@ -62,61 +63,88 @@ export function LearnCompletionPanel({
   }, [slug]);
 
   const summary = useMemo(() => summarizeLearnCompletion(progress, lessonIds), [progress, lessonIds]);
+  const isFree = (certificatePricingMode || "").toLowerCase() === "free" || certificatePriceNgn === 0;
   const offerable = pathCertificateOfferable({
     status: "published",
     certificate_enabled: certificateEnabled,
     certificate_price_ngn: certificatePriceNgn,
+    certificate_pricing_mode: certificatePricingMode,
   });
 
   return (
     <section className="min-w-0 overflow-hidden rounded-2xl border border-app p-4 sm:p-5">
       <h2 className="text-lg font-semibold">Your progress</h2>
-      <p className="mt-2 text-sm text-neutral-600">
-        {summary.completed} of {summary.total} lessons marked complete
-        {summary.total ? ` (${summary.pct}%)` : ""}. Progress stays on this device until you choose
-        to get a certificate.
-      </p>
+      {!summary.isComplete ? (
+        <div className="mt-2 space-y-2">
+          <p className="text-sm text-neutral-600">
+            {summary.completed} of {summary.total} lessons completed
+            {summary.total ? ` (${summary.pct}%)` : ""}.
+          </p>
+          <p className="text-sm text-neutral-600">
+            Complete this learning path to become eligible for your DigitalSkillX certificate.
+          </p>
+          <div className="h-2 overflow-hidden rounded-full bg-neutral-100">
+            <div
+              className="h-full rounded-full bg-brand transition-all"
+              style={{ width: `${summary.pct}%` }}
+            />
+          </div>
+        </div>
+      ) : (
+        <p className="mt-2 text-sm text-neutral-600">
+          {summary.completed} of {summary.total} lessons completed (100%).
+        </p>
+      )}
 
       {summary.isComplete ? (
         <div className="mt-4 space-y-3 rounded-xl bg-emerald-50 p-4">
-          <p className="text-xs font-semibold uppercase tracking-wide text-emerald-800">Congratulations</p>
-          <h3 className="break-words text-xl font-bold text-neutral-900">You completed this learning path.</h3>
+          <p className="text-xs font-semibold uppercase tracking-wide text-emerald-800">Course completed</p>
+          <h3 className="break-words text-xl font-bold text-neutral-900">
+            Congratulations, you completed this learning path.
+          </h3>
           <p className="break-words text-sm text-neutral-700">
-            You completed: <span className="font-semibold">{title}</span>
-          </p>
-          <p className="text-sm text-neutral-700">
-            {summary.completed} of {summary.total} lessons completed.
+            You completed all required lessons for <span className="font-semibold">{title}</span>
             {creatorName ? (
               <>
                 {" "}
-                Lessons by <span className="font-medium">{creatorName}</span> on YouTube.
+                (lessons by <span className="font-medium">{creatorName}</span> on YouTube)
               </>
             ) : null}
+            .
           </p>
         </div>
       ) : null}
 
       {summary.isComplete && offerable ? (
         <div className="mt-4 min-w-0 rounded-xl bg-neutral-50 p-4">
-          <h3 className="text-base font-semibold">Get your DigitalSkillX certificate</h3>
-          <p className="mt-1 text-sm text-neutral-600">
-            Optional. Certificate {formatNaira(certificatePriceNgn ?? 0)}. Lessons stay free.
+          <h3 className="text-base font-semibold">
+            You are now eligible for your DigitalSkillX Certificate of Completion.
+          </h3>
+          <p className="mt-2 text-sm text-neutral-600">
+            Learning was free. You can now get a verified DigitalSkillX certificate for this path.
           </p>
-          <p className="mt-3 text-sm font-medium text-neutral-800">Certificate includes:</p>
-          <ul className="mt-1 list-disc space-y-1 pl-5 text-sm text-neutral-700">
+          <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-neutral-700">
             <li>Your name</li>
             <li>Learning path title</li>
-            <li>Completion recognition</li>
-            <li>Certificate number</li>
-            <li>Verification link</li>
+            <li>Completion date</li>
+            <li>Unique certificate ID</li>
+            <li>Public verification link</li>
           </ul>
           <p className="mt-3 text-xs leading-relaxed text-muted">{PATH_CERTIFICATE_ATTRIBUTION}</p>
           <LearnCertificateCheckout
             pathId={pathId}
+            slug={slug}
             title={title}
             priceNgn={certificatePriceNgn ?? 0}
+            isFree={isFree}
           />
         </div>
+      ) : null}
+
+      {summary.isComplete && !offerable ? (
+        <p className="mt-4 text-sm text-neutral-600">
+          A DigitalSkillX certificate is not offered for this path yet.
+        </p>
       ) : null}
 
       {summary.isComplete && recommendedCourse ? (
@@ -130,9 +158,6 @@ export function LearnCompletionPanel({
             className="mt-2 inline-flex min-h-[44px] max-w-full items-center break-words text-sm font-semibold text-brand hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
           >
             {recommendedCourse.title}
-            {typeof recommendedCourse.price_ngn === "number"
-              ? ` · ${formatNaira(recommendedCourse.price_ngn)}`
-              : ""}
           </Link>
         </div>
       ) : null}
