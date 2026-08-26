@@ -126,6 +126,9 @@ export function isRetryableFactoryError(message: string | null | undefined): boo
   if (/\((5\d\d)\)/.test(lower)) return true;
   if (lower.includes("deepseek request failed")) return true;
   if (lower.includes("youtube") && (lower.includes("unavailable") || lower.includes("temporarily"))) return true;
+  // Transient until lesson-insert dedupe; safe to retry after code fix.
+  if (lower.includes("learning_path_lessons") && lower.includes("duplicate")) return true;
+  if (lower.includes("youtube_video_id_key")) return true;
   return false;
 }
 
