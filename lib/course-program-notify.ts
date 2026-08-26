@@ -11,6 +11,7 @@ import {
 } from "@/lib/ensure-program-course-notify";
 import {
   resolveCoursePublishRecipients,
+  stripHtmlForEmail,
   stripHtmlPreview,
   type AnnouncementRecipient,
 } from "@/lib/announcement-recipients";
@@ -109,8 +110,8 @@ export async function notifyProgramStudentsOfNewCourse(
     : recipients.filter((recipient) => !deliveries.studentIds.has(recipient.id));
 
   const courseUrl = `${siteUrl()}/course/${course.id}`;
-  const longDescription = stripHtmlPreview(course.description ?? "", 4_000);
-  const shortDescription = stripHtmlPreview(course.short_description ?? "", 400);
+  const longDescription = stripHtmlForEmail(course.description ?? "", 1_400);
+  const shortDescription = stripHtmlForEmail(course.short_description ?? "", 320);
 
   if (toNotify.length === 0) {
     return {
@@ -128,7 +129,10 @@ export async function notifyProgramStudentsOfNewCourse(
     };
   }
 
-  const inAppMessage = [shortDescription || longDescription.slice(0, 280), `Open ${course.title} in your dashboard.`]
+  const inAppMessage = [
+    stripHtmlPreview(shortDescription || longDescription, 280),
+    `Open ${course.title} in your dashboard.`,
+  ]
     .filter(Boolean)
     .join(" ");
 

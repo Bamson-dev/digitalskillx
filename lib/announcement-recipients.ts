@@ -172,3 +172,42 @@ export function stripHtmlPreview(html: string, maxLength = 160) {
   if (text.length <= maxLength) return text;
   return `${text.slice(0, maxLength - 1)}…`;
 }
+
+/** Strip HTML but keep paragraph breaks for readable email bodies. */
+export function stripHtmlForEmail(html: string, maxLength = 1_200) {
+  const text = html
+    .replace(/\r\n/g, "\n")
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/p>/gi, "\n\n")
+    .replace(/<\/div>/gi, "\n")
+    .replace(/<\/h[1-6]>/gi, "\n\n")
+    .replace(/<li[^>]*>/gi, "• ")
+    .replace(/<\/li>/gi, "\n")
+    .replace(/<[^>]+>/g, "")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n[ \t]+/g, "\n")
+    .replace(/[ \t]{2,}/g, " ")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+  if (text.length <= maxLength) return text;
+  const cut = text.slice(0, maxLength - 1);
+  const lastBreak = Math.max(cut.lastIndexOf("\n\n"), cut.lastIndexOf(". "), cut.lastIndexOf(" "));
+  const soft = lastBreak > maxLength * 0.6 ? cut.slice(0, lastBreak + (cut[lastBreak] === "." ? 1 : 0)) : cut;
+  return `${soft.trim()}…`;
+}
+
+/** Turn plain text with newlines into spaced email paragraphs. */
+export function proseToEmailHtml(text: string) {
+  const paragraphs = text
+    .split(/\n{2,}/)
+    .map((block) => block.trim())
+    .filter(Boolean)
+    .map((block) => block.replace(/\n/g, "<br/>"));
+  if (paragraphs.length === 0) return "";
+  return paragraphs
+    .map(
+      (block) =>
+        `<p style="margin:0 0 16px;padding:0;font-size:15px;line-height:1.7;color:#334155">${block}</p>`,
+    )
+    .join("");
+}
