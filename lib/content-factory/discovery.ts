@@ -11,6 +11,11 @@ import {
   scoreDiscoveryCandidate,
   validateDiscoveryInput,
 } from "@/lib/content-factory/discovery-shared";
+import { decideCandidateQuality } from "@/lib/content-factory/library-build/quality-decision-shared";
+import {
+  markLibraryJobRunningForRun,
+  syncLibraryBuildDiscoveryJobs,
+} from "@/lib/content-factory/library-build/discovery-sync";
 import {
   buildDiscoverySearchQueries,
   parseDiscoveryTopics,
@@ -283,6 +288,7 @@ export async function processQueuedDiscoveryRun(admin: SupabaseClient<Database>)
     .from("content_factory_discovery_runs")
     .update({ status: "running", error_message: null })
     .eq("id", run.id);
+  await markLibraryJobRunningForRun(admin, run.id);
 
   const remaining = Math.max(0, cap - used);
   const queries = buildDiscoverySearchQueries(run.topic, Math.min(searchRunCap(), remaining || 0));
@@ -363,6 +369,18 @@ export async function processQueuedDiscoveryRun(admin: SupabaseClient<Database>)
       if (status === "filtered") filteredCount += 1;
       else discoveredCount += 1;
 
+      const quality = decideCandidateQuality({
+        candidateStatus: status,
+        ruleScore: scored.ruleScore,
+        aiScore: null,
+        filterReason: scored.filterReason,
+        scoreBreakdown: {
+          ...scored.breakdown,
+          titleSimilarityWarning: titleWarning,
+          channelSeen,
+        },
+      });
+
       const { error: insertError } = await admin.from("content_factory_candidates").insert({
         run_id: run.id,
         playlist_id: hit.playlistId,
@@ -383,6 +401,11 @@ export async function processQueuedDiscoveryRun(admin: SupabaseClient<Database>)
           channelSeen,
         } as unknown as Json,
         filter_reason: scored.filterReason,
+        library_topic_id: run.library_topic_id ?? null,
+        quality_status: quality.qualityStatus,
+        quality_reason: quality.qualityReason,
+        rejection_reason: quality.rejectionReason,
+        final_quality_score: quality.finalQualityScore,
       });
       if (insertError) {
         if (insertError.message.toLowerCase().includes("duplicate") || insertError.code === "23505") {
@@ -407,6 +430,12 @@ export async function processQueuedDiscoveryRun(admin: SupabaseClient<Database>)
       })
       .eq("id", run.id);
 
+    try {
+      await syncLibraryBuildDiscoveryJobs(admin, { runId: run.id });
+    } catch {
+      /* library build optional */
+    }
+
     return {
       processed: true as const,
       runId: run.id,
@@ -429,6 +458,11 @@ export async function processQueuedDiscoveryRun(admin: SupabaseClient<Database>)
         completed_at: new Date().toISOString(),
       })
       .eq("id", run.id);
+    try {
+      await syncLibraryBuildDiscoveryJobs(admin, { runId: run.id });
+    } catch {
+      /* library build optional */
+    }
     return {
       processed: true as const,
       runId: run.id,

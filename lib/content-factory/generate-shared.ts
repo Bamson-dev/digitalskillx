@@ -86,6 +86,8 @@ export function evaluateGenerateEligibility(input: {
   if (c.status === "filtered") return { action: "skip", reason: "filtered" };
   if (c.status === "rejected") return { action: "skip", reason: "rejected" };
   if (c.status !== "qualified") return { action: "skip", reason: "not_qualified" };
+  const qualityStatus = (c as { quality_status?: string | null }).quality_status;
+  if (qualityStatus && qualityStatus !== "qualified") return { action: "skip", reason: "rejected" };
   if (c.ai_score == null || c.ai_score < GENERATE_MIN_AI_SCORE) {
     return { action: "skip", reason: "score_below_threshold" };
   }

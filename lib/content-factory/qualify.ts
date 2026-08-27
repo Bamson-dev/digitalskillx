@@ -20,8 +20,11 @@ import {
   parseQualifyBatchResponse,
   qualifyMaxPerRunFromEnv,
   selectQualifyBatch,
+  QUALIFY_SCORE_THRESHOLD,
   type QualifyCandidateInput,
 } from "@/lib/content-factory/qualify-shared";
+import { decideCandidateQuality } from "@/lib/content-factory/library-build/quality-decision-shared";
+import { syncLibraryBuildDiscoveryJobs } from "@/lib/content-factory/library-build/discovery-sync";
 
 type Admin = SupabaseClient<Database>;
 type CandidateRow = ContentFactoryCandidate;
@@ -160,7 +163,17 @@ async function applyAcceptedResults(
     const breakdown = mergeAiScoreBreakdown(
       (row.score_breakdown ?? {}) as Record<string, unknown>,
       result,
-    );
+    ) as Record<string, unknown>;
+    const quality = decideCandidateQuality({
+      candidateStatus: decision.status,
+      ruleScore: row.rule_score,
+      aiScore: decision.aiScore,
+      filterReason: decision.filterReason,
+      threshold: QUALIFY_SCORE_THRESHOLD,
+      scoreBreakdown: breakdown,
+      titleSimilarityWarning: Boolean(breakdown.titleSimilarityWarning),
+      channelSeen: Boolean(breakdown.channelSeen),
+    });
     const { error } = await admin
       .from("content_factory_candidates")
       .update({
@@ -168,6 +181,10 @@ async function applyAcceptedResults(
         ai_score: decision.aiScore,
         filter_reason: decision.filterReason,
         score_breakdown: breakdown as Json,
+        quality_status: quality.qualityStatus,
+        quality_reason: quality.qualityReason,
+        rejection_reason: quality.rejectionReason,
+        final_quality_score: quality.finalQualityScore,
         updated_at: new Date().toISOString(),
       })
       .eq("id", row.id)
@@ -273,6 +290,11 @@ export async function processPendingQualification(admin: Admin) {
       errorMessage: null,
       completed: true,
     });
+    try {
+      await syncLibraryBuildDiscoveryJobs(admin, { runId: run.id });
+    } catch {
+      /* library build optional */
+    }
     return {
       processed: true as const,
       runId: run.id,

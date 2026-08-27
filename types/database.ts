@@ -822,6 +822,10 @@ export type LearningPath = {
   created_by: string | null;
   created_at: string;
   updated_at: string;
+  verification_status?: "pending" | "passed" | "verification_failed" | "retry" | null;
+  verification_errors?: Json;
+  verification_checked_at?: string | null;
+  library_build_topic_id?: string | null;
 };
 
 export type LearningPathSection = {
@@ -892,6 +896,8 @@ export type ContentFactoryDiscoveryRun = {
   error_message: string | null;
   created_at: string;
   completed_at: string | null;
+  library_topic_id?: string | null;
+  library_build_mode?: "bulk" | "maintenance" | "expansion" | "manual" | null;
 };
 
 export type ContentFactoryCandidate = {
@@ -922,6 +928,123 @@ export type ContentFactoryCandidate = {
   factory_job_id: string | null;
   created_at: string;
   updated_at: string;
+  quality_status?: "pending" | "qualified" | "rejected" | "blocked_duplicate" | "failed" | null;
+  quality_reason?: string | null;
+  rejection_reason?: string | null;
+  final_quality_score?: number | null;
+  library_topic_id?: string | null;
+};
+
+export type LibraryBuildSettings = {
+  id: string;
+  target_published_count: number;
+  build_mode: "bulk" | "maintenance" | "expansion" | "paused" | "stopped";
+  run_status: "idle" | "running" | "paused" | "stopped" | "completed";
+  quality_threshold: number;
+  discovery_jobs_per_day: number;
+  maintenance_max_per_week: number;
+  maintenance_enabled: boolean;
+  last_maintenance_at: string | null;
+  started_at: string | null;
+  paused_at: string | null;
+  stopped_at: string | null;
+  completed_at: string | null;
+  candidates_today: number;
+  approved_today: number;
+  published_today: number;
+  rejected_today: number;
+  jobs_started_today: number;
+  jobs_completed_today: number;
+  jobs_failed_today: number;
+  duplicates_blocked_total: number;
+  rejected_candidates_total: number;
+  failed_jobs_total: number;
+  stats_day: string | null;
+  next_topic_id: string | null;
+  last_job_at: string | null;
+  updated_at: string;
+};
+
+export type LibraryBuildCategory = {
+  id: string;
+  slug: string;
+  name: string;
+  active: boolean;
+  priority_weight: number;
+  minimum_coverage_goal: number;
+  preferred_target: number;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+};
+
+export type LibraryBuildTopic = {
+  id: string;
+  category_id: string;
+  name: string;
+  slug: string;
+  active: boolean;
+  priority_weight: number;
+  discovery_queries: Json;
+  approved_course_count: number;
+  published_course_count: number;
+  target_coverage: number;
+  last_searched_at: string | null;
+  last_discovery_job_at: string | null;
+  last_published_at: string | null;
+  coverage_status: "unknown" | "needs_content" | "developing" | "good" | "strong" | "high_priority";
+  created_at: string;
+  updated_at: string;
+};
+
+export type LibraryBuildTopicCourse = {
+  id: string;
+  learning_path_id: string;
+  topic_id: string;
+  is_primary: boolean;
+  created_at: string;
+};
+
+export type LibraryBuildDiscoveryJob = {
+  id: string;
+  mode: "bulk" | "maintenance" | "expansion";
+  category_id: string | null;
+  topic_id: string | null;
+  discovery_run_id: string | null;
+  status:
+    | "queued"
+    | "running"
+    | "completed"
+    | "failed"
+    | "rate_limited"
+    | "quota_limited"
+    | "paused"
+    | "cancelled";
+  search_queries: Json;
+  candidates_found: number;
+  candidates_rejected: number;
+  candidates_qualified: number;
+  candidates_duplicates: number;
+  candidates_approved: number;
+  courses_generated: number;
+  courses_published: number;
+  retry_count: number;
+  error_message: string | null;
+  sync_fingerprint: string | null;
+  synced_at: string | null;
+  started_at: string | null;
+  completed_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type LibraryBuildActivity = {
+  id: string;
+  kind: string;
+  message: string;
+  details: Json;
+  admin_id: string | null;
+  created_at: string;
 };
 
 export type ContentFactoryBlock = {
@@ -1391,6 +1514,36 @@ export type Database = {
       content_factory_blocks: Table<
         ContentFactoryBlock,
         [Rel<"content_factory_blocks_created_by_fkey", "created_by", "profiles", "id">]
+      >;
+      library_build_settings: Table<LibraryBuildSettings>;
+      library_build_categories: Table<LibraryBuildCategory>;
+      library_build_topics: Table<
+        LibraryBuildTopic,
+        [Rel<"library_build_topics_category_id_fkey", "category_id", "library_build_categories", "id">]
+      >;
+      library_build_discovery_jobs: Table<
+        LibraryBuildDiscoveryJob,
+        [
+          Rel<"library_build_discovery_jobs_category_id_fkey", "category_id", "library_build_categories", "id">,
+          Rel<"library_build_discovery_jobs_topic_id_fkey", "topic_id", "library_build_topics", "id">,
+          Rel<
+            "library_build_discovery_jobs_discovery_run_id_fkey",
+            "discovery_run_id",
+            "content_factory_discovery_runs",
+            "id"
+          >,
+        ]
+      >;
+      library_build_activity: Table<
+        LibraryBuildActivity,
+        [Rel<"library_build_activity_admin_id_fkey", "admin_id", "profiles", "id">]
+      >;
+      library_build_topic_courses: Table<
+        LibraryBuildTopicCourse,
+        [
+          Rel<"library_build_topic_courses_learning_path_id_fkey", "learning_path_id", "learning_paths", "id">,
+          Rel<"library_build_topic_courses_topic_id_fkey", "topic_id", "library_build_topics", "id">,
+        ]
       >;
       authority_articles: Table<
         AuthorityArticle,

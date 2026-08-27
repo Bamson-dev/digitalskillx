@@ -10,9 +10,26 @@ const stubServerOnly = pathToFileURL(
   join(dirname(fileURLToPath(import.meta.url)), "stubs/server-only.mjs"),
 ).href;
 
+const root = join(dirname(fileURLToPath(import.meta.url)), "../..");
+
 export async function resolve(specifier, context, nextResolve) {
   if (specifier === "server-only") {
     return { url: stubServerOnly, shortCircuit: true };
+  }
+  if (specifier.startsWith("@/")) {
+    const rel = join(root, specifier.slice(2));
+    for (const ext of [".ts", ".tsx", ".js", ".mjs"]) {
+      try {
+        return await nextResolve(pathToFileURL(`${rel}${ext}`).href, context);
+      } catch {
+        // try next extension
+      }
+    }
+    try {
+      return await nextResolve(pathToFileURL(rel).href, context);
+    } catch {
+      // fall through
+    }
   }
   if (
     (specifier.startsWith("./") || specifier.startsWith("../")) &&

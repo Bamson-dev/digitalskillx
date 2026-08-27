@@ -1,5 +1,6 @@
 import { requireAdmin } from "@/lib/auth";
 import { contentFactoryEnabled } from "@/lib/content-factory/feature-flag";
+import { LibraryBuildPanel } from "@/components/admin/library-build-panel";
 import { ContentFactoryPanel } from "@/components/admin/content-factory-panel";
 import { LearningPathCertificateOffers } from "@/components/admin/learning-path-certificate-offers";
 import { OrganicAuthorityPanel } from "@/components/admin/organic-authority-panel";
@@ -35,6 +36,7 @@ export default async function AdminContentFactoryPage() {
           to the free Learn library when quality checks pass.
         </p>
       </div>
+      <LibraryBuildPanel />
       <ContentFactoryPanel />
       <SeoGrowthPanel />
       <OrganicAuthorityPanel />

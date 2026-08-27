@@ -57,6 +57,17 @@ export async function GET(request: NextRequest) {
 
   const discovery = await processQueuedDiscoveryRun(admin);
 
+  let libraryBuild: { ticked: boolean; reason?: string; jobId?: string } = { ticked: false };
+  try {
+    const { tickLibraryBuildEngine, tickLibraryBuildMaintenance } = await import(
+      "@/lib/content-factory/library-build/engine"
+    );
+    libraryBuild = await tickLibraryBuildEngine(admin);
+    await tickLibraryBuildMaintenance(admin);
+  } catch {
+    /* library build tables may be missing until migration applied */
+  }
+
   const { data: failedJobs } = await admin
     .from("content_factory_jobs")
     .select("id, error_message, attempts")
@@ -185,6 +196,7 @@ export async function GET(request: NextRequest) {
 
   const moreWork =
     (await contentFactoryHasPendingWork(admin)) ||
+    libraryBuild.ticked ||
     autoGenerate.created > 0 ||
     Boolean(discovery && "processed" in discovery && discovery.processed) ||
     jobProcessed.processed > 0 ||
@@ -210,6 +222,7 @@ export async function GET(request: NextRequest) {
     autoPublish,
     artworkBackfill,
     certificatePricingBackfill,
+    libraryBuild,
     counters: {
       jobsProcessed: jobProcessed.processed,
       jobsFailed: 0,

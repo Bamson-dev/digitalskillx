@@ -4,7 +4,10 @@ import type { Database } from "@/types/database";
 import { contentFactoryEnabled } from "@/lib/content-factory/feature-flag";
 import { generateFromQualifiedCandidates } from "@/lib/content-factory/generate";
 import { GENERATE_MAX_PER_RUN, GENERATE_MIN_AI_SCORE } from "@/lib/content-factory/generate-shared";
-import { approveLearningPath } from "@/lib/content-factory/learning-paths";
+import { approveLearningPathWithVerification } from "@/lib/content-factory/library-build/publish-gate";
+import { incrementLibraryBuildStat } from "@/lib/content-factory/library-build/engine";
+import { linkPublishedPathToTopic, refreshTopicCoverageCounts, resolveTopicIdForCandidate } from "@/lib/content-factory/library-build/topic-coverage";
+import { syncLibraryBuildDiscoveryJobs } from "@/lib/content-factory/library-build/discovery-sync";
 import { asStoredQualityReview } from "@/lib/content-factory/quality-shared";
 import { syncCandidatesForJob } from "@/lib/content-factory/generate";
 import { isMissingRelationError } from "@/lib/schema-guard";
@@ -38,11 +41,13 @@ export async function autoGenerateQualifiedCandidates(
 
   let query = admin
     .from("content_factory_candidates")
-    .select("id, run_id, ai_score, status, factory_job_id, learning_path_id")
+    .select("id, run_id, ai_score, status, factory_job_id, learning_path_id, quality_status, final_quality_score")
     .eq("status", "qualified")
+    .eq("quality_status", "qualified")
     .is("factory_job_id", null)
     .is("learning_path_id", null)
     .gte("ai_score", GENERATE_MIN_AI_SCORE)
+    .order("final_quality_score", { ascending: false, nullsFirst: false })
     .order("ai_score", { ascending: false })
     .limit(40);
 
@@ -173,9 +178,43 @@ export async function autoPublishReadyLearningPaths(
     }
 
     try {
-      await approveLearningPath(admin, pathId);
+      await approveLearningPathWithVerification(admin, pathId, minScore);
       await syncCandidatesForJob(admin, job.id);
+
+      const { data: pathRow } = await admin
+        .from("learning_paths")
+        .select("id, source_playlist_id, library_build_topic_id, factory_job_id")
+        .eq("id", pathId)
+        .maybeSingle();
+      if (pathRow && !pathRow.library_build_topic_id) {
+        const { data: candidate } = await admin
+          .from("content_factory_candidates")
+          .select("id, run_id, library_topic_id")
+          .eq("learning_path_id", pathId)
+          .maybeSingle();
+        const topicId = candidate
+          ? await resolveTopicIdForCandidate(admin, candidate)
+          : null;
+        if (topicId) await linkPublishedPathToTopic(admin, pathId, topicId);
+      } else if (pathRow?.library_build_topic_id) {
+        await linkPublishedPathToTopic(admin, pathId, pathRow.library_build_topic_id);
+      }
+
       published += 1;
+      try {
+        await incrementLibraryBuildStat(admin, "published_today", 1);
+        await refreshTopicCoverageCounts(admin);
+        if (pathRow?.factory_job_id) {
+          const { data: cand } = await admin
+            .from("content_factory_candidates")
+            .select("run_id")
+            .eq("factory_job_id", pathRow.factory_job_id)
+            .maybeSingle();
+          if (cand?.run_id) await syncLibraryBuildDiscoveryJobs(admin, { runId: cand.run_id });
+        }
+      } catch {
+        /* library build tables optional */
+      }
     } catch (err) {
       skipped += 1;
       errors.push(err instanceof Error ? err.message : String(err));
@@ -222,5 +261,24 @@ export async function contentFactoryHasPendingWork(admin: Admin): Promise<boolea
     }
     if ((res.count ?? 0) > 0) return true;
   }
+
+  try {
+    const { data: lbSettings } = await admin
+      .from("library_build_settings")
+      .select("run_status, build_mode")
+      .eq("id", "default")
+      .maybeSingle();
+    if (lbSettings?.run_status === "running" && lbSettings.build_mode !== "stopped") {
+      return true;
+    }
+    const { count: lbJobs } = await admin
+      .from("library_build_discovery_jobs")
+      .select("id", { count: "exact", head: true })
+      .in("status", ["queued", "running"]);
+    if ((lbJobs ?? 0) > 0) return true;
+  } catch {
+    /* library build optional */
+  }
+
   return false;
 }
