@@ -644,6 +644,14 @@ export async function tickLibraryBuildEngine(
       });
       return { ticked: false, reason: "rate_limited" };
     }
+    if (/daily youtube search cap/i.test(message)) {
+      await logLibraryBuildActivity(admin, {
+        kind: "rate_limited",
+        message: "Daily YouTube search cap reached; waiting for reset.",
+        details: { error: message },
+      });
+      return { ticked: false, reason: "youtube_quota" };
+    }
     await logLibraryBuildActivity(admin, {
       kind: "discovery_job_failed",
       message: "Failed to create discovery job.",
