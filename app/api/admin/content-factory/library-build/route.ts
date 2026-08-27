@@ -104,7 +104,9 @@ export async function POST(request: NextRequest) {
             targetId: "default",
             metadata: { ticked: tick.ticked, reason: tick.reason ?? null, jobId: tick.jobId ?? null } as Json,
           });
-          if (tick.ticked) kickCron();
+          // Always kick cron while running so qualify/generate/publish continue even when
+          // a new discovery job cannot be created (YouTube daily cap / backlog).
+          if (status?.runStatus === "running" || tick.ticked) kickCron();
           return NextResponse.json({ ok: true, status, tick });
         }
       case "stop":

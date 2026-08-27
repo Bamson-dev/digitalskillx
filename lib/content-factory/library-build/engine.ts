@@ -577,6 +577,16 @@ export async function tickLibraryBuildEngine(
     return { ticked: false, reason: "daily_job_cap" };
   }
 
+  // Do not enqueue more discovery while Library Build already has in-flight work.
+  // Queued runs inflate the YouTube search reservation counter and starve qualification.
+  const { count: openLbJobs } = await admin
+    .from("library_build_discovery_jobs")
+    .select("id", { count: "exact", head: true })
+    .in("status", ["queued", "running"]);
+  if ((openLbJobs ?? 0) > 0) {
+    return { ticked: false, reason: "discovery_backlog" };
+  }
+
   const youtubeUsed = await countRecentDiscoverySearches(admin);
   const youtubeCap = dailyLimit + 10;
   if (youtubeUsed >= youtubeCap) {

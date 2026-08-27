@@ -9,6 +9,8 @@
 --
 -- Evidence from production discovery run 2692126b-5a03-42c5-8cc2-c00d01582399:
 --   violates check constraint "content_factory_candidates_quality_status_check"
+--
+-- Note: content_factory_discovery_runs has no updated_at column in production.
 
 alter table public.content_factory_candidates
   drop constraint if exists content_factory_candidates_quality_status_check;
@@ -23,8 +25,6 @@ alter table public.content_factory_candidates
 -- Allow stuck running discovery runs blocked by this constraint to be retried by cron.
 -- Does not delete candidates or courses.
 update public.content_factory_discovery_runs
-set
-  error_message = null,
-  updated_at = now()
+set error_message = null
 where status = 'running'
   and error_message ilike '%quality_status_check%';

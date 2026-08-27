@@ -40,8 +40,15 @@ export const maxDuration = 300;
 /**
  * Process Content Factory discovery → qualify → generate → publish.
  * Auth: Authorization: Bearer $CRON_SECRET
+ *
+ * Continuations in keepContentFactoryRunning() POST this route. Without POST,
+ * self-chain returns 405 and Library Build stalls after discovery.
  */
 export async function GET(request: NextRequest) {
+  return POST(request);
+}
+
+export async function POST(request: NextRequest) {
   const auth = verifyCronSecret(request);
   if (!auth.ok) {
     return NextResponse.json({ error: auth.error }, { status: auth.status });
@@ -54,6 +61,19 @@ export async function GET(request: NextRequest) {
   await bootstrapRuntimeSecrets();
   const admin = await createAdminClientAsync();
   const depth = continuationDepthFromRequest(request);
+
+  // Qualify before new YouTube discovery so pending Library Build candidates are not
+  // starved behind search-cap / long playlist fetches.
+  let qualification = await processPendingQualification(admin);
+  if (
+    qualification &&
+    "qualified_count" in qualification &&
+    Number(qualification.qualified_count ?? 0) > 0
+  ) {
+    await autoGenerateQualifiedCandidates(admin, {
+      runId: "runId" in qualification ? String(qualification.runId) : undefined,
+    });
+  }
 
   const discovery = await processQueuedDiscoveryRun(admin);
 
@@ -132,15 +152,25 @@ export async function GET(request: NextRequest) {
     .lt("claimed_at", staleBefore)
     .gte("attempts", FACTORY_RETRY_MAX_ATTEMPTS);
 
-  // Always try qualify so discovery is not starved by pending playlist jobs.
-  let qualification = await processPendingQualification(admin);
+  // Second qualify pass after discovery may have created new pending candidates.
+  const qualificationAfterDiscovery = await processPendingQualification(admin);
   if (
-    qualification &&
-    "qualified_count" in qualification &&
-    Number(qualification.qualified_count ?? 0) > 0
+    qualificationAfterDiscovery &&
+    "processed" in qualificationAfterDiscovery &&
+    qualificationAfterDiscovery.processed
+  ) {
+    qualification = qualificationAfterDiscovery;
+  }
+  if (
+    qualificationAfterDiscovery &&
+    "qualified_count" in qualificationAfterDiscovery &&
+    Number(qualificationAfterDiscovery.qualified_count ?? 0) > 0
   ) {
     await autoGenerateQualifiedCandidates(admin, {
-      runId: "runId" in qualification ? String(qualification.runId) : undefined,
+      runId:
+        "runId" in qualificationAfterDiscovery
+          ? String(qualificationAfterDiscovery.runId)
+          : undefined,
     });
   }
 
