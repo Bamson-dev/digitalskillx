@@ -457,8 +457,9 @@ async function createLibraryDiscoveryJob(
 ) {
   const run = await createDiscoveryRun(admin, {
     adminId: params.adminId,
-    topic: params.topic.name,
+    topic: params.topic.discoveryQueries[0] ?? params.topic.name,
     targetGenerate: 3,
+    skipCooldown: true,
   });
 
   await admin

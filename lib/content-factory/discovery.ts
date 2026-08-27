@@ -125,7 +125,7 @@ export async function findTopicCooldownRun(
 
 export async function createDiscoveryRun(
   admin: SupabaseClient<Database>,
-  params: { adminId: string; topic: string; targetGenerate?: number },
+  params: { adminId: string; topic: string; targetGenerate?: number; skipCooldown?: boolean },
 ): Promise<{
   id: string;
   status: string;
@@ -143,15 +143,18 @@ export async function createDiscoveryRun(
   if ("error" in validated) throw new Error(validated.error);
 
   // Reuse today's search instead of hard-failing — show results and keep generating.
-  const cooldown = await findTopicCooldownRun(admin, validated.topic);
-  if (cooldown) {
-    return {
-      id: cooldown.id,
-      status: cooldown.status,
-      topic: cooldown.topic,
-      target_generate: Number(cooldown.target_generate ?? validated.targetGenerate),
-      reused: true,
-    };
+  // Library Build skips cooldown so gap-priority topics keep searching until the target is met.
+  if (!params.skipCooldown) {
+    const cooldown = await findTopicCooldownRun(admin, validated.topic);
+    if (cooldown) {
+      return {
+        id: cooldown.id,
+        status: cooldown.status,
+        topic: cooldown.topic,
+        target_generate: Number(cooldown.target_generate ?? validated.targetGenerate),
+        reused: true,
+      };
+    }
   }
 
   const used = await countRecentDiscoverySearches(admin, undefined, { includeQueued: true });
