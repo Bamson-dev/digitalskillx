@@ -91,6 +91,22 @@ export async function POST(request: NextRequest) {
         await logAudit({ action: "library_build_resume", targetType: "library_build_settings", targetId: "default" });
         kickCron();
         break;
+      case "tick":
+        {
+          const { tickLibraryBuildEngine, tickLibraryBuildMaintenance, getLibraryBuildStatus: refresh } =
+            await import("@/lib/content-factory/library-build/engine");
+          const tick = await tickLibraryBuildEngine(auth.admin, { adminId: auth.user.id });
+          await tickLibraryBuildMaintenance(auth.admin);
+          status = await refresh(auth.admin);
+          await logAudit({
+            action: "library_build_tick",
+            targetType: "library_build_settings",
+            targetId: "default",
+            metadata: { ticked: tick.ticked, reason: tick.reason ?? null, jobId: tick.jobId ?? null } as Json,
+          });
+          if (tick.ticked) kickCron();
+          return NextResponse.json({ ok: true, status, tick });
+        }
       case "stop":
         status = await stopLibraryBuild(auth.admin, auth.user.id);
         await logAudit({ action: "library_build_stop", targetType: "library_build_settings", targetId: "default" });

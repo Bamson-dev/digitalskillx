@@ -237,3 +237,39 @@ create policy library_build_activity_admin_all on public.library_build_activity
 drop policy if exists library_build_topic_courses_admin_all on public.library_build_topic_courses;
 create policy library_build_topic_courses_admin_all on public.library_build_topic_courses
   for all using (public.is_admin()) with check (public.is_admin());
+
+-- Self-healing column adds:
+-- CREATE TABLE IF NOT EXISTS is a no-op when an earlier partial 0051 already created
+-- library_build_* tables without later columns. These ALTERs are idempotent.
+alter table public.library_build_settings
+  add column if not exists jobs_started_today integer not null default 0;
+alter table public.library_build_settings
+  add column if not exists jobs_completed_today integer not null default 0;
+alter table public.library_build_settings
+  add column if not exists jobs_failed_today integer not null default 0;
+alter table public.library_build_settings
+  add column if not exists duplicates_blocked_total integer not null default 0;
+alter table public.library_build_settings
+  add column if not exists rejected_candidates_total integer not null default 0;
+alter table public.library_build_settings
+  add column if not exists failed_jobs_total integer not null default 0;
+
+alter table public.library_build_topics
+  add column if not exists published_course_count integer not null default 0;
+alter table public.library_build_topics
+  add column if not exists target_coverage integer not null default 5;
+alter table public.library_build_topics
+  add column if not exists last_published_at timestamptz;
+
+alter table public.library_build_discovery_jobs
+  add column if not exists candidates_qualified integer not null default 0;
+alter table public.library_build_discovery_jobs
+  add column if not exists candidates_duplicates integer not null default 0;
+alter table public.library_build_discovery_jobs
+  add column if not exists courses_generated integer not null default 0;
+alter table public.library_build_discovery_jobs
+  add column if not exists courses_published integer not null default 0;
+alter table public.library_build_discovery_jobs
+  add column if not exists sync_fingerprint text;
+alter table public.library_build_discovery_jobs
+  add column if not exists synced_at timestamptz;

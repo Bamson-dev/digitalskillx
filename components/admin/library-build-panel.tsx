@@ -123,8 +123,11 @@ export function LibraryBuildPanel() {
       <section className="rounded-xl border border-neutral-200 bg-white p-6 shadow-sm">
         <h2 className="text-lg font-semibold">Library Build</h2>
         <p className="mt-2 text-sm text-muted">
-          Library Build tables are not available yet. Apply migration{" "}
-          <code className="rounded bg-neutral-100 px-1">0051_library_build_engine.sql</code> first.
+          Library Build status could not be loaded. If tables already exist, apply the additive column
+          patch{" "}
+          <code className="rounded bg-neutral-100 px-1">sql/patch-0051-library-build-column-gap.sql</code>{" "}
+          (CREATE TABLE IF NOT EXISTS does not add new columns to existing tables). Then reload this
+          page.
         </p>
       </section>
     );

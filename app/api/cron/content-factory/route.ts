@@ -64,8 +64,12 @@ export async function GET(request: NextRequest) {
     );
     libraryBuild = await tickLibraryBuildEngine(admin);
     await tickLibraryBuildMaintenance(admin);
-  } catch {
-    /* library build tables may be missing until migration applied */
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    if (!isMissingRelationError(message)) {
+      console.error("[content-factory-cron] library build tick failed:", message);
+      libraryBuild = { ticked: false, reason: `error:${message.slice(0, 180)}` };
+    }
   }
 
   const { data: failedJobs } = await admin

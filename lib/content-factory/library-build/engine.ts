@@ -315,6 +315,17 @@ export async function startLibraryBuild(admin: Admin, adminId: string) {
     adminId,
     details: { publishedCount, target },
   });
+  // Create the first discovery job in-process so start does not depend solely on async cron kick.
+  try {
+    await tickLibraryBuildEngine(admin, { adminId });
+  } catch (err) {
+    await logLibraryBuildActivity(admin, {
+      kind: "discovery_job_failed",
+      message: "Initial discovery tick failed after start.",
+      adminId,
+      details: { error: err instanceof Error ? err.message : String(err) },
+    });
+  }
   return getLibraryBuildStatus(admin);
 }
 
@@ -349,6 +360,16 @@ export async function resumeLibraryBuild(admin: Admin, adminId: string) {
     .eq("id", "default");
   if (error) throw new Error(error.message);
   await logLibraryBuildActivity(admin, { kind: "resume", message: "Library build resumed.", adminId });
+  try {
+    await tickLibraryBuildEngine(admin, { adminId });
+  } catch (err) {
+    await logLibraryBuildActivity(admin, {
+      kind: "discovery_job_failed",
+      message: "Discovery tick failed after resume.",
+      adminId,
+      details: { error: err instanceof Error ? err.message : String(err) },
+    });
+  }
   return getLibraryBuildStatus(admin);
 }
 
