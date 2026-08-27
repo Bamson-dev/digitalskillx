@@ -273,3 +273,13 @@ alter table public.library_build_discovery_jobs
   add column if not exists sync_fingerprint text;
 alter table public.library_build_discovery_jobs
   add column if not exists synced_at timestamptz;
+
+-- Ensure candidate quality_status check matches canonical statuses used by code.
+alter table public.content_factory_candidates
+  drop constraint if exists content_factory_candidates_quality_status_check;
+alter table public.content_factory_candidates
+  add constraint content_factory_candidates_quality_status_check
+  check (
+    quality_status is null
+    or quality_status in ('pending', 'qualified', 'rejected', 'blocked_duplicate', 'failed')
+  );
