@@ -46,7 +46,7 @@ function isPublic(pathname: string) {
 }
 
 /**
- * Refreshes the Supabase session on every request and enforces coarse
+ * Refreshes the Supabase session on protected requests and enforces coarse
  * route protection. Fine-grained admin role checks happen server-side in
  * the admin layout; RLS is the ultimate source of truth.
  */
@@ -56,6 +56,14 @@ export async function updateSession(request: NextRequest) {
     const url = request.nextUrl.clone();
     url.host = "www.digitalskillx.com";
     return NextResponse.redirect(url, 308);
+  }
+
+  const { pathname } = request.nextUrl;
+
+  // Public pages skip Supabase round-trips — prevents MIDDLEWARE_INVOCATION_TIMEOUT
+  // on /, /learn, marketing pages, etc. Protected routes still refresh the session.
+  if (isPublic(pathname)) {
+    return NextResponse.next({ request });
   }
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -99,9 +107,7 @@ export async function updateSession(request: NextRequest) {
       data: { user },
     } = await supabase.auth.getUser();
 
-    const { pathname } = request.nextUrl;
-
-    if (!user && !isPublic(pathname)) {
+    if (!user) {
       if (pathname.startsWith("/api/")) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
       }
@@ -118,17 +124,13 @@ export async function updateSession(request: NextRequest) {
     return response;
   } catch (err) {
     console.error("[digitalskillx] middleware session refresh failed:", err);
-    const { pathname } = request.nextUrl;
     // Fail closed on protected routes — never skip the auth gate on errors.
-    if (!isPublic(pathname)) {
-      if (pathname.startsWith("/api/")) {
-        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-      }
-      const url = request.nextUrl.clone();
-      url.pathname = pathname.startsWith("/admin") ? "/admin/login" : "/login";
-      url.searchParams.set("next", pathname);
-      return NextResponse.redirect(url);
+    if (pathname.startsWith("/api/")) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
-    return NextResponse.next({ request });
+    const url = request.nextUrl.clone();
+    url.pathname = pathname.startsWith("/admin") ? "/admin/login" : "/login";
+    url.searchParams.set("next", pathname);
+    return NextResponse.redirect(url);
   }
 }
