@@ -279,10 +279,10 @@ check("bulk discovery backlog sizing", () =>
       jobsToday: 2,
       dailyLimit: 12,
     }),
-    2,
+    3,
   ),
 );
-check("multiple topics via pickNextTopics", () => {
+check("category spread in pickNextTopics", () => {
   const rows = [
     {
       id: "1",
@@ -301,7 +301,7 @@ check("multiple topics via pickNextTopics", () => {
       id: "2",
       name: "Python",
       categoryName: "Programming",
-      categorySlug: "prog",
+      categorySlug: "programming",
       approvedCourseCount: 10,
       publishedCourseCount: 10,
       targetCoverage: 8,
@@ -326,9 +326,23 @@ check("multiple topics via pickNextTopics", () => {
   ];
   const picked = shared.pickNextTopics(rows, 200, 2);
   assert.equal(picked.length, 2);
-  assert.equal(picked[0].name, "React");
-  assert.equal(picked[1].name, "SQL");
+  assert.notEqual(picked[0].categorySlug, picked[1].categorySlug);
 });
+check("stall recovery also runs above minimum target", () =>
+  assert.equal(
+    shared.isEngineStalled({
+      runStatus: "running",
+      publishedCount: 350,
+      minimumLibrarySize: 300,
+      lastSuccessfulActivityAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+      stallRecoveryMinutes: 20,
+      activeJobs: 0,
+      pendingCandidates: 0,
+      pipelineQueued: 0,
+    }),
+    true,
+  ),
+);
 check("stall recovery detects idle engine below minimum", () =>
   assert.equal(
     shared.isEngineStalled({

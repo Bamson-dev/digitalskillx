@@ -13,16 +13,16 @@ import {
 } from "@/lib/learn-certificate-pricing";
 
 export const LIBRARY_BUILD_DEFAULT_TARGET = 300;
-export const LIBRARY_BUILD_DEFAULT_DISCOVERY_JOBS_PER_DAY = 12;
+export const LIBRARY_BUILD_DEFAULT_DISCOVERY_JOBS_PER_DAY = 48;
 export const LIBRARY_BUILD_DEFAULT_MAINTENANCE_MAX = 20;
 export const LIBRARY_BUILD_DEFAULT_QUALITY_THRESHOLD = 60;
-export const LIBRARY_BUILD_DEFAULT_DISCOVERY_BACKLOG_TARGET = 4;
-export const LIBRARY_BUILD_DEFAULT_MAX_CONCURRENT_DISCOVERY_JOBS = 3;
-export const LIBRARY_BUILD_DEFAULT_QUALIFICATION_BATCH_SIZE = 3;
+export const LIBRARY_BUILD_DEFAULT_DISCOVERY_BACKLOG_TARGET = 12;
+export const LIBRARY_BUILD_DEFAULT_MAX_CONCURRENT_DISCOVERY_JOBS = 8;
+export const LIBRARY_BUILD_DEFAULT_QUALIFICATION_BATCH_SIZE = 8;
 export const LIBRARY_BUILD_DEFAULT_GENERATION_BATCH_SIZE = 40;
-export const LIBRARY_BUILD_DEFAULT_PUBLICATION_BATCH_SIZE = 6;
-export const LIBRARY_BUILD_DEFAULT_EXPANSION_MAX_PER_DAY = 24;
-export const LIBRARY_BUILD_DEFAULT_STALL_RECOVERY_MINUTES = 45;
+export const LIBRARY_BUILD_DEFAULT_PUBLICATION_BATCH_SIZE = 12;
+export const LIBRARY_BUILD_DEFAULT_EXPANSION_MAX_PER_DAY = 0;
+export const LIBRARY_BUILD_DEFAULT_STALL_RECOVERY_MINUTES = 20;
 export const LIBRARY_BUILD_MAX_RETRIES = 3;
 export const LIBRARY_BUILD_STALE_JOB_MS = 30 * 60 * 1000;
 export const LIBRARY_BUILD_OVERSHOOT_DEFAULT = 0;
@@ -215,11 +215,7 @@ export function shouldContinueAutomatedDiscovery(input: {
   if (input.buildMode === "paused" || input.buildMode === "stopped") return false;
   if (input.buildMode === "bulk" || input.buildMode === "expansion") return true;
   if (input.buildMode === "continuous") {
-    if (input.continuousExpansionEnabled === false) return false;
-    const max = input.expansionMaxPerDay ?? LIBRARY_BUILD_DEFAULT_EXPANSION_MAX_PER_DAY;
-    if (max <= 0) return true;
-    const used = input.publishedToday ?? 0;
-    return used < max;
+    return input.continuousExpansionEnabled !== false;
   }
   if (input.buildMode === "maintenance") {
     const max = input.maintenanceMaxPerWeek ?? LIBRARY_BUILD_DEFAULT_MAINTENANCE_MAX;
@@ -236,7 +232,8 @@ export function discoveryJobsToCreate(input: {
   jobsToday: number;
   dailyLimit: number;
 }): number {
-  const slots = Math.max(0, Math.min(input.maxConcurrent, input.backlogTarget) - input.openJobs);
+  const headroom = Math.max(input.backlogTarget, input.maxConcurrent);
+  const slots = Math.max(0, headroom - input.openJobs);
   if (slots <= 0) return 0;
   const dailyRemaining = Math.max(0, Math.max(1, input.dailyLimit) - input.jobsToday);
   return Math.min(slots, dailyRemaining);
@@ -254,7 +251,6 @@ export function isEngineStalled(input: {
   nowMs?: number;
 }): boolean {
   if (input.runStatus !== "running") return false;
-  if (hasReachedMinimumLibrarySize(input.publishedCount, input.minimumLibrarySize)) return false;
   if (input.activeJobs > 0 || input.pendingCandidates > 0 || input.pipelineQueued > 0) return false;
   const minutes = input.stallRecoveryMinutes ?? LIBRARY_BUILD_DEFAULT_STALL_RECOVERY_MINUTES;
   if (!input.lastSuccessfulActivityAt) return true;
@@ -300,15 +296,58 @@ export function pickNextTopics(
 ): TopicCoverageRow[] {
   const active = rows.filter((row) => row.active && !excludeTopicIds.has(row.id));
   if (!active.length || count <= 0) return [];
-  const sorted = [...active].sort(
-    (a, b) =>
-      topicDiscoveryPriorityScore(b, remainingToLibraryTarget) -
-        topicDiscoveryPriorityScore(a, remainingToLibraryTarget) ||
-      a.approvedCourseCount - b.approvedCourseCount ||
-      a.publishedCourseCount - b.publishedCourseCount ||
-      a.name.localeCompare(b.name),
-  );
-  return sorted.slice(0, count);
+
+  const score = (row: TopicCoverageRow) => topicDiscoveryPriorityScore(row, remainingToLibraryTarget);
+  const byCategory = new Map<string, TopicCoverageRow[]>();
+  for (const row of active) {
+    const key = row.categorySlug || row.categoryName;
+    const list = byCategory.get(key) ?? [];
+    list.push(row);
+    byCategory.set(key, list);
+  }
+  for (const list of byCategory.values()) {
+    list.sort(
+      (a, b) =>
+        score(b) - score(a) ||
+        a.approvedCourseCount - b.approvedCourseCount ||
+        a.publishedCourseCount - b.publishedCourseCount ||
+        a.name.localeCompare(b.name),
+    );
+  }
+
+  const picked: TopicCoverageRow[] = [];
+  const used = new Set<string>();
+  const categories = [...byCategory.keys()].sort();
+  while (picked.length < count) {
+    let added = false;
+    for (const category of categories) {
+      if (picked.length >= count) break;
+      const next = byCategory.get(category)?.find((row) => !used.has(row.id));
+      if (!next) continue;
+      picked.push(next);
+      used.add(next.id);
+      added = true;
+    }
+    if (!added) break;
+  }
+
+  if (picked.length < count) {
+    const sorted = [...active]
+      .filter((row) => !used.has(row.id))
+      .sort(
+        (a, b) =>
+          score(b) - score(a) ||
+          a.approvedCourseCount - b.approvedCourseCount ||
+          a.publishedCourseCount - b.publishedCourseCount ||
+          a.name.localeCompare(b.name),
+      );
+    for (const row of sorted) {
+      if (picked.length >= count) break;
+      picked.push(row);
+    }
+  }
+
+  return picked;
 }
 
 export function discoveryQueriesForTopic(
@@ -604,7 +643,10 @@ export function settingsSnapshotFromRow(row: {
     qualificationBatchSize: row.qualification_batch_size ?? LIBRARY_BUILD_DEFAULT_QUALIFICATION_BATCH_SIZE,
     generationBatchSize: row.generation_batch_size ?? LIBRARY_BUILD_DEFAULT_GENERATION_BATCH_SIZE,
     publicationBatchSize: row.publication_batch_size ?? LIBRARY_BUILD_DEFAULT_PUBLICATION_BATCH_SIZE,
-    expansionMaxPerDay: row.expansion_max_per_day ?? LIBRARY_BUILD_DEFAULT_EXPANSION_MAX_PER_DAY,
+    expansionMaxPerDay:
+      row.expansion_max_per_day != null && row.expansion_max_per_day > 0
+        ? row.expansion_max_per_day
+        : LIBRARY_BUILD_DEFAULT_EXPANSION_MAX_PER_DAY,
     stallRecoveryMinutes: row.stall_recovery_minutes ?? LIBRARY_BUILD_DEFAULT_STALL_RECOVERY_MINUTES,
   };
 }

@@ -23,7 +23,7 @@ type Admin = SupabaseClient<Database>;
 export type LibraryBuildThroughputResult = {
   synced: boolean;
   qualification: { runs: number; qualified: number };
-  discovery: { processed: boolean; reason?: string };
+  discovery: { processed: number; reason?: string };
   discoveryBacklog: { created: number; reasons: string[] };
   generation: { created: number; skipped: number };
   publication: { published: number; skipped: number };
@@ -42,7 +42,7 @@ export async function runLibraryBuildThroughputTick(
   const empty: LibraryBuildThroughputResult = {
     synced: false,
     qualification: { runs: 0, qualified: 0 },
-    discovery: { processed: false },
+    discovery: { processed: 0 },
     discoveryBacklog: { created: 0, reasons: [] },
     generation: { created: 0, skipped: 0 },
     publication: { published: 0, skipped: 0 },
@@ -62,15 +62,11 @@ export async function runLibraryBuildThroughputTick(
   }
   if (!settings) return empty;
 
-  // A. Sync all existing discovery jobs + refresh coverage.
   await tickLibraryBuildMaintenance(admin);
   empty.synced = true;
 
-  // B. Qualify pending candidates in batches.
-  const qualification = await processPendingQualificationBatches(
-    admin,
-    settings.qualificationBatchSize,
-  );
+  const qualifyCap = Math.max(settings.qualificationBatchSize * 2, 12);
+  let qualification = await processPendingQualificationBatches(admin, qualifyCap);
   empty.qualification = {
     runs: qualification.runs,
     qualified: qualification.qualified,
@@ -79,48 +75,57 @@ export async function runLibraryBuildThroughputTick(
     await recordLibraryBuildActivity(admin, "qualification_batch");
   }
 
-  // C. Generate qualified candidates.
-  let generation = await autoGenerateQualifiedCandidates(admin, {
-    limit: settings.generationBatchSize,
-  });
-  if (qualification.qualified > 0 && generation.created === 0) {
-    generation = await autoGenerateQualifiedCandidates(admin, {
+  let generation = { created: 0, skipped: 0, runIds: [] as string[] };
+  for (let pass = 0; pass < 3; pass += 1) {
+    const batch = await autoGenerateQualifiedCandidates(admin, {
       limit: settings.generationBatchSize,
     });
+    generation.created += batch.created;
+    generation.skipped += batch.skipped;
+    if (!batch.created) break;
   }
   empty.generation = { created: generation.created, skipped: generation.skipped };
   if (generation.created > 0) {
     await recordLibraryBuildActivity(admin, "generation_batch");
   }
 
-  // D/E. Artwork backfill then publish verified paths.
-  const artworkBackfill = await backfillMissingLearningPathArtwork(admin, 8);
+  const artworkBackfill = await backfillMissingLearningPathArtwork(admin, 16);
   empty.artworkBackfill = { updated: artworkBackfill.updated };
 
-  const publication = await autoPublishReadyLearningPaths(admin, settings.publicationBatchSize);
+  let publication = { published: 0, skipped: 0, errors: [] as string[] };
+  for (let pass = 0; pass < 3; pass += 1) {
+    const batch = await autoPublishReadyLearningPaths(admin, settings.publicationBatchSize);
+    publication.published += batch.published;
+    publication.skipped += batch.skipped;
+    publication.errors.push(...batch.errors);
+    if (!batch.published) break;
+  }
   empty.publication = { published: publication.published, skipped: publication.skipped };
   if (publication.published > 0) {
     await recordLibraryBuildActivity(admin, "publication_batch");
   }
 
-  // Process one queued discovery run (YouTube search) — quota may block here only.
-  let discovery: { processed: boolean; reason?: string } = { processed: false };
-  try {
-    const run = await processQueuedDiscoveryRun(admin);
-    discovery = {
-      processed: Boolean(run && "processed" in run && run.processed),
-      reason: run && "reason" in run ? String(run.reason ?? "") : undefined,
-    };
-    if (discovery.processed) {
-      await recordLibraryBuildActivity(admin, "discovery_run");
+  let discoveryProcessed = 0;
+  let discoveryReason: string | undefined;
+  const discoveryPasses = Math.max(2, Math.min(settings.maxConcurrentDiscoveryJobs, 6));
+  for (let i = 0; i < discoveryPasses; i += 1) {
+    try {
+      const run = await processQueuedDiscoveryRun(admin);
+      if (run && "processed" in run && run.processed) {
+        discoveryProcessed += 1;
+        await recordLibraryBuildActivity(admin, "discovery_run");
+      } else if (run && "reason" in run && run.reason) {
+        discoveryReason = String(run.reason);
+        if (run.reason === "idle") break;
+      }
+    } catch (err) {
+      discoveryReason = err instanceof Error ? err.message : String(err);
+      break;
     }
-  } catch (err) {
-    discovery = { processed: false, reason: err instanceof Error ? err.message : String(err) };
   }
-  empty.discovery = discovery;
+  empty.discovery = { processed: discoveryProcessed, reason: discoveryReason };
 
-  // Second qualify pass after discovery may have added candidates.
-  const qualificationAfter = await processPendingQualificationBatches(admin, settings.qualificationBatchSize);
+  const qualificationAfter = await processPendingQualificationBatches(admin, qualifyCap);
   empty.qualification.runs += qualificationAfter.runs;
   empty.qualification.qualified += qualificationAfter.qualified;
   if (qualificationAfter.qualified > 0) {
@@ -128,7 +133,6 @@ export async function runLibraryBuildThroughputTick(
     await recordLibraryBuildActivity(admin, "qualification_batch");
   }
 
-  // Extra generate/publish pass for backlog drain.
   const extraGen = await autoGenerateQualifiedCandidates(admin, { limit: settings.generationBatchSize });
   empty.generation.created += extraGen.created;
   empty.generation.skipped += extraGen.skipped;
@@ -136,11 +140,9 @@ export async function runLibraryBuildThroughputTick(
   empty.publication.published += extraPub.published;
   empty.publication.skipped += extraPub.skipped;
 
-  // G. Fill discovery backlog when running and capacity allows.
   const backlog = await fillDiscoveryBacklog(admin);
   empty.discoveryBacklog = { created: backlog.created, reasons: backlog.reasons };
 
-  // H. Stall recovery when engine is running but idle below minimum.
   const stallRecovery = await attemptStallRecovery(admin);
   empty.stallRecovery = stallRecovery;
 
@@ -148,7 +150,7 @@ export async function runLibraryBuildThroughputTick(
     empty.qualification.qualified > 0 ||
     empty.generation.created > 0 ||
     empty.publication.published > 0 ||
-    empty.discovery.processed ||
+    empty.discovery.processed > 0 ||
     empty.discoveryBacklog.created > 0 ||
     empty.artworkBackfill.updated > 0;
 

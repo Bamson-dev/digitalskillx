@@ -28,6 +28,7 @@ import {
   shouldContinueAutomatedDiscovery,
   statsDayKey,
   LIBRARY_BUILD_DEFAULT_DISCOVERY_BACKLOG_TARGET,
+  LIBRARY_BUILD_DEFAULT_DISCOVERY_JOBS_PER_DAY,
   LIBRARY_BUILD_DEFAULT_EXPANSION_MAX_PER_DAY,
   LIBRARY_BUILD_DEFAULT_GENERATION_BATCH_SIZE,
   LIBRARY_BUILD_DEFAULT_MAX_CONCURRENT_DISCOVERY_JOBS,
@@ -300,9 +301,16 @@ export async function getLibraryBuildThroughputSettings(admin: Admin) {
   const snap = settingsSnapshotFromRow(settings);
   return {
     ...snap,
-    qualificationBatchSize: snap.qualificationBatchSize,
-    generationBatchSize: snap.generationBatchSize,
-    publicationBatchSize: snap.publicationBatchSize,
+    discoveryJobsPerDay: Math.max(snap.discoveryJobsPerDay, LIBRARY_BUILD_DEFAULT_DISCOVERY_JOBS_PER_DAY),
+    discoveryBacklogTarget: Math.max(snap.discoveryBacklogTarget, LIBRARY_BUILD_DEFAULT_DISCOVERY_BACKLOG_TARGET),
+    maxConcurrentDiscoveryJobs: Math.max(
+      snap.maxConcurrentDiscoveryJobs,
+      LIBRARY_BUILD_DEFAULT_MAX_CONCURRENT_DISCOVERY_JOBS,
+    ),
+    qualificationBatchSize: Math.max(snap.qualificationBatchSize, LIBRARY_BUILD_DEFAULT_QUALIFICATION_BATCH_SIZE),
+    generationBatchSize: Math.max(snap.generationBatchSize, LIBRARY_BUILD_DEFAULT_GENERATION_BATCH_SIZE),
+    publicationBatchSize: Math.max(snap.publicationBatchSize, LIBRARY_BUILD_DEFAULT_PUBLICATION_BATCH_SIZE),
+    stallRecoveryMinutes: Math.min(snap.stallRecoveryMinutes, LIBRARY_BUILD_DEFAULT_STALL_RECOVERY_MINUTES),
   };
 }
 
@@ -954,10 +962,6 @@ export async function attemptStallRecovery(
 
   const publishedCount = await countPublishedLibraryCourses(admin);
   const target = settings.target_published_count ?? 300;
-  if (hasReachedMinimumLibrarySize(publishedCount, target)) {
-    return { attempted: false, reason: "minimum_reached" };
-  }
-
   const pipeline = await getPipelineQueueCounts(admin);
   const activeJobs = pipeline.discoveryBacklog + pipeline.generating;
   const stalled = isEngineStalled({
@@ -975,7 +979,7 @@ export async function attemptStallRecovery(
 
   await logLibraryBuildActivity(admin, {
     kind: "stall_recovery",
-    message: `Engine stalled below minimum (${publishedCount}/${target}); creating discovery work.`,
+    message: `Engine stalled (${publishedCount}/${target}); creating discovery work.`,
     details: { publishedCount, target, pipeline },
   });
 

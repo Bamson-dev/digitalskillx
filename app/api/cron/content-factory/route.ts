@@ -169,7 +169,15 @@ export async function POST(request: NextRequest) {
     };
   }
 
-  const { data: claimed, error } = await admin.rpc("claim_content_factory_jobs", { p_limit: 1 });
+  const factoryJobLimit = libraryThroughput?.discoveryBacklog.created
+    ? 8
+    : (libraryThroughput?.qualification.qualified ?? 0) > 0 ||
+        (libraryThroughput?.generation.created ?? 0) > 0
+      ? 6
+      : 4;
+  const { data: claimed, error } = await admin.rpc("claim_content_factory_jobs", {
+    p_limit: factoryJobLimit,
+  });
   if (error) {
     if (isMissingRelationError(error.message)) {
       return NextResponse.json({
@@ -188,8 +196,7 @@ export async function POST(request: NextRequest) {
     generated?: boolean;
   } = { processed: 0 };
 
-  if (jobs.length) {
-    const job = jobs[0]!;
+  for (const job of jobs) {
     await processContentFactoryJob(admin, job.id);
     await syncCandidatesForJob(admin, job.id);
     const { data: processed } = await admin
@@ -199,7 +206,7 @@ export async function POST(request: NextRequest) {
       .maybeSingle();
     if (processed?.status === "waiting_review") {
       const { autoPublishReadyLearningPaths } = await import("@/lib/content-factory/auto-pipeline");
-      const extraPub = await autoPublishReadyLearningPaths(admin, 3);
+      const extraPub = await autoPublishReadyLearningPaths(admin, 6);
       autoPublish = {
         published: autoPublish.published + extraPub.published,
         skipped: autoPublish.skipped + extraPub.skipped,
@@ -207,10 +214,13 @@ export async function POST(request: NextRequest) {
       };
     }
     jobProcessed = {
-      processed: 1,
+      processed: jobProcessed.processed + 1,
       jobId: job.id,
       job: processed,
-      generated: processed?.status === "waiting_review" || processed?.status === "completed",
+      generated:
+        jobProcessed.generated ||
+        processed?.status === "waiting_review" ||
+        processed?.status === "completed",
     };
   }
 
@@ -219,7 +229,7 @@ export async function POST(request: NextRequest) {
     Boolean(libraryBuild.ticked) ||
     Boolean(libraryThroughput?.stallRecovery.attempted) ||
     autoGenerate.created > 0 ||
-    Boolean(discovery && "processed" in discovery && discovery.processed) ||
+    Boolean((libraryThroughput?.discovery.processed ?? 0) > 0) ||
     jobProcessed.processed > 0 ||
     Boolean(qualification && "processed" in qualification && qualification.processed) ||
     (libraryThroughput?.publication.published ?? 0) > 0;
@@ -249,7 +259,7 @@ export async function POST(request: NextRequest) {
     counters: {
       jobsProcessed: jobProcessed.processed,
       jobsFailed: 0,
-      discoveryRunsProcessed: discovery && "processed" in discovery && discovery.processed ? 1 : 0,
+      discoveryRunsProcessed: libraryThroughput?.discovery.processed ?? 0,
       candidatesQualified:
         qualification && "qualified_count" in qualification
           ? Number(qualification.qualified_count ?? 0)
