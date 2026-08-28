@@ -93,20 +93,23 @@ export async function POST(request: NextRequest) {
         break;
       case "tick":
         {
-          const { tickLibraryBuildEngine, tickLibraryBuildMaintenance, getLibraryBuildStatus: refresh } =
-            await import("@/lib/content-factory/library-build/engine");
-          const tick = await tickLibraryBuildEngine(auth.admin, { adminId: auth.user.id });
-          await tickLibraryBuildMaintenance(auth.admin);
+          const { runLibraryBuildThroughputTick } = await import(
+            "@/lib/content-factory/library-build/throughput-pipeline"
+          );
+          const { getLibraryBuildStatus: refresh } = await import(
+            "@/lib/content-factory/library-build/engine"
+          );
+          const tick = await runLibraryBuildThroughputTick(auth.admin);
           status = await refresh(auth.admin);
           await logAudit({
             action: "library_build_tick",
             targetType: "library_build_settings",
             targetId: "default",
-            metadata: { ticked: tick.ticked, reason: tick.reason ?? null, jobId: tick.jobId ?? null } as Json,
+            metadata: {
+              throughput: tick as Json,
+            },
           });
-          // Always kick cron while running so qualify/generate/publish continue even when
-          // a new discovery job cannot be created (YouTube daily cap / backlog).
-          if (status?.runStatus === "running" || tick.ticked) kickCron();
+          if (status?.runStatus === "running" || (tick.discoveryBacklog.created ?? 0) > 0) kickCron();
           return NextResponse.json({ ok: true, status, tick });
         }
       case "stop":
@@ -122,6 +125,8 @@ export async function POST(request: NextRequest) {
             body.discoveryJobsPerDay != null ? Number(body.discoveryJobsPerDay) : undefined,
           maintenanceMaxPerWeek:
             body.maintenanceMaxPerWeek != null ? Number(body.maintenanceMaxPerWeek) : undefined,
+          discoveryBacklogTarget:
+            body.discoveryBacklogTarget != null ? Number(body.discoveryBacklogTarget) : undefined,
         });
         await logAudit({
           action: "library_build_settings_update",

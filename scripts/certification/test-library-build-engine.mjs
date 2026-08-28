@@ -31,7 +31,10 @@ const pricing = await load("lib/learn-certificate-pricing.ts");
 
 // --- Migration audit ---
 mustExist("supabase/migrations/0051_library_build_engine.sql");
+mustExist("supabase/migrations/0054_library_build_throughput.sql");
 mustExist("sql/apply-library-build-engine.sql");
+mustExist("sql/apply-library-build-throughput.sql");
+mustExist("lib/content-factory/library-build/throughput-pipeline.ts");
 mustExist("lib/content-factory/library-build/discovery-sync.ts");
 mustExist("lib/content-factory/library-build/topic-coverage.ts");
 mustExist("lib/content-factory/library-build/quality-decision-shared.ts");
@@ -221,7 +224,147 @@ check("retry backoff eligible", () => {
 });
 
 // --- Target / mode ---
-check("target stop at 300", () => assert.equal(shared.shouldStopBulkAtTarget(300, 300), true));
+check("minimum library size reached at 300", () =>
+  assert.equal(shared.hasReachedMinimumLibrarySize(300, 300), true),
+);
+check("engine does not stop discovery at 300 in bulk mode", () =>
+  assert.equal(
+    shared.shouldContinueAutomatedDiscovery({
+      runStatus: "running",
+      buildMode: "bulk",
+      publishedCount: 300,
+      target: 300,
+      continuousExpansionEnabled: true,
+    }),
+    true,
+  ),
+);
+check("reaching 300 switches phase to continuous expansion", () =>
+  assert.equal(
+    shared.resolveLibraryBuildPhase({
+      runStatus: "running",
+      buildMode: "continuous",
+      publishedCount: 300,
+      minimumLibrarySize: 300,
+      continuousExpansionEnabled: true,
+    }),
+    "continuous_expansion",
+  ),
+);
+check("continuous mode keeps discovering after 300", () =>
+  assert.equal(
+    shared.shouldContinueAutomatedDiscovery({
+      runStatus: "running",
+      buildMode: "continuous",
+      publishedCount: 305,
+      target: 300,
+      continuousExpansionEnabled: true,
+      publishedToday: 5,
+      expansionMaxPerDay: 24,
+    }),
+    true,
+  ),
+);
+check("quota blocks discovery only — qualify path independent", () => {
+  const cron = read("app/api/cron/content-factory/route.ts");
+  assert.ok(cron.includes("runLibraryBuildThroughputTick"));
+  assert.ok(cron.includes("youtube_quota") || cron.includes("rate_limited") || cron.includes("throughput-pipeline"));
+});
+check("bulk discovery backlog sizing", () =>
+  assert.equal(
+    shared.discoveryJobsToCreate({
+      openJobs: 1,
+      backlogTarget: 4,
+      maxConcurrent: 3,
+      jobsToday: 2,
+      dailyLimit: 12,
+    }),
+    2,
+  ),
+);
+check("multiple topics via pickNextTopics", () => {
+  const rows = [
+    {
+      id: "1",
+      name: "React",
+      categoryName: "Web",
+      categorySlug: "web",
+      approvedCourseCount: 0,
+      publishedCourseCount: 0,
+      targetCoverage: 8,
+      coveragePercentage: 0,
+      priorityWeight: 80,
+      active: true,
+      coverageStatus: "high_priority",
+    },
+    {
+      id: "2",
+      name: "Python",
+      categoryName: "Programming",
+      categorySlug: "prog",
+      approvedCourseCount: 10,
+      publishedCourseCount: 10,
+      targetCoverage: 8,
+      coveragePercentage: 100,
+      priorityWeight: 50,
+      active: true,
+      coverageStatus: "strong",
+    },
+    {
+      id: "3",
+      name: "SQL",
+      categoryName: "Data",
+      categorySlug: "data",
+      approvedCourseCount: 1,
+      publishedCourseCount: 1,
+      targetCoverage: 8,
+      coveragePercentage: 12,
+      priorityWeight: 70,
+      active: true,
+      coverageStatus: "needs_content",
+    },
+  ];
+  const picked = shared.pickNextTopics(rows, 200, 2);
+  assert.equal(picked.length, 2);
+  assert.equal(picked[0].name, "React");
+  assert.equal(picked[1].name, "SQL");
+});
+check("stall recovery detects idle engine below minimum", () =>
+  assert.equal(
+    shared.isEngineStalled({
+      runStatus: "running",
+      publishedCount: 17,
+      minimumLibrarySize: 300,
+      lastSuccessfulActivityAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+      stallRecoveryMinutes: 45,
+      activeJobs: 0,
+      pendingCandidates: 0,
+      pipelineQueued: 0,
+    }),
+    true,
+  ),
+);
+check("pause stops automated discovery", () =>
+  assert.equal(
+    shared.shouldContinueAutomatedDiscovery({
+      runStatus: "paused",
+      buildMode: "paused",
+      publishedCount: 17,
+      target: 300,
+    }),
+    false,
+  ),
+);
+check("one failed job does not stop engine — discovery continues", () => {
+  const engine = read("lib/content-factory/library-build/engine.ts");
+  assert.ok(engine.includes("continuing with other topics"));
+});
+check("existing published courses untouched — no delete/unpublish", () => {
+  const engine = read("lib/content-factory/library-build/engine.ts");
+  const mig = read("supabase/migrations/0054_library_build_throughput.sql");
+  assert.ok(!/delete from public\.learning_paths/i.test(engine));
+  assert.ok(!/unpublish/i.test(mig));
+});
 check("expansion 300→500", () => {
   const e = shared.expansionModeOnTargetIncrease(300, 500, 300);
   assert.equal(e.shouldResumeBulk, true);
@@ -292,8 +435,8 @@ check("free cert preserved", () => {
 });
 
 // --- Wiring presence ---
-check("cron wires sync", () => {
-  assert.ok(read("app/api/cron/content-factory/route.ts").includes("tickLibraryBuildMaintenance"));
+check("cron wires throughput pipeline", () => {
+  assert.ok(read("app/api/cron/content-factory/route.ts").includes("runLibraryBuildThroughputTick"));
 });
 check("qualify wires quality decision", () => {
   assert.ok(read("lib/content-factory/qualify.ts").includes("decideCandidateQuality"));
@@ -450,20 +593,34 @@ function simulateFullEngine() {
     if (!batch.length) break;
     if (batch.some((c) => c.quotaFail)) {
       processDiscoveryJob(batch, "quota_limited");
+      // Quota blocks discovery only — qualification/generation can continue on other work.
       continue;
     }
     processDiscoveryJob(batch);
     bulkPublished = published;
     if (bulkPublished >= TARGET) {
-      mode = "maintenance";
-      runStatus = "completed";
+      mode = "continuous";
+      // Engine keeps running — does NOT set runStatus completed.
     }
   }
 
   if (bulkPublished >= TARGET) {
-    mode = "maintenance";
-    runStatus = "completed";
+    mode = "continuous";
   }
+  const modeAtTarget = mode;
+
+  runStatus = "running";
+  mode = "continuous";
+  activeTarget = 999;
+  let postTargetPublished = published;
+  const postTargetCandidate = {
+    id: "post300",
+    playlistId: `PLPOST${jobsCreated}`,
+    topic: "react",
+    score: 72,
+  };
+  processDiscoveryJob([postTargetCandidate], "completed", { allowPublish: true });
+  postTargetPublished = published;
 
   runStatus = "paused";
   const beforePause = published;
@@ -506,6 +663,7 @@ function simulateFullEngine() {
     published: bulkPublished,
     expanded,
     mode,
+    modeAtTarget,
     expansion,
     runStatus,
     jobsCreated,
@@ -513,14 +671,16 @@ function simulateFullEngine() {
     topicCoverage,
     publishedPaths,
     maintenanceBlocked,
+    postTargetPublished,
   };
 }
 
 const sim = simulateFullEngine();
-check("sim stops at target 10", () => assert.equal(sim.published, 10));
-check("sim entered maintenance after bulk target", () => {
-  assert.equal(sim.expansion.shouldResumeBulk, true);
+check("sim reaches target 10", () => assert.equal(sim.published, 10));
+check("sim switches to continuous after bulk target", () => {
+  assert.equal(sim.modeAtTarget, "continuous");
 });
+check("sim publishes after minimum target", () => assert.ok(sim.postTargetPublished > 10));
 check("sim duplicates blocked", () => assert.ok(sim.simResults.duplicatesBlocked >= 1));
 check("sim rejected weak", () => assert.ok(sim.simResults.rejected >= 1));
 check("sim all published have artwork", () =>

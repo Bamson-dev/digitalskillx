@@ -176,7 +176,9 @@ function generateCertificateNumber() {
   assert.match(cover, /onError/);
   assert.match(cover, /linear-gradient/);
   const learnPage = read("app/(marketplace)/learn/page.tsx");
-  assert.match(learnPage, /LearnCover/);
+  const pathCard = read("components/learn/learn-path-card.tsx");
+  assert.match(pathCard, /LearnCover/);
+  assert.match(learnPage, /LearnPathCard/);
   assert.doesNotMatch(learnPage, /flex h-full items-center justify-center[\s\S]*Free learning path/);
   ok("Learn cards use LearnCover with designed fallback (no empty gray text box)");
 }
@@ -387,7 +389,7 @@ function generateCertificateNumber() {
   const backfill = read("lib/content-factory/artwork-backfill.ts");
   assert.match(backfill, /skipIfHasValidCover|hasUsable|category_fallback|source_thumbnail/);
   const cron = read("app/api/cron/content-factory/route.ts");
-  assert.match(cron, /backfillMissingLearningPathArtwork/);
+  assert.match(cron, /backfillMissingLearningPathArtwork|runLibraryBuildThroughputTick/);
   assert.match(cron, /backfillLearningPathCertificatePricing/);
   ok("backfill artwork + pricing wired; fixed/free preserve logic present");
 }

@@ -5,6 +5,17 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/components/ui/toast";
 
+type PipelineCounts = {
+  totalCandidatesQueued: number;
+  pendingQualification: number;
+  qualifiedCandidates: number;
+  generating: number;
+  awaitingVerification: number;
+  readyToPublish: number;
+  discoveryBacklog: number;
+  activeTopics: number;
+};
+
 type LibraryBuildStatus = {
   publishedCount: number;
   target: number;
@@ -13,8 +24,15 @@ type LibraryBuildStatus = {
   buildMode: string;
   runStatus: string;
   effectiveMode: string;
+  phase: string;
+  minimumLibrarySize: number;
+  continuousExpansionEnabled: boolean;
   nextTopic: { id: string; name: string; categoryName: string } | null;
+  activeTopics?: Array<{ id: string; name: string; categoryName: string }>;
   lastJob: { id: string; status: string; completedAt: string | null } | null;
+  lastSuccessfulActivity?: string | null;
+  lastError?: string | null;
+  pipeline?: PipelineCounts;
   stats: {
     candidatesToday: number;
     approvedToday: number;
@@ -43,6 +61,23 @@ type LibraryBuildStatus = {
 
 type ActivityRow = { id: string; kind: string; message: string; created_at: string };
 
+function phaseLabel(phase: string) {
+  switch (phase) {
+    case "build":
+      return "Build mode";
+    case "continuous_expansion":
+      return "Continuous expansion";
+    case "maintenance":
+      return "Maintenance";
+    case "paused":
+      return "Paused";
+    case "stopped":
+      return "Stopped";
+    default:
+      return phase;
+  }
+}
+
 export function LibraryBuildPanel() {
   const { toast } = useToast();
   const [loading, setLoading] = useState(true);
@@ -52,7 +87,7 @@ export function LibraryBuildPanel() {
   const [target, setTarget] = useState("300");
   const [discoveryRate, setDiscoveryRate] = useState("12");
   const [qualityThreshold, setQualityThreshold] = useState("60");
-  const [maintenanceMax, setMaintenanceMax] = useState("20");
+  const [backlogTarget, setBacklogTarget] = useState("4");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -63,11 +98,11 @@ export function LibraryBuildPanel() {
       setStatus(json.status ?? null);
       setActivity(json.activity ?? []);
       if (json.status) {
-        setTarget(String(json.status.target ?? 300));
+        setTarget(String(json.status.minimumLibrarySize ?? json.status.target ?? 300));
         const s = json.status.settings ?? {};
         setDiscoveryRate(String(s.discovery_jobs_per_day ?? 12));
         setQualityThreshold(String(s.quality_threshold ?? 60));
-        setMaintenanceMax(String(s.maintenance_max_per_week ?? 20));
+        setBacklogTarget(String(s.discovery_backlog_target ?? 4));
       }
     } catch (err) {
       toast(err instanceof Error ? err.message : "Load failed", "error");
@@ -91,7 +126,7 @@ export function LibraryBuildPanel() {
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Action failed");
       setStatus(json.status ?? null);
-      toast("Library build status refreshed.");
+      toast("Library build updated.");
       await load();
     } catch (err) {
       toast(err instanceof Error ? err.message : "Action failed", "error");
@@ -105,14 +140,14 @@ export function LibraryBuildPanel() {
       targetPublishedCount: Number(target),
       discoveryJobsPerDay: Number(discoveryRate),
       qualityThreshold: Number(qualityThreshold),
-      maintenanceMaxPerWeek: Number(maintenanceMax),
+      discoveryBacklogTarget: Number(backlogTarget),
     });
   }
 
   if (loading && !status) {
     return (
       <section className="rounded-xl border border-neutral-200 bg-white p-6 shadow-sm">
-        <h2 className="text-lg font-semibold">Library Build</h2>
+        <h2 className="text-lg font-semibold">Library Build Engine</h2>
         <p className="mt-2 text-sm text-muted">Loading automated library build engine…</p>
       </section>
     );
@@ -121,13 +156,11 @@ export function LibraryBuildPanel() {
   if (!status) {
     return (
       <section className="rounded-xl border border-neutral-200 bg-white p-6 shadow-sm">
-        <h2 className="text-lg font-semibold">Library Build</h2>
+        <h2 className="text-lg font-semibold">Library Build Engine</h2>
         <p className="mt-2 text-sm text-muted">
-          Library Build status could not be loaded. If tables already exist, apply the additive column
-          patch{" "}
-          <code className="rounded bg-neutral-100 px-1">sql/patch-0051-library-build-column-gap.sql</code>{" "}
-          (CREATE TABLE IF NOT EXISTS does not add new columns to existing tables). Then reload this
-          page.
+          Library Build status could not be loaded. Apply migration{" "}
+          <code className="rounded bg-neutral-100 px-1">0054_library_build_throughput.sql</code> if
+          throughput settings are missing, then reload.
         </p>
       </section>
     );
@@ -135,58 +168,85 @@ export function LibraryBuildPanel() {
 
   const running = status.runStatus === "running";
   const paused = status.runStatus === "paused";
+  const pipeline = status.pipeline;
 
   return (
     <section className="space-y-6 rounded-xl border border-neutral-200 bg-white p-6 shadow-sm">
       <div>
-        <h2 className="text-lg font-semibold">Library Build</h2>
+        <h2 className="text-lg font-semibold">Library Build Engine</h2>
         <p className="mt-1 text-sm text-muted">
-          Automated discovery → quality verification → course creation → publishing until your target is
-          reached, then weekly gap-based maintenance.
+          Autonomous high-throughput ingestion: discover → qualify → generate → verify → publish.
+          Runs until you pause or stop. Minimum target is a floor, not a stop signal.
         </p>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
-        <Stat label="Published" value={`${status.publishedCount} / ${status.target}`} />
-        <Stat label="Remaining" value={String(status.remaining)} />
-        <Stat label="Progress" value={`${status.progressPercentage ?? 0}%`} />
-        <Stat label="Mode" value={status.effectiveMode} />
-        <Stat label="Status" value={status.runStatus} />
+        <Stat label="Published courses" value={`${status.publishedCount} / ${status.minimumLibrarySize}`} />
+        <Stat label="Remaining to minimum" value={String(status.remaining)} />
+        <Stat label="Current mode" value={phaseLabel(status.phase)} />
+        <Stat label="Engine status" value={status.runStatus} />
+        <Stat label="Discovery backlog" value={String(pipeline?.discoveryBacklog ?? 0)} />
       </div>
 
       {status.nextTopic ? (
         <p className="text-sm">
-          <span className="font-medium">Next priority:</span> {status.nextTopic.categoryName} →{" "}
+          <span className="font-medium">Top priority topic:</span> {status.nextTopic.categoryName} →{" "}
           {status.nextTopic.name}
+          {status.activeTopics && status.activeTopics.length > 1 ? (
+            <span className="text-muted">
+              {" "}
+              (+{status.activeTopics.length - 1} concurrent topic
+              {status.activeTopics.length - 1 === 1 ? "" : "s"})
+            </span>
+          ) : null}
         </p>
       ) : null}
 
-      <div className="grid gap-3 sm:grid-cols-4 lg:grid-cols-7">
-        <Stat label="Candidates today" value={String(status.stats.candidatesToday)} small />
-        <Stat label="Approved today" value={String(status.stats.approvedToday)} small />
-        <Stat label="Published today" value={String(status.stats.publishedToday)} small />
-        <Stat label="Rejected today" value={String(status.stats.rejectedToday)} small />
-        <Stat label="Jobs started" value={String(status.stats.jobsStartedToday ?? 0)} small />
-        <Stat label="Jobs completed" value={String(status.stats.jobsCompletedToday ?? 0)} small />
-        <Stat label="Jobs failed" value={String(status.stats.jobsFailedToday ?? 0)} small />
-      </div>
-
-      {status.overall ? (
-        <div className="grid gap-3 sm:grid-cols-4">
-          <Stat label="Duplicates blocked" value={String(status.overall.duplicatesBlocked)} small />
-          <Stat label="Rejected candidates" value={String(status.overall.rejectedCandidates)} small />
-          <Stat label="Failed jobs (total)" value={String(status.overall.failedJobs)} small />
-          <Stat label="Active jobs" value={String(status.overall.activeJobs)} small />
+      {pipeline ? (
+        <div className="grid gap-3 sm:grid-cols-4 lg:grid-cols-8">
+          <Stat label="Queued total" value={String(pipeline.totalCandidatesQueued)} small />
+          <Stat label="Pending qualification" value={String(pipeline.pendingQualification)} small />
+          <Stat label="Qualified" value={String(pipeline.qualifiedCandidates)} small />
+          <Stat label="Generating" value={String(pipeline.generating)} small />
+          <Stat label="Awaiting verification" value={String(pipeline.awaitingVerification)} small />
+          <Stat label="Ready to publish" value={String(pipeline.readyToPublish)} small />
+          <Stat label="Active topics" value={String(pipeline.activeTopics)} small />
+          <Stat label="Active discovery jobs" value={String(status.overall?.activeJobs ?? 0)} small />
         </div>
       ) : null}
 
+      <div className="grid gap-3 sm:grid-cols-4 lg:grid-cols-7">
+        <Stat label="Published today" value={String(status.stats.publishedToday)} small />
+        <Stat label="Failed today" value={String(status.stats.jobsFailedToday ?? 0)} small />
+        <Stat label="Candidates today" value={String(status.stats.candidatesToday)} small />
+        <Stat label="Approved today" value={String(status.stats.approvedToday)} small />
+        <Stat label="Rejected today" value={String(status.stats.rejectedToday)} small />
+        <Stat label="Duplicates blocked" value={String(status.overall?.duplicatesBlocked ?? 0)} small />
+        <Stat label="Jobs completed" value={String(status.stats.jobsCompletedToday ?? 0)} small />
+      </div>
+
+      <div className="grid gap-3 text-sm sm:grid-cols-2">
+        <div className="rounded-lg bg-neutral-50 p-3">
+          <div className="text-xs uppercase tracking-wide text-muted">Last successful activity</div>
+          <div className="mt-1 font-medium">
+            {status.lastSuccessfulActivity
+              ? new Date(status.lastSuccessfulActivity).toLocaleString()
+              : "—"}
+          </div>
+        </div>
+        <div className="rounded-lg bg-neutral-50 p-3">
+          <div className="text-xs uppercase tracking-wide text-muted">Last error</div>
+          <div className="mt-1 font-medium text-red-700">{status.lastError ?? "None"}</div>
+        </div>
+      </div>
+
       <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
         <label className="text-sm">
-          Target course count
+          Minimum library size
           <Input className="mt-1" value={target} onChange={(e) => setTarget(e.target.value)} />
         </label>
         <label className="text-sm">
-          Discovery rate (jobs/day)
+          Discovery jobs / day
           <Input className="mt-1" value={discoveryRate} onChange={(e) => setDiscoveryRate(e.target.value)} />
         </label>
         <label className="text-sm">
@@ -198,31 +258,31 @@ export function LibraryBuildPanel() {
           />
         </label>
         <label className="text-sm">
-          Max maintenance additions/week
-          <Input className="mt-1" value={maintenanceMax} onChange={(e) => setMaintenanceMax(e.target.value)} />
+          Discovery backlog target
+          <Input className="mt-1" value={backlogTarget} onChange={(e) => setBacklogTarget(e.target.value)} />
         </label>
       </div>
 
       <div className="flex flex-wrap gap-2">
         <Button disabled={busy || running} onClick={() => act("start")}>
-          Start Library Build
+          Start Engine
         </Button>
         <Button variant="outline" disabled={busy || !running} onClick={() => act("pause")}>
-          Pause Build
+          Pause Engine
         </Button>
         <Button variant="outline" disabled={busy || (!paused && !running)} onClick={() => act("resume")}>
-          Resume Build
+          Resume Engine
         </Button>
         <Button
           variant="danger"
           disabled={busy}
           onClick={() => {
-            if (window.confirm("Stop library build? Queues and published courses are preserved.")) {
+            if (window.confirm("Stop the library build engine? Published courses are preserved.")) {
               void act("stop");
             }
           }}
         >
-          Stop Build
+          Stop Engine
         </Button>
         <Button variant="outline" disabled={busy} onClick={() => saveSettings()}>
           Save settings

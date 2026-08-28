@@ -325,3 +325,20 @@ export async function processPendingQualification(admin: Admin) {
     };
   }
 }
+
+/** Process multiple qualification runs per cron tick (bounded). */
+export async function processPendingQualificationBatches(admin: Admin, maxRuns = 3) {
+  let runs = 0;
+  let qualified = 0;
+  const cap = Math.max(1, Math.min(10, maxRuns));
+  for (let i = 0; i < cap; i += 1) {
+    const result = await processPendingQualification(admin);
+    if (!result || !("processed" in result) || !result.processed) break;
+    runs += 1;
+    if ("qualified_count" in result) {
+      qualified += Number(result.qualified_count ?? 0);
+    }
+    if ("incomplete" in result && result.incomplete) break;
+  }
+  return { runs, qualified };
+}

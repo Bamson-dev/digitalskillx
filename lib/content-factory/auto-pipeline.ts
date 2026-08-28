@@ -33,7 +33,7 @@ function autoPublishMinScore(): number {
  */
 export async function autoGenerateQualifiedCandidates(
   admin: Admin,
-  opts?: { runId?: string; adminId?: string | null },
+  opts?: { runId?: string; adminId?: string | null; limit?: number },
 ): Promise<{ created: number; skipped: number; runIds: string[] }> {
   if (!contentFactoryAutoPipelineEnabled()) {
     return { created: 0, skipped: 0, runIds: [] };
@@ -49,7 +49,7 @@ export async function autoGenerateQualifiedCandidates(
     .gte("ai_score", GENERATE_MIN_AI_SCORE)
     .order("final_quality_score", { ascending: false, nullsFirst: false })
     .order("ai_score", { ascending: false })
-    .limit(40);
+    .limit(opts?.limit ?? 40);
 
   if (opts?.runId) query = query.eq("run_id", opts.runId);
 

@@ -897,7 +897,7 @@ export type ContentFactoryDiscoveryRun = {
   created_at: string;
   completed_at: string | null;
   library_topic_id?: string | null;
-  library_build_mode?: "bulk" | "maintenance" | "expansion" | "manual" | null;
+  library_build_mode?: "bulk" | "maintenance" | "expansion" | "continuous" | "manual" | null;
 };
 
 export type ContentFactoryCandidate = {
@@ -938,13 +938,24 @@ export type ContentFactoryCandidate = {
 export type LibraryBuildSettings = {
   id: string;
   target_published_count: number;
-  build_mode: "bulk" | "maintenance" | "expansion" | "paused" | "stopped";
+  build_mode: "bulk" | "maintenance" | "expansion" | "continuous" | "paused" | "stopped";
   run_status: "idle" | "running" | "paused" | "stopped" | "completed";
   quality_threshold: number;
   discovery_jobs_per_day: number;
   maintenance_max_per_week: number;
   maintenance_enabled: boolean;
+  continuous_expansion_enabled: boolean;
+  discovery_backlog_target: number;
+  max_concurrent_discovery_jobs: number;
+  qualification_batch_size: number;
+  generation_batch_size: number;
+  publication_batch_size: number;
+  expansion_max_per_day: number;
+  stall_recovery_minutes: number;
   last_maintenance_at: string | null;
+  last_successful_activity_at: string | null;
+  last_error: string | null;
+  last_error_at: string | null;
   started_at: string | null;
   paused_at: string | null;
   stopped_at: string | null;
@@ -1007,7 +1018,7 @@ export type LibraryBuildTopicCourse = {
 
 export type LibraryBuildDiscoveryJob = {
   id: string;
-  mode: "bulk" | "maintenance" | "expansion";
+  mode: "bulk" | "maintenance" | "expansion" | "continuous";
   category_id: string | null;
   topic_id: string | null;
   discovery_run_id: string | null;

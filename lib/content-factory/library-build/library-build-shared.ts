@@ -16,12 +16,20 @@ export const LIBRARY_BUILD_DEFAULT_TARGET = 300;
 export const LIBRARY_BUILD_DEFAULT_DISCOVERY_JOBS_PER_DAY = 12;
 export const LIBRARY_BUILD_DEFAULT_MAINTENANCE_MAX = 20;
 export const LIBRARY_BUILD_DEFAULT_QUALITY_THRESHOLD = 60;
+export const LIBRARY_BUILD_DEFAULT_DISCOVERY_BACKLOG_TARGET = 4;
+export const LIBRARY_BUILD_DEFAULT_MAX_CONCURRENT_DISCOVERY_JOBS = 3;
+export const LIBRARY_BUILD_DEFAULT_QUALIFICATION_BATCH_SIZE = 3;
+export const LIBRARY_BUILD_DEFAULT_GENERATION_BATCH_SIZE = 40;
+export const LIBRARY_BUILD_DEFAULT_PUBLICATION_BATCH_SIZE = 6;
+export const LIBRARY_BUILD_DEFAULT_EXPANSION_MAX_PER_DAY = 24;
+export const LIBRARY_BUILD_DEFAULT_STALL_RECOVERY_MINUTES = 45;
 export const LIBRARY_BUILD_MAX_RETRIES = 3;
 export const LIBRARY_BUILD_STALE_JOB_MS = 30 * 60 * 1000;
 export const LIBRARY_BUILD_OVERSHOOT_DEFAULT = 0;
 
-export type LibraryBuildMode = "bulk" | "maintenance" | "expansion" | "paused" | "stopped";
+export type LibraryBuildMode = "bulk" | "maintenance" | "expansion" | "continuous" | "paused" | "stopped";
 export type LibraryRunStatus = "idle" | "running" | "paused" | "stopped" | "completed";
+export type LibraryBuildPhase = "build" | "continuous_expansion" | "maintenance" | "paused" | "stopped" | "idle";
 export type TopicCoverageStatus =
   | "unknown"
   | "high_priority"
@@ -54,6 +62,14 @@ export type LibraryBuildSettingsSnapshot = {
   qualityThreshold: number;
   discoveryJobsPerDay: number;
   maintenanceMaxPerWeek: number;
+  continuousExpansionEnabled: boolean;
+  discoveryBacklogTarget: number;
+  maxConcurrentDiscoveryJobs: number;
+  qualificationBatchSize: number;
+  generationBatchSize: number;
+  publicationBatchSize: number;
+  expansionMaxPerDay: number;
+  stallRecoveryMinutes: number;
 };
 
 export { coveragePercentage };
@@ -125,12 +141,41 @@ export function remainingToTarget(publishedCount: number, target: number): numbe
   return Math.max(0, target - Math.max(0, publishedCount));
 }
 
+export function hasReachedMinimumLibrarySize(
+  publishedCount: number,
+  minimumSize: number,
+  overshoot = LIBRARY_BUILD_OVERSHOOT_DEFAULT,
+): boolean {
+  return publishedCount >= minimumSize + Math.max(0, overshoot);
+}
+
+/** @deprecated Use hasReachedMinimumLibrarySize — target is a minimum, not a stop signal. */
 export function shouldStopBulkAtTarget(
   publishedCount: number,
   target: number,
   overshoot = LIBRARY_BUILD_OVERSHOOT_DEFAULT,
 ): boolean {
-  return publishedCount >= target + Math.max(0, overshoot);
+  return hasReachedMinimumLibrarySize(publishedCount, target, overshoot);
+}
+
+export function resolveLibraryBuildPhase(input: {
+  runStatus: LibraryRunStatus;
+  buildMode: LibraryBuildMode;
+  publishedCount: number;
+  minimumLibrarySize: number;
+  continuousExpansionEnabled?: boolean;
+}): LibraryBuildPhase {
+  if (input.runStatus === "paused" || input.buildMode === "paused") return "paused";
+  if (input.runStatus === "stopped" || input.buildMode === "stopped") return "stopped";
+  if (input.runStatus !== "running") return "idle";
+  if (
+    hasReachedMinimumLibrarySize(input.publishedCount, input.minimumLibrarySize) &&
+    (input.continuousExpansionEnabled ?? true)
+  ) {
+    return "continuous_expansion";
+  }
+  if (input.buildMode === "maintenance") return "maintenance";
+  return "build";
 }
 
 export function resolveEffectiveBuildMode(input: {
@@ -138,15 +183,20 @@ export function resolveEffectiveBuildMode(input: {
   runStatus: LibraryRunStatus;
   publishedCount: number;
   target: number;
+  continuousExpansionEnabled?: boolean;
 }): LibraryBuildMode {
   if (input.runStatus === "paused") return "paused";
   if (input.runStatus === "stopped") return "stopped";
-  if (input.runStatus === "completed" && input.publishedCount >= input.target) return "maintenance";
+  const continuous = input.continuousExpansionEnabled ?? true;
   if (input.publishedCount < input.target) {
-    if (input.settingsMode === "expansion" || input.settingsMode === "bulk") return "bulk";
+    if (input.settingsMode === "expansion" || input.settingsMode === "bulk") return input.settingsMode;
     if (input.runStatus === "running") return "bulk";
   }
-  if (input.publishedCount >= input.target) return "maintenance";
+  if (hasReachedMinimumLibrarySize(input.publishedCount, input.target)) {
+    if (continuous && input.runStatus === "running") return "continuous";
+    if (input.settingsMode === "continuous") return "continuous";
+    return "maintenance";
+  }
   return input.settingsMode;
 }
 
@@ -155,13 +205,21 @@ export function shouldContinueAutomatedDiscovery(input: {
   buildMode: LibraryBuildMode;
   publishedCount: number;
   target: number;
+  continuousExpansionEnabled?: boolean;
+  publishedToday?: number;
+  expansionMaxPerDay?: number;
   maintenanceApprovedThisWeek?: number;
   maintenanceMaxPerWeek?: number;
 }): boolean {
   if (input.runStatus !== "running") return false;
   if (input.buildMode === "paused" || input.buildMode === "stopped") return false;
-  if (input.buildMode === "bulk" || input.buildMode === "expansion") {
-    return !shouldStopBulkAtTarget(input.publishedCount, input.target);
+  if (input.buildMode === "bulk" || input.buildMode === "expansion") return true;
+  if (input.buildMode === "continuous") {
+    if (input.continuousExpansionEnabled === false) return false;
+    const max = input.expansionMaxPerDay ?? LIBRARY_BUILD_DEFAULT_EXPANSION_MAX_PER_DAY;
+    if (max <= 0) return true;
+    const used = input.publishedToday ?? 0;
+    return used < max;
   }
   if (input.buildMode === "maintenance") {
     const max = input.maintenanceMaxPerWeek ?? LIBRARY_BUILD_DEFAULT_MAINTENANCE_MAX;
@@ -169,6 +227,41 @@ export function shouldContinueAutomatedDiscovery(input: {
     return used < max;
   }
   return false;
+}
+
+export function discoveryJobsToCreate(input: {
+  openJobs: number;
+  backlogTarget: number;
+  maxConcurrent: number;
+  jobsToday: number;
+  dailyLimit: number;
+}): number {
+  const slots = Math.max(0, Math.min(input.maxConcurrent, input.backlogTarget) - input.openJobs);
+  if (slots <= 0) return 0;
+  const dailyRemaining = Math.max(0, Math.max(1, input.dailyLimit) - input.jobsToday);
+  return Math.min(slots, dailyRemaining);
+}
+
+export function isEngineStalled(input: {
+  runStatus: LibraryRunStatus;
+  publishedCount: number;
+  minimumLibrarySize: number;
+  lastSuccessfulActivityAt: string | null | undefined;
+  stallRecoveryMinutes?: number;
+  activeJobs: number;
+  pendingCandidates: number;
+  pipelineQueued: number;
+  nowMs?: number;
+}): boolean {
+  if (input.runStatus !== "running") return false;
+  if (hasReachedMinimumLibrarySize(input.publishedCount, input.minimumLibrarySize)) return false;
+  if (input.activeJobs > 0 || input.pendingCandidates > 0 || input.pipelineQueued > 0) return false;
+  const minutes = input.stallRecoveryMinutes ?? LIBRARY_BUILD_DEFAULT_STALL_RECOVERY_MINUTES;
+  if (!input.lastSuccessfulActivityAt) return true;
+  const last = Date.parse(input.lastSuccessfulActivityAt);
+  if (!Number.isFinite(last)) return true;
+  const now = input.nowMs ?? Date.now();
+  return now - last >= minutes * 60 * 1000;
 }
 
 export function computeTopicCoverageStatus(
@@ -196,8 +289,17 @@ export function pickNextTopic(
   rows: TopicCoverageRow[],
   remainingToLibraryTarget: number,
 ): TopicCoverageRow | null {
-  const active = rows.filter((row) => row.active);
-  if (!active.length) return null;
+  return pickNextTopics(rows, remainingToLibraryTarget, 1)[0] ?? null;
+}
+
+export function pickNextTopics(
+  rows: TopicCoverageRow[],
+  remainingToLibraryTarget: number,
+  count = 1,
+  excludeTopicIds: ReadonlySet<string> = new Set(),
+): TopicCoverageRow[] {
+  const active = rows.filter((row) => row.active && !excludeTopicIds.has(row.id));
+  if (!active.length || count <= 0) return [];
   const sorted = [...active].sort(
     (a, b) =>
       topicDiscoveryPriorityScore(b, remainingToLibraryTarget) -
@@ -206,7 +308,7 @@ export function pickNextTopic(
       a.publishedCourseCount - b.publishedCourseCount ||
       a.name.localeCompare(b.name),
   );
-  return sorted[0] ?? null;
+  return sorted.slice(0, count);
 }
 
 export function discoveryQueriesForTopic(
@@ -469,6 +571,41 @@ export function expansionModeOnTargetIncrease(
   return {
     shouldResumeBulk: publishedCount < newTarget,
     remaining: remainingToTarget(publishedCount, newTarget),
+  };
+}
+
+export function settingsSnapshotFromRow(row: {
+  target_published_count?: number | null;
+  build_mode?: string | null;
+  run_status?: string | null;
+  quality_threshold?: number | null;
+  discovery_jobs_per_day?: number | null;
+  maintenance_max_per_week?: number | null;
+  continuous_expansion_enabled?: boolean | null;
+  discovery_backlog_target?: number | null;
+  max_concurrent_discovery_jobs?: number | null;
+  qualification_batch_size?: number | null;
+  generation_batch_size?: number | null;
+  publication_batch_size?: number | null;
+  expansion_max_per_day?: number | null;
+  stall_recovery_minutes?: number | null;
+}): LibraryBuildSettingsSnapshot {
+  return {
+    targetPublishedCount: row.target_published_count ?? LIBRARY_BUILD_DEFAULT_TARGET,
+    buildMode: (row.build_mode ?? "bulk") as LibraryBuildMode,
+    runStatus: (row.run_status ?? "idle") as LibraryRunStatus,
+    qualityThreshold: row.quality_threshold ?? LIBRARY_BUILD_DEFAULT_QUALITY_THRESHOLD,
+    discoveryJobsPerDay: row.discovery_jobs_per_day ?? LIBRARY_BUILD_DEFAULT_DISCOVERY_JOBS_PER_DAY,
+    maintenanceMaxPerWeek: row.maintenance_max_per_week ?? LIBRARY_BUILD_DEFAULT_MAINTENANCE_MAX,
+    continuousExpansionEnabled: row.continuous_expansion_enabled !== false,
+    discoveryBacklogTarget: row.discovery_backlog_target ?? LIBRARY_BUILD_DEFAULT_DISCOVERY_BACKLOG_TARGET,
+    maxConcurrentDiscoveryJobs:
+      row.max_concurrent_discovery_jobs ?? LIBRARY_BUILD_DEFAULT_MAX_CONCURRENT_DISCOVERY_JOBS,
+    qualificationBatchSize: row.qualification_batch_size ?? LIBRARY_BUILD_DEFAULT_QUALIFICATION_BATCH_SIZE,
+    generationBatchSize: row.generation_batch_size ?? LIBRARY_BUILD_DEFAULT_GENERATION_BATCH_SIZE,
+    publicationBatchSize: row.publication_batch_size ?? LIBRARY_BUILD_DEFAULT_PUBLICATION_BATCH_SIZE,
+    expansionMaxPerDay: row.expansion_max_per_day ?? LIBRARY_BUILD_DEFAULT_EXPANSION_MAX_PER_DAY,
+    stallRecoveryMinutes: row.stall_recovery_minutes ?? LIBRARY_BUILD_DEFAULT_STALL_RECOVERY_MINUTES,
   };
 }
 

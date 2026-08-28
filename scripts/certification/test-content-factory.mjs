@@ -597,8 +597,8 @@ console.log("PASS: Stage 1 discovery artifacts present");
   assert.doesNotMatch(disc, /processContentFactoryJob/);
   assert.doesNotMatch(disc, /from\("learning_paths"\)\.insert/);
   assert.match(disc, /generated_count: 0/);
-  assert.match(cron, /autoGenerateQualifiedCandidates/);
-  assert.match(cron, /processQueuedDiscoveryRun/);
+  assert.match(cron, /runLibraryBuildThroughputTick|autoGenerateQualifiedCandidates/);
+  assert.match(cron, /runLibraryBuildThroughputTick|processQueuedDiscoveryRun/);
   assert.match(auto, /generateFromQualifiedCandidates/);
   assert.match(proc, /does not generate learning paths in Stage 1/);
   console.log("PASS: 18 discovery stays search-only; cron auto-generates after qualify");
@@ -1063,8 +1063,8 @@ function selectQualifyBatch(candidates, options = {}) {
   assert.match(qualify, /getDeepseekModel/);
   assert.match(qualify, /await getDeepseekModel\(\)/);
   assert.doesNotMatch(qualify, /create a second|anthropic|openai/i);
-  assert.match(cron, /processPendingQualification/);
-  assert.match(cron, /autoGenerateQualifiedCandidates/);
+  assert.match(cron, /runLibraryBuildThroughputTick|processPendingQualification/);
+  assert.match(cron, /runLibraryBuildThroughputTick|autoGenerateQualifiedCandidates/);
   assert.match(cron, /keepContentFactoryRunning/);
   assert.match(cron, /verifyCronSecret/);
   assert.match(jobsRoute, /listDiscoveryCandidates/);
@@ -2480,13 +2480,16 @@ console.log("\nAll Content Factory Phase 1 + Stage 1–6 offline checks passed."
 
 {
   const index = read("app/(marketplace)/learn/page.tsx");
+  const toolbar = read("components/learn/learn-discovery-toolbar.tsx");
+  const discovery = read("lib/learn-discovery/discovery.ts");
   const shared = read("lib/content-factory/library-shared.ts");
   const paths = read("lib/content-factory/learning-paths.ts");
-  assert.match(index, /method=\"get\"/);
-  assert.match(index, /name=\"q\"/);
+  assert.match(index, /LearnDiscoveryToolbar/);
+  assert.match(toolbar, /learn-q/);
+  assert.match(discovery, /sanitizeLibraryQuery|parseLearnDiscoverySearchParams/);
   assert.match(shared, /sanitizeLibraryQuery/);
   assert.match(paths, /title.ilike/);
-  assert.match(paths, /display_name/);
+  assert.match(discovery, /creator_profiles/);
   assert.match(paths, /short_description.ilike/);
   assert.doesNotMatch(index, /searchYouTubePlaylists|getDeepseekApiKey|recordProductEvent/);
   console.log("PASS: S7-7 search");
@@ -2498,7 +2501,7 @@ console.log("\nAll Content Factory Phase 1 + Stage 1–6 offline checks passed."
   assert.match(shared, /LIBRARY_CATEGORIES/);
   assert.match(shared, /Digital Marketing/);
   assert.match(index, /Learning categories/);
-  assert.match(index, /libraryHref/);
+  assert.match(index, /learnDiscoveryHref|libraryHref/);
   console.log("PASS: S7-8 category filtering");
 }
 
@@ -2631,20 +2634,22 @@ console.log("\nAll Content Factory Phase 1 + Stage 1–6 offline checks passed."
 
 {
   const index = read("app/(marketplace)/learn/page.tsx");
+  const toolbar = read("components/learn/learn-discovery-toolbar.tsx");
   const learn = read("app/(marketplace)/learn/[slug]/page.tsx");
   assert.match(index, /overflow-x-hidden/);
   assert.match(learn, /overflow-x-hidden/);
-  assert.match(index, /sm:flex-row/);
+  assert.match(toolbar, /sm:flex-row/);
   assert.match(learn, /lg:grid-cols-\[1fr_280px\]/);
   console.log("PASS: S7-22 mobile layout");
 }
 
 {
   const index = read("app/(marketplace)/learn/page.tsx");
+  const toolbar = read("components/learn/learn-discovery-toolbar.tsx");
   const learn = read("app/(marketplace)/learn/[slug]/page.tsx");
   const embed = read("components/learn/lazy-youtube-embed.tsx");
-  assert.match(index, /htmlFor=\"learn-q\"/);
-  assert.match(index, /sr-only/);
+  assert.match(toolbar, /htmlFor=\"learn-q\"/);
+  assert.match(toolbar, /sr-only/);
   assert.match(learn, /aria-label=\"Lesson list\"/);
   assert.match(embed, /aria-label=\{`Play \$\{title\}`\}/);
   assert.match(embed, /alt=\{`\$\{title\} thumbnail`\}/);

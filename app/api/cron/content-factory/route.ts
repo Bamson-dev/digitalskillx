@@ -3,20 +3,14 @@ import {
   continuationDepthFromRequest,
   keepContentFactoryRunning,
 } from "@/lib/bulk-import-continue";
-import {
-  autoGenerateQualifiedCandidates,
-  autoPublishReadyLearningPaths,
-  contentFactoryHasPendingWork,
-} from "@/lib/content-factory/auto-pipeline";
-import { backfillMissingLearningPathArtwork } from "@/lib/content-factory/artwork-backfill";
+import { contentFactoryHasPendingWork } from "@/lib/content-factory/auto-pipeline";
 import { verifyCronSecret } from "@/lib/cron-auth";
 import { bootstrapRuntimeSecrets } from "@/lib/bootstrap-runtime-secrets";
 import { createAdminClientAsync } from "@/lib/supabase/admin";
 import { contentFactoryEnabled } from "@/lib/content-factory/feature-flag";
 import { processContentFactoryJob } from "@/lib/content-factory/process-job";
-import { processQueuedDiscoveryRun } from "@/lib/content-factory/discovery";
-import { processPendingQualification } from "@/lib/content-factory/qualify";
 import { syncCandidatesForJob } from "@/lib/content-factory/generate";
+import { runLibraryBuildThroughputTick } from "@/lib/content-factory/library-build/throughput-pipeline";
 import { isMissingRelationError } from "@/lib/schema-guard";
 import { FACTORY_RETRY_MAX_ATTEMPTS, isRetryableFactoryError } from "@/lib/content-factory/ops-shared";
 import type { ContentFactoryJob } from "@/types/database";
@@ -62,35 +56,46 @@ export async function POST(request: NextRequest) {
   const admin = await createAdminClientAsync();
   const depth = continuationDepthFromRequest(request);
 
-  // Qualify before new YouTube discovery so pending Library Build candidates are not
-  // starved behind search-cap / long playlist fetches.
-  let qualification = await processPendingQualification(admin);
-  if (
-    qualification &&
-    "qualified_count" in qualification &&
-    Number(qualification.qualified_count ?? 0) > 0
-  ) {
-    await autoGenerateQualifiedCandidates(admin, {
-      runId: "runId" in qualification ? String(qualification.runId) : undefined,
-    });
-  }
-
-  const discovery = await processQueuedDiscoveryRun(admin);
-
-  let libraryBuild: { ticked: boolean; reason?: string; jobId?: string } = { ticked: false };
+  let libraryThroughput: Awaited<ReturnType<typeof runLibraryBuildThroughputTick>> | null = null;
   try {
-    const { tickLibraryBuildEngine, tickLibraryBuildMaintenance } = await import(
-      "@/lib/content-factory/library-build/engine"
-    );
-    libraryBuild = await tickLibraryBuildEngine(admin);
-    await tickLibraryBuildMaintenance(admin);
+    libraryThroughput = await runLibraryBuildThroughputTick(admin);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     if (!isMissingRelationError(message)) {
-      console.error("[content-factory-cron] library build tick failed:", message);
-      libraryBuild = { ticked: false, reason: `error:${message.slice(0, 180)}` };
+      console.error("[content-factory-cron] library throughput tick failed:", message);
     }
+    libraryThroughput = null;
   }
+
+  const qualification = libraryThroughput
+    ? {
+        processed: libraryThroughput.qualification.runs > 0,
+        qualified_count: libraryThroughput.qualification.qualified,
+        runs: libraryThroughput.qualification.runs,
+      }
+    : null;
+  const discovery = libraryThroughput?.discovery ?? null;
+  const autoGenerate = libraryThroughput
+    ? { created: libraryThroughput.generation.created, skipped: libraryThroughput.generation.skipped, runIds: [] }
+    : { created: 0, skipped: 0, runIds: [] as string[] };
+  let autoPublish = libraryThroughput
+    ? {
+        published: libraryThroughput.publication.published,
+        skipped: libraryThroughput.publication.skipped,
+        errors: [] as string[],
+      }
+    : { published: 0, skipped: 0, errors: [] as string[] };
+  const artworkBackfill = libraryThroughput
+    ? { updated: libraryThroughput.artworkBackfill.updated }
+    : { updated: 0 };
+  const libraryBuild = libraryThroughput
+    ? {
+        ticked: libraryThroughput.discoveryBacklog.created > 0,
+        created: libraryThroughput.discoveryBacklog.created,
+        reason: libraryThroughput.discoveryBacklog.reasons[0],
+        stallRecovery: libraryThroughput.stallRecovery,
+      }
+    : { ticked: false };
 
   const { data: failedJobs } = await admin
     .from("content_factory_jobs")
@@ -152,31 +157,6 @@ export async function POST(request: NextRequest) {
     .lt("claimed_at", staleBefore)
     .gte("attempts", FACTORY_RETRY_MAX_ATTEMPTS);
 
-  // Second qualify pass after discovery may have created new pending candidates.
-  const qualificationAfterDiscovery = await processPendingQualification(admin);
-  if (
-    qualificationAfterDiscovery &&
-    "processed" in qualificationAfterDiscovery &&
-    qualificationAfterDiscovery.processed
-  ) {
-    qualification = qualificationAfterDiscovery;
-  }
-  if (
-    qualificationAfterDiscovery &&
-    "qualified_count" in qualificationAfterDiscovery &&
-    Number(qualificationAfterDiscovery.qualified_count ?? 0) > 0
-  ) {
-    await autoGenerateQualifiedCandidates(admin, {
-      runId:
-        "runId" in qualificationAfterDiscovery
-          ? String(qualificationAfterDiscovery.runId)
-          : undefined,
-    });
-  }
-
-  const autoGenerate = await autoGenerateQualifiedCandidates(admin);
-  let autoPublish = await autoPublishReadyLearningPaths(admin, 3);
-  const artworkBackfill = await backfillMissingLearningPathArtwork(admin, 8);
   let certificatePricingBackfill: unknown = null;
   try {
     const { backfillLearningPathCertificatePricing } = await import(
@@ -218,7 +198,13 @@ export async function POST(request: NextRequest) {
       .eq("id", job.id)
       .maybeSingle();
     if (processed?.status === "waiting_review") {
-      autoPublish = await autoPublishReadyLearningPaths(admin, 1);
+      const { autoPublishReadyLearningPaths } = await import("@/lib/content-factory/auto-pipeline");
+      const extraPub = await autoPublishReadyLearningPaths(admin, 3);
+      autoPublish = {
+        published: autoPublish.published + extraPub.published,
+        skipped: autoPublish.skipped + extraPub.skipped,
+        errors: [...autoPublish.errors, ...extraPub.errors],
+      };
     }
     jobProcessed = {
       processed: 1,
@@ -230,11 +216,13 @@ export async function POST(request: NextRequest) {
 
   const moreWork =
     (await contentFactoryHasPendingWork(admin)) ||
-    libraryBuild.ticked ||
+    Boolean(libraryBuild.ticked) ||
+    Boolean(libraryThroughput?.stallRecovery.attempted) ||
     autoGenerate.created > 0 ||
     Boolean(discovery && "processed" in discovery && discovery.processed) ||
     jobProcessed.processed > 0 ||
-    Boolean(qualification && "processed" in qualification && qualification.processed);
+    Boolean(qualification && "processed" in qualification && qualification.processed) ||
+    (libraryThroughput?.publication.published ?? 0) > 0;
   keepContentFactoryRunning({
     moreWork,
     depth,
@@ -257,6 +245,7 @@ export async function POST(request: NextRequest) {
     artworkBackfill,
     certificatePricingBackfill,
     libraryBuild,
+    libraryThroughput,
     counters: {
       jobsProcessed: jobProcessed.processed,
       jobsFailed: 0,
