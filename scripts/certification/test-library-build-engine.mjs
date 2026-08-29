@@ -358,6 +358,27 @@ check("stall recovery detects idle engine below minimum", () =>
     true,
   ),
 );
+check("auto-resume completed engine when continuous expansion enabled", () =>
+  assert.equal(
+    shared.shouldAutoResumeLibraryBuild({
+      runStatus: "completed",
+      buildMode: "maintenance",
+      continuousExpansionEnabled: true,
+    }),
+    true,
+  ),
+);
+check("do not auto-resume when admin paused", () =>
+  assert.equal(
+    shared.shouldAutoResumeLibraryBuild({
+      runStatus: "paused",
+      buildMode: "paused",
+      continuousExpansionEnabled: true,
+    }),
+    false,
+  ),
+);
+check("library goal is 1000+", () => assert.equal(shared.LIBRARY_BUILD_LIBRARY_GOAL, 1000));
 check("pause stops automated discovery", () =>
   assert.equal(
     shared.shouldContinueAutomatedDiscovery({

@@ -11,6 +11,7 @@ import { processQueuedDiscoveryRun } from "@/lib/content-factory/discovery";
 import { processPendingQualificationBatches } from "@/lib/content-factory/qualify";
 import {
   attemptStallRecovery,
+  ensureLibraryBuildKeepsRunning,
   fillDiscoveryBacklog,
   getLibraryBuildThroughputSettings,
   recordLibraryBuildActivity,
@@ -51,6 +52,15 @@ export async function runLibraryBuildThroughputTick(
   };
 
   if (!contentFactoryEnabled()) return empty;
+
+  try {
+    await ensureLibraryBuildKeepsRunning(admin);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    if (!isMissingRelationError(message)) {
+      console.error("[library-build] ensure running failed:", message);
+    }
+  }
 
   let settings;
   try {

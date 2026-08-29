@@ -17,6 +17,8 @@ import {
   expansionModeOnTargetIncrease,
   hasReachedMinimumLibrarySize,
   isEngineStalled,
+  LIBRARY_BUILD_DEFAULT_TARGET,
+  LIBRARY_BUILD_LIBRARY_GOAL,
   maintenanceCycleDue,
   pickNextTopic,
   pickNextTopics,
@@ -25,6 +27,7 @@ import {
   resolveEffectiveBuildMode,
   resolveLibraryBuildPhase,
   settingsSnapshotFromRow,
+  shouldAutoResumeLibraryBuild,
   shouldContinueAutomatedDiscovery,
   statsDayKey,
   LIBRARY_BUILD_DEFAULT_DISCOVERY_BACKLOG_TARGET,
@@ -349,6 +352,51 @@ function resolveRunningBuildMode(
     return "continuous";
   }
   return "bulk";
+}
+
+/** Keep continuous expansion running — never leave the engine in completed/stopped drift. */
+export async function ensureLibraryBuildKeepsRunning(admin: Admin) {
+  const settings = await loadSettingsRow(admin);
+  if (!settings) return null;
+
+  if (!shouldAutoResumeLibraryBuild({
+    runStatus: (settings.run_status ?? "idle") as LibraryRunStatus,
+    buildMode: (settings.build_mode ?? "bulk") as LibraryBuildMode,
+    continuousExpansionEnabled: settings.continuous_expansion_enabled !== false,
+  })) {
+    return settings;
+  }
+
+  const publishedCount = await countPublishedLibraryCourses(admin);
+  const target = settings.target_published_count ?? LIBRARY_BUILD_DEFAULT_TARGET;
+  const buildMode = resolveRunningBuildMode(
+    publishedCount,
+    target,
+    settings.continuous_expansion_enabled !== false,
+  );
+
+  const { data, error } = await admin
+    .from("library_build_settings")
+    .update({
+      build_mode: buildMode,
+      run_status: "running",
+      completed_at: null,
+      stopped_at: null,
+      last_successful_activity_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", "default")
+    .select("*")
+    .single();
+  if (error) throw new Error(error.message);
+
+  await logLibraryBuildActivity(admin, {
+    kind: "continuous_expansion",
+    message: `Library build auto-resumed (${publishedCount} published, goal ${LIBRARY_BUILD_LIBRARY_GOAL}+).`,
+    details: { publishedCount, target, buildMode, libraryGoal: LIBRARY_BUILD_LIBRARY_GOAL },
+  });
+
+  return data ?? settings;
 }
 
 async function ensureBuildModeForPublishedCount(

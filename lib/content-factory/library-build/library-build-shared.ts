@@ -13,6 +13,8 @@ import {
 } from "@/lib/learn-certificate-pricing";
 
 export const LIBRARY_BUILD_DEFAULT_TARGET = 300;
+/** Long-term library size goal — engine keeps expanding past the 300 minimum indefinitely. */
+export const LIBRARY_BUILD_LIBRARY_GOAL = 1000;
 export const LIBRARY_BUILD_DEFAULT_DISCOVERY_JOBS_PER_DAY = 48;
 export const LIBRARY_BUILD_DEFAULT_MAINTENANCE_MAX = 20;
 export const LIBRARY_BUILD_DEFAULT_QUALITY_THRESHOLD = 60;
@@ -198,6 +200,19 @@ export function resolveEffectiveBuildMode(input: {
     return "maintenance";
   }
   return input.settingsMode;
+}
+
+/** Resume the engine when continuous expansion is on and it was auto-marked completed/stopped. */
+export function shouldAutoResumeLibraryBuild(input: {
+  runStatus: LibraryRunStatus;
+  buildMode: LibraryBuildMode;
+  continuousExpansionEnabled?: boolean;
+}): boolean {
+  if (input.continuousExpansionEnabled === false) return false;
+  if (input.runStatus === "paused" || input.runStatus === "stopped") return false;
+  if (input.runStatus === "completed") return true;
+  if (input.runStatus === "running" && input.buildMode === "stopped") return true;
+  return false;
 }
 
 export function shouldContinueAutomatedDiscovery(input: {
