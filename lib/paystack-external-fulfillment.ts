@@ -12,7 +12,10 @@ import {
   configuredExternalCourseId,
   identifyPaystackExternalProduct,
   readExternalPaystackData,
+  resolveExternalProductByKey,
+  type ExternalPaystackData,
   type ExternalFulfillmentStatus,
+  type PaystackExternalProduct,
   type PaystackChargePayload,
   PAYSTACK_EXTERNAL_PRODUCTS,
 } from "@/lib/paystack-external-products";
@@ -21,6 +24,16 @@ import { verifyTransaction } from "@/lib/paystack";
 import type { Database, Json } from "@/types/database";
 
 type Admin = SupabaseClient<Database>;
+
+export type LeadthurHandoffPayment = {
+  productKey: string;
+  amount: number;
+  currency: string;
+  status: string;
+  customerEmail: string;
+  paidAt?: string | null;
+  leadthurEventId?: string;
+};
 
 export type ExternalFulfillmentResult =
   | { handled: false }
@@ -153,61 +166,146 @@ export async function fulfillPaystackExternalCharge(params: {
   reference: string;
   webhookEvent?: string;
   webhookData?: PaystackChargePayload | null;
+  handoffPayment?: LeadthurHandoffPayment;
   admin?: Admin;
 }): Promise<ExternalFulfillmentResult> {
   const admin = params.admin ?? (await createAdminClientAsync());
   const reference = params.reference.trim();
   if (!reference) return { handled: false };
 
-  secureLog("info", "paystack/external", "payment_received", {
+  const handoff = params.handoffPayment;
+  const logSource = handoff ? "leadthur/handoff" : "paystack/external";
+
+  secureLog("info", logSource, "payment_received", {
     reference,
     event: params.webhookEvent ?? "charge.success",
+    source: handoff ? "leadthur-paystack-router" : "paystack",
   });
 
-  const verified = await verifyTransaction(reference, admin);
-  if (!verified) {
-    secureLog("warn", "paystack/external", "payment_rejected", {
-      reference,
-      reason: "verify_failed",
-    });
-    return {
-      handled: true,
-      ok: false,
-      reference,
-      error: "Transaction could not be verified.",
-      permanent: false,
-      status: 409,
-    };
-  }
+  let product: PaystackExternalProduct | null = null;
+  let buyerEmail = "";
+  let buyerName: string | null = null;
+  let paystackSource: ExternalPaystackData["source"] = "paystack_payment_page";
 
-  if (verified.status !== "success") {
-    secureLog("warn", "paystack/external", "payment_rejected", {
-      reference,
-      reason: "not_success",
-      status: verified.status,
-    });
-    return {
-      handled: true,
-      ok: false,
-      reference,
-      error: `Payment status is ${verified.status}.`,
-      permanent: verified.status === "failed",
-      status: verified.status === "failed" ? 200 : 409,
-    };
-  }
+  if (handoff) {
+    if (handoff.status !== "success") {
+      secureLog("warn", logSource, "payment_rejected", {
+        reference,
+        reason: "not_success",
+        status: handoff.status,
+      });
+      return {
+        handled: true,
+        ok: false,
+        reference,
+        error: `Payment status is ${handoff.status}.`,
+        permanent: handoff.status === "failed",
+        status: handoff.status === "failed" ? 200 : 422,
+      };
+    }
 
-  const product = identifyPaystackExternalProduct({
-    verified,
-    webhookData: params.webhookData ?? null,
-  });
-  if (!product) {
-    secureLog("info", "paystack/external", "payment_rejected", {
+    product = resolveExternalProductByKey(handoff.productKey);
+    if (!product) {
+      secureLog("warn", logSource, "product_rejected", {
+        reference,
+        reason: "unknown_product_key",
+        productKey: handoff.productKey,
+      });
+      return {
+        handled: true,
+        ok: false,
+        reference,
+        error: "Unknown product key.",
+        permanent: true,
+        status: 422,
+      };
+    }
+
+    if (
+      handoff.amount !== product.expectedAmountKobo ||
+      handoff.currency.toUpperCase() !== product.currency
+    ) {
+      secureLog("warn", logSource, "payment_rejected", {
+        reference,
+        reason: "amount_or_currency_mismatch",
+        amount: handoff.amount,
+        currency: handoff.currency,
+      });
+      return {
+        handled: true,
+        ok: false,
+        reference,
+        error: "Payment amount or currency does not match product.",
+        permanent: true,
+        status: 422,
+      };
+    }
+
+    buyerEmail = handoff.customerEmail.trim().toLowerCase();
+    paystackSource = "leadthur-paystack-router";
+    secureLog("info", logSource, "payment_verified", {
       reference,
-      reason: "unknown_product",
-      amount: verified.amount,
-      currency: verified.currency,
+      productKey: product.key,
+      eventId: handoff.leadthurEventId ?? null,
     });
-    return { handled: false };
+  } else {
+    const verified = await verifyTransaction(reference, admin);
+    if (!verified) {
+      secureLog("warn", logSource, "payment_rejected", {
+        reference,
+        reason: "verify_failed",
+      });
+      return {
+        handled: true,
+        ok: false,
+        reference,
+        error: "Transaction could not be verified.",
+        permanent: false,
+        status: 409,
+      };
+    }
+
+    if (verified.status !== "success") {
+      secureLog("warn", logSource, "payment_rejected", {
+        reference,
+        reason: "not_success",
+        status: verified.status,
+      });
+      return {
+        handled: true,
+        ok: false,
+        reference,
+        error: `Payment status is ${verified.status}.`,
+        permanent: verified.status === "failed",
+        status: verified.status === "failed" ? 200 : 409,
+      };
+    }
+
+    product = identifyPaystackExternalProduct({
+      verified,
+      webhookData: params.webhookData ?? null,
+    });
+    if (!product) {
+      secureLog("info", logSource, "payment_rejected", {
+        reference,
+        reason: "unknown_product",
+        amount: verified.amount,
+        currency: verified.currency,
+      });
+      return { handled: false };
+    }
+
+    buyerEmail =
+      verified.metadata?.buyer_email?.trim().toLowerCase() ||
+      verified.customer?.email?.trim().toLowerCase() ||
+      params.webhookData?.customer?.email?.trim().toLowerCase() ||
+      "";
+    buyerName = buyerNameFromCharge(params.webhookData ?? null, verified.customer);
+
+    secureLog("info", logSource, "payment_verified", {
+      reference,
+      productKey: product.key,
+    });
   }
 
   const courseId = configuredExternalCourseId(product);
@@ -230,7 +328,7 @@ export async function fulfillPaystackExternalCharge(params: {
   }
 
   if (course.visibility !== "published") {
-    secureLog("error", "paystack/external", "fulfillment_failed", {
+    secureLog("error", logSource, "fulfillment_failed", {
       reference,
       reason: "course_not_published",
       courseId: course.id,
@@ -244,19 +342,6 @@ export async function fulfillPaystackExternalCharge(params: {
       status: 422,
     };
   }
-
-  secureLog("info", "paystack/external", "payment_verified", {
-    reference,
-    productKey: product.key,
-    courseId: course.id,
-  });
-
-  const buyerEmail =
-    verified.metadata?.buyer_email?.trim().toLowerCase() ||
-    verified.customer?.email?.trim().toLowerCase() ||
-    params.webhookData?.customer?.email?.trim().toLowerCase() ||
-    "";
-  const buyerName = buyerNameFromCharge(params.webhookData ?? null, verified.customer);
 
   const { data: existingTx } = await admin
     .from("transactions")
@@ -355,16 +440,17 @@ export async function fulfillPaystackExternalCharge(params: {
   }
 
   const paystackData: Record<string, unknown> = {
-    source: "paystack_payment_page",
+    source: paystackSource,
     product_key: product.key,
     payment_page: product.paymentPageUrl,
     fulfillment_status: "payment_verified" as ExternalFulfillmentStatus,
     paystack_transaction_id: params.webhookData?.id ?? null,
     webhook_event: params.webhookEvent ?? "charge.success",
-    paid_at: params.webhookData?.paid_at ?? new Date().toISOString(),
+    paid_at: handoff?.paidAt ?? params.webhookData?.paid_at ?? new Date().toISOString(),
     customer_email: buyerEmail,
     checkout_email: buyerEmail,
     checkout_full_name: buyerName,
+    leadthur_event_id: handoff?.leadthurEventId ?? null,
     ...(params.webhookData ?? {}),
   };
 
@@ -441,14 +527,19 @@ export async function fulfillPaystackExternalCharge(params: {
     }
 
     const firstName = buyerName?.split(/\s+/)[0] || buyerEmail.split("@")[0] || "there";
-    const emailResult = await sendAccessEmail({
-      studentId,
-      email: buyerEmail,
-      firstName,
-      courseId: course.id,
-      courseTitle: course.title,
-      isNewAccount,
-    });
+    let emailResult: { sent: boolean; error?: string | null } = { sent: true };
+    if (!externalMeta?.access_email_sent_at) {
+      emailResult = await sendAccessEmail({
+        studentId,
+        email: buyerEmail,
+        firstName,
+        courseId: course.id,
+        courseTitle: course.title,
+        isNewAccount,
+      });
+    } else {
+      secureLog("info", "paystack/external", "duplicate_email_skipped", { reference });
+    }
 
     await patchTransactionPaystackData(admin, reference, {
       fulfillment_status: emailResult.sent ? "email_sent" : "email_failed",

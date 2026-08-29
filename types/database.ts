@@ -1345,6 +1345,7 @@ export type Database = {
           Rel<"transactions_learning_path_id_fkey", "learning_path_id", "learning_paths", "id">,
         ]
       >;
+      leadthur_handoff_nonces: Table<LeadthurHandoffNonce, []>;
       checkout_abandon_reminders: Table<
         CheckoutAbandonReminder,
         [

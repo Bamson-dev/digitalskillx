@@ -760,3 +760,22 @@ console.log("PASS: classroom companion rarity + reduced-motion guards");
   }
   console.log("PASS: paystack external enrollment suite");
 }
+
+{
+  const { spawnSync } = await import("node:child_process");
+  const r = spawnSync(
+    process.execPath,
+    [
+      "--import",
+      join(root, "scripts/certification/register-ts-ext.mjs"),
+      join(root, "scripts/certification/test-leadthur-handoff.mjs"),
+    ],
+    { cwd: root, encoding: "utf8" },
+  );
+  if (r.status !== 0) {
+    console.error(r.stdout);
+    console.error(r.stderr);
+    process.exit(r.status ?? 1);
+  }
+  console.log("PASS: leadthur paystack handoff suite");
+}

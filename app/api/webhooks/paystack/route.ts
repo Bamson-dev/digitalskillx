@@ -9,6 +9,8 @@ import {
   type PaystackChargePayload,
   readExternalPaystackData,
 } from "@/lib/paystack-external-products";
+import { isLeadthurHandoffRequest } from "@/lib/leadthur-handoff";
+import { handleLeadthurHandoffRequest } from "@/lib/leadthur-handoff-handler";
 import { ensurePurchaseEnrollment } from "@/lib/purchase";
 import { rateLimitedResponse } from "@/lib/api-rate-limit";
 import { secureLog } from "@/lib/secure-log";
@@ -23,6 +25,16 @@ export async function POST(request: NextRequest) {
   if (limited) return limited;
 
   const rawBody = await request.text();
+  const admin = await createAdminClientAsync();
+
+  if (isLeadthurHandoffRequest(request.headers)) {
+    return handleLeadthurHandoffRequest({
+      rawBody,
+      headers: request.headers,
+      admin,
+    });
+  }
+
   const signature = request.headers.get("x-paystack-signature");
 
   if (!(await verifyWebhookSignature(rawBody, signature))) {
@@ -42,7 +54,6 @@ export async function POST(request: NextRequest) {
   }
 
   const reference = event.data?.reference;
-  const admin = await createAdminClientAsync();
 
   if (event.event === "charge.failed" || event.event === "charge.abandoned") {
     if (reference) {
@@ -140,7 +151,6 @@ export async function POST(request: NextRequest) {
       level: "error",
       extra: { reference, error: result.error, status: result.status },
     });
-    // Permanent business failures → 200 so Paystack stops retrying forever.
     const statusCode = Number(result.status);
     const permanent =
       ("permanent" in result && Boolean(result.permanent)) ||

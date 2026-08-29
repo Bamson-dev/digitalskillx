@@ -65,6 +65,7 @@ function metadataString(meta: Record<string, unknown> | undefined, key: string):
 function metadataMatchesProduct(meta: Record<string, unknown> | undefined, product: PaystackExternalProduct) {
   const productKey = metadataString(meta, "product_key") ?? metadataString(meta, "product");
   if (productKey && productKey.toLowerCase() === product.key) return true;
+  if (productKey && productKey.toLowerCase() === "digitalskillx") return true;
 
   const paymentPage =
     metadataString(meta, "payment_page") ??
@@ -85,6 +86,52 @@ function metadataMatchesProduct(meta: Record<string, unknown> | undefined, produ
   }
 
   return false;
+}
+
+function pageSlugFromUrl(value: string): string | null {
+  try {
+    const url = new URL(value);
+    const host = url.hostname.toLowerCase();
+    if (!host.endsWith("paystack.com") && !host.endsWith("paystack.shop")) return null;
+    const parts = url.pathname.split("/").filter(Boolean);
+    const payIndex = parts.findIndex((part) => part.toLowerCase() === "pay");
+    if (payIndex >= 0 && parts[payIndex + 1]) {
+      return parts[payIndex + 1].toLowerCase();
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+function collectStrings(value: unknown, out: string[], depth = 0): void {
+  if (depth > 6 || value == null) return;
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+    const text = String(value).trim();
+    if (text) out.push(text);
+    return;
+  }
+  if (Array.isArray(value)) {
+    for (const item of value) collectStrings(item, out, depth + 1);
+    return;
+  }
+  if (typeof value === "object") {
+    for (const [key, nested] of Object.entries(value as Record<string, unknown>)) {
+      out.push(key);
+      collectStrings(nested, out, depth + 1);
+    }
+  }
+}
+
+function hasPaymentPageIdentity(
+  values: string[],
+  product: PaystackExternalProduct,
+): boolean {
+  return values.some((value) => {
+    const slug = pageSlugFromUrl(value);
+    if (slug === product.paymentPageSlug) return true;
+    return value.toLowerCase().includes(`pay/${product.paymentPageSlug}`);
+  });
 }
 
 export function amountAndCurrencyMatchProduct(
@@ -122,8 +169,14 @@ export function identifyPaystackExternalProduct(input: {
       metadataString(meta, "slug");
     if (pageSlug && pageSlug.toLowerCase().includes(product.paymentPageSlug)) return product;
 
-    // Payment Page (paystack.shop/pay/aiapp) — amount + currency uniquely identify this product.
-    return product;
+    const haystack: string[] = [];
+    collectStrings(meta, haystack);
+    if (
+      hasPaymentPageIdentity(haystack, product) &&
+      amountAndCurrencyMatchProduct(input.verified.amount, input.verified.currency, product)
+    ) {
+      return product;
+    }
   }
 
   return null;
@@ -137,6 +190,11 @@ export function configuredExternalCourseId(product: PaystackExternalProduct): st
   return product.defaultCourseId;
 }
 
+export function resolveExternalProductByKey(productKey: string): PaystackExternalProduct | null {
+  const normalized = productKey.trim().toLowerCase();
+  return PAYSTACK_EXTERNAL_PRODUCTS.find((product) => product.key === normalized) ?? null;
+}
+
 export type ExternalFulfillmentStatus =
   | "payment_received"
   | "payment_verified"
@@ -146,7 +204,7 @@ export type ExternalFulfillmentStatus =
   | "fulfillment_failed";
 
 export type ExternalPaystackData = {
-  source: "paystack_payment_page";
+  source: "paystack_payment_page" | "leadthur-paystack-router";
   product_key: string;
   payment_page: string;
   fulfillment_status: ExternalFulfillmentStatus;
@@ -156,12 +214,13 @@ export type ExternalPaystackData = {
   fulfillment_error?: string | null;
   paid_at?: string | null;
   customer_email?: string | null;
+  leadthur_event_id?: string | null;
 };
 
 export function readExternalPaystackData(paystackData: unknown): ExternalPaystackData | null {
   if (!paystackData || typeof paystackData !== "object") return null;
   const row = paystackData as Partial<ExternalPaystackData>;
-  if (row.source !== "paystack_payment_page") return null;
+  if (row.source !== "paystack_payment_page" && row.source !== "leadthur-paystack-router") return null;
   if (!row.product_key || !row.fulfillment_status) return null;
   return row as ExternalPaystackData;
 }

@@ -10,8 +10,10 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
+const leadthurBackend = resolve(root, "../LeadRush/backend");
 const ts = (rel) => pathToFileURL(join(root, rel)).href;
 const read = (rel) => readFileSync(join(root, rel), "utf8");
+const readLeadthur = (rel) => readFileSync(join(leadthurBackend, rel), "utf8");
 
 let passed = 0;
 function check(label, fn) {
@@ -110,12 +112,52 @@ check("metadata product_key accepted", () => {
   assert.equal(match?.key, "build-software-with-ai");
 });
 
-check("amount+currency mapping when metadata absent", () => {
+check("amount+currency alone does not identify product", () => {
   const match = products.identifyPaystackExternalProduct({
     verified: { ...validVerified, metadata: {} },
     webhookData: { amount: 4_999_900, currency: "NGN" },
   });
+  assert.equal(match, null);
+});
+
+check("page slug aiapp identifies product", () => {
+  const match = products.identifyPaystackExternalProduct({
+    verified: { ...validVerified, metadata: {} },
+    webhookData: {
+      amount: 4_999_900,
+      currency: "NGN",
+      page: { slug: "aiapp" },
+    },
+  });
   assert.equal(match?.key, "build-software-with-ai");
+});
+
+check("paystack.shop referrer identifies product", () => {
+  const match = products.identifyPaystackExternalProduct({
+    verified: { ...validVerified, metadata: {} },
+    webhookData: {
+      amount: 4_999_900,
+      currency: "NGN",
+      metadata: { referrer: "https://paystack.shop/pay/aiapp" },
+    },
+  });
+  assert.equal(match?.key, "build-software-with-ai");
+});
+
+check("Leadthur payment must not match DigitalSkillX product", () => {
+  const match = products.identifyPaystackExternalProduct({
+    verified: {
+      status: "success",
+      amount: 50_000_000,
+      currency: "NGN",
+      metadata: { product: "leadthur", source: "leadthur_checkout" },
+    },
+    webhookData: {
+      reference: "LP-1786343304640-4WA4OQ",
+      metadata: { product: "leadthur" },
+    },
+  });
+  assert.equal(match, null);
 });
 
 check("configured course id defaults to production course", () => {
@@ -167,12 +209,12 @@ check("new account email mentions secure sign-in", () => {
   assert.match(tpl.html, /secure sign-in link/i);
 });
 
-check("webhook route extends existing handler", () => {
+check("webhook route supports Leadthur handoff and direct Paystack", () => {
   const route = read("app/api/webhooks/paystack/route.ts");
-  assert.match(route, /fulfillPaystackExternalCharge/);
+  assert.match(route, /isLeadthurHandoffRequest/);
+  assert.match(route, /handleLeadthurHandoffRequest/);
   assert.match(route, /verifyWebhookSignature/);
   assert.match(route, /completePaidCheckout/);
-  assert.doesNotMatch(route, /app\/api\/webhooks\/paystack-aiapp/);
 });
 
 check("fulfillment module uses server verification", () => {
@@ -232,6 +274,48 @@ check("no plaintext password in access email template", () => {
     supportEmail: "support@digitalskillx.com",
   });
   assert.doesNotMatch(tpl.html, /Password:/i);
+});
+
+check("duplicate email skipped when access email already sent", () => {
+  const mod = read("lib/paystack-external-fulfillment.ts");
+  assert.match(mod, /duplicate_email_skipped/);
+  assert.match(mod, /access_email_sent_at/);
+});
+
+check("abandoned payment handled without enrollment", () => {
+  const route = read("app/api/webhooks/paystack/route.ts");
+  assert.match(route, /charge\.abandoned/);
+  assert.match(route, /status:\s*"failed"/);
+});
+
+check("missing customer email rejected in fulfillment", () => {
+  const mod = read("lib/paystack-external-fulfillment.ts");
+  assert.match(mod, /missing_customer_email/);
+});
+
+check("Paystack API verification failure returns handled error", () => {
+  const mod = read("lib/paystack-external-fulfillment.ts");
+  assert.match(mod, /verify_failed/);
+  assert.match(mod, /verifyTransaction/);
+});
+
+check("enrollment already exists path is idempotent", () => {
+  const mod = read("lib/paystack-external-fulfillment.ts");
+  assert.match(mod, /duplicate_enrollment/);
+  assert.match(mod, /priorEnrollment/);
+});
+
+check("Leadthur webhook routes DigitalSkillX payments", () => {
+  const router = readLeadthur("src/api/webhook-router.ts");
+  assert.match(router, /isDigitalSkillXPaystackEvent/);
+  assert.match(router, /routeDigitalSkillXCharge/);
+  assert.match(router, /isLeadThurLifetimePaystackCharge/);
+});
+
+check("DigitalSkillX payment must not trigger Leadthur fulfillment", () => {
+  const guard = readLeadthur("src/services/paystack-product-guard.ts");
+  assert.match(guard, /isDigitalSkillXPaystackEvent/);
+  assert.match(guard, /return false/);
 });
 
 console.log(`\nPASS: Paystack external enrollment certification (${passed} checks)`);
