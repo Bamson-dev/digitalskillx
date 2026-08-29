@@ -8,6 +8,7 @@ import {
   courseEnrollmentEmail,
   idleReminderEmail,
   paymentReceiptEmail,
+  paystackCourseAccessReadyEmail,
   progressMilestoneEmail,
 } from "@/lib/email/system-templates";
 import { sendSystemEmail } from "@/lib/system-email";
@@ -150,6 +151,37 @@ export async function sendCourseEnrollmentEmail(params: {
     html: tpl.html,
     replyTo: sender.replyTo,
     payload: { studentId: params.studentId, courseId: params.courseId },
+  });
+}
+
+/** Paystack Payment Page access email — sent after external checkout enrollment. */
+export async function sendPaystackCourseAccessEmail(params: {
+  email: string;
+  firstName: string;
+  courseTitle: string;
+  courseUrl: string;
+  loginUrl: string;
+  isNewAccount: boolean;
+}) {
+  const settings = await getPlatformSettingsAdmin();
+  const sender = await getEmailSenderConfig();
+  const tpl = paystackCourseAccessReadyEmail({
+    firstName: studentFirstName(params.firstName),
+    courseTitle: params.courseTitle,
+    courseUrl: params.courseUrl,
+    loginUrl: params.loginUrl,
+    isNewAccount: params.isNewAccount,
+    supportEmail: sender.replyTo ?? sender.fromAddress,
+    brandColor: settings.primary_color,
+  });
+
+  return sendSystemEmail({
+    type: "paystack_course_access",
+    to: params.email.trim().toLowerCase(),
+    subject: tpl.subject,
+    html: tpl.html,
+    replyTo: sender.replyTo,
+    payload: { courseTitle: params.courseTitle, isNewAccount: params.isNewAccount },
   });
 }
 

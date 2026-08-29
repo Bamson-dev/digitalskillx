@@ -61,6 +61,8 @@ export async function fulfillPurchase(params: {
   courseId: string;
   reference: string;
   skipTransaction?: boolean;
+  /** External Paystack Payment Page sends a dedicated access email instead. */
+  skipCustomerEmails?: boolean;
   /** Included in welcome email when checkout created a new account. */
   welcomePassword?: string;
   /** Used when profile email is not set yet (guest checkout). */
@@ -188,7 +190,7 @@ export async function fulfillPurchase(params: {
     }
 
     const receiptEmail = profile?.email?.trim() || params.buyerEmail?.trim();
-    if (receiptEmail && (claimedThisRun || enrollment.created)) {
+    if (!params.skipCustomerEmails && receiptEmail && (claimedThisRun || enrollment.created)) {
       const welcome = await sendWelcomeEmailIfNeeded({
         studentId: params.studentId,
         fullName: params.buyerName?.trim() || profile?.full_name || "there",

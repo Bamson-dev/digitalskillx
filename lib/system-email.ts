@@ -11,6 +11,7 @@ export type SystemEmailType =
   | "idle_reminder"
   | "progress_milestone"
   | "course_enrollment"
+  | "paystack_course_access"
   | "checkout_abandon_reminder";
 
 export type SendSystemEmailParams = {

@@ -4,6 +4,11 @@ import { bootstrapRuntimeSecrets } from "@/lib/bootstrap-runtime-secrets";
 import { createAdminClientAsync } from "@/lib/supabase/admin";
 import { verifyWebhookSignature } from "@/lib/paystack";
 import { completePaidCheckout, readPendingCheckoutDetails } from "@/lib/guest-checkout";
+import { fulfillPaystackExternalCharge } from "@/lib/paystack-external-fulfillment";
+import {
+  type PaystackChargePayload,
+  readExternalPaystackData,
+} from "@/lib/paystack-external-products";
 import { ensurePurchaseEnrollment } from "@/lib/purchase";
 import { rateLimitedResponse } from "@/lib/api-rate-limit";
 import { secureLog } from "@/lib/secure-log";
@@ -28,7 +33,7 @@ export async function POST(request: NextRequest) {
 
   let event: {
     event: string;
-    data: { reference: string; status: string; metadata?: Record<string, string> };
+    data: PaystackChargePayload & { reference?: string; status?: string; metadata?: Record<string, string> };
   };
   try {
     event = JSON.parse(rawBody);
@@ -63,6 +68,35 @@ export async function POST(request: NextRequest) {
     .select("status, paystack_data, student_id, course_id")
     .eq("reference", reference)
     .maybeSingle();
+
+  if (!txBefore || readExternalPaystackData(txBefore.paystack_data)) {
+    const external = await fulfillPaystackExternalCharge({
+      reference,
+      webhookEvent: event.event,
+      webhookData: event.data,
+      admin,
+    });
+    if (external.handled) {
+      if (!external.ok) {
+        secureLog("error", "webhooks/paystack", "external fulfillment failed", {
+          reference,
+          error: external.error,
+        });
+        if (external.permanent || external.status === 200) {
+          return NextResponse.json({ received: true, error: external.error });
+        }
+        return NextResponse.json({ error: external.error }, { status: external.status });
+      }
+      return NextResponse.json({
+        received: true,
+        external: true,
+        alreadyFulfilled: external.alreadyFulfilled ?? false,
+      });
+    }
+    if (!txBefore) {
+      return NextResponse.json({ received: true, ignored: true });
+    }
+  }
 
   if (txBefore?.status === "success") {
     if (txBefore.student_id && txBefore.course_id) {

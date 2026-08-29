@@ -22,6 +22,8 @@
     "test:phase8": "node scripts/certification/test-phase8-commerce.mjs",
     "test:content-factory": "node scripts/certification/test-content-factory.mjs",
     "test:library-build": "node --import ./scripts/certification/register-ts-ext.mjs scripts/certification/test-library-build-engine.mjs",
+    "test:learn-discovery": "node --import ./scripts/certification/register-ts-ext.mjs scripts/certification/test-learn-discovery-experience.mjs",
+    "test:learn-analytics": "node --import ./scripts/certification/register-ts-ext.mjs scripts/certification/test-learn-analytics.mjs",
     "test:organic-authority": "node --import ./scripts/certification/register-ts-ext.mjs scripts/certification/test-organic-authority.mjs",
     "test:seo-growth": "node --import ./scripts/certification/register-ts-ext.mjs scripts/certification/test-seo-growth.mjs",
     "test:resend-email": "node scripts/certification/test-resend-email.mjs",
@@ -31,6 +33,7 @@
     "test:security-scan": "node scripts/certification/test-security-scan-phase6.mjs",
     "test:e2e": "playwright test",
     "test:paystack": "node scripts/certification/run-paystack-cert.mjs",
+    "test:paystack-external": "node --import ./scripts/certification/register-ts-ext.mjs scripts/certification/test-paystack-external-enrollment.mjs",
     "test:stress": "node scripts/certification/run-stress.mjs",
     "test:integrity": "node scripts/certification/run-paystack-cert.mjs"
   },
