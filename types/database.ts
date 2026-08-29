@@ -232,6 +232,15 @@ export type Transaction = Timestamps & {
   updated_at: string;
 };
 
+export type LeadthurHandoffNonce = {
+  nonce: string;
+  event_id: string;
+  product_key: string;
+  reference: string | null;
+  created_at: string;
+  expires_at: string;
+};
+
 export type CheckoutAbandonReminder = {
   id: string;
   transaction_id: string;
