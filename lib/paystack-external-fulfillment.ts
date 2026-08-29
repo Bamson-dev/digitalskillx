@@ -20,6 +20,7 @@ import {
   PAYSTACK_EXTERNAL_PRODUCTS,
 } from "@/lib/paystack-external-products";
 import { sendPaystackCourseAccessEmail } from "@/lib/system-email-triggers";
+import { trackExternalPurchase } from "@/lib/purchase-tracking";
 import { verifyTransaction } from "@/lib/paystack";
 import type { Database, Json } from "@/types/database";
 
@@ -549,6 +550,16 @@ export async function fulfillPaystackExternalCharge(params: {
 
     if (emailResult.sent) {
       secureLog("info", "paystack/external", "email_sent", { reference });
+      if (!externalMeta?.purchase_tracking_sent_at) {
+        await trackExternalPurchase({
+          reference,
+          customerEmail: buyerEmail,
+          product,
+        });
+        await patchTransactionPaystackData(admin, reference, {
+          purchase_tracking_sent_at: new Date().toISOString(),
+        });
+      }
     } else {
       secureLog("warn", "paystack/external", "email_failed", {
         reference,

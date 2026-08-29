@@ -26,7 +26,23 @@ If you see `"cronBootstrapDetail": "... PASTE_…_HERE placeholder"` — product
    - `ADMIN_EMAIL` = `admin@digitalskillx.com`
    - `ADMIN_PASSWORD` = your admin password
    - `ADMIN_MFA_REQUIRED` = `true` (optional — only when you want authenticator enforced; default is off)
+   - `DIGITALSKILLX_FORWARD_SECRET` = shared secret for Leadthur Paystack handoffs (≥32 chars; must match Leadthur)
+   - `STAPE_SERVER_URL` = `https://fbvnfwjp.aimoneycode.com.ng` (server-side GA4 purchase events after enrollment)
+   - `META_PIXEL_ID` = Meta Pixel ID (Conversions API)
+   - `META_CAPI_TOKEN` = Meta Conversions API access token
 4. **Redeploy** (required after env changes).
+
+### Purchase tracking (Paystack → Leadthur → DigitalSkillX)
+
+After a successful external Paystack enrollment, DigitalSkillX fires server-side purchase events to Stape (GA4) and Meta CAPI. These env vars are **required in production** for attribution:
+
+| Variable | Purpose |
+|----------|---------|
+| `STAPE_SERVER_URL` | Stape tagging server base URL (e.g. `https://fbvnfwjp.aimoneycode.com.ng`) |
+| `META_PIXEL_ID` | Meta Pixel ID for Conversions API |
+| `META_CAPI_TOKEN` | Meta Conversions API access token |
+
+Tracking is fail-open: missing credentials or API errors are logged but never block enrollment.
 
 ### 2. One-shot setup (after redeploy)
 

@@ -211,6 +211,7 @@ export type ExternalPaystackData = {
   paystack_transaction_id?: string | number | null;
   webhook_event?: string;
   access_email_sent_at?: string | null;
+  purchase_tracking_sent_at?: string | null;
   fulfillment_error?: string | null;
   paid_at?: string | null;
   customer_email?: string | null;
