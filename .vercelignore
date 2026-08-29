@@ -1,0 +1,13 @@
+# Local WIP (untracked) — incomplete learn analytics/discovery work breaks `next build`.
+lib/learn-analytics
+lib/learn-discovery
+app/(admin)/admin/(panel)/learn-analytics
+app/(student)/my-learning
+app/api/admin/learn-analytics
+app/api/learn/analytics
+app/api/learn/discovery
+components/admin/learn-analytics-dashboard.tsx
+components/learn/learn-course-view-tracker.tsx
+components/learn/learn-discovery-toolbar.tsx
+components/learn/learn-path-card.tsx
+components/learn/learn-path-resume-cta.tsx
