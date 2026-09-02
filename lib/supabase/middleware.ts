@@ -45,6 +45,27 @@ function isPublic(pathname: string) {
   return PUBLIC_PREFIXES.some((p) => pathname.startsWith(p));
 }
 
+/** Avoid MIDDLEWARE_INVOCATION_TIMEOUT when Supabase auth is slow or unreachable. */
+const AUTH_GET_USER_TIMEOUT_MS = 6_000;
+
+async function getUserWithTimeout(
+  supabase: ReturnType<typeof createServerClient<Database>>,
+) {
+  return Promise.race([
+    supabase.auth.getUser(),
+    new Promise<{ data: { user: null }; error: Error }>((resolve) =>
+      setTimeout(
+        () =>
+          resolve({
+            data: { user: null },
+            error: new Error("middleware_auth_timeout"),
+          }),
+        AUTH_GET_USER_TIMEOUT_MS,
+      ),
+    ),
+  ]);
+}
+
 /**
  * Refreshes the Supabase session on protected requests and enforces coarse
  * route protection. Fine-grained admin role checks happen server-side in
@@ -105,7 +126,7 @@ export async function updateSession(request: NextRequest) {
 
     const {
       data: { user },
-    } = await supabase.auth.getUser();
+    } = await getUserWithTimeout(supabase);
 
     if (!user) {
       if (pathname.startsWith("/api/")) {

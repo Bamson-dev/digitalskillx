@@ -18,7 +18,7 @@ export async function POST(
   const limited = await rateLimitedResponse(request, "admin-wfu-import-confirm", 10);
   if (limited) return limited;
 
-  const auth = await requireAdminApiAuth();
+  const auth = await requireAdminApiAuth({ lite: true });
   if ("error" in auth) return auth.error;
 
   const form = await request.formData();

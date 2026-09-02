@@ -25,7 +25,7 @@ export async function POST(
   const limited = await rateLimitedResponse(request, "admin-wfu-import", 15);
   if (limited) return limited;
 
-  const auth = await requireAdminApiAuth();
+  const auth = await requireAdminApiAuth({ lite: true });
   if ("error" in auth) return auth.error;
 
   const snapshot = await loadCampaignSnapshot(auth.admin, params.campaignId);

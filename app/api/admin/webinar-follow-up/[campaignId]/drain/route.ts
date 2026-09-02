@@ -20,7 +20,7 @@ export async function POST(
   _request: NextRequest,
   { params }: { params: { campaignId: string } },
 ) {
-  const auth = await requireAdminApiAuth();
+  const auth = await requireAdminApiAuth({ lite: true });
   if ("error" in auth) return auth.error;
   if (!resendConfigured()) {
     return NextResponse.json({ error: "Resend is not configured." }, { status: 503 });

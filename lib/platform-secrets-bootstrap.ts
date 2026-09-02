@@ -2,6 +2,15 @@ import "server-only";
 import { setCachedIntegrationSecret, getCachedIntegrationSecret } from "@/lib/integration-secrets-cache";
 import { preloadRuntimeEnvIntoProcessEnv, runtimeEnv } from "@/lib/runtime-env";
 
+const FETCH_TIMEOUT_MS = 5_000;
+
+function fetchWithTimeout(url: string, init: RequestInit, timeoutMs = FETCH_TIMEOUT_MS) {
+  return fetch(url, {
+    ...init,
+    signal: AbortSignal.timeout(timeoutMs),
+  });
+}
+
 export type PlatformSecretsRow = {
   supabase_service_role_key?: string | null;
   paystack_secret_key?: string | null;
@@ -67,7 +76,7 @@ export async function fetchPlatformSecretsWithServiceRole(
   const url = `${supabaseUrl.replace(/\/$/, "")}/rest/v1/platform_secrets?id=eq.default&select=${select}`;
 
   try {
-    const res = await fetch(url, {
+    const res = await fetchWithTimeout(url, {
       headers: {
         apikey: serviceRole,
         Authorization: `Bearer ${serviceRole}`,
@@ -94,7 +103,7 @@ export async function probeCronBootstrapRpc(): Promise<{
   if (!supabaseUrl || !anonKey) return { httpStatus: null, reason: "Supabase URL/anon key missing" };
 
   try {
-    const res = await fetch(
+    const res = await fetchWithTimeout(
       `${supabaseUrl.replace(/\/$/, "")}/rest/v1/rpc/server_bootstrap_platform_secrets`,
       {
         method: "POST",
@@ -152,7 +161,7 @@ export async function fetchPlatformSecretsViaCronAuth(): Promise<PlatformSecrets
   if (!cronSecret || !supabaseUrl || !anonKey) return null;
 
   try {
-    const res = await fetch(
+    const res = await fetchWithTimeout(
       `${supabaseUrl.replace(/\/$/, "")}/rest/v1/rpc/server_bootstrap_platform_secrets`,
       {
         method: "POST",
@@ -196,7 +205,9 @@ export async function fetchPlatformSecretsViaCronAuth(): Promise<PlatformSecrets
 }
 
 /** Load integration secrets from env file, platform_secrets (service role), or CRON bootstrap. */
-export async function bootstrapPlatformSecrets(): Promise<void> {
+let bootstrapPromise: Promise<void> | null = null;
+
+async function bootstrapPlatformSecretsInner(): Promise<void> {
   preloadRuntimeEnvIntoProcessEnv();
 
   const existing = readServiceRoleFromEnv();
@@ -211,4 +222,14 @@ export async function bootstrapPlatformSecrets(): Promise<void> {
     applyPlatformSecretsRow(viaCron);
     console.log("[digitalskillx] Loaded platform_secrets via CRON bootstrap");
   }
+}
+
+export async function bootstrapPlatformSecrets(): Promise<void> {
+  if (!bootstrapPromise) {
+    bootstrapPromise = bootstrapPlatformSecretsInner().catch((err) => {
+      bootstrapPromise = null;
+      throw err;
+    });
+  }
+  return bootstrapPromise;
 }
