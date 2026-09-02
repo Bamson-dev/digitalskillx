@@ -34,27 +34,35 @@ export async function POST(request: NextRequest) {
   const depth = continuationDepthFromRequest(request);
 
   try {
-    // Peek + kick before draining so a timeout mid-drain does not leave
-    // due emails idle until the next scheduled cron.
-    const peek = await nudgeWebinarFollowupFromCron(
-      admin,
-      depth === 0 ? "wfu_cron_bootstrap" : "wfu_cron_continue_peek",
-    );
+    const drainPromise = (async () => {
+      const peek = await nudgeWebinarFollowupFromCron(
+        admin,
+        depth === 0 ? "wfu_cron_bootstrap" : "wfu_cron_continue_peek",
+      );
 
-    const result = await runLiveWebinarFollowupDrain(admin, {
-      budgetMs: DRAIN_BUDGET_MS,
-    });
-    keepWebinarFollowupSending({
-      moreDue: result.moreDue,
-      depth,
-      reason: "more_wfu_due",
-    });
+      const result = await runLiveWebinarFollowupDrain(admin, {
+        budgetMs: DRAIN_BUDGET_MS,
+      });
+      keepWebinarFollowupSending({
+        moreDue: result.moreDue,
+        depth,
+        reason: "more_wfu_due",
+      });
+
+      return { peek, ...result };
+    })();
+
+    const result = await Promise.race([
+      drainPromise,
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error("wfu_cron_timeout")), 110_000),
+      ),
+    ]);
 
     return NextResponse.json({
       ok: true,
       depth,
       chained: result.moreDue,
-      peek,
       ...result,
     });
   } catch (err) {

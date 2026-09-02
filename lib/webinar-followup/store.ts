@@ -207,65 +207,109 @@ export async function loadCampaignSnapshot(
 
 export async function loadCampaignCounts(admin: Admin, campaignId: string): Promise<CampaignCounts> {
   const counts = emptyCounts();
-  const { data: contacts, error } = await admin
-    .from("webinar_followup_contacts" as never)
-    .select("status, next_send_at")
-    .eq("campaign_id", campaignId);
-  if (error) {
-    if (isMissingRelationError(error.message)) return counts;
-    throw new Error(error.message);
-  }
-  const now = Date.now();
-  let next: string | null = null;
-  for (const row of (contacts as Array<{ status: string; next_send_at: string }> | null) ?? []) {
-    counts.total += 1;
-    if (row.status === "active") {
-      counts.active += 1;
-      const t = new Date(row.next_send_at).getTime();
-      if (t <= now) counts.dueNow += 1;
-      else if (!next || row.next_send_at < next) next = row.next_send_at;
-    } else if (row.status === "waiting") counts.waiting += 1;
-    else if (row.status === "completed") counts.completed += 1;
-    else if (row.status === "unsubscribed") counts.unsubscribed += 1;
-    else if (row.status === "failed") counts.failed += 1;
-    else if (row.status === "paused") counts.paused += 1;
-  }
-  counts.nextScheduledAt = next;
+  const nowIso = new Date().toISOString();
 
-  const countExact = async (status: string) => {
-    const { count, error: countError } = await admin
-      .from("webinar_followup_sends" as never)
+  const countContacts = async (filters?: {
+    status?: string;
+    dueOnly?: boolean;
+  }): Promise<number> => {
+    let query = admin
+      .from("webinar_followup_contacts" as never)
       .select("id", { count: "exact", head: true })
-      .eq("campaign_id", campaignId)
-      .eq("status", status);
-    if (countError) return 0;
+      .eq("campaign_id", campaignId);
+    if (filters?.status) query = query.eq("status", filters.status);
+    if (filters?.dueOnly) {
+      query = query.eq("status", "active").lte("next_send_at", nowIso);
+    }
+    const { count, error } = await query;
+    if (error) {
+      if (isMissingRelationError(error.message)) return 0;
+      throw new Error(error.message);
+    }
     return count ?? 0;
   };
-  counts.sent = await countExact("sent");
-  counts.sending = await countExact("sending");
-  counts.sendFailed = await countExact("failed");
 
+  const [active, waiting, completed, unsubscribed, failed, paused, dueNow, sent, sending, sendFailed, sentToday, nextRow, lastSent] =
+    await Promise.all([
+      countContacts({ status: "active" }),
+      countContacts({ status: "waiting" }),
+      countContacts({ status: "completed" }),
+      countContacts({ status: "unsubscribed" }),
+      countContacts({ status: "failed" }),
+      countContacts({ status: "paused" }),
+      countContacts({ dueOnly: true }),
+      countExact(admin, campaignId, "sent"),
+      countExact(admin, campaignId, "sending"),
+      countExact(admin, campaignId, "failed"),
+      countSentToday(admin, campaignId),
+      admin
+        .from("webinar_followup_contacts" as never)
+        .select("next_send_at")
+        .eq("campaign_id", campaignId)
+        .eq("status", "active")
+        .gt("next_send_at", nowIso)
+        .order("next_send_at", { ascending: true })
+        .limit(1)
+        .maybeSingle(),
+      admin
+        .from("webinar_followup_sends" as never)
+        .select("sent_at")
+        .eq("campaign_id", campaignId)
+        .eq("status", "sent")
+        .not("sent_at", "is", null)
+        .order("sent_at", { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+    ]);
+
+  counts.active = active;
+  counts.waiting = waiting;
+  counts.completed = completed;
+  counts.unsubscribed = unsubscribed;
+  counts.failed = failed;
+  counts.paused = paused;
+  counts.dueNow = dueNow;
+  counts.total = active + waiting + completed + unsubscribed + failed + paused;
+  counts.sent = sent;
+  counts.sending = sending;
+  counts.sendFailed = sendFailed;
+  counts.sentToday = sentToday;
+  counts.nextScheduledAt = nextRow.data
+    ? String((nextRow.data as { next_send_at: string }).next_send_at)
+    : null;
+  counts.lastSentAt = lastSent.data
+    ? String((lastSent.data as { sent_at: string }).sent_at)
+    : null;
+
+  return counts;
+}
+
+async function countExact(admin: Admin, campaignId: string, status: string): Promise<number> {
+  const { count, error } = await admin
+    .from("webinar_followup_sends" as never)
+    .select("id", { count: "exact", head: true })
+    .eq("campaign_id", campaignId)
+    .eq("status", status);
+  if (error) {
+    if (isMissingRelationError(error.message)) return 0;
+    return 0;
+  }
+  return count ?? 0;
+}
+
+async function countSentToday(admin: Admin, campaignId: string): Promise<number> {
   const dayStart = lagosDayStartUtc().toISOString();
-  const { count: sentToday } = await admin
+  const { count, error } = await admin
     .from("webinar_followup_sends" as never)
     .select("id", { count: "exact", head: true })
     .eq("campaign_id", campaignId)
     .eq("status", "sent")
     .gte("sent_at", dayStart);
-  counts.sentToday = sentToday ?? 0;
-
-  const { data: lastSent } = await admin
-    .from("webinar_followup_sends" as never)
-    .select("sent_at")
-    .eq("campaign_id", campaignId)
-    .eq("status", "sent")
-    .not("sent_at", "is", null)
-    .order("sent_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  counts.lastSentAt = lastSent ? String((lastSent as { sent_at: string }).sent_at) : null;
-
-  return counts;
+  if (error) {
+    if (isMissingRelationError(error.message)) return 0;
+    return 0;
+  }
+  return count ?? 0;
 }
 
 export async function listSequenceSteps(admin: Admin, campaignId: string): Promise<WfuStep[]> {

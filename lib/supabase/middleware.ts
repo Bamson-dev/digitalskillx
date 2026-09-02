@@ -46,7 +46,7 @@ function isPublic(pathname: string) {
 }
 
 /** Avoid MIDDLEWARE_INVOCATION_TIMEOUT when Supabase auth is slow or unreachable. */
-const AUTH_GET_USER_TIMEOUT_MS = 6_000;
+const AUTH_GET_USER_TIMEOUT_MS = 4_000;
 
 async function getUserWithTimeout(
   supabase: ReturnType<typeof createServerClient<Database>>,
@@ -80,6 +80,13 @@ export async function updateSession(request: NextRequest) {
   }
 
   const { pathname } = request.nextUrl;
+
+  // Admin auth is enforced in server layouts (requireAdmin). Skipping Supabase here
+  // avoids MIDDLEWARE_INVOCATION_TIMEOUT when auth is slow and removes duplicate
+  // round-trips on every admin navigation.
+  if (pathname.startsWith("/admin") && pathname !== "/admin/login") {
+    return NextResponse.next({ request });
+  }
 
   // Public pages skip Supabase round-trips — prevents MIDDLEWARE_INVOCATION_TIMEOUT
   // on /, /learn, marketing pages, etc. Protected routes still refresh the session.
