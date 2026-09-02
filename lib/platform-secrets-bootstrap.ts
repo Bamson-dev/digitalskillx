@@ -206,14 +206,21 @@ export async function fetchPlatformSecretsViaCronAuth(): Promise<PlatformSecrets
 
 /** Load integration secrets from env file, platform_secrets (service role), or CRON bootstrap. */
 let bootstrapPromise: Promise<void> | null = null;
+let lastBootstrapAt = 0;
+const BOOTSTRAP_TTL_MS = 5 * 60 * 1000;
 
 async function bootstrapPlatformSecretsInner(): Promise<void> {
   preloadRuntimeEnvIntoProcessEnv();
+
+  if (Date.now() - lastBootstrapAt < BOOTSTRAP_TTL_MS) {
+    return;
+  }
 
   const existing = readServiceRoleFromEnv();
   if (existing) {
     const row = await fetchPlatformSecretsWithServiceRole(existing);
     if (row) applyPlatformSecretsRow(row);
+    lastBootstrapAt = Date.now();
     return;
   }
 
@@ -222,6 +229,7 @@ async function bootstrapPlatformSecretsInner(): Promise<void> {
     applyPlatformSecretsRow(viaCron);
     console.log("[digitalskillx] Loaded platform_secrets via CRON bootstrap");
   }
+  lastBootstrapAt = Date.now();
 }
 
 export async function bootstrapPlatformSecrets(): Promise<void> {

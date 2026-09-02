@@ -1,6 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { bootstrapRuntimeSecrets } from "@/lib/bootstrap-runtime-secrets";
-import { createAdminClientAsync } from "@/lib/supabase/admin";
 import { verifyCronSecret } from "@/lib/cron-auth";
 import { requireAdminApiAuth } from "@/lib/admin-api-auth";
 import { paystackSecretKeyConfigured } from "@/lib/env-paystack";
@@ -10,41 +9,21 @@ import { serviceRoleKeyConfigured } from "@/lib/env-service-role";
 import { integrationSecretsDiagnostics } from "@/lib/secrets-diagnostics";
 import { supabaseProjectRef } from "@/lib/supabase-project-ref";
 import { configuredAdminEmail } from "@/lib/admin-email";
+import { probeDatabaseConnection } from "@/lib/health-database-probe";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 /** Public: minimal liveness only. Full diagnostics require admin session or CRON_SECRET. */
 export async function GET(request: NextRequest) {
-  await bootstrapRuntimeSecrets();
-
   const cron = verifyCronSecret(request);
   let detailed = cron.ok;
   if (!detailed) {
-    const adminAuth = await requireAdminApiAuth();
+    const adminAuth = await requireAdminApiAuth({ lite: true });
     detailed = !("error" in adminAuth);
   }
 
-  let database: "unknown" | "connected" | "error" = "unknown";
-  try {
-    // Bound the DB probe so readiness/liveness never hangs Playwright or load balancers.
-    const admin = await Promise.race([
-      createAdminClientAsync(),
-      new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error("health_db_timeout")), 4_000),
-      ),
-    ]);
-    const probe = admin.from("courses").select("id").limit(1);
-    const { error } = await Promise.race([
-      probe,
-      new Promise<{ error: { message: string } }>((resolve) =>
-        setTimeout(() => resolve({ error: { message: "health_db_timeout" } }), 4_000),
-      ),
-    ]);
-    database = error ? "error" : "connected";
-  } catch {
-    database = "error";
-  }
+  const database = await probeDatabaseConnection();
 
   if (!detailed) {
     // Application liveness is 200 even when DB is degraded — callers read `status` / `database`.
@@ -58,6 +37,8 @@ export async function GET(request: NextRequest) {
       { status: 200 },
     );
   }
+
+  await bootstrapRuntimeSecrets();
 
   const youtube = await youtubeApiKeyDiagnostics();
   const paystackReady = await paystackSecretKeyConfigured();
