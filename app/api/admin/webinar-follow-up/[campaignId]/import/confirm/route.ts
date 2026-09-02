@@ -4,7 +4,8 @@ import { rateLimitedResponse } from "@/lib/api-rate-limit";
 import { logAudit } from "@/lib/audit";
 import { MAX_CSV_BYTES } from "@/lib/webinar-followup/constants";
 import { extractContactsFromCsv } from "@/lib/webinar-followup/csv";
-import { confirmImportEnrollment } from "@/lib/webinar-followup/store";
+import { scheduleWebinarFollowupDrain } from "@/lib/webinar-followup/live-drain";
+import { confirmImportEnrollment, loadCampaignSnapshot } from "@/lib/webinar-followup/store";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -56,6 +57,14 @@ export async function POST(
     campaignId: params.campaignId,
     contacts: extracted.contacts,
   });
+
+  const campaign = await loadCampaignSnapshot(auth.admin, params.campaignId);
+  if (campaign.campaign?.status === "active" && result.enrolled > 0) {
+    scheduleWebinarFollowupDrain(auth.admin, {
+      campaignId: params.campaignId,
+      reason: "wfu_import_confirm",
+    });
+  }
 
   await logAudit({
     action: "webinar_followup_import_confirm",

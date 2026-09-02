@@ -2,12 +2,12 @@ import { NextResponse, type NextRequest } from "next/server";
 import { requireAdminApiAuth } from "@/lib/admin-api-auth";
 import { rateLimitedResponse } from "@/lib/api-rate-limit";
 import { logAudit } from "@/lib/audit";
-import { keepWebinarFollowupSending } from "@/lib/bulk-import-continue";
 import { MAX_CSV_BYTES, type CampaignStatus } from "@/lib/webinar-followup/constants";
 import {
   extractContactsFromCsv,
   parseCsvMatrix,
 } from "@/lib/webinar-followup/csv";
+import { scheduleWebinarFollowupDrain } from "@/lib/webinar-followup/live-drain";
 import { importNewContactsOneShot, loadCampaignSnapshot, loadCampaignCounts } from "@/lib/webinar-followup/store";
 
 export const dynamic = "force-dynamic";
@@ -89,11 +89,10 @@ export async function POST(
     },
   });
 
-  // If campaign is active and new contacts are due for Email 1, drain via continuation.
+  // Active campaign: drain immediately in background (not only cron chain).
   if (snapshot.campaign.status === "active" && result.enrolled > 0) {
-    keepWebinarFollowupSending({
-      moreDue: true,
-      depth: 0,
+    scheduleWebinarFollowupDrain(auth.admin, {
+      campaignId: params.campaignId,
       reason: "wfu_import_new_contacts",
     });
   }

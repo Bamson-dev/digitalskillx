@@ -31,6 +31,12 @@ export function defaultCtaUrlForStep(stepNumber: number): string {
 export const MAX_SEND_ATTEMPTS = 8;
 export const STALE_SENDING_MINUTES = 2;
 export const DEFAULT_STEP_DELAY_HOURS = 24;
+/** Parallel Resend calls per processor tick (stay under provider rate limits). */
+export const WEBINAR_FOLLOWUP_SEND_CONCURRENCY = 8;
+/** Max contacts queued + claimed per tick. */
+export const WEBINAR_FOLLOWUP_DRAIN_LIMIT = 100;
+/** Time budget for one drain pass (ms); fits Vercel maxDuration 120s with continuation headroom. */
+export const WEBINAR_FOLLOWUP_DRAIN_BUDGET_MS = 100_000;
 export const MAX_CSV_BYTES = 5 * 1024 * 1024;
 export const MAX_CSV_ROWS = 20_000;
 

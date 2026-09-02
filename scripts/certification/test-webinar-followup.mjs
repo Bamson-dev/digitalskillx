@@ -628,12 +628,12 @@ function makeSteps(campaignId, n) {
   assert.match(panel, /Activate Campaign/);
   assert.match(panel, /\[TEST\]/);
   assert.match(importRoute, /importNewContactsOneShot/);
-  assert.match(importRoute, /keepWebinarFollowupSending/);
+  assert.match(importRoute, /scheduleWebinarFollowupDrain/);
   const drainRoute = readFileSync(
     join(root, "app/api/admin/webinar-follow-up/[campaignId]/drain/route.ts"),
     "utf8",
   );
-  assert.match(drainRoute, /runLiveWebinarFollowupDrain/);
+  assert.match(drainRoute, /kickWebinarFollowupDrain/);
   assert.match(panel, /Send due emails now/);
   assert.match(panel, /Today's emails have been sent|Today&apos;s emails have been sent/);
   ok("admin flow is one-click import + confirm-modal activate; no env activation lock");
@@ -658,7 +658,10 @@ function makeSteps(campaignId, n) {
   assert.match(vercel, /25 10 \* \* \*/);
   assert.match(cronRoute, /wfu_drain_error/);
   assert.match(storeSrc, /\.range\(from, to\)/);
-  assert.match(liveDrain, /leftover/);
+  const processorSrc = readFileSync(join(root, "lib/webinar-followup/processor.ts"), "utf8");
+  assert.match(processorSrc, /WEBINAR_FOLLOWUP_SEND_CONCURRENCY/);
+  assert.match(processorSrc, /Promise\.all/);
+  assert.match(liveDrain, /scheduleWebinarFollowupDrain/);
   ok("cron path and continuation support webinar follow-up");
 }
 

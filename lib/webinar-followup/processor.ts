@@ -2,6 +2,9 @@ import type { SendEmailResult } from "../email/types";
 import { isSyntheticTestRecipient } from "../email/synthetic-recipient";
 import {
   MAX_SEND_ATTEMPTS,
+  WEBINAR_FOLLOWUP_DRAIN_BUDGET_MS,
+  WEBINAR_FOLLOWUP_DRAIN_LIMIT,
+  WEBINAR_FOLLOWUP_SEND_CONCURRENCY,
   canProcessCampaign,
   normalizeEmail,
   nextSendAtAfter,
@@ -113,6 +116,155 @@ function errorMessage(error: unknown): string {
   return String(error);
 }
 
+type SendTickCounts = Pick<
+  ProcessorResult,
+  "sent" | "failed" | "skipped" | "unsubscribed" | "completed"
+>;
+
+async function processClaimedSend(params: {
+  store: WfuStore;
+  sendEmail: WfuMailer;
+  campaign: WfuCampaign;
+  send: WfuSend;
+  now: Date;
+}): Promise<SendTickCounts> {
+  const counts: SendTickCounts = {
+    sent: 0,
+    failed: 0,
+    skipped: 0,
+    unsubscribed: 0,
+    completed: 0,
+  };
+  const nowIso = params.now.toISOString();
+
+  const contact = await params.store.getContact(params.send.contact_id);
+  if (!contact || contact.status !== "active") {
+    await params.store.markSendResult({
+      sendId: params.send.id,
+      status: "skipped",
+      lastError: "contact_not_active",
+    });
+    counts.skipped += 1;
+    return counts;
+  }
+
+  if (await params.store.isEmailSuppressed(contact.email)) {
+    await params.store.markContactUnsubscribed(contact.id, nowIso);
+    await params.store.markSendResult({
+      sendId: params.send.id,
+      status: "skipped",
+      lastError: "suppressed",
+    });
+    counts.unsubscribed += 1;
+    return counts;
+  }
+
+  if (isSyntheticTestRecipient(contact.email)) {
+    await params.store.markSendResult({
+      sendId: params.send.id,
+      status: "skipped",
+      lastError: "synthetic_recipient",
+    });
+    counts.skipped += 1;
+    return counts;
+  }
+
+  const step = await params.store.getStep(params.campaign.id, params.send.step_number);
+  if (!step || step.status !== "active") {
+    await params.store.markSendResult({
+      sendId: params.send.id,
+      status: "skipped",
+      lastError: "step_not_active",
+    });
+    counts.skipped += 1;
+    return counts;
+  }
+
+  const unsub = unsubscribeUrl(contact.email, params.campaign.slug);
+  const unsubApi = unsubscribeApiUrl(contact.email, params.campaign.slug);
+  const rendered = renderWebinarFollowupEmail({
+    email: step,
+    firstName: contact.first_name,
+    campaignSlug: params.campaign.slug,
+    unsubscribeUrl: unsub,
+  });
+
+  const mail = await params.sendEmail({
+    to: normalizeEmail(contact.email),
+    subject: rendered.subject,
+    html: rendered.html,
+    idempotencyKey: params.send.idempotency_key,
+    headers: unsubApi ? listUnsubscribeHeader(unsubApi) : undefined,
+  });
+
+  if ("messageId" in mail) {
+    const completed = params.send.step_number >= params.campaign.total_steps;
+    const nextStep = completed ? params.campaign.total_steps + 1 : params.send.step_number + 1;
+    const nextStepDef = completed
+      ? null
+      : await params.store.getStep(params.campaign.id, nextStep);
+    const delayHours = nextStepDef?.delayHours ?? 24;
+    const nextAt = completed ? null : nextSendAtAfter(params.now, delayHours);
+
+    await params.store.markSendResult({
+      sendId: params.send.id,
+      status: "sent",
+      providerMessageId: mail.messageId,
+    });
+    await params.store.markContactSent({
+      contactId: contact.id,
+      stepNumber: params.send.step_number,
+      sentAt: params.now.toISOString(),
+      nextStep,
+      nextSendAt: nextAt?.toISOString() ?? params.now.toISOString(),
+      completed,
+    });
+    counts.sent += 1;
+    if (completed) counts.completed += 1;
+    return counts;
+  }
+
+  if ("skipped" in mail && mail.skipped) {
+    await params.store.markSendResult({
+      sendId: params.send.id,
+      status: "skipped",
+      lastError: errorMessage(mail.error),
+    });
+    counts.skipped += 1;
+    return counts;
+  }
+
+  const attempts = params.send.attempts;
+  const retryable = attempts < MAX_SEND_ATTEMPTS;
+  const backoffMin = Math.min(60, 2 ** Math.min(attempts, 5));
+  const err = errorMessage(mail.error);
+  if (retryable) {
+    await params.store.markSendResult({
+      sendId: params.send.id,
+      status: "pending",
+      lastError: err,
+      scheduledAt: new Date(params.now.getTime() + backoffMin * 60_000).toISOString(),
+    });
+  } else {
+    await params.store.markSendResult({
+      sendId: params.send.id,
+      status: "failed",
+      lastError: err,
+    });
+    await params.store.markContactFailed(contact.id, nowIso, err);
+  }
+  counts.failed += 1;
+  return counts;
+}
+
+function mergeSendCounts(target: SendTickCounts, delta: SendTickCounts) {
+  target.sent += delta.sent;
+  target.failed += delta.failed;
+  target.skipped += delta.skipped;
+  target.unsubscribed += delta.unsubscribed;
+  target.completed += delta.completed;
+}
+
 async function processOneCampaignTick(params: {
   store: WfuStore;
   sendEmail: WfuMailer;
@@ -192,125 +344,21 @@ async function processOneCampaignTick(params: {
     completed: 0,
   };
 
-  for (const send of claimed) {
-    const contact = await params.store.getContact(send.contact_id);
-    if (!contact || contact.status !== "active") {
-      await params.store.markSendResult({
-        sendId: send.id,
-        status: "skipped",
-        lastError: "contact_not_active",
-      });
-      result.skipped += 1;
-      continue;
-    }
-
-    if (await params.store.isEmailSuppressed(contact.email)) {
-      await params.store.markContactUnsubscribed(contact.id, nowIso);
-      await params.store.markSendResult({
-        sendId: send.id,
-        status: "skipped",
-        lastError: "suppressed",
-      });
-      result.unsubscribed += 1;
-      continue;
-    }
-
-    if (isSyntheticTestRecipient(contact.email)) {
-      await params.store.markSendResult({
-        sendId: send.id,
-        status: "skipped",
-        lastError: "synthetic_recipient",
-      });
-      result.skipped += 1;
-      continue;
-    }
-
-    const step = await params.store.getStep(params.campaign.id, send.step_number);
-    if (!step || step.status !== "active") {
-      await params.store.markSendResult({
-        sendId: send.id,
-        status: "skipped",
-        lastError: "step_not_active",
-      });
-      result.skipped += 1;
-      continue;
-    }
-
-    const unsub = unsubscribeUrl(contact.email, params.campaign.slug);
-    const unsubApi = unsubscribeApiUrl(contact.email, params.campaign.slug);
-    const rendered = renderWebinarFollowupEmail({
-      email: step,
-      firstName: contact.first_name,
-      campaignSlug: params.campaign.slug,
-      unsubscribeUrl: unsub,
-    });
-
-    const mail = await params.sendEmail({
-      to: normalizeEmail(contact.email),
-      subject: rendered.subject,
-      html: rendered.html,
-      idempotencyKey: send.idempotency_key,
-      headers: unsubApi ? listUnsubscribeHeader(unsubApi) : undefined,
-    });
-
-    if ("messageId" in mail) {
-      const completed = send.step_number >= params.campaign.total_steps;
-      const nextStep = completed ? params.campaign.total_steps + 1 : send.step_number + 1;
-      const nextStepDef = completed
-        ? null
-        : await params.store.getStep(params.campaign.id, nextStep);
-      // Next email's delay is configured on the NEXT step (hours after previous send).
-      const delayHours = nextStepDef?.delayHours ?? 24;
-      const nextAt = completed ? null : nextSendAtAfter(params.now, delayHours);
-
-      await params.store.markSendResult({
-        sendId: send.id,
-        status: "sent",
-        providerMessageId: mail.messageId,
-      });
-      await params.store.markContactSent({
-        contactId: contact.id,
-        stepNumber: send.step_number,
-        sentAt: params.now.toISOString(),
-        nextStep,
-        nextSendAt: nextAt?.toISOString() ?? params.now.toISOString(),
-        completed,
-      });
-      result.sent += 1;
-      if (completed) result.completed += 1;
-      continue;
-    }
-
-    if ("skipped" in mail && mail.skipped) {
-      await params.store.markSendResult({
-        sendId: send.id,
-        status: "skipped",
-        lastError: errorMessage(mail.error),
-      });
-      result.skipped += 1;
-      continue;
-    }
-
-    const attempts = send.attempts;
-    const retryable = attempts < MAX_SEND_ATTEMPTS;
-    const backoffMin = Math.min(60, 2 ** Math.min(attempts, 5));
-    const err = errorMessage(mail.error);
-    if (retryable) {
-      await params.store.markSendResult({
-        sendId: send.id,
-        status: "pending",
-        lastError: err,
-        scheduledAt: new Date(params.now.getTime() + backoffMin * 60_000).toISOString(),
-      });
-    } else {
-      await params.store.markSendResult({
-        sendId: send.id,
-        status: "failed",
-        lastError: err,
-      });
-      await params.store.markContactFailed(contact.id, nowIso, err);
-    }
-    result.failed += 1;
+  const concurrency = Math.max(1, WEBINAR_FOLLOWUP_SEND_CONCURRENCY);
+  for (let i = 0; i < claimed.length; i += concurrency) {
+    const chunk = claimed.slice(i, i + concurrency);
+    const chunkResults = await Promise.all(
+      chunk.map((send) =>
+        processClaimedSend({
+          store: params.store,
+          sendEmail: params.sendEmail,
+          campaign: params.campaign,
+          send,
+          now: params.now,
+        }),
+      ),
+    );
+    for (const row of chunkResults) mergeSendCounts(result, row);
   }
 
   if (due.length === 0 && claimed.length === 0) result.reason = "no_due";
@@ -325,7 +373,7 @@ export async function processWebinarFollowupTick(params: {
   campaignId?: string;
 }): Promise<ProcessorResult> {
   const now = params.now ?? new Date();
-  const limit = Math.max(1, Math.min(params.limit ?? 20, 100));
+  const limit = Math.max(1, Math.min(params.limit ?? WEBINAR_FOLLOWUP_DRAIN_LIMIT, 100));
   const campaigns = params.campaignId
     ? ([await params.store.getCampaign(params.campaignId)].filter(Boolean) as WfuCampaign[])
     : await params.store.listActiveCampaigns();
@@ -377,8 +425,8 @@ export async function drainWebinarFollowupUntilBudget(params: {
   budgetMs?: number;
   campaignId?: string;
 }): Promise<DrainResult> {
-  const budgetMs = Math.max(1_000, params.budgetMs ?? 100_000);
-  const limit = Math.max(1, Math.min(params.limit ?? 40, 100));
+  const budgetMs = Math.max(1_000, params.budgetMs ?? WEBINAR_FOLLOWUP_DRAIN_BUDGET_MS);
+  const limit = Math.max(1, Math.min(params.limit ?? WEBINAR_FOLLOWUP_DRAIN_LIMIT, 100));
   const started = Date.now();
   const acc: DrainResult = {
     campaignsExamined: 0,

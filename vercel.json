@@ -22,6 +22,26 @@
     },
     {
       "path": "/api/cron/webinar-follow-up",
+      "schedule": "5 8 * * *"
+    },
+    {
+      "path": "/api/cron/webinar-follow-up",
+      "schedule": "5 11 * * *"
+    },
+    {
+      "path": "/api/cron/webinar-follow-up",
+      "schedule": "5 13 * * *"
+    },
+    {
+      "path": "/api/cron/webinar-follow-up",
+      "schedule": "5 15 * * *"
+    },
+    {
+      "path": "/api/cron/webinar-follow-up",
+      "schedule": "5 17 * * *"
+    },
+    {
+      "path": "/api/cron/webinar-follow-up",
       "schedule": "0 14 * * *"
     },
     {

@@ -4,7 +4,8 @@ import { requireAdminApiAuth } from "@/lib/admin-api-auth";
 import { logAudit } from "@/lib/audit";
 import { keepWebinarFollowupSending } from "@/lib/bulk-import-continue";
 import { resendConfigured } from "@/lib/email/providers/resend";
-import { runLiveWebinarFollowupDrain } from "@/lib/webinar-followup/live-drain";
+import { WEBINAR_FOLLOWUP_DRAIN_BUDGET_MS } from "@/lib/webinar-followup/constants";
+import { kickWebinarFollowupDrain } from "@/lib/webinar-followup/live-drain";
 import { loadCampaignSnapshot } from "@/lib/webinar-followup/store";
 
 export const dynamic = "force-dynamic";
@@ -50,14 +51,10 @@ export async function POST(
   waitUntil(
     (async () => {
       try {
-        const drain = await runLiveWebinarFollowupDrain(auth.admin, {
-          budgetMs: 55_000,
+        const drain = await kickWebinarFollowupDrain(auth.admin, {
+          budgetMs: WEBINAR_FOLLOWUP_DRAIN_BUDGET_MS,
           campaignId,
-        });
-        keepWebinarFollowupSending({
-          moreDue:
-            drain.moreDue || (drain.counts?.dueNow ?? 0) > 0 || (drain.counts?.sending ?? 0) > 0,
-          reason: "admin_wfu_drain_more",
+          reason: "admin_wfu_drain",
         });
         await logAudit({
           action: "webinar_followup_admin_drain",

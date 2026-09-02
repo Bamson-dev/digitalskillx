@@ -1,8 +1,10 @@
 import "server-only";
+import { waitUntil } from "@vercel/functions";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 import { sendEmail } from "@/lib/email";
-import { nudgeWebinarFollowupIfNeeded } from "@/lib/bulk-import-continue";
+import { keepWebinarFollowupSending, nudgeWebinarFollowupIfNeeded } from "@/lib/bulk-import-continue";
+import { WEBINAR_FOLLOWUP_DRAIN_BUDGET_MS, WEBINAR_FOLLOWUP_DRAIN_LIMIT } from "./constants";
 import { drainWebinarFollowupUntilBudget, type DrainResult } from "./processor";
 import { createSupabaseWfuStore, ensureSequenceFromSource, loadCampaignCounts, type CampaignCounts } from "./store";
 
@@ -68,8 +70,8 @@ export async function runLiveWebinarFollowupDrain(
   const drain = await drainWebinarFollowupUntilBudget({
     store,
     sendEmail: webinarFollowupSendMail(),
-    limit: 60,
-    budgetMs: opts?.budgetMs ?? 90_000,
+    limit: WEBINAR_FOLLOWUP_DRAIN_LIMIT,
+    budgetMs: opts?.budgetMs ?? WEBINAR_FOLLOWUP_DRAIN_BUDGET_MS,
     campaignId: opts?.campaignId,
   });
   let leftover = false;
@@ -90,4 +92,47 @@ export async function runLiveWebinarFollowupDrain(
     sequenceSynced,
     moreDue: drain.moreDue || leftover,
   };
+}
+
+/** Drain due webinar emails and chain continuation if backlog remains. */
+export async function kickWebinarFollowupDrain(
+  admin: Admin,
+  opts: { campaignId?: string; reason: string; budgetMs?: number },
+): Promise<DrainResult & { counts: CampaignCounts | null; sequenceSynced?: boolean }> {
+  keepWebinarFollowupSending({ moreDue: true, depth: 0, reason: opts.reason });
+  try {
+    const drain = await runLiveWebinarFollowupDrain(admin, {
+      budgetMs: opts.budgetMs ?? WEBINAR_FOLLOWUP_DRAIN_BUDGET_MS,
+      campaignId: opts.campaignId,
+    });
+    const counts = drain.counts;
+    const moreDue =
+      drain.moreDue ||
+      (counts?.dueNow ?? 0) > 0 ||
+      (counts?.sending ?? 0) > 0;
+    keepWebinarFollowupSending({
+      moreDue,
+      reason: `${opts.reason}_more`,
+    });
+    return drain;
+  } catch {
+    keepWebinarFollowupSending({
+      moreDue: true,
+      reason: `${opts.reason}_error`,
+    });
+    throw new Error("webinar_followup_drain_failed");
+  }
+}
+
+/** Start draining immediately after import/activate without blocking the HTTP response. */
+export function scheduleWebinarFollowupDrain(
+  admin: Admin,
+  opts: { campaignId?: string; reason: string; budgetMs?: number },
+): void {
+  keepWebinarFollowupSending({ moreDue: true, depth: 0, reason: opts.reason });
+  waitUntil(
+    kickWebinarFollowupDrain(admin, opts).catch((err) => {
+      console.error(`[wfu-schedule-drain] ${opts.reason}`, err);
+    }),
+  );
 }

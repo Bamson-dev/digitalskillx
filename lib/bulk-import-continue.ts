@@ -62,7 +62,7 @@ export function scheduleBulkWorkerContinuation(params: {
         path: params.path,
         depth: 0,
         reason: params.path === "/api/cron/content-factory" ? "cf_chain_reset" : "wfu_chain_reset",
-        delayMs: 8_000,
+        delayMs: 3_000,
       });
     }
     return;
@@ -130,6 +130,13 @@ export function keepWebinarFollowupSending(params: {
     origin,
     path: "/api/cron/webinar-follow-up",
     depth,
+    reason: `${params.reason}_retry_1s`,
+    delayMs: 1_000,
+  });
+  scheduleBulkWorkerContinuation({
+    origin,
+    path: "/api/cron/webinar-follow-up",
+    depth,
     reason: `${params.reason}_retry_2s`,
     delayMs: 2_000,
   });
@@ -137,8 +144,8 @@ export function keepWebinarFollowupSending(params: {
     origin,
     path: "/api/cron/webinar-follow-up",
     depth,
-    reason: `${params.reason}_retry_12s`,
-    delayMs: 12_000,
+    reason: `${params.reason}_retry_4s`,
+    delayMs: 4_000,
   });
 }
 

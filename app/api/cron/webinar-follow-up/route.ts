@@ -6,6 +6,7 @@ import {
   nudgeWebinarFollowupFromCron,
   runLiveWebinarFollowupDrain,
 } from "@/lib/webinar-followup/live-drain";
+import { WEBINAR_FOLLOWUP_DRAIN_BUDGET_MS } from "@/lib/webinar-followup/constants";
 import {
   continuationDepthFromRequest,
   keepWebinarFollowupSending,
@@ -16,7 +17,7 @@ export const runtime = "nodejs";
 export const maxDuration = 120;
 
 /** Leave headroom for waitUntil continuation retries after the drain. */
-const DRAIN_BUDGET_MS = 55_000;
+const DRAIN_BUDGET_MS = WEBINAR_FOLLOWUP_DRAIN_BUDGET_MS - 15_000;
 
 export async function GET(request: NextRequest) {
   return POST(request);
