@@ -33,26 +33,37 @@ async function sendStapeGa4Purchase(ctx: PurchaseTrackingContext): Promise<void>
     return;
   }
 
-  const collectUrl = `${baseUrl}/g/collect`;
+  // Stape sGTM Data Client — /g/collect rejects JSON Measurement Protocol bodies (400).
+  const collectUrl = `${baseUrl}/data`;
+  const email = ctx.customerEmail.trim().toLowerCase();
 
   const payload = {
-    client_id: ctx.customerEmail.trim().toLowerCase(),
-    events: [
-      {
-        name: "purchase",
-        params: {
-          transaction_id: ctx.reference,
-          value: ctx.product.expectedAmountNgn,
-          currency: ctx.product.currency,
-          items: [
-            {
-              item_id: ctx.product.key,
-              item_name: ctx.product.title,
-              price: ctx.product.expectedAmountNgn,
-              quantity: 1,
-            },
-          ],
+    event_name: "purchase",
+    event: "purchase_stape",
+    transaction_id: ctx.reference,
+    value: ctx.product.expectedAmountNgn,
+    currency: ctx.product.currency,
+    email,
+    user_data: { email },
+    ecommerce: {
+      transaction_id: ctx.reference,
+      value: ctx.product.expectedAmountNgn,
+      currency: ctx.product.currency,
+      items: [
+        {
+          item_id: ctx.product.key,
+          item_name: ctx.product.title,
+          price: ctx.product.expectedAmountNgn,
+          quantity: 1,
         },
+      ],
+    },
+    items: [
+      {
+        item_id: ctx.product.key,
+        item_name: ctx.product.title,
+        price: ctx.product.expectedAmountNgn,
+        quantity: 1,
       },
     ],
   };

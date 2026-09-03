@@ -39,7 +39,7 @@ After a successful external Paystack enrollment, DigitalSkillX fires server-side
 
 | Variable | Purpose |
 |----------|---------|
-| `STAPE_SERVER_URL` | Stape tagging server base URL (e.g. `https://fbvnfwjp.aimoneycode.com.ng`) |
+| `STAPE_SERVER_URL` | Stape tagging server base URL (e.g. `https://fbvnfwjp.aimoneycode.com.ng`). Server posts purchase events to `{STAPE_SERVER_URL}/data` (Data Client). |
 | `META_PIXEL_ID` | Meta Pixel ID for Conversions API |
 | `META_CAPI_TOKEN` | Meta Conversions API access token |
 | `ADMIN_API_KEY` | Protects `POST /api/admin/manual-track-purchase` via `x-admin-key`. Admin UI sends this from the server only. |
