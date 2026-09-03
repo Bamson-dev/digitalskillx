@@ -45,21 +45,26 @@ export function parseManualTrackPurchaseBody(raw: unknown):
   if (!raw || typeof raw !== "object") return { ok: false, error: "JSON body is required." };
   const body = raw as Record<string, unknown>;
   const email = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
-  const reference = typeof body.reference === "string" ? body.reference.trim() : "";
+  const referenceRaw = typeof body.reference === "string" ? body.reference.trim() : "";
+  const reference =
+    referenceRaw ||
+    `manual-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
   const productName =
     typeof body.productName === "string" && body.productName.trim()
       ? body.productName.trim()
       : BUILD_SOFTWARE_WITH_AI_PRODUCT.title;
   const amountRaw = body.amount;
-  const amount =
+  const amountParsed =
     typeof amountRaw === "number"
       ? amountRaw
-      : typeof amountRaw === "string"
+      : typeof amountRaw === "string" && amountRaw.trim()
         ? Number(amountRaw)
         : NaN;
+  const amount = Number.isFinite(amountParsed) && amountParsed > 0
+    ? amountParsed
+    : BUILD_SOFTWARE_WITH_AI_PRODUCT.expectedAmountNgn;
 
   if (!email || !email.includes("@")) return { ok: false, error: "A valid email is required." };
-  if (!reference) return { ok: false, error: "Payment reference is required." };
   if (!Number.isFinite(amount) || amount <= 0) return { ok: false, error: "Amount must be a positive number." };
 
   return { ok: true, value: { email, reference, amount, productName } };

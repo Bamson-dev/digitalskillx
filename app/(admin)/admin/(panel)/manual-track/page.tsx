@@ -16,10 +16,10 @@ export default async function ManualTrackPurchasePage() {
       <div>
         <h1 className="text-2xl font-bold">Manual purchase tracking</h1>
         <p className="mt-1 max-w-2xl text-sm text-muted">
-          Enroll the buyer into{" "}
+          Paste the buyer’s email and click Track. They get enrolled into{" "}
           <span className="font-medium text-ink">Build And Monetize Your Software With AI</span>{" "}
-          (same process as a Paystack webhook) and fire Stape + Meta purchase events. One click
-          does both.
+          and Stape + Meta purchase events fire automatically (amount, product, and reference are
+          defaults).
         </p>
       </div>
 

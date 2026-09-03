@@ -34,33 +34,23 @@ export function ManualTrackPurchaseForm() {
 
       <div>
         <Label htmlFor="email">Customer Email</Label>
-        <Input id="email" name="email" type="email" required autoComplete="email" />
-      </div>
-      <div>
-        <Label htmlFor="reference">Payment Reference</Label>
-        <Input id="reference" name="reference" required placeholder="TRF-001" />
-      </div>
-      <div>
-        <Label htmlFor="amount">Amount</Label>
         <Input
-          id="amount"
-          name="amount"
-          type="number"
-          min={1}
-          step={1}
-          defaultValue={BUILD_SOFTWARE_WITH_AI_PRODUCT.expectedAmountNgn}
+          id="email"
+          name="email"
+          type="email"
           required
+          autoComplete="email"
+          placeholder="buyer@email.com"
         />
+        <p className="mt-1.5 text-xs text-muted">
+          That’s all you need. Amount (₦{BUILD_SOFTWARE_WITH_AI_PRODUCT.expectedAmountNgn.toLocaleString("en-NG")}),
+          product name, and payment reference are filled in automatically.
+        </p>
       </div>
-      <div>
-        <Label htmlFor="productName">Product Name</Label>
-        <Input
-          id="productName"
-          name="productName"
-          defaultValue={BUILD_SOFTWARE_WITH_AI_PRODUCT.title}
-          required
-        />
-      </div>
+
+      <input type="hidden" name="amount" value={BUILD_SOFTWARE_WITH_AI_PRODUCT.expectedAmountNgn} />
+      <input type="hidden" name="productName" value={BUILD_SOFTWARE_WITH_AI_PRODUCT.title} />
+
       <SubmitButton pendingText="Enrolling and tracking…">Track Purchase</SubmitButton>
     </form>
   );
