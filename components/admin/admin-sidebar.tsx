@@ -29,6 +29,7 @@ import {
   Factory,
   FileDown,
   Radio,
+  Crosshair,
 } from "lucide-react";
 import { signOutAdmin } from "@/app/(admin)/admin/actions";
 import { cn } from "@/lib/utils";
@@ -57,6 +58,7 @@ const teachingNav: NavItem[] = [
 const insightsNav: NavItem[] = [
   { href: "/admin/analytics", label: "Analytics", icon: BarChart3 },
   { href: "/admin/sales", label: "Sales", icon: ShoppingBag },
+  { href: "/admin/manual-track", label: "Manual track", icon: Crosshair },
   { href: "/admin/offers", label: "Offers", icon: Percent },
   { href: "/admin/digital-products", label: "Digital products", icon: Tag },
   { href: "/admin/business", label: "Business", icon: Briefcase },

@@ -30,6 +30,7 @@ If you see `"cronBootstrapDetail": "... PASTE_…_HERE placeholder"` — product
    - `STAPE_SERVER_URL` = `https://fbvnfwjp.aimoneycode.com.ng` (server-side GA4 purchase events after enrollment)
    - `META_PIXEL_ID` = Meta Pixel ID (Conversions API)
    - `META_CAPI_TOKEN` = Meta Conversions API access token
+   - `ADMIN_API_KEY` = server-only key for `POST /api/admin/manual-track-purchase` (`x-admin-key`). Example (generate your own; never reuse this): `86c88158b3bf2f1a7c37939253a9eda5818be81682412b06e3fc90534d7c2275`
 4. **Redeploy** (required after env changes).
 
 ### Purchase tracking (Paystack → Leadthur → DigitalSkillX)
@@ -41,6 +42,7 @@ After a successful external Paystack enrollment, DigitalSkillX fires server-side
 | `STAPE_SERVER_URL` | Stape tagging server base URL (e.g. `https://fbvnfwjp.aimoneycode.com.ng`) |
 | `META_PIXEL_ID` | Meta Pixel ID for Conversions API |
 | `META_CAPI_TOKEN` | Meta Conversions API access token |
+| `ADMIN_API_KEY` | Protects `POST /api/admin/manual-track-purchase` via `x-admin-key`. Admin UI sends this from the server only. |
 
 Tracking is fail-open: missing credentials or API errors are logged but never block enrollment.
 

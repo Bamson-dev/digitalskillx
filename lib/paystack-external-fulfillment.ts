@@ -169,6 +169,7 @@ export async function fulfillPaystackExternalCharge(params: {
   webhookData?: PaystackChargePayload | null;
   handoffPayment?: LeadthurHandoffPayment;
   admin?: Admin;
+  skipPurchaseTracking?: boolean;
 }): Promise<ExternalFulfillmentResult> {
   const admin = params.admin ?? (await createAdminClientAsync());
   const reference = params.reference.trim();
@@ -550,7 +551,7 @@ export async function fulfillPaystackExternalCharge(params: {
 
     if (emailResult.sent) {
       secureLog("info", "paystack/external", "email_sent", { reference });
-      if (!externalMeta?.purchase_tracking_sent_at) {
+      if (!params.skipPurchaseTracking && !externalMeta?.purchase_tracking_sent_at) {
         await trackExternalPurchase({
           reference,
           customerEmail: buyerEmail,

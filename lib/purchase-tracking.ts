@@ -115,25 +115,51 @@ async function sendMetaCapiPurchase(ctx: PurchaseTrackingContext): Promise<void>
   }
 }
 
+export type PurchaseTrackingOutcome = {
+  stape: "sent" | "skipped" | "failed";
+  meta: "sent" | "skipped" | "failed";
+  errors: string[];
+};
+
 /** Fire Stape GA4 + Meta CAPI purchase events. Fail-open — never throws. */
-export async function trackExternalPurchase(ctx: PurchaseTrackingContext): Promise<void> {
+export async function trackExternalPurchase(
+  ctx: PurchaseTrackingContext,
+): Promise<PurchaseTrackingOutcome> {
+  const outcome: PurchaseTrackingOutcome = { stape: "sent", meta: "sent", errors: [] };
+
   try {
     await sendStapeGa4Purchase(ctx);
-    secureLog("info", "purchase-tracking", "stape_purchase_sent", { reference: ctx.reference });
+    if (!stapeServerUrl()) {
+      outcome.stape = "skipped";
+    } else {
+      secureLog("info", "purchase-tracking", "stape_purchase_sent", { reference: ctx.reference });
+    }
   } catch (err) {
+    const error = err instanceof Error ? err.message : String(err);
+    outcome.stape = "failed";
+    outcome.errors.push(`Stape: ${error}`);
     secureLog("warn", "purchase-tracking", "stape_purchase_failed", {
       reference: ctx.reference,
-      error: err instanceof Error ? err.message : String(err),
+      error,
     });
   }
 
   try {
     await sendMetaCapiPurchase(ctx);
-    secureLog("info", "purchase-tracking", "meta_capi_purchase_sent", { reference: ctx.reference });
+    if (!metaPixelId() || !metaCapiToken()) {
+      outcome.meta = "skipped";
+    } else {
+      secureLog("info", "purchase-tracking", "meta_capi_purchase_sent", { reference: ctx.reference });
+    }
   } catch (err) {
+    const error = err instanceof Error ? err.message : String(err);
+    outcome.meta = "failed";
+    outcome.errors.push(`Meta CAPI: ${error}`);
     secureLog("warn", "purchase-tracking", "meta_capi_purchase_failed", {
       reference: ctx.reference,
-      error: err instanceof Error ? err.message : String(err),
+      error,
     });
   }
+
+  return outcome;
 }
