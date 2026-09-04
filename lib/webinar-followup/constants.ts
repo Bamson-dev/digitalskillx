@@ -14,7 +14,7 @@ export const WEBINAR_FOLLOWUP_REGULAR_PRICE = "₦100,000";
 export const WEBINAR_FOLLOWUP_OFFER_VALUE = "₦805,000";
 /** Exact evergreen sequence length for the first campaign. */
 export const WEBINAR_FOLLOWUP_REQUIRED_STEPS = 40;
-export const WEBINAR_FOLLOWUP_SEQUENCE_SOURCE_VERSION = "build-software-with-ai.v40.8";
+export const WEBINAR_FOLLOWUP_SEQUENCE_SOURCE_VERSION = "build-software-with-ai.v40.8.1";
 
 export function sequenceNeedsResync(storedVersion: string | undefined | null, stepCount: number): boolean {
   return (
