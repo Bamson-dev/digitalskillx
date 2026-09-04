@@ -1,15 +1,21 @@
 import "server-only";
 import { getServiceRoleKeySync } from "@/lib/env-service-role";
 import { preloadRuntimeEnvIntoProcessEnv } from "@/lib/runtime-env";
+import { createSupabaseFetch } from "@/lib/supabase/fetch-retry";
 
-const PROBE_TIMEOUT_MS = 3_500;
+const PROBE_TIMEOUT_MS = 5_000;
 
 async function restProbe(
   supabaseUrl: string,
   apiKey: string,
 ): Promise<boolean> {
   try {
-    const res = await fetch(
+    const fetchWithRetry = createSupabaseFetch({
+      retries: 2,
+      baseDelayMs: 250,
+      timeoutMs: PROBE_TIMEOUT_MS,
+    });
+    const res = await fetchWithRetry(
       `${supabaseUrl.replace(/\/$/, "")}/rest/v1/courses?select=id&limit=1`,
       {
         headers: {
@@ -17,7 +23,6 @@ async function restProbe(
           Authorization: `Bearer ${apiKey}`,
         },
         cache: "no-store",
-        signal: AbortSignal.timeout(PROBE_TIMEOUT_MS),
       },
     );
     return res.ok;

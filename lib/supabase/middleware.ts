@@ -1,6 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import type { Database } from "@/types/database";
+import { createSupabaseFetch } from "@/lib/supabase/fetch-retry";
 
 const PUBLIC_PREFIXES = [
   "/verify",
@@ -128,6 +129,7 @@ export async function updateSession(request: NextRequest) {
             );
           },
         },
+        global: { fetch: createSupabaseFetch({ retries: 1, timeoutMs: 4_000 }) },
       },
     );
 

@@ -7,6 +7,7 @@ import {
   getServiceRoleKeySync,
   serviceRoleKeyMissingMessage,
 } from "@/lib/env-service-role";
+import { createSupabaseFetch } from "@/lib/supabase/fetch-retry";
 
 function buildAdminClient(serviceRoleKey: string) {
   const supabaseUrl = runtimeEnv("NEXT_PUBLIC_SUPABASE_URL");
@@ -16,6 +17,7 @@ function buildAdminClient(serviceRoleKey: string) {
 
   return createSupabaseClient<Database>(supabaseUrl, serviceRoleKey, {
     auth: { autoRefreshToken: false, persistSession: false },
+    global: { fetch: createSupabaseFetch({ retries: 3, timeoutMs: 15_000 }) },
   });
 }
 

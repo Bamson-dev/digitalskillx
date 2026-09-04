@@ -1,6 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import type { Database } from "@/types/database";
+import { createSupabaseFetch } from "@/lib/supabase/fetch-retry";
 
 /**
  * Supabase client for Server Components, Route Handlers and Server Actions.
@@ -36,6 +37,7 @@ export function createClient() {
           }
         },
       },
+      global: { fetch: createSupabaseFetch({ retries: 2, timeoutMs: 12_000 }) },
     },
   );
 }
