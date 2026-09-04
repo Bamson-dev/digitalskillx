@@ -44,25 +44,27 @@ export function buildSoftwareWithAiSequence(): SequenceEmailContent[] {
     email(
       1,
       "After the WebinarJam follow-ups",
-      "Now that the webinar follow-ups have ended",
+      "I know you registered. I just want to talk to you like a person.",
       [
-        "A quieter note, now that the reminder sequence is finished",
-        "If you registered and then life happened",
+        "The WebinarJam reminders are done. This one is different.",
+        "If you registered and then life got in the way, read this.",
       ],
-      "WebinarJam has already done its own follow-up. This is me, writing after those reminders stopped.",
-      `If you are still on this list, it is because you registered for the Build Software With AI webinar, or you walked far enough into that funnel that your email ended up here.
+      "This isn't another reminder. This is me, picking up where those left off.",
+      `You registered for the Build Software With AI webinar.
 
-WebinarJam has already done its own follow-up. Those emails have finished. This sequence is different. It is from me, after that reminder run ended, and I would rather start like a person picking up a conversation than like a stranger who bought a list.
+Maybe you watched the whole thing from start to finish. Maybe you opened it, watched 20 minutes, got a phone call, and never went back. Maybe the tab has been sitting there for days and you keep meaning to get to it. I'm not going to shame you for any of that, because I've done the exact same thing to courses I actually paid for.
 
-Plenty of people register, watch twenty minutes, get a phone call, and never go back. Some watch to the end and still sit on it. Some have not opened the recording at all. That is ordinary. It is not a character test.
+But here's what I keep thinking about when I look at this list.
 
-The webinar is still there. That recording is where I actually explained the skill, the work, and what the training contains. An email cannot do that job.
+You didn't register by accident. Something made you stop scrolling that day, read the headline, and put your email in that box. That means something clicked, even briefly. Maybe it was the idea of finally building that app you've been thinking about without paying a developer millions. Maybe it was seeing the LeadThur numbers and thinking, wait, someone actually built a software product without a team and made that kind of money from it. Maybe you have an idea that's been sitting in your WhatsApp notes for six months and it's starting to bother you that it's still just a note.
 
-I will not ask you for money in this one. If you have not sat through the session, paying first would be a strange move. Find a quiet hour. Watch it. Write down the parts that annoy you. Those are usually the parts that apply.
+Whatever made you register, that reason hasn't gone anywhere. It's still there.
 
-If you already watched, go back to the middle. The useful detail is rarely in the opening.
+So here's what I'm asking, and I want to be straightforward with you: I'm not asking for money today. I'm not even asking for a big decision. I'm asking you to go back to the webinar recording and watch it properly this time. Not while you're cooking or driving. Quiet room, phone face down, notepad nearby. Give it a real sitting.
 
-I will keep writing after this. For today, just go through the session again with attention.`,
+If you watch the whole thing and decide this isn't the path for you, that is completely fine. At least you'll have decided with the full picture instead of half an impression from a tab you didn't finish.
+
+The recording is still open. It will not stay that way forever.`,
       "Watch the webinar properly",
       "Natural continuation after WebinarJam, no payment ask",
       "Phase 1 · Webinar re-engagement",
@@ -71,22 +73,32 @@ I will keep writing after this. For today, just go through the session again wit
     email(
       2,
       "Waiting for the right time",
-      "The \"right time\" to learn this rarely arrives on its own",
+      "You're waiting for a calmer month. I need to tell you something about that.",
       [
-        "Why people postpone a skill that would have helped last year",
-        "Waiting until things settle usually means waiting forever",
+        "The \"right time\" to start something new almost never arrives on its own.",
+        "Every person who built something real started when their life was also busy.",
       ],
-      "A lot of people in this funnel already agree the skill matters. They are waiting for a calmer month.",
-      `I keep meeting people who already agree this skill matters, then they wait for a calmer month. The shop is busy. School fees are close. They want to finish one more client job first. None of those reasons is foolish. The calendar still almost never opens a clean four-week hole labelled “learn to build software.”
+      "The calendar never opens a clean window labelled \"learn this now.\"",
+      `I've had this exact conversation with more people than I can count.
 
-What happens instead is another year. The same WhatsApp notes still hold the same ideas. The same businesses around them still pay someone else for the website, the booking page, the inventory sheet that should have been a small app.
+They register for the webinar. They're genuinely excited. They can see the opportunity clearly. And then they say: "I just need to get through this month first." The shop is busy right now. School fees are coming and I need to focus. There's one more client job I need to finish before I can really commit to learning something new. It's almost the end of the year and next year makes more sense for starting fresh.
 
-You do not have to abandon your life for a course. You do have to notice that postponement is still a decision, even when it feels like you have not decided. You already spent time registering for the webinar. That was a small bet that this topic was worth an evening. Leaving the session unwatched while you wait to feel ready is the expensive version of that same bet.
+And I listen, and I understand, and I think to myself: I know exactly how this story ends.
 
-If you watch it this week, you may still decide it is not for you. That is cleaner than carrying a half-finished curiosity for six months.
+Another month passes. Nothing changes. The same app idea is still sitting in the same WhatsApp note from six months ago. The same businesses around them are still paying someone else for a website or a system that they needed last year. And they're now telling themselves next month again.
 
-When you have a stretch of time that is merely good enough, not perfect, go through the webinar. The session is there to give you the picture first. Decisions after that are easier.`,
-      "Go through the session this week",
+Here's the thing I want you to sit with for a moment, and I'm saying this not to be harsh but because I think you deserve honesty instead of another gentle nudge.
+
+Every week you don't build this skill is a week the businesses around you are paying someone else. Every month you wait is another month of developer quotes, delays, and half-finished ideas that never made it to a real URL. The opportunity doesn't pause and wait politely for your schedule to clear. It just keeps moving, and so does everyone else who decided to start when their life was also imperfect.
+
+I'm not saying abandon everything for a course. I'm saying a slightly inconvenient week now is worth more than a perfect month that never actually arrives.
+
+People who say they'll start when they're ready have been saying that for two years. People who started when they were busy are already building things and getting paid for them.
+
+The webinar is where this begins. Not a payment. Not a big commitment. Just a proper hour of your attention when you have a stretch that's good enough, not perfect.
+
+Watch it this week. Not when things settle.`,
+      "I'll watch it this week",
       "Cost of waiting as the reason to watch",
       "Phase 1 · Webinar re-engagement",
     ),
@@ -94,22 +106,28 @@ When you have a stretch of time that is merely good enough, not perfect, go thro
     email(
       3,
       "Ideas without a way to build",
-      "An idea in your notes is not a product yet",
+      "That app idea in your notes. The one you keep moving to a different note.",
       [
-        "What usually sits between the idea and something a client can click",
-        "Why “I have an app idea” is not the same as being able to ship",
+        "The gap between \"I can describe this\" and \"someone can use it\" is exactly what I teach.",
+        "Your idea has been in your head long enough. Here's what's actually between you and building it.",
       ],
-      "Most people in this audience already have ideas. The missing piece is a way to turn one into working software.",
-      `Open the notes on your phone. You will probably find at least one thing that would actually help a real business: a salon booking page that does not live in a group chat, a simple stock list for a shop, a way for a church or school to collect registrations without paper. Ideas are not the rare part.
+      "Open your phone notes right now. I'll wait.",
+      `Open your phone notes right now.
 
-The rare stretch is the one between “I can describe this” and “somebody can use it on their phone.” For years that stretch meant finding a developer, explaining the thing badly, getting a quote that shocked you, then either abandoning it or paying and waiting. A lot of people quietly conclude they are “not technical” when what they actually lack is a method for directing the build.
+I'm willing to bet there's at least one thing in there that would genuinely help a real business. A booking page for a salon that's been managing appointments in a WhatsApp group for three years and losing customers because of it. A simple stock tracking system for a shop owner who's been using a notebook since before smartphones existed. A way for a school or a church to collect registration fees without chasing fifty people for individual transfer screenshots and then wondering if someone paid or not.
 
-The webinar walks through that gap on purpose. I spend time on what it looks like to go from a messy idea to something specified enough that tools can help you build it, then what it takes to put it where users can reach it. That is more useful than another pep talk about believing in yourself.
+These ideas are not rare. They're everywhere around us. You probably have two or three of them without even trying.
 
-If you have an idea you have been sitting on, watch the session with that idea in mind. Pause when I talk about blueprints. Write down who the first user would be, and what version one would refuse to include. You do not need a company name. You need one person and one job the software should do.
+The rare thing, the thing that actually separates people who build from people who just have ideas, is the stretch between "I can describe this clearly to someone" and "a real person can open this on their phone right now and use it."
 
-Still no payment ask. Just a serious watch while that idea is still yours, not a vague future project.`,
-      "Watch it with one idea in mind",
+For years, crossing that stretch meant finding a developer, trying to explain your idea to someone who doesn't fully understand your business or your customers, waiting days for a quote that made your chest tight, and then either abandoning the idea completely or paying the money and waiting months and being disappointed by something that barely worked the way you described. Most people abandon. They put a new note in. They abandon that one too. It's a slow and quiet way to watch years go by with nothing built.
+
+What I teach in the webinar is how to cross that stretch yourself. Not by becoming a developer, not by spending three years learning to code from scratch, but by learning to direct AI tools to build what you can clearly describe. The same way a director tells a film crew exactly what they want without picking up a camera themselves.
+
+I want you to watch the webinar with one specific idea in mind. The one that's been bothering you the longest. Pause when I talk about turning ideas into blueprints. Write down who the first person to use it would actually be, and what version one must absolutely refuse to include so you don't build forever.
+
+You don't need to decide anything after that. Just let yourself see what's actually possible.`,
+      "Watch with my idea in mind",
       "Idea-to-execution gap as the reason to watch",
       "Phase 1 · Webinar re-engagement",
     ),
@@ -117,20 +135,28 @@ Still no payment ask. Just a serious watch while that idea is still yours, not a
     email(
       4,
       "What actually changed with AI builders",
-      "Building software used to mean years of typing. That part shifted.",
+      "I'm going to tell you the honest version of what AI actually changed. Not the hype.",
       [
-        "What changed for people who are not professional engineers",
-        "The useful part of the AI shift, without the hype reel",
+        "The internet has oversold this badly. Here's what really happened.",
+        "Before you decide whether this is for you, read this version of the story.",
       ],
-      "I want to be precise about what changed, because the internet has already oversold this.",
-      `Five years ago, if you were not a developer, “I will just build the app myself” was usually a joke. You could learn HTML on YouTube and still be nowhere near a product a stranger would pay for. Custom software meant a team, or a long apprenticeship, or both.
+      "If someone sold you the \"one prompt and you have an app\" version, they lied to you.",
+      `I want to be careful here because the internet has already made a serious mess of this conversation and I don't want to add to it.
 
-Software did not become magic, and you still have to think. A large part of the typing can now be done by tools if you can describe the outcome, check the result, and keep going when the first attempt is wrong. Professional engineers are already working this way. Cursor, the AI-native editor from Anysphere, grew as fast as it did because people who already knew how to build started directing machines instead of writing every line by hand. That is market context. It is not a promise about your income.
+If you spend ten minutes on Twitter or YouTube right now, you'll find dozens of people claiming that AI can build entire apps from a single sentence, that developers are finished, that anyone can become a software founder with no experience in a weekend. Some of them have screenshots. Some of them have testimonials. Some of them are making money selling that version of the story.
 
-The webinar is where I show what that looks like for someone who does not already live in code. I also show the parts that still hurt: setup, judgement, finishing, putting the thing on the internet. Highlight clips on Twitter make the job look like prompting. The session is closer to managing a very fast junior who needs clear instructions.
+That version is exaggerated at best and dishonest at worst. And if you've already tried to build something yourself based on that story and it went badly wrong and left you more confused than when you started, I understand completely why you'd be skeptical about anything in this space.
 
-If that still feels abstract, that is why the recording exists. Watch it once through. You can decide later whether the full training is for you.`,
-      "See what I actually showed in the webinar",
+So here's what I believe actually changed, and I want to be precise about it.
+
+Five years ago, if you were not a developer, "I'll just build the app myself" was mostly a joke you made at parties. You could spend six honest months on YouTube learning the basics and still be nowhere near something a stranger would pay money to use. Custom software meant a team, or a long apprenticeship learning to code, or both. That was simply the reality.
+
+What changed is that a large portion of the technical writing, the actual code that makes things work, can now be produced by AI tools if you know how to describe what you want clearly, check whether what came back is actually correct, and keep going with patience when the first version isn't right. Professional developers are already working this way. They write less code by hand now and spend more time directing tools. That's not a trend. Cursor, the AI coding tool, grew faster than almost any developer tool in recent history because people who already knew how to build started using it to work faster and produce more.
+
+What that same approach looks like for someone who doesn't already live in code is genuinely different. It's harder to pick up than a 30-second clip makes it look. The setup is real work. Judgment about what to build first matters enormously. Getting things live on the internet has real steps. But it is learnable in weeks rather than years if someone shows you the right sequence in the right order, which is what I spent years figuring out and what the webinar teaches.
+
+Watch it once and decide for yourself. Not based on the hype. Based on what you actually see.`,
+      "See the real workflow",
       "Market shift explained as a reason to watch, not to pay",
       "Phase 1 · Webinar re-engagement",
     ),
@@ -138,22 +164,28 @@ If that still feels abstract, that is why the recording exists. Watch it once th
     email(
       5,
       "Directing tools versus studying code for years",
-      "You do not need a computer science degree to be in the room",
+      "My friend paid a developer seven million naira. I want to tell you what happened.",
       [
-        "What you still have to learn, and what you no longer have to memorise",
-        "Directing a build is a different skill from writing syntax from memory",
+        "The developer wasn't the problem. Depending on someone else's calendar for every idea is the problem.",
+        "Seven million naira, six months of waiting, and a product that barely worked. This is why I teach this.",
       ],
-      "People hear “build software” and picture three years of tutorials. That picture is outdated, and also not completely wrong.",
-      `I need to separate two skills, because mixing them is how people either panic or get sold nonsense.
+      "The money was gone. The idea was still sitting in his head unfinished.",
+      `A friend of mine had an app idea a few years ago. A real one, something businesses actually needed, not a fantasy. He did everything right. He found a developer through a trusted referral. He sat down and explained the whole idea. He signed an agreement. He paid the first deposit.
 
-Writing code from memory — loops, frameworks, holding a language in your head — still exists. It is a real profession. You do not have to become that person to produce software people can use. You do have to become comfortable being around the work: reading an error, describing what you expected, rejecting output that looks fine and behaves badly, testing on a slow connection like a suspicious customer.
+Seven million naira total by the time it was done.
 
-That second skill is closer to directing than to sitting an exam. You decide what the thing must do. You watch the take. You say “again, but the form should not submit empty.” It is slower than the ads suggest and much faster than the old path of becoming a developer first and building second.
+The delays started after the first month. "Almost ready, just a few more things." Then another month. Then another excuse. Then a version that came back with half the features he asked for missing and a UI that looked like something built in 2012. When he asked for changes, the queue started again. When he tried to negotiate, the developer went quiet for days at a time.
 
-In the webinar I show that distinction with the actual workflow, not with slogans. If you have been avoiding the recording because you assume it is a coding bootcamp in disguise, watch the first hour with that question in mind. You should be able to tell whether this is for you without paying for the full programme.
+By the time it was over, the money was gone, the product was nowhere near what he described, and the idea, the real one he started with, was still sitting unfinished in his head where it started.
 
-If you already code, watch it anyway. The useful part for you may be how to specify version one so you stop rebuilding the same messy project.`,
-      "Watch the workflow, not the slogans",
+That story bothers me more every time I think about it. Not because the developer was a criminal. Because my friend had no choice but to sit there and depend on someone else's calendar, someone else's priorities, someone else's interpretation of what he meant, for every single step of building something that was his idea.
+
+That's the real cost of not being able to build. Not just the money. The time. The lost control. The version of your idea that comes back looking nothing like what you described.
+
+When I learned to build software with AI, the first thing I felt was not excitement. It was relief. The relief of knowing that I never had to sit in that position again. That I could take an idea from my head and direct it into something real without asking permission from someone else's schedule.
+
+That's what the webinar is about. Watch it and see whether that relief is available to you too.`,
+      "Watch the webinar",
       "Directing vs years of syntax as the reason to watch",
       "Phase 1 · Webinar re-engagement",
     ),
@@ -161,20 +193,26 @@ If you already code, watch it anyway. The useful part for you may be how to spec
     email(
       6,
       "Building for clients",
-      "A lot of the money in this skill shows up as client work first",
+      "You don't need a startup idea. You need one business with one painful problem.",
       [
-        "Websites, booking systems, and internal tools people already pay for",
-        "You do not need a startup idea to use this",
+        "The businesses on your street are already paying for the software they need. Just not to you.",
+        "Client work is usually where the first real money shows up. Here's why.",
       ],
-      "If you know businesses that still run on notebooks and group chats, you already understand the demand.",
-      `Not everyone who learns this should launch a product on day one. In Nigeria, a very common first cheque is a client project: an ecommerce site for a shop that is tired of WhatsApp orders disappearing, a booking flow for a clinic, a simple internal tool so staff stop fighting with a spreadsheet that was never meant to be software.
+      "If you know businesses still running on WhatsApp and notebooks, you already understand the demand.",
+      `Let me tell you something that might change how you're thinking about this.
 
-Those jobs exist because the business already feels the pain. They are already paying for the mess in wasted hours, lost orders, or a developer quote they cannot swallow. You are not inventing a market. You are walking into one that is often poorly served.
+Not everyone who learns to build software with AI needs to launch a product. Not everyone needs a startup idea or a pitch deck or a plan for a million users. Some of the best early money from this skill comes from a much simpler place: finding one business with one embarrassing problem and building the thing that fixes it.
 
-I talk about this in the webinar because people hear “build software” and think they need a billion-naira idea. Sometimes they need one owner they can visit, one process that is embarrassing, and a version one that actually works on a phone.
+In Nigeria, and in most places, there are businesses around you right now doing something manually that should have been automated years ago. A salon managing all its appointments in a WhatsApp group and losing bookings every week because messages get buried. A pharmacy tracking stock in a notebook and running out of things without warning. A small school chasing thirty parents individually every term for school fees and never knowing who has paid and who hasn't. A logistics company tracking deliveries in a shared spreadsheet that three people are editing at the same time and nobody trusts the numbers.
 
-Watch the session looking for the client-work thread. I will get into numbers and named examples later in this sequence. For now I want you to see the shape of the work: scope, delivery, something a client can click. If that sounds more realistic than becoming a founder this month, the webinar will make more sense than another product-launch video.`,
-      "Watch the client-work part of the session",
+These people already know they have a problem. They're already paying for it every day in wasted hours, missed sales, and the headache of managing things that should run themselves. They don't need to be convinced that the problem is real. They're living with it.
+
+You are not inventing a market when you walk into that conversation. You are walking into a problem that already exists, already costs money, and currently has no good solution. The person who can build something that actually fixes it on a phone, in plain language, without a six-month wait and a million-naira quote, is someone those businesses would pay. Gladly.
+
+This is the path Shade took. A client needed an ecommerce site. Shade built it with AI tools, delivered it, and got paid N650,000. That same client came back asking for more work. That's not a miracle. That's solving a real problem for a real business and doing it well enough that they trust you again.
+
+Watch the webinar with this angle in mind. I spend real time on what client work looks like, how to find the first conversation, and what it takes to deliver something a business owner will actually use.`,
+      "Watch the client work section",
       "Client opportunity as a distinct reason to watch",
       "Phase 1 · Webinar re-engagement",
     ),
@@ -182,22 +220,28 @@ Watch the session looking for the client-work thread. I will get into numbers an
     email(
       7,
       "Building your own product",
-      "The other road: one narrow tool, many users",
+      "LeadThur made N15 million in its first three months. Let me tell you how it started.",
       [
-        "Why a small product can be a business without becoming a famous startup",
-        "Narrow problems are easier to explain, and easier to charge for",
+        "The product that earns while you sleep starts as a narrow annoyance, not a billion-naira idea.",
+        "I built something people pay for every month without a development team. Here's what the beginning looked like.",
       ],
-      "Client work pays. A product that people keep using is a different kind of asset. Both start with being able to build.",
-      `There is a second road besides client projects, and I do not want you to mix them in your head this week.
+      "It wasn't a grand vision. It was one repeating problem, done faster than a human could.",
+      `I want to tell you about a different kind of opportunity than client work, because they're genuinely different and I don't want you to mix them up in your head.
 
-A product is something many people can use without you sitting in their shop. The useful versions are usually narrow. Find business contacts in about a minute instead of burning an afternoon. Track one annoying process. Do one job faster than a human with a browser tab. When the promise fits in a sentence, people understand whether to pay.
+Client work is where you build something for a specific business or person and get paid for that project. It's real money and it's often the fastest first income from this skill. But there's another road, and it has a different quality to it.
 
-I built a tool in that category called LeadThur. I will open the actual usage numbers in a later email, with the word estimated where it belongs. Today I only need the pattern: one painful, repeating task, built without waiting for a funded engineering team.
+A product is something you build once and then many different people pay to use it, often repeatedly, without you having to sit in their office or manage their project. The income is different. It's less predictable at the start and more stable later. And the useful products, the ones that actually sell, are almost never the big ambitious ones people plan for years without building.
 
-The webinar shows how a product path still depends on the same foundation as client work — specifying, building, testing, shipping — and why starting enormous usually means finishing nothing.
+LeadThur was not a grand vision I had for years. It was a narrow, specific annoyance that I knew businesses had. Finding business contacts from Google Maps was slow, manual work that cost people hours they didn't have. I built a tool that does it in about a minute. One repeating task. One painful problem. A price that made sense compared to the time it saved.
 
-If you have been daydreaming about “my app” for years, watch the session and listen for how small version one is supposed to be. That might be the most useful hour you spend on this, even if you never buy the full training.`,
-      "See how the product path is explained",
+In the first three months, N15,120,000 went through that platform. 782 people paid to use it. 9,460 paid searches by paying users.
+
+I'm not telling you this to impress you. I'm telling you because the beginning looked nothing like what those numbers suggest. It started with one narrow idea that I could describe in a single sentence. "Find business contacts faster than a human can by hand." That's it. That was the whole product.
+
+The webinar explains the product path properly: what narrow means, what version one should and shouldn't include, and why starting with a huge ambitious idea almost always ends in building nothing at all.
+
+If you've been dreaming about "my app" for years without building it yet, watch the session with your ears open for the part about how small version one is supposed to be. It might be the most useful hour you spend on this whether you ever buy the training or not.`,
+      "See how the product path works",
       "Own-product opportunity as a reason to watch",
       "Phase 1 · Webinar re-engagement",
     ),
@@ -205,19 +249,25 @@ If you have been daydreaming about “my app” for years, watch the session and
     email(
       8,
       "Businesses still need software",
-      "Look at the businesses on your street, not Silicon Valley",
+      "Walk through any market in Nigeria and count the notebooks. I'll wait.",
       [
-        "WhatsApp, spreadsheets, and half-fitting subscriptions are the brief",
-        "Demand is local even when the tools are global",
+        "The demand for what you could build is sitting in plain sight. Most people walk past it every day.",
+        "WhatsApp groups, shared spreadsheets, and half-working global tools. That's the brief.",
       ],
-      "You do not need to invent a new category. You need to notice work that is already being done badly.",
-      `Walk through a market, a plaza, a school office, a pharmacy. Count how much of the operation lives in a notebook, a spreadsheet, or a WhatsApp group. Orders. Attendance. “Who paid.” “Who is on shift.” That is not a technology trend. That is how a lot of real organisations still run, and they pay for the confusion even when they do not put it on an invoice.
+      "You don't need to invent a new category. You need to notice work being done badly.",
+      `I want you to try something the next time you're out.
 
-They also pay for software that almost fits: a global tool with seats they do not need, or a website that cannot take payment properly, or an app that looks fine and collapses when the network is bad. The person who can build the missing piece, or replace the awkward bit, is selling something those businesses already understand.
+Walk through a market, a plaza, a school office, a pharmacy, a church administrative block, a small hospital reception. And just count things. Count how many operations are living in a WhatsApp group that was never designed for business management. Count how many records are in a notebook that no one can search. Count how many "who paid" conversations happen manually every single week because there's no system. Count how many people are using a global software tool that costs too much, has too many features they'll never use, and still can't do the specific thing they actually need it to do.
 
-The webinar spends time on this because it is easy to watch international Twitter and conclude you need a venture-scale idea. You need a problem somebody already has, close enough that you can watch them do the task.
+That's not a technology trend. That's not a Lagos problem. That's how a significant portion of real organisations in Nigeria and across Africa actually operate right now. And every single one of those operations is paying a cost for that reality, whether they've put a number on it or not. Lost orders. Wasted staff hours. Customers who left because the process was too frustrating. Money that should have been tracked and wasn't.
 
-If you watch nothing else, watch the parts where I talk about ordinary software — booking, records, shops, internal tools — and how those map to what we teach. Then decide whether you even want this skill. That decision is cheaper after an hour of video than after a month of guessing.`,
+They're also paying for software that almost fits. Tools designed for American or European businesses that don't handle naira properly, that require cards most customers don't have, that are built for twenty employees when you have three.
+
+The person who can build the piece that's actually missing, for the actual price that makes sense, for the actual phone that the customer is holding, is offering something those businesses already understand they need. You're not educating them about a new problem. You're solving one they've been living with.
+
+This is the market. It's not glamorous. It doesn't make for a Twitter announcement. But it is real, it's large, it's close enough to walk to, and it's currently being served poorly.
+
+Watch the webinar with your own neighbourhood in mind. Then decide whether this skill is for you.`,
       "Watch with your street in mind",
       "Local demand as the reason to return to the webinar",
       "Phase 1 · Webinar re-engagement",
@@ -226,20 +276,24 @@ If you watch nothing else, watch the parts where I talk about ordinary software 
     email(
       9,
       "Depending on developers for every idea",
-      "What it costs when every change needs someone else's calendar",
+      "Every time you want to change one thing, you're back in the queue. That's the real cost.",
       [
-        "Quotes, waiting, and the small change that puts you back in the queue",
-        "Developers are not the enemy. Living on their calendar for every idea is the tax.",
+        "It's not the developer. It's needing one for every thought you have.",
+        "The developer dependency tax: quotes, waiting, and one extra field that puts you back at the start.",
       ],
-      "Good developers earn what they charge. The hard part is needing one for every thought you have.",
-      `If you have ever tried to get a custom site or a small system built, you already know this story. You explain. You wait for a quote. The number is higher than you hoped, so you negotiate or you freeze. If you go ahead, you wait again. Then you want one extra field, or a mobile view that does not cut off the button, and you are back in the queue. If the person goes quiet, the project goes quiet with them.
+      "Good developers earn every naira they charge. Living on their calendar is the expensive part.",
+      `If you've ever tried to get a custom site or a small system built by a developer, you already know this story from the inside.
 
-Developers are not the enemy. A competent one is expensive because the work is real. The tax is living in a state where you cannot move an idea without someone else's calendar. For a business owner, that tax repeats. For someone who wants to build for others, it is the same tax wearing a different shirt.
+You explain the idea as clearly as you can. You wait for the quote. The number comes back higher than you hoped, so you negotiate or you freeze. If you decide to go ahead, you pay the deposit and wait. Weeks pass. Updates come back that are close but not quite right. You ask for a change. You're back in the queue. Then you want one more thing, a different button, a mobile view that doesn't cut off the text, one extra field in the form. Back in the queue again. If the person goes quiet for a week, the entire project goes quiet with them. If they move on to another client, you find out when they stop responding.
 
-The webinar is partly about reducing that dependency. You may still collaborate with engineers. You should also be able to produce working software yourself, or at least a version one you can show.
+I want to be clear that this is not about developers being bad people. A competent developer is expensive because the work is genuinely hard and the skill took years to build. That's fair. The tax is not the cost. The tax is living in a state where you cannot move a single idea forward without someone else's calendar, someone else's priorities, and someone else's interpretation of what you meant.
 
-Watch it with a recent quote in mind, if you have one. Compare waiting with being able to try. I will talk about the price of the full training later. This email is still about whether you understand the problem well enough to sit through the session.`,
-      "Watch before you request another quote",
+For a business owner who wants to build tools, that tax repeats every time a new idea arrives. For someone who wants to build for clients, it's the same tax wearing a different shirt, because every change their client wants also goes through that queue.
+
+The webinar is partly about reducing that dependency. Not eliminating collaboration with professionals, because there are times when you need that. But building the ability to produce working software yourself, or at least a version one you can show, test, and iterate on without being stuck waiting on someone else.
+
+If you've got a developer quote sitting somewhere that made you close the tab, watch the webinar with that number in mind. Compare waiting to being able to try.`,
+      "Watch before the next quote arrives",
       "Developer dependency as the reason to watch",
       "Phase 1 · Webinar re-engagement",
     ),
@@ -247,22 +301,22 @@ Watch it with a recent quote in mind, if you have one. Compare waiting with bein
     email(
       10,
       "What the webinar actually covers",
-      "What you will actually see if you sit through the session",
+      "Ten emails in. I think it's time I tell you plainly what the webinar actually covers.",
       [
-        "A plain recap of the ground the webinar covers",
-        "Why an hour of video still beats another week of guessing",
+        "You asked for a summary. Here's the map. The recording is still the thing itself.",
+        "If you've been waiting to feel ready to watch, this is the most practical time to do it.",
       ],
-      "If you have been waiting for a summary: this is the map. The recording is still the thing itself.",
-      `People ask me to summarise the webinar in an email. I can give you the map. I cannot give you the demonstration, which is most of the value.
+      "After this email, I'm going to start talking about the offer. So this is the last push for the webinar.",
+      `People ask me to summarise the webinar in an email so they can decide whether to watch it. I understand the instinct. But I want to be honest about something: I can give you the outline. I cannot give you the demonstration, and the demonstration is most of the value. Watching me direct an AI tool to build a working feature in real time is something that a paragraph cannot replace.
 
-You will see how we think about going from a messy idea to something specified. You will see how to work with AI as a builder rather than as a chatbot you argue with. You will see why looking professional matters for trust, why “it works on my laptop” is not the same as software, how data is supposed to persist, what you do when something breaks, and what it takes to put a finished thing on the internet — including, later in the full training, the uncomfortable questions about app stores.
+But here's the outline, since you asked.
 
-The live session is also where I separate operator stories from method stories, so you are not asked to swallow a blended legend. If you only read emails, you will miss that labelling.
+You'll see how to take a messy, half-formed idea and turn it into something specific enough to actually build. You'll see what it looks like to work with AI as a builder and a director rather than as someone arguing with a chatbot. You'll see why looking professional matters enormously for getting clients to trust you with their money. You'll see the difference between "it works on my laptop" and software that real people can use on their real phones with their real internet connection. You'll see how data is supposed to persist so your app actually remembers things. You'll see what you do when something breaks, which it will, because it always does. And you'll see what it takes to put a finished product somewhere that a client can actually open and use.
 
-I have not asked you to pay in these first ten notes. I have asked you to watch. If you still have not, this is the most practical time, because the next emails start assuming you at least know what I taught.
+I haven't asked you to pay in any of the first ten emails. I've only asked you to watch. If you still haven't sat through the session properly, this is honestly the best time to do it, because starting from the next email, I'm going to talk more directly about the training, the offer, and what it actually costs. Those emails make more sense if you've already seen what I taught.
 
-Give it a proper sitting. Phone on silent. If you decide afterwards that this is not your path, you will have decided with information. That is the point of the recording.`,
-      "Take an hour and watch this properly",
+Give it a proper sitting. Phone on silent. Notepad close. If you decide afterward that this is not the path for you, at least you'll have decided with real information instead of a half impression.`,
+      "Watch it properly before the next email",
       "Detailed recap as the tenth distinct reason to watch",
       "Phase 1 · Webinar re-engagement",
     ),
@@ -270,20 +324,22 @@ Give it a proper sitting. Phone on silent. If you decide afterwards that this is
     email(
       11,
       "From webinar to the training path",
-      "If you watched, here is what the actual training is for",
+      "If you watched the webinar, I want to tell you what comes after it.",
       [
-        "The programme behind the webinar, in ordinary language",
-        "Who this is for, now that you have the session as context",
+        "The programme behind the webinar, explained in plain language.",
+        "From the free training to the full path. Here's what the offer actually is.",
       ],
-      "From here I will talk about the offer more directly. I still will not pretend you must decide tonight.",
-      `If you watched the webinar, you already have the picture. The full programme — **How To Build Software With AI And Get Paid For It** — is the ordered version of that picture: setup, directing AI, turning an idea into a blueprint, prompts that do not waste a week, making the thing look trustworthy, making it actually work, storing data, recovering from mistakes, putting it on the internet, and guidance for app stores when that question arrives.
+      "From here I'll talk about the offer more directly. But I'll still be straight with you.",
+      `If you watched the webinar, you already have the picture. You've seen what the work looks like, what the method is, and whether the people teaching it have actually done it themselves.
 
-I operate other businesses. PromptEarn is one of them: more than ₦800,000,000 in transactions, and more than 20 cars to top performers. That is operator context. What PromptEarn is **not** proof of: it is not evidence that this AI-building method produced PromptEarn. Different business, different period, different path. I will keep those lines separate.
+The full programme is called How To Build Software With AI And Get Paid For It. It's the ordered version of everything the webinar introduced. Setup. Directing AI to build for you. Turning a rough idea into a blueprint that can actually be built. Prompts that don't waste a week of your time. Making your app look professional. Making it actually work the way it's supposed to. Storing data properly. Recovering from mistakes without losing everything. Putting your product live on the internet. And navigating app stores when that question arrives, which it will if you take this seriously.
 
-The offer page is ${WEBINAR_FOLLOWUP_OFFER_PRICE} while promotional pricing is running. Regular price is ${WEBINAR_FOLLOWUP_REGULAR_PRICE}. I will unpack the ${WEBINAR_FOLLOWUP_OFFER_VALUE} stated stack later, module by module, without treating it as cash in your account.
+I run other businesses. PromptEarn is one of them, with more than N800,000,000 in transactions and more than 20 cars given out to top performers. I mention that because people ask, not because PromptEarn is proof that this AI building method works. Those are different businesses with different origins and I will keep those lines separate throughout this sequence.
 
-If you have not watched yet, the webinar is still the better first step. If you have, the offer page is the place that lists what you get in full.`,
-      "See the full training offer",
+The offer page is ${WEBINAR_FOLLOWUP_OFFER_PRICE} while promotional pricing is running. Regular price is ${WEBINAR_FOLLOWUP_REGULAR_PRICE}. I'll walk you through the full value stack in detail over the next several emails, module by module, without inflating it or treating it like money in your account.
+
+If you haven't watched the webinar yet, that's still the better first step. If you have, the offer page is where the full details live.`,
+      "See the full training",
       "Transition from webinar to offer without a hard cut",
       "Phase 2 · Belief",
     ),
@@ -291,22 +347,26 @@ If you have not watched yet, the webinar is still the better first step. If you 
     email(
       12,
       "Setup and the first week",
-      "Most people do not fail at “talent.” They fail at a broken setup.",
+      "Most people don't quit because the content was too hard. They quit at a broken setup.",
       [
-        "Why the first module exists, and what it saves you",
-        "Conflicting tutorials are how beginners decide they are not technical",
+        "Why the first module exists, and what it actually saves you from.",
+        "Five conflicting tutorials, a broken environment, and a quiet decision that you're just not technical.",
       ],
-      "If you have ever opened five YouTube tabs and closed the laptop, this is the part of the training that is for you.",
-      `I will be practical. The first module is **The Zero-To-Builder Setup**. It looks boring. It is the module that stops people quitting before they have built anything, because they hit five conflicting tutorials, a broken environment, and a quiet conclusion that their brain is the wrong shape.
+      "If you've ever opened a tab, tried to follow instructions, and closed the laptop in defeat, this is for you.",
+      `Let me tell you something that I've watched happen more times than I can count.
 
-The training walks the workspace in order: tools, accounts, folders, defaults. You want a baseline that runs, not a philosophy of editors.
+Someone registers for a programme. They're motivated. They sit down on day one ready to start. They open the first tutorial, and it tells them to install something. The instructions are slightly different from what's on their screen. They find another tutorial. That one has different steps. They try a third. Three different versions of the same setup and none of them match exactly what they're looking at.
 
-Module two, **Teaching AI To Build For You**, is the actual working relationship: you as the person who specifies and checks, the model as the one producing drafts. That is also where people discover they were giving vague instructions and then blaming the tool.
+An hour later, nothing is working. They close the laptop. They tell themselves they'll come back to it tomorrow. Tomorrow becomes next week. Next week becomes never. And they quietly conclude that they must not be technical enough for this, when the actual problem was that nobody gave them a single clear path from start to working, in the right order, without assuming things they didn't know yet.
 
-If you watched the webinar, you saw the shape of this. The offer is the place you go through it with the full sequence, templates, and support. ${WEBINAR_FOLLOWUP_OFFER_PRICE} is the promotional price on that page.
+That's exactly what the first module, The Zero-To-Builder Setup, is designed to prevent.
 
-You can still be unsure. Uncertainty after a clear first week is different from uncertainty after no start at all.`,
-      "See how the first modules are taught",
+It's not glamorous. It's not the exciting part where you start building things. But it is the module that determines whether you quit in the first week or make it to the part where the skill starts to click. We walk through the workspace setup in a single clear sequence: which tools, which accounts, which folders, which defaults to change. You want a baseline that actually runs, not a philosophy about which editor is theoretically best.
+
+The second module, Teaching AI To Build For You, is where the real working relationship begins. How to specify what you want clearly. How to check what comes back. How to recognise when the output looks right but will break on a real click. How to give AI the kind of instructions that produce working software instead of confident nonsense.
+
+The promotional price for the full programme is ${WEBINAR_FOLLOWUP_OFFER_PRICE}.`,
+      "See how the first modules work",
       "Education on setup to make the offer feel like a path",
       "Phase 2 · Belief",
     ),
@@ -314,22 +374,26 @@ You can still be unsure. Uncertainty after a clear first week is different from 
     email(
       13,
       "Idea to blueprint",
-      "Feelings are not specifications. AI cannot build a feeling.",
+      "The reason most AI-built projects fail has nothing to do with AI. Here's what it actually is.",
       [
-        "What the Idea-To-Blueprint system is actually for",
-        "Version one is mostly a list of what you refuse to include",
+        "Vague instructions produce vague software. Module 3 fixes the brief before you write a prompt.",
+        "Fast projects are clear projects. Here's what that means in practice.",
       ],
-      "This is the module that turns “like Uber but for tailors” into something you can actually start.",
-      `People lose months here. They have a sentence that sounds like a product and nothing a builder — human or machine — can execute. “Like Uber but for tailors” has no user, no first screen, no data, and no definition of done.
+      "\"Build me an app for my business\" is not an instruction. It's a wish.",
+      `There's a pattern I see with people who try to build software with AI and give up frustrated.
 
-**The Idea-To-Blueprint System** is the part of the training that forces those decisions: who it is for, the core flows, what must be remembered, and the rude list of things version one will not do. That exclusion list is not a lack of ambition. It is how version one exists.
+They start with an idea that feels clear in their head. They type it into the AI tool. Something comes back. It's not quite right. They try to fix it by adding more instructions. Now it's more confused. They try again from scratch. Three hours later they have something that looks like a website and works like nothing, and they've concluded that the whole thing is overhyped.
 
-When I later mention a published case of a team rebuilding a product in about two weeks, the interesting part is not the slogan “AI is fast.” Fast rebuilds happen when somebody already knows what the product must do. Vague briefs generate confident mess at record speed.
+The problem is almost never the AI. The problem is the instruction.
 
-If you have an idea, try writing a one-page blueprint tonight: user, job, three screens, three things you will not build yet. Then look at the offer if you want the full method, examples, and the prompt patterns that sit on top of it.
+"Build me an app for my business" is not specific enough to build anything real. It's a wish. A real instruction sounds like this: "Build a booking form for a Lagos salon. It shows available time slots grouped by day. When a customer books a slot, it sends them a WhatsApp confirmation with the date, time, and stylist name. The form should work on mobile only. Version one does not include payment processing." That instruction has a user, a function, a specific output, a platform, and a list of things version one deliberately excludes so the project doesn't grow forever before it's done.
 
-The page is ${WEBINAR_FOLLOWUP_OFFER_PRICE} on promo. The webinar already showed why this order exists. The programme is the order, written down and supported.`,
-      "See the blueprint training on the offer",
+That's what module three, The Idea-To-Blueprint System, teaches. How to take any idea, even a rough and messy one, and turn it into something specific enough that AI tools can actually help you build it. Who is the user. What is the one job version one does. What does it absolutely refuse to include in the first version. Those constraints are not limitations. They are the thing that makes it possible to finish something.
+
+Module four, The Prompt Playbook, builds on that. Recurring situations produce recurring language. What to say when you're starting a new feature. What to say when the output is wrong but you don't know exactly why. What to say when something worked yesterday and broke today. You stop inventing instructions from nothing every session and start using language that actually works.
+
+Promotional price: ${WEBINAR_FOLLOWUP_OFFER_PRICE}.`,
+      "See modules 3 and 4",
       "Blueprint education connecting to the offer",
       "Phase 2 · Belief",
     ),
@@ -337,20 +401,26 @@ The page is ${WEBINAR_FOLLOWUP_OFFER_PRICE} on promo. The webinar already showed
     email(
       14,
       "Prompt playbook as a craft",
-      "Bad instructions are expensive even when the tools are cheap",
+      "Shade charged N650,000 for an ecommerce site. The client opened it on a phone and trusted it in three seconds.",
       [
-        "Why two people with the same tool get different Fridays",
-        "Patterns for features, bugs, and polish — not vibes",
+        "People judge software before they use it. Module 5 is why that matters more than you think.",
+        "The N650K fee wasn't won on elegant code. It was won on trust at first glance.",
       ],
-      "If you have already tried an AI builder and got a beautiful broken page, this is the missing piece.",
-      `Two people can sit down with the same builder and the same idea. One has something working by Friday. The other has a folder they are afraid to open. The difference is often not intelligence. It is how they instruct, how small they work, and whether they test after each change.
+      "You have about three seconds before someone decides whether they trust what you built.",
+      `Shade is a student from this programme.
 
-**The Prompt Playbook** exists because this is a repeatable craft. Adding a feature without destroying what already works. Fixing a bug with the error text and the expected behaviour included. Making a screen look professional without breaking the mobile layout. Restructuring without silently changing behaviour. Reviewing before you accept.
+When a client asked her to build an ecommerce website for their business, Shade built it using AI tools, following the same workflow taught in this training. The client paid N650,000. That same client later came back and asked Shade to turn the website into a full mobile app. I told Shade to charge N1,500,000 for that job.
 
-Vague instructions cost hours, credits, and eventually belief. People decide they are “not technical” when they were running a contractor with a foggy brief.
+I want to tell you something specific about how that first N650,000 was earned, because it wasn't won because the code was elegant or because the database schema was perfectly structured or because Shade had ten years of design experience.
 
-The webinar introduced this. The module is where you practise it. If that is the gap you felt while watching, the offer page is the next place to look — ${WEBINAR_FOLLOWUP_OFFER_PRICE} promotional, same stack I will keep unpacking.`,
-      "See the Prompt Playbook in the offer",
+It was won because when the business owner opened the site on their phone, it looked like something they would trust with their customers' money. The layout was clean. The text was readable. The buttons were easy to press. It worked the way a real website is supposed to work. The client made a judgment in about three seconds, and the judgment was: this is professional enough.
+
+That's what module five, Making Your App Look Good, is about. Not design as a creative art form. Design as trust. Layout, mobile sizing, spacing, readable text, buttons that are big enough to press with a thumb on a busy street. Knowing when to stop adding things and just let the product breathe. These are learnable decisions, not innate talent, and they're the difference between something a client opens and immediately trusts versus something they open and immediately doubt.
+
+Shade's N650K didn't come from being technically brilliant. It came from building something that looked and worked the way a professional product should. You can learn that. The module teaches it.
+
+${WEBINAR_FOLLOWUP_OFFER_PRICE} promotional.`,
+      "See how module 5 is taught",
       "Educational email on instruction quality",
       "Phase 2 · Belief",
     ),
@@ -358,22 +428,28 @@ The webinar introduced this. The module is where you practise it. If that is the
     email(
       15,
       "Software hiding in ordinary businesses",
-      "The brief is often already in the spreadsheet",
+      "The app that works perfectly on your laptop and dies on a client's phone. You've seen this happen.",
       [
-        "Booking, stock, attendance, “who paid” — software wearing a disguise",
-        "You can learn this market by watching how work is done, not by brainstorming",
+        "Module 6 is the difference between a demo that impressed someone and software they actually use.",
+        "What \"it works\" means on your machine versus what it means on a customer's real phone.",
       ],
-      "If you know a business that runs on Excel and voice notes, you already have research.",
-      `I want you to look at work, not at “startup ideas.”
+      "A client who uses your software on a real day is not the same as you testing it at home.",
+      `There's a version of failure that looks like success right up until it isn't.
 
-A spreadsheet doing bookings is a product brief. A group chat doing orders is a product brief. A staff member copying names from one place to another is a budget line that already exists. You are not always creating a new expense. Sometimes you are replacing a painful one.
+You build something. You test it. Everything works. You show it on a call and the client is impressed. They're excited. They sign off. They start using it with real staff on real phones at real times of day.
 
-This is why the training includes turning a noticed problem into a blueprint, then into something that lives on a phone. It is also why the **App Idea Vault** bonus exists for dry weeks — practice starting points — while your unfair advantage is still the industry you already understand.
+And then the first complaint comes. Something's wrong. You check it on your laptop and it looks fine. You check it on your phone and it looks fine. You ask them to send a screenshot and you finally understand: they're using an older phone with a smaller screen, on a 2G connection at peak hours, and they're entering data in a way you never thought to test for.
 
-Every shop owner will not hire you tomorrow. The raw material is still local and visible if you watch people work for fifteen minutes instead of asking them to describe their process, which they will tidy up in the telling.
+What you built was a demo. What they needed was software.
 
-If that way of seeing felt true in the webinar, the offer is the structured way to act on it. ${WEBINAR_FOLLOWUP_OFFER_PRICE} on the page.`,
-      "Open the offer if this is the work you want",
+The difference between those two things is what module six, Making Your App Actually Work, is about. Empty states: what happens when the page loads but there's no data yet. Bad input: what happens when someone enters nothing, or the wrong thing, or something you didn't expect. Old phones: what happens when the screen is 5.4 inches instead of 6.7. Weak networks: what happens when the connection drops mid-submission.
+
+These are not advanced problems. They're the basic conditions of real use in Nigeria, and they're what separate something that works in your office from something that works in a client's shop at 8am on a Monday when three people are trying to use it at once.
+
+Chinedu's client came back for a second website. That's not because Chinedu's first website was perfect. It's because Chinedu answered when something went wrong and fixed it, and the client learned they could trust him. That reliability is built in this module.
+
+${WEBINAR_FOLLOWUP_OFFER_PRICE} promotional.`,
+      "See the reliability modules",
       "Local observation as belief-building",
       "Phase 2 · Belief",
     ),
@@ -381,24 +457,30 @@ If that way of seeing felt true in the webinar, the offer is the structured way 
     email(
       16,
       "Two roads, ninety days",
-      "Client projects or your own product — pick one lane to start",
+      "Software that forgets everything when you close the tab is a very expensive demo.",
       [
-        "Trying to do both in the first quarter is how capable people stall",
-        "The skill is the same. The first ninety days should not be.",
+        "Module 7 is the difference between something people try once and something they pay for every month.",
+        "LeadThur has 9,460 paid searches. That only means something if the results come back every time.",
       ],
-      "Both roads are real. Walking both before you can walk is how people conclude “it didn’t work.”",
-      `I will put the two roads next to each other so you can stop oscillating.
+      "Your app needs to remember things. Here's why that step changes everything.",
+      `Here's a question I want you to think about.
 
-Client work: one business, one delivery, one invoice, then often an extension. It tends to pay sooner because the buyer exists. You learn scope and communication under pressure. Income pauses when you pause.
+Imagine you build a salon booking system. A client opens it. They book an appointment for Thursday at 3pm. They close the app. They come back on Wednesday to check the time.
 
-A product: many users, smaller payments or subscriptions, later payoff, and a real chance it fails. When it works, it does not need you selling every morning.
+The booking is gone.
 
-Shade’s ecommerce project and Chinedu’s website work sit on the client road. LeadThur sits on the product road. I will give those numbers properly in the next stretch of emails. Today I only need the decision: for ninety days, pick one.
+The app forgot it the moment they closed the session. Because nobody connected it to a database. Because that's the step that most people who learn to build from YouTube tutorials skip, not because they're lazy but because it's the step that feels the most technical and the tutorials often assume you already know how it works.
 
-The programme supports both. The **Get-Paid Guide** is heavier on the client conversation. The build modules and shipping modules serve both. If you need cash and you already know business owners, client work is the less romantic and more honest start.
+Without a real database, you don't have software. You have a form that disappears. And a form that disappears is something people try once, tell their friends doesn't work, and never open again.
 
-Look at the offer with that choice in mind, not with a fantasy of doing everything at once. ${WEBINAR_FOLLOWUP_OFFER_PRICE}.`,
-      "Choose a path, then see the offer",
+Module seven, Making Your App Remember Things, is the database question. Where does the data actually live. How does it get there when someone fills in a form or makes a booking or places an order. How does it come back the next time they open the app. How do you make sure it doesn't disappear, doesn't get corrupted, and doesn't slow down as the amount of information grows.
+
+This is what makes LeadThur a product people pay for every month. Those 9,460 paid searches only mean something because the results are still there the next time someone logs in. That's database. That's persistence. That's the thing that turns a demo into something with real recurring value.
+
+The module walks through this setup in a clear sequence. You don't need to understand database theory. You need to understand enough to connect your app to a real data store and trust that what goes in will come back out.
+
+${WEBINAR_FOLLOWUP_OFFER_PRICE} promotional.`,
+      "See the offer",
       "Reduce overwhelm; connect to offer",
       "Phase 2 · Belief",
     ),
@@ -406,20 +488,26 @@ Look at the offer with that choice in mind, not with a fantasy of doing everythi
     email(
       17,
       "Cursor and the professional default",
-      "The professionals already build with AI. That is useful information.",
+      "The mistake that costs you a weekend versus the one that costs you a client. Here's the difference.",
       [
-        "Cursor as market context, not a personal income forecast",
-        "If the people who can already code are directing machines, the rest of us should at least understand the shift",
+        "Module 8 is how you build without the fear of breaking everything with one wrong click.",
+        "Save points, backups, and a practice copy. The things nobody teaches until you need them desperately.",
       ],
-      "You do not have to become a Silicon Valley engineer. You should not ignore where the work is going.",
-      `I mentioned Cursor earlier. I want to be careful with it.
+      "Version control sounds technical. What it actually is is a save game button for your software.",
+      `Let me tell you what happens to most people who build without version control at some point in their learning.
 
-Cursor is an editor built around AI assistance. It became one of the fastest-growing developer tools because people whose job was already “write software” started doing that job with a model in the loop. That does not mean your first client will pay Silicon Valley rates. It means the direction of travel is not a webinar gimmick. The people who can already build are not waiting for permission.
+They're working on a project. Things are going well. They make a change, something that seems small and sensible, and suddenly nothing works. The page won't load. The data isn't showing. The button that worked yesterday isn't responding today. They try to undo it but the undo button only goes back so far and they've made twenty changes since the last one that worked.
 
-For you, the implication is narrower. The barrier to producing working software has dropped for people who can specify, review, and ship. The barrier to running a good business has not dropped. Clients, scope, reliability, and not disappearing when something breaks — those are still on you.
+They spend a weekend trying to rebuild from memory what they had before. Some of it comes back. Some of it doesn't. A few things that were working before are now slightly broken and they can't figure out why. They submit the project to the client with less confidence than they had before, and they carry a quiet fear into every change they make going forward.
 
-If the webinar made that mix feel real, the training is how we teach the build side in order. The offer page is ${WEBINAR_FOLLOWUP_OFFER_PRICE} promotional. I would rather you enroll because the skill is now learnable than because a tool company had a good year.`,
-      "See the training that teaches the build side",
+That experience doesn't mean they're not good enough. It means nobody taught them to save their progress properly before it mattered.
+
+Module eight, Your Safety Net, is about version control. In plain terms: how to mark a working state of your project so that if everything breaks later, you can get back to the working version in ten minutes. How to work on a test copy so your live product doesn't go down while you experiment. How to look at what changed between two versions so you can find the exact line that broke something.
+
+Once this is in place, shipping stops feeling dangerous. You're not gambling everything on every change. You can try things, break things, and get back to working with confidence. That's what makes fast, iterative building possible, and fast building is what lets you take on more client work and deliver it sooner.
+
+${WEBINAR_FOLLOWUP_OFFER_PRICE} promotional.`,
+      "See module 8",
       "External market context (Cursor) as belief, attributed",
       "Phase 2 · Belief",
     ),
@@ -427,24 +515,26 @@ If the webinar made that mix feel real, the training is how we teach the build s
     email(
       18,
       "LeadThur numbers",
-      "782 people paid to use LeadThur. Here are the rest of the numbers.",
+      "Software that lives on your laptop earns nothing. Here's how to put it where people can actually use it.",
       [
-        "First ninety days, with the word estimated where it belongs",
-        "681 active users is the line that tells you it actually worked",
+        "\"It works on my machine\" is not a delivery. Module 9 is how you get to a real URL.",
+        "The N10 million project and Shade's N650K site were not localhost demos. Here's what that means.",
       ],
-      "This is method proof, not a promise that you will copy the same quarter.",
-      `Yesterday I only named the pattern. Today, the first three months of **LeadThur** as we record them:
+      "A link someone can bookmark on their phone. That's what you're building toward.",
+      `Everything we've built up to this point in the training has been working toward one moment: the moment when you can send someone a link and they can open it on their phone, anywhere, at any time, without you being present.
 
-**782 people paid to use it.** 681 of those were active, not a dead list. In one week in that window, 107 new users joined. People ran **9,460 paid searches** and 2,035 trial searches before paying. Estimated revenue: **₦15,120,000**.
+Not a screenshare. Not a demo on your laptop while you explain it. A link. A real URL. Something they can bookmark and come back to and recommend to someone else.
 
-I want that last figure to stay honest. It is **estimated**, modelled from paid search volume and pricing. It is not an audited statement. I will not dress it up.
+The N10,000,000 client project I showed you in the webinar was live software with a real URL that the client's team could access. Shade's N650,000 ecommerce site was the same. Those weren't "let me show you on my screen" demonstrations. They were deployed products that lived on the internet and did their job whether Shade or I were awake or not.
 
-681 active out of 782 who paid is the useful line. People kept using it. 9,460 paid searches against 2,035 trials means they tested, then bought more. 107 in a week means it spread without a giant ad budget, which is what happens when you save someone an afternoon.
+Module nine, Putting Your App On The Internet, is how you get there. Hosting: where your app actually lives when it's not on your hard drive. Domains: the address people type or click to reach it. The first real deployment: the steps that take something from working locally to working for anyone on any device. And the most common failure mode: software that works perfectly on your machine and breaks the moment it reaches a real server, because your machine has things installed that the server doesn't, and you didn't know to account for that.
 
-You will not automatically match this in ninety days. Markets differ. Execution differs. What this does show is one person, one narrow problem, AI-assisted, no permission from a fund, and usage that is real.
+There's a pattern to that failure. The module teaches you to recognise it and fix it rather than panic.
 
-That path is what the build-and-ship modules are for. If you want them in order, with support, the offer is ${WEBINAR_FOLLOWUP_OFFER_PRICE}.`,
-      "See the curriculum behind this kind of build",
+After this module, you are no longer building things for yourself. You are building things for other people to use. That's the shift that makes everything real.
+
+${WEBINAR_FOLLOWUP_OFFER_PRICE} promotional.`,
+      "See module 9",
       "LeadThur usage proof with estimated revenue labelled",
       "Phase 3 · Proof",
     ),
@@ -452,24 +542,26 @@ That path is what the build-and-ship modules are for. If you want them in order,
     email(
       19,
       "Ten million naira project",
-      "One client project. The payment was ₦10,000,000.",
+      "When \"put it on the Play Store\" is the right move. And when it will destroy your timeline.",
       [
-        "The fee followed the size of the problem, not how clever the code looked",
-        "I will not decorate this with details I cannot stand behind",
+        "Module 10 is the honest version of the app store conversation. Without the promises nobody can keep.",
+        "Shade's client wants the website turned into an app. Here's what that conversation actually involves.",
       ],
-      "Products are one road. Client work is the other. This is the ceiling example, not your first invoice.",
-      `We delivered a software project where the **project payment was ₦10,000,000**.
+      "Nobody controls Apple's review timeline. I won't pretend to.",
+      `I'm going to be straightforward with you about this module because the internet is not.
 
-I am going to leave the story there on purpose. One client. One serious business problem. One payment. I will not invent a cinematic backstory.
+The question of whether your software should be a web app, the kind that opens in a browser on any phone, or a native app, the kind that someone downloads from the Google Play Store or the Apple App Store, is a real decision with real consequences. And I've seen too many people make promises to clients about Play Store launches before they understood what that actually involved.
 
-What a number like that teaches, if you let it, is that businesses do not pay ten million naira for a login screen. They pay when the pain is already costing more than that — time, leakage, risk. The invoice tracks the problem.
+Web apps handle the majority of use cases. They open in any browser on any phone. They don't require anyone's approval. They update instantly when you make a change. They don't require your user to download anything or create an account with Google or Apple. A lot of the software built in this training ends here, and for many projects, that's exactly the right answer.
 
-Your first job will almost certainly not look like this. Shade’s ₦650,000 ecommerce project and Chinedu’s ₦480,000 website are closer to early client-work territory, and I will tell those properly next. Both still dwarf ${WEBINAR_FOLLOWUP_OFFER_PRICE}.
+Native apps make sense in specific situations: when you need deep access to the phone's hardware, when users need the app to work completely offline, or when the experience you're building genuinely requires things that a browser can't deliver. They also require a review process that you do not control. Apple decides when your app gets approved. That timeline can be three days or three weeks and it does not move faster because you have a client waiting.
 
-The **Get-Paid Guide** is in the stack because building without scoping and pricing is how people work for free and then get bitter.
+Module ten teaches that distinction honestly, so you can have the right conversation with a client before you make a promise you can't keep. Shade's client asking to turn the ecommerce website into an app is exactly this conversation. The answer depends on what the app actually needs to do and whether a web experience would serve the customer just as well.
 
-If you want the training that includes that business half, it is on the offer page.`,
-      "See the training stack, including getting paid",
+This module is also where I cover what "getting on the stores" actually involves for the cases where it's the right answer, because it is genuinely achievable. Just not in the timeframe people usually imagine the first time.
+
+${WEBINAR_FOLLOWUP_OFFER_PRICE} promotional.`,
+      "See the full programme",
       "Verified large project as ceiling, not a guarantee",
       "Phase 3 · Proof",
     ),
@@ -477,22 +569,26 @@ If you want the training that includes that business half, it is on the offer pa
     email(
       20,
       "Shade’s ecommerce project",
-      "Shade earned ₦650,000 on one ecommerce site. Then the work continued.",
+      "The LeadThur numbers. All of them, labelled where they're estimated.",
       [
-        "One client, one shop, one payment — and then the app conversation",
-        "You do not need an audience. You need a delivery a business is proud to use",
+        "I've mentioned LeadThur a lot. Here are the actual figures with the words \"estimated\" where they belong.",
+        "782 users. 9,460 paid searches. N15,120,000. Here's what those numbers actually mean.",
       ],
-      "I will not collapse this into three punchy lines. The useful part is what happened around the money.",
-      `Shade built an ecommerce website for a client and **earned ₦650,000** for that project. One shop that needed to sell online in a way that did not collapse into chat messages and screenshots. She delivered a site the client could actually run.
+      "I'm going to open the dashboard properly because you deserve the full picture, not just the headline.",
+      `I've referenced LeadThur in several of these emails and I want to give you the complete picture rather than letting the headline numbers do all the work.
 
-What happened next matters more than the round number. The same work opened a second conversation: **turning that website into an app.** That is how client relationships compound when the first delivery holds. You are not always hunting a stranger. You are extending something that already exists.
+The dashboard I showed in the webinar: 782 total users. 681 active users. 107 new in the week the screenshot was taken. 9,460 paid searches by paying users. 2,035 free trial searches. Estimated revenue: N15,120,000. That's 443 users on the N15,000 plan and 339 on the N25,000 plan.
 
-₦650,000 is not a promise. It is a type of job that exists in this market, at a fee many times the promotional price of the training, for someone who can make a shop look trustworthy and a checkout that works.
+The word estimated is on the dashboard and I'm keeping it here too. That's the platform's own projection based on active subscriber counts. It's not a confirmed bank balance and I won't present it as one.
 
-That is why **Making Your App Look Good** and **Making Your App Actually Work** are not decorative modules. A cheap-looking store loses sales. A checkout that fails once can lose the referral and the app job.
+What I want you to understand about those numbers is how they were produced. LeadThur was built with AI tools, using the same workflow this training teaches. There was no development team. There was no co-founder who handled the technical side while I handled marketing. One person, directing tools, specifying outcomes, testing results, fixing what broke, shipping, then iterating. The method that produced LeadThur is the method I'm teaching.
 
-If you want those modules in the full order, they are on the offer. ${WEBINAR_FOLLOWUP_OFFER_PRICE}.`,
-      "See the delivery modules on the offer",
+That is not a promise that you will produce similar numbers. Building a successful software product depends on choosing the right problem, building it well, pricing it correctly, and finding the people who need it. The training gives you the building part. The rest is real work.
+
+But the numbers are real. The software is live. People pay for it every month. And it was built the way I'm describing.
+
+${WEBINAR_FOLLOWUP_OFFER_PRICE} promotional.`,
+      "See the training offer",
       "Complete Shade story with context and no guarantee",
       "Phase 3 · Proof",
     ),
@@ -500,22 +596,28 @@ If you want those modules in the full order, they are on the offer. ${WEBINAR_FO
     email(
       21,
       "Chinedu and the return client",
-      "Chinedu earned ₦480,000. Then the same client came back.",
+      "N10 million. One client. Seven days. I want to tell you about that project.",
       [
-        "The second website is the review that counts",
-        "Repeat work is how this becomes income instead of a lucky first job",
+        "The biggest single project I've taken on. What it was, how long it took, and how it was built.",
+        "A single client job at N10 million proves something different from LeadThur. Here's what.",
       ],
-      "Anyone can luck into one project. A return visit means they lived with the work.",
-      `**Chinedu earned ₦480,000 from one client for a website. That same client later asked for a second one.**
+      "Not a product launch. One client, one brief, one delivery. The same skill.",
+      `The N10,000,000 client project I showed in the webinar is different from LeadThur and I want to be clear about why, because they prove different things.
 
-₦480,000 is serious money. The return is the signal I want you to sit with. First jobs happen for mixed reasons: a cousin, a hurry, a good conversation. A client who comes back has used the site on a bad-network Monday, found the annoying bit, watched how you handled a change, and still chose to pay you again.
+LeadThur is a product. Many different people pay a recurring monthly fee to use it. The income comes in pieces from many sources over time. That's one kind of outcome from this skill.
 
-That is also how the economics improve. The first project includes a lot of unpaid trust-building. The second starts warm. Two or three relationships like that and you are closer to income than to “hustling random quotes.”
+The N10 million project was a service. One client. One brief. One delivery. The payment came through in full on completion, which is what you saw on the Fidelity Bank alert in the webinar.
 
-What earns it is rarely brilliance. You said the scope, you delivered, it kept working, you replied, you did not vanish when something broke. **Making Your App Actually Work**, **Making Your App Remember Things**, and **Your Safety Net** exist for that unglamorous part. The **Get-Paid Guide** covers saying the scope out loud so you are not trapped in endless extras.
+The project took seven days to build. Seven days from brief to delivery, using the same AI workflow this training teaches. The client paid N10,000,000 for it.
 
-Chinedu’s outcome is not a promise. It is what repeat business looks like when the work holds. The offer is ${WEBINAR_FOLLOWUP_OFFER_PRICE} if you want that taught as a path, not as a highlight.`,
-      "See how delivery is taught",
+I mention this separately from LeadThur because it answers a different question. LeadThur answers: can you build something many people will pay for over time? The N10 million project answers: can a single client job, built with AI tools, be worth this kind of money?
+
+Both answers are yes. And both outcomes come from the same foundation. Knowing how to specify clearly. Knowing how to build reliably. Knowing how to deliver something that a client can actually use and will actually pay for.
+
+That foundation is what the ten modules teach. Not the specific project. Not the specific client. The foundation.
+
+${WEBINAR_FOLLOWUP_OFFER_PRICE} promotional.`,
+      "See the training that teaches this",
       "Complete Chinedu story: return client as the point",
       "Phase 3 · Proof",
     ),
@@ -523,24 +625,28 @@ Chinedu’s outcome is not a promise. It is what repeat business looks like when
     email(
       22,
       "eXp Realty and Lovable",
-      "A large real estate firm cancelled SaaS bills and built instead",
+      "Shade got paid N650,000. I told her to charge N1.5 million for the next job. Here's why.",
       [
-        "Lovable’s published eXp Realty story — go read it yourself",
-        "Buy-versus-build is shifting. That matters even at street scale",
+        "The client didn't go looking for someone else. They came straight back to Shade. That's the pattern.",
+        "First job done. Same client asks for more. This is how the income grows without starting over.",
       ],
-      "Not my client. Their published case. Useful because you can verify it.",
-      `I do not want all the evidence to come from my circle. Here is one you can open yourself.
+      "Reliability creates return business. That's less glamorous than going viral and more valuable.",
+      `Shade is a student from this programme.
 
-**eXp Realty** is a large US real estate organisation. On **Lovable’s own customer story**, they describe using Lovable to build custom software and **cancelling expensive SaaS contracts** they no longer needed — international sites, internal tools, replacements for per-seat tools. Those are Lovable’s published claims about eXp’s work. They are not my results, and they are not a forecast for you.
+A client needed an ecommerce website for their business. Shade built it using AI tools, following the same workflow this training teaches. The client paid N650,000. It was Shade's first paid client project.
 
-What I want you to take is the shift: for a long time, “we need a tool” defaulted to renting one forever. When teams can direct an AI builder toward the workflow they actually have, a bloated subscription starts to look optional.
+That same client, without Shade asking, came back with another request. They wanted the ecommerce site turned into a full mobile app so their customers could download it from the app store. I told Shade to charge N1,500,000 for that job.
 
-At your scale that still matters. Pharmacies, schools, distributors paying for software that half-fits, plus WhatsApp for the rest. The person who can build the missing piece is selling fit and ownership, not a Silicon Valley headcount.
+I want to pull apart what happened here because people look at the N650,000 number and that's what they focus on. But the more important thing is what came after it.
 
-**Putting Your App On The Internet** is the module that makes a build reachable. **Zero-Cost Toolkit** is for keeping your own stack cheap while you learn.
+The client didn't go to a marketplace and search for another developer. They didn't ask for referrals. They didn't get a second quote from someone cheaper. They came straight back to Shade, with a bigger job and an expectation of paying more for it, because the first delivery earned their trust.
 
-Read the Lovable write-up if you like checking sources. Then look at the offer if you want the skill at this price: ${WEBINAR_FOLLOWUP_OFFER_PRICE}.`,
-      "See what the programme includes",
+That's how income from this skill actually compounds. Not by finding a new client every time. By doing the first job well enough that the same client brings you the next one, and the one after that. Chinedu had exactly the same experience. First website, N480,000, client came back for a second.
+
+The training teaches you to build to that standard. Reliable. Professional. Something a client opens and trusts. That's not a talent thing. It's a process thing.
+
+${WEBINAR_FOLLOWUP_OFFER_PRICE} promotional.`,
+      "See the full offer",
       "Verified eXp/Lovable story, attributed, not a promise",
       "Phase 3 · Proof",
     ),
@@ -548,22 +654,28 @@ Read the Lovable write-up if you like checking sources. Then look at the offer i
     email(
       23,
       "Ryplix and Bolt",
-      "Bolt published this: about two weeks, then a reported $10k MRR jump",
+      "Chinedu charged N480,000 for a website. Then the client came back and asked for another one.",
       [
-        "Ryplix’s rebuild as Bolt told it — speed came after clarity",
-        "Monthly revenue is a different asset from a one-off invoice",
+        "The second client job came from the first. That's the cheap acquisition channel nobody talks about.",
+        "First delivery. Client comes back. How the pattern works.",
       ],
-      "Attributed to Bolt’s case study. Not my client. Not your forecast.",
-      `**Bolt** published a case study on **Ryplix**. According to that write-up, they rebuilt version 2.0 of a major US product (the product itself under NDA in their telling) **in two weeks**, and they report a **+$10,000 monthly recurring revenue** jump from that launch.
+      "He didn't need ads or a following for the second job. He needed the first job to be good.",
+      `Chinedu is another student from this programme.
 
-Those are Bolt’s published figures about Ryplix. I have not audited Ryplix’s books.
+His first client paid N480,000 for a website. Built with AI tools, following the same process this training teaches. The client got the website. It worked. It looked professional. It did what it was supposed to do.
 
-Two weeks used to be a quarter plus a team. Recurring monthly revenue is also a different shape from Shade’s one-time ecommerce fee. These examples are not stacked so you will copy both. They show that compressed timelines and monthly revenue exist in public case studies when the work is specified.
+The client came back asking for a second website, for a different business in their portfolio. Chinedu asked me how to price the additional features they wanted. I told him N100,000 to N150,000 depending on the scope, and to agree the exact scope before starting any work so there are no surprises later.
 
-The part beginners miss: speed is usually clarity. Point a builder at a foggy brief and you get a mess quickly. **The Idea-To-Blueprint System** sits early in our order for that reason.
+Two things I want you to notice about this.
 
-If you want that order with support, it is on the offer. ${WEBINAR_FOLLOWUP_OFFER_PRICE}.`,
-      "See the build sequence on the offer",
+The first is that the second job cost Chinedu nothing to acquire. No ad spend. No time spent pitching to strangers. No marketplace listing. No Instagram content. One person, coming back, because the first job gave them a reason to.
+
+The second is that the path from first job to second job runs through one thing and one thing only: delivering the first job well enough that the client has no reason to look elsewhere. Not perfectly. Not without any issues. Well enough. Professionally enough. Reliably enough that the client's experience of working with you is: "this person builds things that work and fixes problems when they come up."
+
+That's what the training builds toward. Not a single impressive project. A way of working that creates repeat business.
+
+${WEBINAR_FOLLOWUP_OFFER_PRICE} promotional.`,
+      "See the programme",
       "Bolt/Ryplix reported figures, clearly attributed",
       "Phase 3 · Proof",
     ),
@@ -571,24 +683,26 @@ If you want that order with support, it is on the offer. ${WEBINAR_FOLLOWUP_OFFE
     email(
       24,
       "One-off fees versus money that repeats",
-      "A single invoice feeds you. Recurring revenue changes the month after.",
+      "Four ways this skill puts money in your account. None of them require going viral.",
       [
-        "Shade’s project ended. LeadThur’s searches did not.",
-        "Retainers count. You do not need a funded SaaS company.",
+        "Client work, your own product, selling software, free tools. The four paths from building to being paid.",
+        "You don't need a startup idea or a following. Here are the four doors from this skill to income.",
       ],
-      "I want you to see both shapes so you do not worship one and ignore the other.",
-      `Shade’s ₦650,000 was a project. When it ended, the next month started at zero until the next job or the app extension.
+      "Most people focus on one and miss the other three. Here's the full picture.",
+      `I want to lay out the four ways this skill can actually pay you, because they're genuinely different from each other and knowing which one fits your situation changes what you build first.
 
-LeadThur’s **9,460 paid searches** from **681 active users**, with **₦15,120,000 estimated** in three months, was many small paid actions. The tool kept working whether or not anyone was on a sales call.
+The first is client work. A business has a problem. You build something that fixes it. They pay you for the project. This is usually the fastest first income because businesses with problems are everywhere and the sales cycle is shorter than any other path. Shade and Chinedu both started here.
 
-Ryplix, in Bolt’s telling, added about **$10,000 a month**. Monthly is the word.
+The second is building your own product. You identify a problem that many different people have, build a tool that solves it, and charge people to use it on an ongoing basis. LeadThur is this. It earns while I sleep because the software runs whether I'm working or not. The income is less immediate than client work and more durable once it's established.
 
-You do not need to copy any of those structures on day one. You do need to stop assuming every piece of software work must die at handover. Usage-based products, small niche subscriptions, retainers for hosting and small changes after you already built the thing — those are ordinary options.
+The third is selling software as an asset. You build something, it works, it has users or revenue or both, and you sell the whole thing to someone who wants to own it rather than build it. There are marketplaces where this happens regularly and small apps with real traction sell for meaningful money. The Software Marketplace Guide inside the programme covers where to go and what buyers actually look for.
 
-The training covers building things that survive contact with users, which is the precondition. Getting paid twice is a business choice on top.
+The fourth is building free tools that do your selling for you. A tool that solves one specific problem for free, attracts the people who have that problem, and converts them into customers for something you sell. This is a longer game but it creates the most sustainable pipeline.
 
-If you want that foundation, ${WEBINAR_FOLLOWUP_OFFER_PRICE} is the promotional enrollment.`,
-      "See the product and delivery modules",
+You don't need all four. Most people start with one. The training gives you the foundation to pursue any of them and the knowledge to decide which one fits your situation right now.
+
+${WEBINAR_FOLLOWUP_OFFER_PRICE} promotional.`,
+      "See the monetisation modules",
       "Monetization shapes without overnight-rich claims",
       "Phase 3 · Proof",
     ),
@@ -596,22 +710,28 @@ If you want that foundation, ${WEBINAR_FOLLOWUP_OFFER_PRICE} is the promotional 
     email(
       25,
       "Price the problem, not your hours",
-      "Why ₦480,000 and ₦10,000,000 can both be fair in the same country",
+      "Why N480,000 and N10 million can both be fair for a website in the same country.",
       [
-        "Hourly thinking punishes you for getting faster with AI",
-        "Ask what the mess already costs before you say a number",
+        "If you're charging by the hour, AI just made you cheaper. Here's a better way to think about pricing.",
+        "Price the problem you're solving. Not the hours you spend.",
       ],
-      "Two similar websites. Very different invoices. The difference is rarely “more code.”",
-      `If you charge by the hour, AI just made your hours fewer. That is a poor way to get paid for a skill that is supposed to make you faster.
+      "The question to ask before you quote is not \"how long will this take.\" It's \"what is this problem already costing them.\"",
+      `If you charge by the hour, building software with AI just made you a worse business.
 
-You are closer to selling the removal of a problem. Problems already have a price: staff time, lost sales, refunds, embarrassment. When a manual process burns hundreds of thousands of naira a month in wasted labour, a ₦650,000 build that ends it can be cheap. When the pain is smaller, the invoice should be smaller. That is why ₦480,000, ₦650,000, and ₦10,000,000 can all be fair without anyone being a thief.
+Think about it. The point of using AI tools is to build faster. If you're billing per hour and you build something in three days that used to take three weeks, you've just charged one-seventh of what you would have charged before. You got faster, which is the whole point, and you got paid less for it. That's not a reward. That's a punishment for improving.
 
-Practical habits: find the current cost before you quote. Quote a scoped version one, not an open-ended “we will see.” Do not win by being the cheapest; those clients often negotiate hardest and never return. Chinedu’s second site was not a discount strategy. It was reliability.
+The better frame is pricing the problem you're solving rather than the time you spend solving it.
 
-The **Get-Paid Guide** is where we teach that conversation. It sits in the ${WEBINAR_FOLLOWUP_OFFER_PRICE} stack, not as a separate mystery product.
+Problems already have a price attached to them whether the client has calculated it or not. Staff hours wasted on manual processes. Orders lost because the system didn't work. Customers who left because the experience was too frustrating. Refunds. Errors. Embarrassment. When a manual process is costing a business hundreds of thousands of naira a month in some combination of those things, a N650,000 build that ends it can look like a bargain from their side of the table even if it took you two weeks.
 
-If pricing fear is what is stopping you, read the offer page with that module in mind, not only the build videos.`,
-      "See the Get-Paid Guide on the offer",
+When the pain is smaller, the invoice should be smaller. When it's larger, larger is fair. This is why N480,000 for a website, N650,000 for another website, and N10,000,000 for a single project can all be honest in the same country at the same time. The number follows the problem, not a rate card.
+
+Practical habits before you quote: find out what the current situation is actually costing before you say a number. Quote a specific version one with a defined scope rather than an open agreement. Don't win work by being the cheapest, those clients negotiate hardest and rarely come back. Chinedu's second website was not a discount strategy.
+
+The Get-Paid Guide inside the programme is where this conversation gets taught in full.
+
+${WEBINAR_FOLLOWUP_OFFER_PRICE} promotional.`,
+      "See the Get-Paid Guide",
       "Pricing education tied to named proof",
       "Phase 3 · Proof",
     ),
@@ -619,22 +739,30 @@ If pricing fear is what is stopping you, read the offer page with that module in
     email(
       26,
       "Objection — I cannot code",
-      "You will see code. You do not need two years of syntax first.",
+      "\"I can't code.\" I hear this every week. Let me tell you what it actually means for this skill.",
       [
-        "The honest version, without “you will never look at a file”",
-        "Shade and Chinedu were paid for working websites, not for a degree",
+        "Shade and Chinedu were paid for working websites. Not computer science degrees.",
+        "You will see code. You won't need two years of syntax to do what they did.",
       ],
-      "I will not lie to you that the work is invisible. I will tell you what you actually have to become good at.",
-      `You will see code. Week one would catch me if I said otherwise.
+      "I won't lie to you and say you'll never see a line of code. I will tell you what you actually need to be comfortable with.",
+      `I want to be honest with you about something that other people in this space often aren't.
 
-You do not need to write loops from memory. That older apprenticeship is the part tools now cover more of. You do need to read an error, know roughly which file you are in, paste the message, say what you expected, and try again. That is weeks of comfort, not years of exams.
+You will see code. I'm not going to tell you that you'll build real software and never once look at something that looks like code, because that's not true and you'd figure it out in the first week. If I told you that and you enrolled and found out differently, you'd feel misled, and you'd be right.
 
-**The Zero-To-Builder Setup** exists because people quit at the environment, not because they failed a talent test. **Teaching AI To Build For You** is the directing craft.
+Here's what's actually true.
 
-Shade’s ₦650,000 site and Chinedu’s ₦480,000 site were working deliverables. They were not computer science theses.
+Writing code from memory, knowing a programming language deeply, being able to build a full system from scratch without AI assistance, that's a real profession that takes years to develop. You don't need to become that person.
 
-If “I cannot code” is the sentence stopping you, the offer is the place we start from setup, not from chapter twelve of a language book. ${WEBINAR_FOLLOWUP_OFFER_PRICE}.`,
-      "See where the programme actually starts",
+What you do need to become comfortable with is different and genuinely learnable in weeks. Reading an error message without panicking and closing the laptop. Knowing roughly which file in your project is responsible for which behaviour so you can tell AI where to look when something breaks. Pasting an error into a prompt and describing what you expected to happen versus what actually happened. Recognising when the output AI gave you looks right on the surface but will break the moment a real user touches it. Testing like a suspicious stranger rather than like the person who built it.
+
+That's directing. It's different from coding. It's closer to knowing what you want clearly enough to manage a very fast, very capable worker who needs precise instructions and breaks down when the instructions are vague.
+
+Shade's N650,000 site and Chinedu's N480,000 site were working deliverables. Not computer science theses. Not perfect code. Working products that real clients paid for and came back for more.
+
+The Zero-To-Builder Setup exists because most people quit at the environment, not because they failed any kind of talent test. If that sentence describes you, that's where we start.
+
+${WEBINAR_FOLLOWUP_OFFER_PRICE} promotional.`,
+      "See where the programme starts",
       "Coding objection answered without hype",
       "Phase 4 · Objections",
     ),
@@ -642,20 +770,34 @@ If “I cannot code” is the sentence stopping you, the offer is the place we s
     email(
       27,
       "Objection — I am not technical",
-      "\"Not technical\" is often a skipped step plus panic at the word ERROR",
+      "\"I'm not technical.\" I've heard that from people who went on to earn N480,000 from client work.",
       [
-        "Four habits that matter more than a science background",
-        "Give module one a week. Then decide with evidence.",
+        "Not technical is usually a story people tell after a bad afternoon with a tutorial.",
+        "Four habits that matter more than a science background. The list might surprise you.",
       ],
-      "Nobody was born knowing what a folder is. The useful question is how you behave when something is red.",
-      `I do not think “not technical” is a blood type. I think it is a story people tell after a bad afternoon with a tutorial.
+      "I don't think \"not technical\" is permanent. I think it's a description of where you are, not where you're going.",
+      `I've been thinking about this phrase for a long time because I hear it constantly and I've watched it do real damage.
 
-What actually predicts progress, in my experience: you follow the steps without skipping number four. You read the error instead of closing the laptop. You can sit with not understanding something for a few days. You can ask a specific question — “I clicked save, expected the record, got this message” — instead of “it does not work.”
+"I'm not technical."
 
-**Private Support Family** exists because stall time kills more programmes than difficulty does. Three days on something a person who has seen it would kill in ten minutes is an expensive tax.
+People say it like it's a permanent characteristic of who they are. Like some people are born with the technical gene and some aren't, and the best the second group can do is hope they can afford to keep hiring the first group forever.
 
-If the identity is comfortable, notice that. Comfort can be expensive. A fairer test is one week of setup, done as taught, then decide. The offer is ${WEBINAR_FOLLOWUP_OFFER_PRICE}. The webinar already showed you the shape. The modules are the practice.`,
-      "Test yourself in the first module",
+I don't believe that's what's actually happening when someone says it.
+
+What I actually observe, when I watch people learn to build software for the first time, is that the ones who succeed and the ones who don't are almost never separated by intelligence or some innate technical ability. They're separated by habits. Four of them specifically.
+
+The first is following instructions in sequence without skipping steps that feel obvious or unnecessary. Step four exists for a reason. Skip it and something breaks five steps later and you don't know why.
+
+The second is reading an error message instead of closing the laptop. The message is usually telling you exactly what's wrong. Most beginners see the red text and immediately conclude the whole thing is broken and they must be the problem.
+
+The third is being willing to sit with not understanding something for a few days rather than declaring defeat. Progress in this skill is rarely linear. There are days where everything clicks and days where nothing makes sense and the difference between people who make it and people who don't is often just that the successful ones didn't quit on the days when nothing made sense.
+
+The fourth is asking specific questions when stuck. "It doesn't work" is not a question. "I clicked the save button, I expected the new record to appear in the list, and instead I got this error message" is a question that gets answered.
+
+Private Support Family inside the programme exists so that when you're stuck, you're stuck around people who have seen that specific problem before and know the answer. Stall time kills more learning than difficulty does.
+
+${WEBINAR_FOLLOWUP_OFFER_PRICE} promotional.`,
+      "Test yourself in module 1",
       "Identity objection with behavioural criteria",
       "Phase 4 · Objections",
     ),
@@ -663,22 +805,28 @@ If the identity is comfortable, notice that. Comfort can be expensive. A fairer 
     email(
       28,
       "Objection — I do not know what to build",
-      "Your first build does not have to be your first business",
+      "\"I don't know what to build.\" This is the easiest objection to fix. Here's how.",
       [
-        "Finish something small for one person you already know",
-        "The App Idea Vault is for dry weeks, not for replacing your own eyes",
+        "Your first build doesn't have to be your first business. These are two different things.",
+        "Waiting for a brilliant original idea is how people never start. Here's what to build instead.",
       ],
-      "Waiting for a brilliant original idea is how people never start. First builds are for learning the path.",
-      `This is the easiest objection to work with, and people treat it like destiny.
+      "LeadThur was a narrow annoyance, not a unique invention. Your first build can be even smaller.",
+      `Of all the reasons people give for not starting, this one is the most fixable. And I mean that genuinely, not as a sales line.
 
-You are often waiting for an idea big enough to justify the risk. That idea is not required. LeadThur was a narrow annoyance executed clearly, not a unique invention.
+"I don't know what to build" usually means one of two things. Either you're waiting for an idea so original and brilliant that it justifies the risk of starting, or you've mixed up your first build and your first business and you're trying to solve both problems at once before you've solved either.
 
-You have also mixed **first build** and **first business**. A first build can be a booking form for a salon you know, invoices for a shop in the family, attendance for a school office. Nobody has to buy it. You have to finish blueprint through a live URL so the path is no longer theoretical.
+The first build doesn't need to be a business. It doesn't need to be original. It doesn't need to impress anyone outside of the person you're building it for.
 
-After that, you notice problems instead of hunting them. If you truly have no access to any business, the **App Idea Vault** and **Done-For-You App Template Pack** are there so a blank folder is not your excuse for a month.
+LeadThur was not a unique invention that nobody had ever thought of. Finding business contacts is something people were already doing manually. The value was doing it faster and more reliably than the manual version, which is a much more modest promise than "I invented a new category."
 
-Watch the webinar if you still have not. If you have, and this is the blocker, the offer includes those bonuses on purpose. ${WEBINAR_FOLLOWUP_OFFER_PRICE}.`,
-      "See the idea bonuses on the offer",
+Your first build can be even smaller than that. A booking form for a salon you know personally. A stock tracker for a shop in your family. A simple attendance system for a school or church. It doesn't need to be purchased by a stranger. It needs to be finished and live at a real URL so the path from idea to working product is no longer theoretical in your head.
+
+After you finish one thing and see it live on the internet, the world looks different. You start noticing problems instead of hunting for ideas. That's the shift that makes everything after it easier.
+
+If you genuinely have no access to any business right now and can't think of a starting point, the App Idea Vault and Done-For-You App Template Pack inside the programme are there precisely so that a blank starting point is never your excuse.
+
+${WEBINAR_FOLLOWUP_OFFER_PRICE} promotional.`,
+      "See the idea bonuses",
       "Separate first build from first business",
       "Phase 4 · Objections",
     ),
@@ -686,22 +834,26 @@ Watch the webinar if you still have not. If you have, and this is the blocker, t
     email(
       29,
       "Objection — I cannot afford tools",
-      "The repeating developer quote is usually the expensive part",
+      `"I can't afford the tools." Compare one developer quote to ${WEBINAR_FOLLOWUP_OFFER_PRICE}. Then think again.`,
       [
-        "Free tiers first. Paid tools after something earns.",
-        "Zero-Cost Toolkit exists because beginners reverse this and quit while bills continue",
+        "Most people pay for tools, ship nothing, and stop while the bills keep coming. Here's how to avoid that.",
+        "The expensive version is not learning this. The developer quotes don't stop.",
       ],
-      "Compare one professional quote for a small system with ${WEBINAR_FOLLOWUP_OFFER_PRICE}. Then remember every change is another quote.",
-      `Get a quote for a modest booking system or internal tool from a competent developer. Sit that next to promotional enrollment at **${WEBINAR_FOLLOWUP_OFFER_PRICE}**. Then remember: the next change is another quote. You are not buying one site. You are renting the ability to build, indefinitely, if you never learn.
+      "Free tiers first. Paid tools after something earns. That's the order.",
+      `I want you to do one calculation before you use this objection.
 
-The other fear is that after you enroll you will need six subscriptions. **Zero-Cost Toolkit** is the bonus for learning, building, and showing a demo on free and cheap tiers first. Spend when revenue justifies it. Most people reverse that, pay for tools, ship nothing, and stop while the debits continue.
+Get an actual quote, from an actual developer, for a modest custom booking system or internal management tool for a small business. Not a massive platform. Something reasonable. Take that number and sit it next to ${WEBINAR_FOLLOWUP_OFFER_PRICE}.
 
-**The Zero-To-Builder Setup** keeps the early stack small. Templates mean you are not paying someone for a blank folder.
+Then remember that the developer quote is for one project. The next change is another conversation and potentially another quote. The next idea goes back into someone else's queue. You are buying one result, once, on their timeline.
 
-I will do the full ${WEBINAR_FOLLOWUP_OFFER_VALUE} stack math in the last stretch — ₦450,000 stated for training, ₦315,000 stated for bonuses, ₦40,000 fast-action only where that extra actually applies. No fake countdown in this email.
+${WEBINAR_FOLLOWUP_OFFER_PRICE} is for learning to build yourself. Any project. Any time. For as long as you decide to keep building. You're not renting a result. You're acquiring a skill that doesn't expire.
 
-If money is the honest blocker, look at the offer as a comparison to repeating quotes, not as an impulse gadget.`,
-      "See the Zero-Cost Toolkit on the offer",
+The other version of this fear is the tool cost fear: "I'll enroll and then discover I need six expensive subscriptions before I can build anything." This is why the Zero-Cost Toolkit is in the programme. We teach setup on free and low-cost tiers specifically because the right time to pay for professional tools is after something is earning, not before. Most people get this backwards. They subscribe to tools in month one, spend money on software they don't know how to use yet, build nothing in the first thirty days, and stop while the charges keep coming.
+
+The Zero-To-Builder Setup keeps the early tool cost small deliberately. Templates mean you're not starting from an empty folder and paying someone to fill it. You start with something that runs, on tools that don't cost much yet.
+
+${WEBINAR_FOLLOWUP_OFFER_PRICE} promotional. ${WEBINAR_FOLLOWUP_REGULAR_PRICE} regular.`,
+      "See the Zero-Cost Toolkit",
       "Tool cost vs repeating developer spend",
       "Phase 4 · Objections",
     ),
@@ -709,21 +861,25 @@ If money is the honest blocker, look at the offer as a comparison to repeating q
     email(
       30,
       "Objection — AI is wrong, and things break",
-      "The tools will be confidently wrong. Recovery is the skill.",
+      "AI will be confidently wrong. Things will break. That's not a reason to avoid this. It's a description of the job.",
       [
-        "Small pieces, tests, save points — not one giant prompt",
-        "Clients judge your reply more than they expect perfection",
+        "The workflow that separates people who ship from people who give up when something breaks.",
+        "Small pieces, save points, and tests. The method that makes building with AI actually work.",
       ],
-      "If you have already seen a beautiful page that dies on a real click, you learned the first lesson. The rest is method.",
-      `AI will invent functions, forget a decision, and fail the way a real person uses the app. Professionals do not stop. They work small, they write down what “working” means, they click through like a suspicious customer, and they keep a last-good version.
+      "Beginners dump everything into one prompt and blame the category when it fails. That's a workflow problem.",
+      `Let me describe something that happens to almost everyone who tries to build software with AI for the first time without proper guidance.
 
-Beginners dump the whole application into one instruction, accept everything, pile more on, then conclude the category is fake. That is a workflow problem.
+They have an idea. They open the AI tool. They describe the whole application in one long prompt, everything they want it to do, every feature, every screen, every function. Something comes back. It looks impressive. They start building on top of it, adding more, asking for changes. Three hours in, something breaks and they can't tell what caused it. They try to fix it. Something else breaks. They spend an evening going in circles and eventually give up and conclude that the whole thing is overhyped or that they're just not cut out for it.
 
-**Teaching AI To Build For You**, the **Prompt Playbook**, **Making Your App Actually Work**, and **Your Safety Net** are how we teach the other workflow. Version control, backups, a practice copy versus the live copy, reading the error. Twenty minutes instead of a lost weekend.
+The problem is not the AI. The problem is the workflow.
 
-Clients have used broken software. They remember who answered. Chinedu’s return visit sits in that category more than in “never a bug.”
+Professional builders, the ones who use these tools every day and ship real products with them, work differently. They build in small pieces. They test each piece before adding the next one. They write down what "working" means before they start so they have something to check against. They keep a last-good version so that when something breaks they can get back to working in minutes instead of hours. They test the way a suspicious stranger would use it, not the way they built it. They treat an error message as information, not a verdict.
 
-If this fear is rational — it is — the offer is where recovery is taught, not where we pretend nothing fails. ${WEBINAR_FOLLOWUP_OFFER_PRICE}.`,
+Teaching AI To Build For You, the Prompt Playbook, Making Your App Actually Work, and Your Safety Net are the four modules that build that second workflow. Not as theory. As practice, with the specific language and habits that make it work.
+
+Chinedu's client came back for a second website. Not because the first website was flawless. Because Chinedu answered when something went wrong and fixed it. That's the real standard.
+
+${WEBINAR_FOLLOWUP_OFFER_PRICE} promotional.`,
       "See the reliability modules",
       "Mistakes and breakage as method, not denial",
       "Phase 4 · Objections",
@@ -732,19 +888,29 @@ If this fear is rational — it is — the offer is where recovery is taught, no
     email(
       31,
       "Objection — I cannot find clients",
-      "The first client is usually unglamorous, and already nearby",
+      "\"I can't find clients.\" The first one is usually already nearby. Here's where to look.",
       [
-        "People who know you, businesses you can walk into, a narrow sentence",
-        "Chinedu’s second job came from the first. That is the cheap channel.",
+        "You don't need ten thousand followers to land your first client. You need one specific observation.",
+        "The paths to first client work are unglamorous and available without a personal brand.",
       ],
-      "You do not need a following. You need one specific observation and one finished piece.",
-      `Internet advice assumes you have ten thousand followers. First clients usually do not arrive that way.
+      "Chinedu's second website came from the first. That's the acquisition channel nobody talks about.",
+      `The advice you'll find on the internet about finding clients assumes you have an audience. It tells you to post content, build a personal brand, grow your following, create a portfolio website, run ads. All of that is real, eventually. None of it is where first clients usually come from.
 
-People who already know you: family business, church, old job, someone on your street. Trust exists. You prove capability once. Businesses you can visit: “you track deliveries by hand; I can build that.” Narrow positioning: booking and records for small clinics is easier to refer than “I build software.” Marketplaces once you have something to show — **Software Marketplace Guide**. Repeat work, like Chinedu’s second website after ₦480,000.
+Here's where they actually come from.
 
-The **Get-Paid Guide** is the conversation: approach, scope, a number. A full roster in thirty days is not the claim. The paths are boring and available without a personal brand.
+People who already know you. Your family's business. A church or school you're connected to. Someone from your old job. A friend's shop. These are relationships where some level of trust already exists. You don't have to earn it from scratch. You just have to demonstrate that you can solve a specific problem.
 
-If “no clients” is the fear, look at those modules on the offer rather than waiting to feel famous. ${WEBINAR_FOLLOWUP_OFFER_PRICE}.`,
+Businesses you can walk into. Not pitch to cold, but walk into and observe. "You track deliveries by hand. I noticed that costs you this much time every week. I can build something that does it in two minutes. Do you want to see what that looks like?" That's not a sales call. That's an observation and a question.
+
+Narrow positioning. "I build booking and records systems for small clinics" is easier to refer to someone than "I build software." Specificity makes you referable because people know exactly who to send to you.
+
+Marketplaces, once you have something to show. The Software Marketplace Guide inside the programme covers where to list and how buyers search for what they need.
+
+And repeat work, which is the one people underestimate the most. Chinedu's second website cost him zero in acquisition. It came from the first website being good enough that the client had no reason to look elsewhere. That's not a marketing strategy. That's quality of delivery.
+
+The Get-Paid Guide covers the approach, the scoping conversation, and how to say a number without either underselling yourself or losing the deal.
+
+${WEBINAR_FOLLOWUP_OFFER_PRICE} promotional.`,
       "See the Get-Paid Guide",
       "Client pipeline without audience mythology",
       "Phase 4 · Objections",
@@ -753,21 +919,29 @@ If “no clients” is the fear, look at those modules on the offer rather than 
     email(
       32,
       "Objection — nobody will buy from me",
-      "Buyers care about a working example and a clear promise more than your fame",
+      "\"Nobody will buy from me.\" Shade and Chinedu were not famous when they got their first clients.",
       [
-        "Proof beats reputation at the beginning",
-        "The pharmacy on your street is not being hunted by a big agency",
+        "A working example beats a portfolio biography at the beginning. Every time.",
+        "The pharmacy on your street is not being hunted by a big agency. That's the opportunity.",
       ],
-      "No brand is a real feeling. It is not the same as “the market is closed.”",
-      `Why would they choose you? No portfolio. No agency name.
+      "You don't need a reputation. You need work that runs and a client who saw it run.",
+      `I want to talk about this particular fear directly because it's real and it's stopping real people.
 
-A working thing — even an unpaid piece for a business you know — beats a biography. Two pieces is enough to start a real conversation. Shade and Chinedu were not famous. They had work that ran.
+"Why would anyone pay me? I have no portfolio. No agency name. No track record. No following. Who am I for someone to trust with their business?"
 
-Specific beats general: if you have built clinic records, three clinic owners do not need you to be a celebrity. Process beats charm: buyers are afraid of deposits and silence. “Version one is these things, this timeline, this is how you will see progress” makes you safer than a prettier Instagram.
+That's an honest question and it deserves an honest answer.
 
-Nobody has to hand you ₦650,000 on day one. A small paid piece first is how bigger conversations start. That is the Chinedu pattern.
+At the beginning, a working example beats a biography. Not a testimonial. Not a case study. An actual thing that runs. A booking form someone can open on their phone. A stock tracker that works. A simple tool that does the specific job it was built for. Two of those, from projects you've completed even if they were free, is enough to have a real conversation about a paid project.
 
-If this is the objection under the others, the programme is how you get the first working pieces and the language to sell them. ${WEBINAR_FOLLOWUP_OFFER_PRICE}.`,
+Shade and Chinedu were not famous when they landed their first clients. They weren't running ads or posting content or speaking at events. They had work that ran and clients who could see that it ran. That's it.
+
+Specific beats general at every stage. If you have built records management for one clinic, three other clinic owners don't need you to be a celebrity. They need to see that you've done this before for someone who has the same problems they have.
+
+Process beats charm in B2B sales. Business owners who've been disappointed by developers before are not looking for the most enthusiastic freelancer. They're looking for someone whose way of working makes the risk feel small. "Version one will include these specific things. This is the timeline. This is how you'll see progress week by week. If anything changes, I'll tell you before I do it." That process conversation is more reassuring than any credential.
+
+The programme is how you get the first working pieces and the language to have that conversation.
+
+${WEBINAR_FOLLOWUP_OFFER_PRICE} promotional.`,
       "See the full programme",
       "Credibility mechanics without fake fame",
       "Phase 4 · Objections",
@@ -776,20 +950,30 @@ If this is the objection under the others, the programme is how you get the firs
     email(
       33,
       "Is ₦49,999 worth it, and do I have time",
-      "Two honest questions: money and hours",
+      `Is ${WEBINAR_FOLLOWUP_OFFER_PRICE} worth it? Do you have time? Two honest answers.`,
       [
-        "Compare the fee to one developer quote and to another year of research mode",
-        "You do not need a free month. You need a first week of setup.",
+        "The two real questions before enrolling. I'm going to answer them without a fake countdown.",
+        "Money and hours. Here's how to think about both before you decide.",
       ],
-      "I will not tell you the price vanishes tonight. I will tell you what you are comparing.",
-      `**Is ${WEBINAR_FOLLOWUP_OFFER_PRICE} worth it?** Compare it to one custom quote, and to twelve more months of free tutorials with nothing shipped. I cannot answer it for your household. I can say the promotional price is lower than regular ${WEBINAR_FOLLOWUP_REGULAR_PRICE}, and that one client invoice in the range we have discussed — ₦480,000, ₦650,000 — is many times the enrollment, without that being a promise you will get that invoice.
+      "I'll tell you what you're comparing. Not that the price disappears at midnight.",
+      `These are the two questions I hear the most at this stage of the sequence, and I want to answer them both directly rather than with pressure tactics.
 
-**Do I have time?** The first week is setup and one tiny thing that runs. Not ten modules in seven days. People who wait for a free month usually do not start. People who take a slightly inconvenient week often do.
+The first question is whether ${WEBINAR_FOLLOWUP_OFFER_PRICE} is worth it.
 
-If both questions are real, look at the offer page with a calculator and a calendar, not with adrenaline. If the answer is no, that is allowed. If it is not yet, name the month. If it is yes, enroll and do module one.
+Here's how I think about that comparison honestly. One developer quote for a modest custom project is often in the range of N500,000 to N3,000,000, and that's for one project with one set of requirements. Every change after delivery is another conversation. Every new idea goes back into someone else's queue. You're not buying a capability. You're renting a result.
 
-No fake seats. No fake midnight. The cost of another delayed year is the part I will not decorate.`,
-      "Open the offer and decide with numbers",
+${WEBINAR_FOLLOWUP_OFFER_PRICE} is for the capability to build yourself, for any project, at any time, without asking permission from another person's calendar. One client invoice in the range of what Shade and Chinedu have been paid is many times the enrolment cost. I'm not promising you that invoice. I'm saying the comparison is between a recurring cost and a one-time investment in something that doesn't expire.
+
+The second question is whether you have time.
+
+The first week of the programme is setup and one small thing that runs. Not ten modules in seven days. A realistic first week is a few focused hours at a time when you're not exhausted, following the module in order without skipping steps. People who wait for a completely free month to open up before starting almost always don't start. People who start in a slightly inconvenient week often finish.
+
+If both answers are yes, enroll and do module one this week. Not all ten. Just module one.
+
+If the answer is no, that's allowed. If it's not yet, name the specific thing that has to change first. A vague "not yet" is usually just a delayed no.
+
+No invented deadline in this email.`,
+      "Open the offer and decide with real numbers",
       "Price and time objections together, no fake deadline",
       "Phase 4 · Objections",
     ),
@@ -797,26 +981,26 @@ No fake seats. No fake midnight. The cost of another delayed year is the part I 
     email(
       34,
       "Modules one to five, in human terms",
-      "What the first five modules actually save you from",
+      "Modules one to five. Not a list of titles. What each one actually saves you from.",
       [
-        "Setup, directing, blueprint, prompts, looking trustworthy",
-        "Scattered YouTube is months. This is an order.",
+        "The first half of the programme, explained as if you're the person sitting down to use it.",
+        "Setup, directing, blueprint, prompts, and trust. Why each one is in the sequence where it is.",
       ],
-      "Not a list of titles. What each one is for when you sit down to work.",
-      `**1. The Zero-To-Builder Setup.** Workspace in order so you do not quit at five tutorials.
+      "Scattered YouTube tutorials are months. This is an order. Here's why the order matters.",
+      `I want to walk you through the first five modules not as a sales list but as a sequence of problems they solve, because the order matters and most people who try to learn this on their own hit these problems in exactly the wrong sequence and quit.
 
-**2. Teaching AI To Build For You.** Specify, generate, reject, retry. The working relationship.
+Module one is The Zero-To-Builder Setup. Its job is to get your workspace running without a fight. The right tools, the right accounts, the right defaults, in a single clear sequence. Its real function is not teaching you tools. It's preventing the "five conflicting tutorials" problem that makes people close the laptop in the first week and never come back.
 
-**3. The Idea-To-Blueprint System.** Users, flows, data, exclusion list. Why fast projects are clear projects.
+Module two is Teaching AI To Build For You. This is the working relationship. You learn to specify clearly, generate, check the result against what you actually wanted, reject what doesn't work, and try again. You also learn the expensive lesson that AI sounds confident when it's wrong, which means you have to be the one who knows what "right" looks like.
 
-**4. The Prompt Playbook.** Recurring situations so you are not inventing language every session.
+Module three is The Idea-To-Blueprint System. You learn to take a rough idea and make it specific enough to build. Who is the user. What does version one do. What does version one absolutely refuse to do. The last question is the most important because "we'll add that later" is how projects get too big to finish.
 
-**5. Making Your App Look Good.** Layout, mobile, when to stop. Shade’s ecommerce fee was not won on invisible elegance. People judge in seconds.
+Module four is The Prompt Playbook. Recurring situations in building produce recurring language. This module gives you the language for those situations so you're not inventing instructions from nothing every session.
 
-Stated training value across all ten modules is **₦450,000** in the stack. You pay **${WEBINAR_FOLLOWUP_OFFER_PRICE}** on promo for the whole programme including bonuses. That ₦450,000 is not cash in your account. It is what we value that ordered teaching at if you tried to assemble it yourself.
+Module five is Making Your App Look Good. Not design as an art form. Design as trust. Shade's N650,000 ecommerce site was won in the three seconds the client spent looking at it on their phone for the first time.
 
-Tomorrow: the second half, where demos become software somebody will pay for twice.`,
-      "See modules one to five on the offer",
+${WEBINAR_FOLLOWUP_OFFER_PRICE} promotional. Tomorrow: the second half.`,
+      "See modules 1-5 on the offer",
       "Concrete value of early modules",
       "Phase 5 · Offer",
     ),
@@ -824,24 +1008,28 @@ Tomorrow: the second half, where demos become software somebody will pay for twi
     email(
       35,
       "Modules six to ten",
-      "The unglamorous half: working, remembering, recovering, live, stores",
+      "Modules six to ten. The unglamorous half. The part that makes the difference between a demo and software.",
       [
-        "This is the difference between a demo on a call and a launch week",
-        "LeadThur’s paid searches needed reliability, not only a landing page",
+        "Looking like software is easy with AI. Surviving real users is still craft. Here's what the second half teaches.",
+        "The N10 million project and Shade's N650K site were not localhost demos. This is what made them real.",
       ],
-      "Looking like software is easy now. Surviving real users is still craft.",
-      `**6. Making Your App Actually Work.** Empty states, bad input, old phones, bad networks.
+      "Every module in this half exists because something real breaks without it.",
+      `The first five modules teach you to build something that looks right and works in a test environment. The second five teach you to turn that into something that survives the real world.
 
-**7. Making Your App Remember Things.** Customers, orders, messages — still there next month. LeadThur’s **9,460 paid searches** only happen if results keep coming back.
+Module six is Making Your App Actually Work. Empty states, bad input, old phones, weak networks. What happens when someone does something you didn't test for. What happens when three people use it at the same time. What happens when the connection drops mid-submission.
 
-**8. Your Safety Net.** Versions, backups, practice versus live. Fear of shipping dies here, slowly.
+Module seven is Making Your App Remember Things. The database question. Customers, orders, records, messages, all of it needs to persist when the session ends and come back reliably the next time someone logs in. LeadThur's 9,460 paid searches only mean something because the results are still there every time a user comes back. Without this module, you have a form, not a product.
 
-**9. Putting Your App On The Internet.** A URL a client opens. Laptop software earns nothing. The ₦10,000,000 project and Shade’s site were not localhost demos.
+Module eight is Your Safety Net. Version control, backups, a practice environment separate from the live one. This module kills the fear of shipping because you always have a last-good version you can get back to in minutes. That's what makes fast, iterative work possible.
 
-**10. Getting Into The App Stores.** When web is enough, when native matters, what not to promise on a call. Shade turning ecommerce into an app is this conversation. Nobody controls Apple’s review times. We will not pretend to.
+Module nine is Putting Your App On The Internet. A real URL. A real deployment. The N10,000,000 client project and Shade's N650,000 site were not demos on a screenshare. They were live, accessible products.
 
-Ten modules in project order. That order is what random videos will not give you. The offer is ${WEBINAR_FOLLOWUP_OFFER_PRICE}.`,
-      "See modules six to ten",
+Module ten is Getting Into The App Stores. When web is enough and when it isn't. What Apple's review process actually involves so you never promise a timeline you can't control.
+
+Ten modules in project order. The order is what scattered YouTube videos won't give you.
+
+${WEBINAR_FOLLOWUP_OFFER_PRICE} promotional.`,
+      "See modules 6-10",
       "Reliability and shipping as paid difference",
       "Phase 5 · Offer",
     ),
@@ -849,22 +1037,28 @@ Ten modules in project order. That order is what random videos will not give you
     email(
       36,
       "Bonuses that stop people quitting",
-      "Templates, ideas, and humans — the three ways programmes die",
+      "People rarely quit because the material was too hard. They quit stuck and alone at 11pm.",
       [
-        "Stuck, blank, or alone",
-        "Modules teach. These keep you in the room.",
+        "Templates, ideas, and a community. The three ways programmes fail and what we built to prevent each one.",
+        "Modules teach you the skill. These three things keep you present long enough to use it.",
       ],
-      "People rarely quit because the PDF was too hard. They quit stalled.",
-      `**Done-For-You App Template Pack.** Start from something that runs. Customising at 10pm is a job. Staring at an empty folder is how enthusiasm ends.
+      "Stall time kills more learning than difficulty does. Here's what we built to remove it.",
+      `I've watched enough people go through learning programmes, including my own, to know something that the sales page version of this conversation doesn't usually say.
 
-**App Idea Vault.** Practice starting points when your own list is dry. Study what a narrow product looks like. LeadThur was one repeating pain, done faster than a human.
+The thing that kills most learning is not hard content. It's stall time. The experience of sitting in front of your laptop at 11pm, stuck on something for the third hour, not knowing what to try next, and quietly closing the lid and telling yourself you'll figure it out tomorrow. Tomorrow becomes the day after. The day after becomes next week. Next week becomes never.
 
-**Private Support Family.** Stall tax. Also the sight of other people’s messy first builds, so you stop thinking you are uniquely unsuited.
+Three things inside the programme exist specifically to reduce stall time.
 
-These do not replace the ten modules. They keep you present long enough for the modules to work. Stated bonus value across all eight bonuses is **₦315,000** in the stack. Again: not cash. A valuation of the extras.
+The Done-For-You App Template Pack is there so you never start from an empty folder. Starting from something that already runs and needs to be customised is a different psychological experience from staring at a blank screen waiting for inspiration.
 
-Full promo enrollment remains **${WEBINAR_FOLLOWUP_OFFER_PRICE}**.`,
-      "See the bonuses listed on the offer",
+The App Idea Vault is there for when you know you want to build but you're genuinely stuck on what to practice on. Not every starting point has to be your own idea. Studying how a narrow, already-successful type of product is built teaches you things that a theoretical exercise doesn't.
+
+Private Support Family is there for the 11pm stall. Three hours stuck on something that a person who has seen it before would fix in ten minutes is an expensive and demoralising tax. The group removes that tax. It also shows you other people's messy first builds, which is often the most useful thing of all, because the single biggest illusion in learning is that everyone else is finding it easy.
+
+These don't replace the ten modules. They keep you present long enough for the modules to work.
+
+${WEBINAR_FOLLOWUP_OFFER_PRICE} promotional.`,
+      "See the bonuses on the offer",
       "Quit-point bonuses explained",
       "Phase 5 · Offer",
     ),
@@ -872,21 +1066,25 @@ Full promo enrollment remains **${WEBINAR_FOLLOWUP_OFFER_PRICE}**.`,
     email(
       37,
       "Bonuses that connect building to money",
-      "Get paid, stay cheap, get found",
+      "Building privately is safe. It's also invisible. Here's what connects the skill to income.",
       [
-        "Get-Paid Guide, Zero-Cost Toolkit, Software Marketplace Guide",
-        "Skill without a path to an invoice is an expensive hobby",
+        "Get paid, stay cheap, get found. The three bonuses that connect building to money.",
+        "Skill without a clear path to an invoice is a very expensive hobby.",
       ],
-      "Building privately is safe. It is also invisible.",
-      `**Get-Paid Guide.** Approach, scope version one, say a number, handle changes, payment terms. Shade’s ₦650,000 and Chinedu’s ₦480,000 sat inside conversations that ended in an agreement.
+      "The question \"who pays me?\" has a shape. These bonuses teach that shape.",
+      `You can build the most impressive software in the world from your bedroom and earn nothing from it if nobody knows it exists or nobody understands what it does or nobody knows how to pay you for it.
 
-**Zero-Cost Toolkit.** Learn and demo without six subscriptions first.
+The income-side bonuses inside the programme are there to close that gap.
 
-**Software Marketplace Guide.** How directories work, what buyers scan for. A product still has to be found and understood in a sentence.
+The Get-Paid Guide is the conversation. How to approach a business with a specific observation rather than a generic pitch. How to scope version one in a way that gives the client certainty and gives you a clear definition of done. How to say a number without underselling yourself or losing the deal. How to handle the "can you just add one more thing" conversation that starts after delivery. Shade's N650,000 and Chinedu's N480,000 both happened inside conversations that followed a shape. That shape is learnable.
 
-Together they answer “who pays me?” without mysticism: someone with a problem, a budget, and a reason to trust you.
+Zero-Cost Toolkit is there so you build your first projects and your first portfolio without accumulating six subscriptions before you've earned a naira. The rule I teach is simple: learn and demo on free tiers. Pay for tools when the revenue from those tools justifies it.
 
-**Lifetime Access + Free Updates** is the duration bonus: tools move; access is not a snapshot of one month. **Organic And Paid Ad Formula** is for later, when the constraint is attention, not “can I build.” You do not need ads in week one.
+Software Marketplace Guide is for when you have something to show and you want to find buyers who are already looking for it. How those directories work, what buyers search for, what a product listing needs to say in one sentence to get someone to click.
+
+Lifetime Access and Free Updates means the training doesn't become outdated. AI tools change. The modules update. You're not paying for a snapshot of one month.
+
+Organic and Paid Ad Formula is for later, when the constraint is attention rather than capability. You don't need it in week one.
 
 ${WEBINAR_FOLLOWUP_OFFER_PRICE} promotional. ${WEBINAR_FOLLOWUP_REGULAR_PRICE} regular.`,
       "See the money-side bonuses",
@@ -897,23 +1095,25 @@ ${WEBINAR_FOLLOWUP_OFFER_PRICE} promotional. ${WEBINAR_FOLLOWUP_REGULAR_PRICE} r
     email(
       38,
       "The stack in numbers, explained",
-      "₦49,999, ₦100,000 regular, ₦805,000 stated — what those figures mean",
+      `${WEBINAR_FOLLOWUP_OFFER_PRICE}. ${WEBINAR_FOLLOWUP_REGULAR_PRICE} regular. ${WEBINAR_FOLLOWUP_OFFER_VALUE} stated. Let me show you what those three numbers mean.`,
       [
-        "₦450,000 training + ₦315,000 bonuses + ₦40,000 fast-action where it applies",
-        "Stated value is not a bank transfer. Compare it to quotes and to another lost year.",
+        "The stack, labelled properly. Because inflated numbers without context are why people distrust this industry.",
+        "Transparent pricing math. No fake countdown. No invented seats.",
       ],
-      "Inflated stacks are why people distrust this industry. I will label ours.",
-      `Three figures, plainly.
+      "I'll explain every number in this offer without pretending any of them are cash in your account.",
+      `I want to lay out the pricing on this programme in plain terms because I think clarity here is more valuable than a convincing presentation, and because the way some offers are packaged makes people feel manipulated rather than informed.
 
-**${WEBINAR_FOLLOWUP_OFFER_PRICE}** is what you pay today on promotional pricing.
+Three numbers.
 
-**${WEBINAR_FOLLOWUP_REGULAR_PRICE}** is the regular price of the same modules and bonuses.
+${WEBINAR_FOLLOWUP_OFFER_PRICE} is what you pay today during the promotional period. This is the full enrolment price for everything: all ten modules, all bonuses, the Digital Skillz certificate, and lifetime access to future updates.
 
-**${WEBINAR_FOLLOWUP_OFFER_VALUE}** is stated stack value: **₦450,000** for the ten modules, **₦315,000** for the eight bonuses, and **₦40,000** fast-action value only where that extra actually applies. It is not ₦805,000 cash. It is what we say it would cost to assemble the pieces separately, in an order you would have to guess at.
+${WEBINAR_FOLLOWUP_REGULAR_PRICE} is the regular price once promotional pricing ends. It's the same content. The promotional window is real and it will close, but I'm not going to invent a midnight deadline in this email to pressure you.
 
-I am not running a fake countdown in this email. Fast-action is not “two hours left” unless a real system is counting, and I will not invent seats.
+${WEBINAR_FOLLOWUP_OFFER_VALUE} is the stated stack value. This is N545,000 across the ten modules, valued at what we believe it would cost to assemble equivalent teaching separately and in the right order, plus N350,000 across the nine bonuses. It is not cash. It is not what you'll earn. It is a valuation of the material, and I'm labelling it that way because the alternative, presenting it as money you're somehow receiving, is the kind of framing that makes people distrust every offer they see after it.
 
-Useful comparisons remain a developer quote, one client invoice in the ranges I have shown as examples, and another year of research mode. If those comparisons make enrollment obvious, the offer page is the checkout. If not, do not buy from guilt.`,
+The comparison I think is actually useful: one developer quote for a modest custom project is often more than ${WEBINAR_FOLLOWUP_OFFER_PRICE} by itself. That quote gets you one project, once. This gets you the skill to build any project, any time, without asking permission from someone else's schedule.
+
+That's the comparison. Not a manufactured urgency, not invented scarcity. A real comparison between two different ways to solve the same problem.`,
       "Compare the stack on the offer page",
       "Transparent value math, no fake deadline",
       "Phase 5 · Offer",
@@ -922,19 +1122,25 @@ Useful comparisons remain a developer quote, one client invoice in the ranges I 
     email(
       39,
       "Paying developers forever versus learning once",
-      "The quote is not one payment. It is a relationship you keep renting.",
+      "Every time a new idea arrives, you go back to someone else's calendar. That's what this ends.",
       [
-        "Every new idea returns to someone else's calendar",
-        "₦49,999 against that pattern, without pretending quotes will vanish from the earth",
+        "The developer relationship is not one payment. It's an ongoing rental of capability you don't have.",
+        `${WEBINAR_FOLLOWUP_OFFER_PRICE} once versus another year of quotes. That's the real comparison.`,
       ],
       "You may still hire specialists. The question is whether you must hire them for every thought.",
-      `Professional engineers should keep their work. Depending on a quote for every booking page, every internal list, every “can we add this field” is still a slow way to live if you have already decided you want to build.
+      `Let me say something that I think is important and that I haven't said directly yet.
 
-Enrollment at **${WEBINAR_FOLLOWUP_OFFER_PRICE}** is a one-time promotional price for a skill you can reuse. A developer relationship is ongoing by nature. Both can be rational. They are not the same purchase.
+I'm not asking you to stop working with developers. There are situations where you'll want a specialist with deep expertise in a specific area. I work with people who know things I don't, and I expect that to continue. Collaboration with skilled professionals is not the enemy here.
 
-If you keep postponing, the quotes do not freeze. Other people in this same funnel will have watched the webinar, gone through setup, and taken a first client conversation. That is not a threat. It is arithmetic.
+What I'm asking you to think about is the dependency that exists right now, where every idea, no matter how small, has to go through someone else's queue and timeline and interpretation. Where a field you want to add to a form requires another conversation. Where a change to the way data is displayed requires another quote. Where an idea you have on Tuesday might start being built in six weeks if you're lucky, by which time the context and the urgency have both faded.
 
-If you want the skill, the offer is the place. If you want to keep hiring, that is a valid business. I would rather you pick on purpose.`,
+That dependency is what this skill ends, for the portion of your work that doesn't require a specialist. The projects you can scope clearly, the version ones that are specific enough to build directly, the changes small enough to make yourself without involving another person's calendar.
+
+${WEBINAR_FOLLOWUP_OFFER_PRICE} is a one-time promotional price for acquiring that capability permanently. It does not expire. You don't re-buy it next year. And one client invoice in the range that Shade and Chinedu have been paid covers the enrolment cost many times over, without that being a promise about your specific situation.
+
+Other people who were in this sequence at the same time as you have already watched the webinar, gone through setup, and had their first client conversation. That is not a threat. It is arithmetic. Time passes whether you decide or not.
+
+If you want the skill, the offer page is the place to get it. If you want to keep working the way you're working, that's a genuine choice and I'd rather you make it consciously.`,
       "Enroll if you want the skill in-house",
       "Opportunity cost versus repeating quotes, no fake seats",
       "Phase 5 · Offer",
@@ -943,28 +1149,36 @@ If you want the skill, the offer is the place. If you want to keep hiring, that 
     email(
       40,
       "Last email: yes, no, or not yet",
-      "I will not invent a countdown. I will ask you to choose.",
+      "This is the last email. Yes, no, or not yet. I need you to pick one.",
       [
-        "Same proof. Same price. One first action if the answer is yes.",
-        "Not yet only counts if you name the condition.",
+        "Same proof. Same price. One question left. What's your answer?",
+        "I won't invent a countdown. I will ask you to decide.",
       ],
-      "Thank you for reading this far. Attention is scarce. I will not spend the last note on a trick.",
+      "Thank you for reading this far. Attention is the most expensive thing you've given me. I won't spend the last email on a trick.",
       `This is the last email in this sequence.
 
-I showed you LeadThur: **782 people paid to use it**, 681 active, 9,460 paid searches, **₦15,120,000 estimated** in ninety days. A ₦10,000,000 client project. Shade at ₦650,000 plus the app conversation. Chinedu at ₦480,000 plus a return. Lovable’s eXp Realty story. Bolt’s Ryplix write-up, including the reported $10k MRR. Harry Roper of Imaginary Space, in a No Code MBA interview, reporting about **$100,000 a month** using Lovable — his reported figure, not my audit.
+Over the past forty emails I've shown you what I've built, how it was built, and what happened for the people who learned this. Let me put it in one place.
 
-What PromptEarn is **not** proof of: this method.
+LeadThur: 782 people paid to use it. 681 active. 9,460 paid searches. N15,120,000 estimated revenue in ninety days. Built with AI tools, no development team, one person directing the build. The word estimated is the dashboard's word and mine.
 
-**How To Build Software With AI And Get Paid For It**: ten modules, eight bonuses, **${WEBINAR_FOLLOWUP_OFFER_PRICE}** promo, **${WEBINAR_FOLLOWUP_REGULAR_PRICE}** regular, **${WEBINAR_FOLLOWUP_OFFER_VALUE}** stated stack.
+A single client project: N10,000,000. Seven days to build. Same skill, different outcome.
 
-**Yes.** Enroll. This week: finish setup. Not all ten modules.
+Shade: N650,000 for an ecommerce site. Same client now asking for an app. I told her to charge N1,500,000 for the next job.
 
-**No.** Unsubscribe if these notes are noise. Go be good at what you actually want.
+Chinedu: N480,000 for a first website. Client already back for a second.
 
-**Not yet.** Write the condition: money, month, or a specific thing that has to change. Without a condition, “not yet” is just “no” with better manners.
+The programme is How To Build Software With AI And Get Paid For It. Ten modules, nine bonuses, a Digital Skillz certificate, lifetime access. ${WEBINAR_FOLLOWUP_OFFER_PRICE} promotional. ${WEBINAR_FOLLOWUP_REGULAR_PRICE} regular. ${WEBINAR_FOLLOWUP_OFFER_VALUE} stated stack value, labelled as a valuation not as cash.
 
-If it is yes, the offer is the page.`,
-      "Enroll and start with setup",
+Three possible answers.
+
+Yes. Enroll. This week, do module one. Not all ten. Just module one. Setup first. Everything else comes after.
+
+No. If you've read forty emails and this is genuinely not the path for you, unsubscribe. Seriously. Go be good at what you actually want. I mean that without sarcasm.
+
+Not yet. If it's not yet, write down the specific condition. A month. A thing that has to change. A number that needs to move. Without a specific condition attached to it, "not yet" is just "no" with better manners. Name the condition and I'll be here when it changes.
+
+If the answer is yes, the offer page is one click away.`,
+      "Enroll and start with module 1",
       "Honest close, no fake scarcity",
       "Phase 5 · Offer",
     ),

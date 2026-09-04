@@ -143,7 +143,7 @@ new@example.com,New
   assert.ok(emails.every((e) => e.bodyText.trim().length >= 500));
   assert.match(
     emails.map((e) => e.bodyText).join("\n"),
-    /What PromptEarn is \*\*not\*\* proof of/i,
+    /not because PromptEarn is proof that this AI building method works/i,
   );
   assert.doesNotMatch(
     emails.map((e) => e.bodyText).join("\n"),
@@ -179,7 +179,7 @@ new@example.com,New
   assert.match(rendered.html, /aimoneycode\.com\.ng\/reg/);
   assert.match(rendered.html, /DigitalSkillX/);
   assert.doesNotMatch(rendered.html, /₦49,999/);
-  assert.match(rendered.text, /WebinarJam has already done its own follow-up/);
+  assert.match(rendered.text, /You registered for the Build Software With AI webinar/);
   assert.doesNotMatch(rendered.html, /PDIGITAL MARKETSTORE LTD/);
   ok("render includes greeting, unsubscribe, and webinar CTA for email 1");
 
@@ -190,7 +190,7 @@ new@example.com,New
     unsubscribeUrl: "https://example.com/unsubscribe?token=x",
   });
   assert.doesNotMatch(noFakeName.html, />Platform,</);
-  assert.match(noFakeName.text, /^If you are still on this list/);
+  assert.match(noFakeName.text, /^You registered for the Build Software With AI webinar/);
   assert.equal(webinarPersonalFirstName("Platform"), null);
   assert.equal(webinarPersonalFirstName("Ada Okafor"), "Ada");
   ok("org/role labels are not used as greetings; copy starts as written");
