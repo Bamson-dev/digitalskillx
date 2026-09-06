@@ -1,9 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import Image from "next/image";
 import { ArrowRight } from "lucide-react";
 import { PriceDisplay } from "@/components/marketplace/price-display";
+import { CourseMediaImage } from "@/components/marketplace/course-media-image";
 import { reasonLabel, type CourseRecommendation, type RecommendableCourse } from "@/lib/recommendations";
 import { trackProductEvent } from "@/lib/product-analytics";
 import { cn } from "@/lib/utils";
@@ -20,7 +20,6 @@ export function RecommendationRail({
   subtitle?: string;
   items: CourseRecommendation[];
   className?: string;
-  /** Emit product_recommendation_* or upsell_* events. */
   trackAs?: "product_recommendation" | "upsell";
   seedCourseId?: string;
 }) {
@@ -32,7 +31,7 @@ export function RecommendationRail({
         <h2 className="font-display text-lg font-bold text-neutral-900">{title}</h2>
         {subtitle ? <p className="mt-1 text-sm text-neutral-500">{subtitle}</p> : null}
       </div>
-      <ul className="mt-5 divide-y divide-neutral-200 border-y border-neutral-200">
+      <ul className="mt-5 divide-y divide-neutral-200 overflow-hidden rounded-xl border border-neutral-200 bg-white">
         {items.map(({ course, reason }) => (
           <li key={course.id}>
             <RecommendationRow
@@ -85,20 +84,18 @@ function RecommendationRow({
           });
         }
       }}
-      className="group flex min-h-[64px] items-center gap-4 py-4"
+      className="group flex min-h-[64px] items-center gap-4 px-4 py-4 hover:bg-neutral-50"
     >
-      <div className="relative h-14 w-20 shrink-0 overflow-hidden bg-neutral-100 sm:h-16 sm:w-24">
-        {course.thumbnail_url ? (
-          <Image
-            src={course.thumbnail_url}
-            alt=""
-            fill
-            className="object-cover"
-            sizes="96px"
-          />
-        ) : (
-          <div className="h-full w-full bg-neutral-100" />
-        )}
+      <div className="relative h-14 w-24 shrink-0 overflow-hidden rounded-md bg-neutral-100 sm:h-16 sm:w-28">
+        <CourseMediaImage
+          src={course.thumbnail_url}
+          alt={course.title}
+          title={course.title}
+          aspect="none"
+          sizes="112px"
+          placeholderSize="compact"
+          className="absolute inset-0 h-full w-full"
+        />
       </div>
       <div className="min-w-0 flex-1">
         {label ? (

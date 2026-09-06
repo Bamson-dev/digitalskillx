@@ -1,27 +1,33 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import Image from "next/image";
 import { ArrowRight } from "lucide-react";
 import { requireStudent } from "@/lib/auth";
+import { createClient } from "@/lib/supabase/server";
 import { fetchPublishedCourses, type CatalogCourse } from "@/lib/published-courses";
 import { getStudentEnrolledCoursesWithProgress } from "@/lib/student-enrollments";
 import { getStudentCertificates } from "@/lib/student-certificates";
 import { DashboardAnnouncements } from "@/components/student/dashboard-announcements";
+import { StudentFixedAnnouncements } from "@/components/student/student-fixed-announcement";
 import { CourseProgressNudge } from "@/components/student/course-progress-nudge";
 import { RecommendationRail } from "@/components/marketplace/recommendation-rail";
-import { CourseThumbnailPlaceholder } from "@/components/marketplace/course-thumbnail-placeholder";
+import { CourseMediaImage } from "@/components/marketplace/course-media-image";
 import { resumeLessonPath } from "@/lib/system-email-triggers";
 import { recommendCourses } from "@/lib/recommendations";
 import { DashboardCompanionWelcome } from "@/components/student/dashboard-companion-welcome";
+import { fetchVisibleStudentAnnouncements } from "@/lib/platform-announcements";
 import { toPercent } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "Dashboard" };
 
 export default async function StudentDashboardPage() {
   const profile = await requireStudent();
+  const supabase = createClient();
 
-  const myCourses = await getStudentEnrolledCoursesWithProgress(profile.id);
-  const certificates = await getStudentCertificates(profile.id);
+  const [myCourses, certificates, fixedAnnouncements] = await Promise.all([
+    getStudentEnrolledCoursesWithProgress(profile.id),
+    getStudentCertificates(profile.id),
+    fetchVisibleStudentAnnouncements(supabase, 3),
+  ]);
   const enrolledIds = new Set(myCourses.map((row) => row.courseId));
 
   const catalog = await fetchPublishedCourses<CatalogCourse>(
@@ -73,37 +79,41 @@ export default async function StudentDashboardPage() {
   const firstName = (profile.full_name ?? "there").split(" ")[0];
 
   return (
-    <div className="mx-auto max-w-3xl space-y-12">
+    <div className="mx-auto max-w-3xl space-y-10">
       <DashboardCompanionWelcome />
       <header>
         <h1 className="font-display text-2xl font-bold tracking-tight text-neutral-900 sm:text-3xl">
           {firstName}, pick up where you left off
         </h1>
         <p className="mt-2 text-sm text-neutral-500">
-          Your courses, progress, and next lesson — in one place.
+          Your courses, progress, and next lesson — in one place.{" "}
+          <Link href="/my-learning" className="text-brand hover:underline">
+            Free Learn Library progress
+          </Link>
         </p>
       </header>
+
+      <StudentFixedAnnouncements announcements={fixedAnnouncements} />
 
       <DashboardAnnouncements studentId={profile.id} />
 
       {continueCourse?.course ? (
-        <section className="border-b border-neutral-200 pb-10">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-neutral-500">
+        <section className="overflow-hidden rounded-xl border border-neutral-200 bg-white">
+          <p className="border-b border-neutral-100 px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-neutral-500 sm:px-5">
             Continue learning
           </p>
-          <div className="mt-4 flex gap-4 sm:gap-5">
-            <div className="relative h-20 w-28 shrink-0 overflow-hidden bg-neutral-100 sm:h-28 sm:w-40">
-              {continueCourse.course.thumbnail_url ? (
-                <Image
-                  src={continueCourse.course.thumbnail_url}
-                  alt=""
-                  fill
-                  className="object-cover"
-                  sizes="160px"
-                />
-              ) : (
-                <CourseThumbnailPlaceholder title={continueCourse.course.title} size="compact" />
-              )}
+          <div className="flex flex-col gap-4 p-4 sm:flex-row sm:gap-5 sm:p-5">
+            <div className="relative h-28 w-full shrink-0 overflow-hidden rounded-lg sm:h-28 sm:w-44">
+              <CourseMediaImage
+                src={continueCourse.course.thumbnail_url}
+                alt={continueCourse.course.title}
+                title={continueCourse.course.title}
+                aspect="none"
+                sizes="176px"
+                placeholderSize="compact"
+                className="absolute inset-0 h-full w-full"
+                frameClassName="rounded-lg"
+              />
             </div>
             <div className="min-w-0 flex-1">
               <h2 className="font-display text-xl font-bold text-neutral-900 sm:text-2xl">
@@ -118,7 +128,7 @@ export default async function StudentDashboardPage() {
               </div>
               <Link
                 href={continueResumePath ?? `/courses/${continueCourse.course.id}`}
-                className="mt-6 inline-flex h-11 min-h-[44px] items-center gap-2 bg-brand px-5 text-sm font-semibold text-white hover:bg-brand-700"
+                className="mt-6 inline-flex h-11 min-h-[44px] items-center gap-2 rounded-lg bg-brand px-5 text-sm font-semibold text-white hover:bg-brand-700"
               >
                 Resume lesson
                 <ArrowRight className="h-4 w-4" />
@@ -139,17 +149,22 @@ export default async function StudentDashboardPage() {
         </div>
 
         {myCourses.length === 0 ? (
-          <div className="border-y border-neutral-200 py-10">
-            <p className="text-sm text-neutral-600">You haven&apos;t enrolled in a course yet.</p>
+          <div className="rounded-xl border border-dashed border-neutral-300 bg-neutral-50 px-6 py-10 text-center">
+            <p className="font-display text-lg font-semibold text-neutral-900">
+              Your learning starts here
+            </p>
+            <p className="mt-2 text-sm text-neutral-600">
+              Browse available courses and start learning.
+            </p>
             <Link
               href="/browse"
-              className="mt-3 inline-flex text-sm font-semibold text-brand hover:text-brand-700"
+              className="mt-5 inline-flex h-11 min-h-[44px] items-center justify-center rounded-lg bg-brand px-5 text-sm font-semibold text-white hover:bg-brand-700"
             >
               Browse the catalog
             </Link>
           </div>
         ) : activeCourses.length === 0 ? (
-          <div className="border-y border-neutral-200 py-8">
+          <div className="rounded-xl border border-neutral-200 bg-white px-6 py-8 text-center">
             <p className="text-sm text-neutral-600">
               No active courses — you&apos;ve completed everything you&apos;re enrolled in.
             </p>
@@ -168,23 +183,18 @@ export default async function StudentDashboardPage() {
                 <li key={courseId}>
                   <Link
                     href={`/courses/${course.id}`}
-                    className="flex h-full min-h-[44px] flex-col border border-neutral-200 bg-white transition hover:border-neutral-400"
+                    className="flex h-full min-h-[44px] flex-col overflow-hidden rounded-xl border border-neutral-200 bg-white transition hover:border-neutral-400 hover:shadow-sm"
                   >
-                    <div className="relative aspect-[16/10] w-full bg-neutral-100">
-                      {course.thumbnail_url ? (
-                        <Image
-                          src={course.thumbnail_url}
-                          alt=""
-                          fill
-                          className="object-cover"
-                          sizes="(max-width: 640px) 100vw, 50vw"
-                        />
-                      ) : (
-                        <CourseThumbnailPlaceholder title={course.title} />
-                      )}
-                    </div>
+                    <CourseMediaImage
+                      src={course.thumbnail_url}
+                      alt={course.title}
+                      title={course.title}
+                      aspect="video"
+                      sizes="(max-width: 640px) 100vw, 50vw"
+                      frameClassName="rounded-t-xl"
+                    />
                     <div className="flex flex-1 flex-col p-4">
-                      <p className="line-clamp-2 font-display text-[15px] font-semibold text-neutral-900">
+                      <p className="line-clamp-2 min-h-[2.5rem] font-display text-[15px] font-semibold text-neutral-900">
                         {course.title}
                       </p>
                       <p className="mt-1 text-xs text-neutral-500">
@@ -195,9 +205,9 @@ export default async function StudentDashboardPage() {
                           ? ` · ${lessonsLeft} left`
                           : null}
                       </p>
-                      <div className="mt-3 h-1 overflow-hidden bg-neutral-100">
+                      <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-neutral-100">
                         <div
-                          className="h-full bg-brand"
+                          className="h-full rounded-full bg-brand"
                           style={{ width: `${toPercent(pct)}%` }}
                         />
                       </div>
@@ -213,14 +223,14 @@ export default async function StudentDashboardPage() {
       {completedCourses.length > 0 ? (
         <section>
           <h2 className="mb-4 font-display text-lg font-bold text-neutral-900">Completed</h2>
-          <ul className="divide-y divide-neutral-200 border-y border-neutral-200">
+          <ul className="divide-y divide-neutral-200 overflow-hidden rounded-xl border border-neutral-200 bg-white">
             {completedCourses.map(({ courseId, course }) => {
               if (!course) return null;
               return (
                 <li key={courseId}>
                   <Link
                     href={`/courses/${course.id}`}
-                    className="flex min-h-[56px] items-center justify-between gap-4 py-3.5"
+                    className="flex min-h-[56px] items-center justify-between gap-4 px-4 py-3.5 hover:bg-neutral-50"
                   >
                     <span className="truncate font-medium text-neutral-900">{course.title}</span>
                     <ArrowRight className="h-4 w-4 shrink-0 text-neutral-400" />
@@ -243,12 +253,12 @@ export default async function StudentDashboardPage() {
               View all
             </Link>
           </div>
-          <ul className="divide-y divide-neutral-200 border-y border-neutral-200">
+          <ul className="divide-y divide-neutral-200 overflow-hidden rounded-xl border border-neutral-200 bg-white">
             {certificates.slice(0, 3).map((cert) => (
               <li key={cert.id}>
                 <Link
                   href={`/certificates/${cert.id}`}
-                  className="flex min-h-[56px] items-center justify-between gap-4 py-3.5"
+                  className="flex min-h-[56px] items-center justify-between gap-4 px-4 py-3.5 hover:bg-neutral-50"
                 >
                   <div className="min-w-0">
                     <p className="truncate font-medium text-neutral-900">

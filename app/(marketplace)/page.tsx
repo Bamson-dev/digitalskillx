@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import Image from "next/image";
 import { ArrowUpRight } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { bootstrapRuntimeSecrets } from "@/lib/bootstrap-runtime-secrets";
@@ -14,7 +13,7 @@ import {
 import { ORG } from "@/lib/org";
 import { MarketplaceNav, MarketplaceFooter } from "@/components/marketplace/marketplace-chrome";
 import { CourseCard } from "@/components/marketplace/course-card";
-import { CourseThumbnailPlaceholder } from "@/components/marketplace/course-thumbnail-placeholder";
+import { CourseMediaImage } from "@/components/marketplace/course-media-image";
 import { PriceDisplay } from "@/components/marketplace/price-display";
 import { EnrollButton } from "@/components/marketplace/enroll-button";
 import { HomepageCurrencyBar } from "@/components/marketplace/homepage-currency-bar";
@@ -149,20 +148,15 @@ export default async function HomePage() {
           {featured ? (
             <div className="border-t border-neutral-200">
               <Link href={`/course/${featured.id}`} className="group block w-full">
-                <div className="relative aspect-[21/9] min-h-[200px] w-full bg-neutral-100 sm:min-h-[260px] lg:aspect-[2.4/1] lg:min-h-[320px]">
-                  {featured.thumbnail_url ? (
-                    <Image
-                      src={featured.thumbnail_url}
-                      alt={featured.title}
-                      fill
-                      className="object-cover"
-                      priority
-                      sizes="100vw"
-                    />
-                  ) : (
-                    <CourseThumbnailPlaceholder title={featured.title} size="hero" />
-                  )}
-                </div>
+                <CourseMediaImage
+                  src={featured.thumbnail_url}
+                  alt={featured.title}
+                  title={featured.title}
+                  aspect="hero"
+                  priority
+                  sizes="100vw"
+                  placeholderSize="hero"
+                />
               </Link>
               <div className={`${CONTAINER} flex flex-wrap items-end justify-between gap-4 px-4 py-5 sm:px-8`}>
                 <div className="min-w-0">
@@ -182,9 +176,9 @@ export default async function HomePage() {
                   </span>
                   <Link
                     href={`/course/${featured.id}`}
-                    className="inline-flex items-center gap-1 text-sm font-semibold text-neutral-800 hover:text-brand"
+                    className="inline-flex h-10 min-h-[44px] items-center gap-1 bg-brand px-4 text-sm font-semibold text-white hover:bg-brand-700"
                   >
-                    View
+                    View course
                     <ArrowUpRight className="h-4 w-4" />
                   </Link>
                 </div>
@@ -258,18 +252,16 @@ export default async function HomePage() {
                 Start here
               </p>
               <div className="mt-8 grid min-w-0 gap-10 lg:grid-cols-2 lg:items-center lg:gap-14">
-                <div className="relative aspect-[4/3] w-full min-w-0 overflow-hidden bg-neutral-800">
-                  {featured.thumbnail_url ? (
-                    <Image
-                      src={featured.thumbnail_url}
-                      alt={featured.title}
-                      fill
-                      className="object-cover"
-                      sizes="(max-width: 1024px) 100vw, 50vw"
-                    />
-                  ) : (
-                    <CourseThumbnailPlaceholder title={featured.title} size="hero" />
-                  )}
+                <div className="min-w-0 overflow-hidden rounded-xl">
+                  <CourseMediaImage
+                    src={featured.thumbnail_url}
+                    alt={featured.title}
+                    title={featured.title}
+                    aspect="video"
+                    sizes="(max-width: 1024px) 100vw, 50vw"
+                    placeholderSize="hero"
+                    frameClassName="rounded-xl"
+                  />
                 </div>
                 <div className="min-w-0">
                   <h2 className="font-display text-3xl font-bold leading-tight sm:text-4xl">
@@ -330,9 +322,16 @@ export default async function HomePage() {
             </div>
 
             {catalog.length === 0 ? (
-              <p className="mt-12 text-sm text-neutral-500">Check back shortly for new courses.</p>
+              <div className="mt-12 rounded-xl border border-dashed border-neutral-300 bg-neutral-50 px-6 py-12 text-center">
+                <p className="font-display text-lg font-semibold text-neutral-900">
+                  Courses launching soon
+                </p>
+                <p className="mt-2 text-sm text-neutral-500">
+                  Check back shortly for new programs.
+                </p>
+              </div>
             ) : (
-              <div className="mt-10 grid min-w-0 grid-cols-1 gap-x-8 gap-y-12 sm:grid-cols-2 lg:grid-cols-3">
+              <div className="mt-10 grid min-w-0 grid-cols-1 gap-6 sm:grid-cols-2 sm:gap-7 lg:grid-cols-3 lg:gap-8">
                 {catalog.map((course) => (
                   <CourseCard key={course.id} course={course} />
                 ))}

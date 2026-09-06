@@ -126,12 +126,12 @@ export function BrowseCatalog({
       ) : null}
 
       {filtered.length === 0 ? (
-        <div className="mt-16 border border-dashed border-neutral-300 px-6 py-16">
+        <div className="mt-16 rounded-xl border border-dashed border-neutral-300 bg-neutral-50 px-6 py-16 text-center">
           <p className="font-display text-lg font-semibold text-neutral-800">No courses match</p>
           <p className="mt-2 text-sm text-neutral-500">Try a different keyword or category.</p>
         </div>
       ) : (
-        <div className="mt-10 grid grid-cols-1 gap-x-6 gap-y-10 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="mt-10 grid grid-cols-1 gap-6 sm:grid-cols-2 sm:gap-7 lg:grid-cols-3 lg:gap-8">
           {filtered.map((course) => (
             <CourseCard key={course.id} course={course} />
           ))}

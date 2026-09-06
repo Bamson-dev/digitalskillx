@@ -59,7 +59,7 @@ export function CourseHeroMedia({
   return (
     <div
       className={cn(
-        "relative aspect-video w-full overflow-hidden bg-neutral-900",
+        "relative aspect-video w-full overflow-hidden rounded-xl bg-neutral-900",
         className,
       )}
     >

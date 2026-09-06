@@ -72,20 +72,20 @@ export function CourseLandingView({
   const showCertificate = Boolean(course.certificate_enabled);
 
   const purchaseCard = (
-    <div className="border border-neutral-200 bg-white p-6">
+    <div className="rounded-xl border border-neutral-200 bg-white p-6 shadow-sm">
       <p className="font-display text-3xl font-bold tabular-nums tracking-tight text-brand">
         <PriceDisplay course={course} />
       </p>
       <p className="mt-1 text-xs text-neutral-400">One-time · Lifetime access</p>
       {purchaseComplete && !isLoggedIn ? (
-        <div className="mt-5 border border-green-200 bg-green-50 p-4 text-sm text-green-900">
+        <div className="mt-5 rounded-lg border border-green-200 bg-green-50 p-4 text-sm text-green-900">
           <p className="font-semibold">Enrollment complete</p>
           <p className="mt-1 text-green-800">
             Check your email for login details, then sign in to start learning.
           </p>
           <Link
             href={`/login?next=${encodeURIComponent(`/courses/${course.id}`)}`}
-            className="mt-3 inline-flex h-11 w-full items-center justify-center bg-brand text-sm font-bold text-white hover:bg-brand-700"
+            className="mt-3 inline-flex h-11 w-full items-center justify-center rounded-lg bg-brand text-sm font-bold text-white hover:bg-brand-700"
           >
             Log in to start learning
           </Link>
