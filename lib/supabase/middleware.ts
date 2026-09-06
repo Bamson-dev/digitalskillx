@@ -73,11 +73,15 @@ async function getUserWithTimeout(
  * the admin layout; RLS is the ultimate source of truth.
  */
 export async function updateSession(request: NextRequest) {
-  const host = request.headers.get("host") ?? "";
+  // Apex → www. Build an absolute URL so we never inherit the container port
+  // (behind Coolify/Traefik, nextUrl can be :3000 and would break public links).
+  const host = (request.headers.get("host") ?? "").split(":")[0].toLowerCase();
   if (host === "digitalskillx.com") {
-    const url = request.nextUrl.clone();
-    url.host = "www.digitalskillx.com";
-    return NextResponse.redirect(url, 308);
+    const { pathname, search } = request.nextUrl;
+    return NextResponse.redirect(
+      `https://www.digitalskillx.com${pathname}${search}`,
+      308,
+    );
   }
 
   const { pathname } = request.nextUrl;
