@@ -43,7 +43,13 @@ const PUBLIC_PATHS = [
 
 function isPublic(pathname: string) {
   if (PUBLIC_PATHS.includes(pathname)) return true;
-  return PUBLIC_PREFIXES.some((p) => pathname.startsWith(p));
+  return PUBLIC_PREFIXES.some((p) => {
+    // `/course` sales pages must NOT match `/courses` (enrolled classroom).
+    if (p === "/course") {
+      return pathname === "/course" || pathname.startsWith("/course/");
+    }
+    return pathname.startsWith(p);
+  });
 }
 
 /** Avoid MIDDLEWARE_INVOCATION_TIMEOUT when Supabase auth is slow or unreachable. */
@@ -145,14 +151,7 @@ export async function updateSession(request: NextRequest) {
       if (pathname.startsWith("/api/")) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
       }
-      const url = request.nextUrl.clone();
-      if (pathname.startsWith("/admin/mfa")) {
-        url.pathname = "/admin/login";
-      } else {
-        url.pathname = pathname.startsWith("/admin") ? "/admin/login" : "/login";
-      }
-      url.searchParams.set("next", pathname);
-      return NextResponse.redirect(url);
+      return redirectToLogin(request, pathname);
     }
 
     return response;
@@ -162,9 +161,23 @@ export async function updateSession(request: NextRequest) {
     if (pathname.startsWith("/api/")) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
-    const url = request.nextUrl.clone();
-    url.pathname = pathname.startsWith("/admin") ? "/admin/login" : "/login";
-    url.searchParams.set("next", pathname);
-    return NextResponse.redirect(url);
+    return redirectToLogin(request, pathname);
   }
+}
+
+/** Login redirect without inheriting container :3000 from nextUrl. */
+function redirectToLogin(request: NextRequest, pathname: string) {
+  const site = (
+    process.env.NEXT_PUBLIC_SITE_URL || "https://www.digitalskillx.com"
+  ).replace(/\/$/, "");
+  const loginPath = pathname.startsWith("/admin/mfa")
+    ? "/admin/login"
+    : pathname.startsWith("/admin")
+      ? "/admin/login"
+      : "/login";
+  const next = `${pathname}${request.nextUrl.search || ""}`;
+  return NextResponse.redirect(
+    `${site}${loginPath}?next=${encodeURIComponent(next)}`,
+    307,
+  );
 }

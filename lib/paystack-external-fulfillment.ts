@@ -142,8 +142,10 @@ async function sendAccessEmail(params: {
   isNewAccount: boolean;
 }) {
   const base = siteUrl();
-  const courseUrl = `${base}/courses/${params.courseId}`;
-  const loginUrl = `${base}/login?next=${encodeURIComponent(courseUrl)}`;
+  const coursePath = `/courses/${params.courseId}`;
+  const courseUrl = `${base}${coursePath}`;
+  // Relative `next` so login always accepts it (absolute next broke older emails).
+  const loginUrl = `${base}/login?next=${encodeURIComponent(coursePath)}`;
 
   if (params.isNewAccount) {
     await sendMagicLinkEmail(params.email, `/courses/${params.courseId}`);

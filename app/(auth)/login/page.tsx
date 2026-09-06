@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { LoginForm } from "@/components/auth/login-form";
 import { authQueryErrorMessage } from "@/lib/auth-errors";
 import { ensureStudentProfile } from "@/lib/ensure-student-profile";
+import { safeNextPath } from "@/lib/safe-next-path";
 import { createClient } from "@/lib/supabase/server";
 
 export const metadata: Metadata = { title: "Log in" };
@@ -12,10 +13,9 @@ export default async function LoginPage({
 }: {
   searchParams?: { next?: string; error?: string; auth_error?: string; registered?: string };
 }) {
-  const next =
-    typeof searchParams?.next === "string" && searchParams.next.startsWith("/")
-      ? searchParams.next
-      : "/dashboard";
+  const next = safeNextPath(
+    typeof searchParams?.next === "string" ? searchParams.next : undefined,
+  );
 
   const supabase = createClient();
   const {

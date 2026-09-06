@@ -299,7 +299,8 @@ export function paystackCourseAccessReadyEmail(p: PaystackCourseAccessEmailParam
       brandColor: p.brandColor,
       title: "Your course access is ready",
       bodyHtml,
-      cta: { label: "Start learning", url: p.courseUrl },
+      // loginUrl includes ?next=/courses/... so Start learning resumes after sign-in.
+      cta: { label: "Start learning", url: p.loginUrl },
       supportEmail: p.supportEmail,
     }),
   };

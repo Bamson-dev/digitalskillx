@@ -29,7 +29,10 @@ export async function requireStudent(): Promise<Profile> {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
+  if (!user) {
+    // Middleware normally adds ?next=; this is a fallback if a route skipped the gate.
+    redirect("/login");
+  }
 
   let profile = (await getProfile()) ?? (await ensureStudentProfile());
   if (!profile) profile = studentProfileFromUser(user);
