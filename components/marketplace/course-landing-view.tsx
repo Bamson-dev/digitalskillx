@@ -9,8 +9,10 @@ import { EnrollButton } from "@/components/marketplace/enroll-button";
 import { PriceDisplay } from "@/components/marketplace/price-display";
 import { CurriculumAccordion } from "@/components/marketplace/curriculum-accordion";
 import { CourseHeroMedia } from "@/components/marketplace/course-hero-media";
+import { CourseDescriptionProse } from "@/components/course/course-description-prose";
 import { RecommendationRail } from "@/components/marketplace/recommendation-rail";
 import type { CourseRecommendation } from "@/lib/recommendations";
+import { courseOverviewBlurb } from "@/lib/course-copy-format";
 import { cn } from "@/lib/utils";
 
 type Lesson = { id: string; title: string; position: number; lesson_type: string };
@@ -63,9 +65,10 @@ export function CourseLandingView({
 }) {
   const [tab, setTab] = useState<(typeof TABS)[number]>("About");
   const { formatCoursePrice } = useCurrency();
-  const outcomes = course.learning_outcomes ?? [];
+  const outcomes = (course.learning_outcomes ?? []).filter((o) => o.trim().length > 0);
   const modules = [...course.modules].sort((a, b) => a.position - b.position);
   const instructorName = course.instructor_name ?? ORG.instructor;
+  const heroBlurb = courseOverviewBlurb(course.short_description, course.description);
   const hasRating = typeof course.rating === "number" && course.rating > 0;
   const showEnrollmentCount = typeof enrollmentCount === "number" && enrollmentCount > 0;
   const hasCourseAccess = isEnrolled || purchaseComplete;
@@ -154,9 +157,7 @@ export function CourseLandingView({
           <h1 className="mt-2 font-display text-[1.75rem] font-bold leading-[1.1] text-neutral-950">
             {course.title}
           </h1>
-          <p className="mt-3 text-base text-neutral-600">
-            {course.short_description ?? course.description}
-          </p>
+          {heroBlurb ? <p className="mt-3 text-base leading-relaxed text-neutral-600">{heroBlurb}</p> : null}
           {metaRow}
         </div>
       </section>
@@ -172,9 +173,9 @@ export function CourseLandingView({
               <h1 className="mt-2 font-display text-4xl font-bold leading-[1.08] text-neutral-950 lg:text-[2.75rem]">
                 {course.title}
               </h1>
-              <p className="mt-4 text-lg text-neutral-600">
-                {course.short_description ?? course.description}
-              </p>
+              {heroBlurb ? (
+                <p className="mt-4 text-lg leading-relaxed text-neutral-600">{heroBlurb}</p>
+              ) : null}
               {metaRow}
             </div>
 
@@ -208,25 +209,41 @@ export function CourseLandingView({
 
             <div className="py-8">
               {tab === "About" ? (
-                <div className="space-y-8">
-                  {course.description ? (
-                    <div className="prose prose-neutral max-w-none text-neutral-600">
-                      <p>{course.description}</p>
-                    </div>
-                  ) : null}
+                <div className="space-y-10">
                   {outcomes.length > 0 ? (
                     <div>
                       <h2 className="font-display text-xl font-bold text-neutral-900">
                         What you&apos;ll learn
                       </h2>
+                      <p className="mt-1 text-sm text-neutral-500">
+                        Practical skills you&apos;ll build through this program.
+                      </p>
                       <ul className="mt-5 grid gap-3 sm:grid-cols-2">
                         {outcomes.map((item) => (
-                          <li key={item} className="flex gap-3 text-sm text-neutral-700">
+                          <li
+                            key={item}
+                            className="flex gap-3 rounded-xl border border-neutral-100 bg-neutral-50/80 px-4 py-3 text-sm text-neutral-700"
+                          >
                             <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-brand" />
                             <span>{item}</span>
                           </li>
                         ))}
                       </ul>
+                    </div>
+                  ) : null}
+                  {course.description || course.short_description ? (
+                    <div>
+                      <h2 className="font-display text-xl font-bold text-neutral-900">
+                        About this course
+                      </h2>
+                      <div className="mt-4">
+                        <CourseDescriptionProse
+                          description={course.description}
+                          shortDescription={null}
+                          stripOutcomes
+                          className="text-base"
+                        />
+                      </div>
                     </div>
                   ) : null}
                 </div>

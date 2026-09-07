@@ -1,18 +1,21 @@
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, ClipboardList } from "lucide-react";
+import { ArrowLeft, CheckCircle2, ClipboardList, PlayCircle } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { requireStudent } from "@/lib/auth";
 import { getStudentViewSupabase } from "@/lib/student-view-supabase";
 import { checkStudentCourseEnrollment } from "@/lib/student-enrollments";
 import { CourseComingSoonView } from "@/components/course/course-coming-soon-view";
 import { CourseCommunitySection } from "@/components/course/course-community-section";
+import { CourseDescriptionProse } from "@/components/course/course-description-prose";
 import { courseCommunityFromRow } from "@/lib/course-community";
 import { CourseResources } from "@/components/student/course-resources";
 import { CourseCurriculumList } from "@/components/student/course-curriculum-list";
+import { CourseMediaImage } from "@/components/marketplace/course-media-image";
 import { isLessonComingSoon } from "@/lib/lesson-coming-soon";
 import { isMissingColumnError } from "@/lib/schema-guard";
+import { courseOverviewBlurb } from "@/lib/course-copy-format";
 import type { Lesson, Module } from "@/types/database";
 
 export const metadata: Metadata = { title: "Course" };
@@ -157,48 +160,103 @@ export default async function CourseDetailPage({
     null;
 
   const outcomes = (course.learning_outcomes ?? []).filter((o) => o.trim().length > 0);
+  const blurb = courseOverviewBlurb(course.short_description, course.description);
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-8 pb-8">
       <Link
         href="/courses"
-        className="inline-flex items-center gap-1 text-sm text-muted hover:text-foreground"
+        className="inline-flex items-center gap-1 text-sm text-neutral-500 hover:text-neutral-900"
       >
-        <ArrowLeft className="h-4 w-4" /> Back to courses
+        <ArrowLeft className="h-4 w-4" /> Back to my courses
       </Link>
 
-      <div>
-        <h1 className="font-display text-2xl font-bold text-neutral-950">{course.title}</h1>
-        {isAdminPreview && !enrollment ? (
-          <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">
-            Admin preview — you are viewing this course as a student would, without enrolling.
-          </p>
-        ) : null}
-        {course.description ? (
-          <p className="mt-2 max-w-2xl text-sm leading-relaxed text-neutral-600">
-            {course.description}
-          </p>
-        ) : null}
-        {course.instructor_name ? (
-          <p className="mt-2 text-sm text-neutral-500">Instructor · {course.instructor_name}</p>
-        ) : null}
-      </div>
+      <section className="overflow-hidden rounded-2xl border border-neutral-200 bg-white">
+        <div className="grid gap-0 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">
+          <div className="relative min-h-[200px] bg-neutral-950 lg:min-h-full">
+            <CourseMediaImage
+              src={course.thumbnail_url}
+              alt={course.title}
+              title={course.title}
+              aspect="none"
+              sizes="(max-width: 1024px) 100vw, 50vw"
+              placeholderSize="hero"
+              className="absolute inset-0 h-full w-full"
+              frameClassName="h-full min-h-[220px] rounded-none bg-neutral-950"
+            />
+          </div>
+          <div className="flex flex-col justify-center p-6 sm:p-8">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-brand">
+              Your course
+            </p>
+            <h1 className="mt-2 font-display text-2xl font-bold leading-tight text-neutral-950 sm:text-3xl">
+              {course.title}
+            </h1>
+            {isAdminPreview && !enrollment ? (
+              <p className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                Admin preview — you are viewing this course as a student would, without enrolling.
+              </p>
+            ) : null}
+            {blurb ? <p className="mt-3 text-sm leading-relaxed text-neutral-600">{blurb}</p> : null}
+            {course.instructor_name ? (
+              <p className="mt-3 text-sm text-neutral-500">Instructor · {course.instructor_name}</p>
+            ) : null}
+
+            <div className="mt-6 flex flex-wrap items-center gap-3">
+              {resumeLessonId ? (
+                <Link
+                  href={`/lessons/${resumeLessonId}`}
+                  className="inline-flex h-11 items-center gap-2 rounded-lg bg-brand px-5 text-sm font-semibold text-white hover:bg-brand-700"
+                >
+                  <PlayCircle className="h-4 w-4" />
+                  {completedLessons > 0 ? "Continue learning" : "Start learning"}
+                </Link>
+              ) : null}
+              <p className="text-sm tabular-nums text-neutral-500">
+                {completedLessons}/{totalLessons} lessons · {progressPct}% complete
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
 
       {outcomes.length > 0 ? (
-        <section>
-          <h2 className="font-display text-lg font-bold text-neutral-950">What you&apos;ll learn</h2>
-          <ul className="mt-3 list-disc space-y-1.5 pl-5 text-sm text-neutral-700">
+        <section className="rounded-2xl border border-neutral-200 bg-white p-6 sm:p-8">
+          <h2 className="font-display text-xl font-bold text-neutral-950">What you&apos;ll learn</h2>
+          <p className="mt-1 text-sm text-neutral-500">
+            Skills and outcomes you&apos;ll walk away with from this program.
+          </p>
+          <ul className="mt-6 grid gap-3 sm:grid-cols-2">
             {outcomes.map((outcome) => (
-              <li key={outcome}>{outcome}</li>
+              <li
+                key={outcome}
+                className="flex gap-3 rounded-xl border border-neutral-100 bg-neutral-50/80 px-4 py-3 text-sm text-neutral-700"
+              >
+                <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-brand" />
+                <span>{outcome}</span>
+              </li>
             ))}
           </ul>
+        </section>
+      ) : null}
+
+      {course.description ? (
+        <section className="rounded-2xl border border-neutral-200 bg-white p-6 sm:p-8">
+          <h2 className="font-display text-xl font-bold text-neutral-950">About this course</h2>
+          <div className="mt-4">
+            <CourseDescriptionProse
+              description={course.description}
+              shortDescription={null}
+              stripOutcomes
+            />
+          </div>
         </section>
       ) : null}
 
       <CourseCommunitySection links={communityLinks} courseTitle={course.title} />
 
       {modules.length === 0 ? (
-        <div className="border border-neutral-200 bg-white p-8 text-center text-sm text-neutral-500">
+        <div className="rounded-2xl border border-neutral-200 bg-white p-8 text-center text-sm text-neutral-500">
           This course doesn&apos;t have any content yet.
         </div>
       ) : (
@@ -212,12 +270,12 @@ export default async function CourseDetailPage({
       )}
 
       {(assignments ?? []).length > 0 ? (
-        <section>
-          <h2 className="font-display text-lg font-bold text-neutral-950">Assignments</h2>
+        <section className="rounded-2xl border border-neutral-200 bg-white p-6 sm:p-8">
+          <h2 className="font-display text-xl font-bold text-neutral-950">Assignments</h2>
           <p className="mt-1 text-sm text-neutral-500">
             Apply what you learned. Submit when you&apos;re ready.
           </p>
-          <ul className="mt-4 divide-y divide-neutral-200 border-y border-neutral-200">
+          <ul className="mt-5 divide-y divide-neutral-200 border-y border-neutral-200">
             {(assignments ?? []).map((assignment) => (
               <li key={assignment.id}>
                 <Link

@@ -4,9 +4,11 @@ import { ArrowLeft, CheckCircle2, Clock } from "lucide-react";
 import { CourseHeroMedia } from "@/components/marketplace/course-hero-media";
 import { CourseThumbnailPlaceholder } from "@/components/marketplace/course-thumbnail-placeholder";
 import { CourseCommunitySection } from "@/components/course/course-community-section";
+import { CourseDescriptionProse } from "@/components/course/course-description-prose";
 import { Badge } from "@/components/ui/badge";
 import type { CourseCommunityLinks } from "@/lib/course-community";
 import { hasCourseCommunity } from "@/lib/course-community";
+import { courseOverviewBlurb } from "@/lib/course-copy-format";
 import { cn } from "@/lib/utils";
 
 type CourseComingSoonViewProps = {
@@ -42,7 +44,7 @@ export function CourseComingSoonView({
   variant = "marketplace",
   className,
 }: CourseComingSoonViewProps) {
-  const blurb = shortDescription ?? description;
+  const blurb = courseOverviewBlurb(shortDescription, description);
   const outcomes = learningOutcomes.filter(Boolean);
   const isStudent = variant === "student";
   const showCommunity = communityLinks && hasCourseCommunity(communityLinks);
@@ -155,10 +157,12 @@ export function CourseComingSoonView({
                 </div>
               </div>
 
-              {description && description !== blurb ? (
+              {description ? (
                 <div className="mt-8 border-t border-neutral-100 pt-8">
                   <h2 className="font-display text-lg font-semibold text-neutral-900">About this course</h2>
-                  <p className="mt-3 text-sm leading-relaxed text-neutral-600">{description}</p>
+                  <div className="mt-3">
+                    <CourseDescriptionProse description={description} stripOutcomes />
+                  </div>
                 </div>
               ) : null}
 
