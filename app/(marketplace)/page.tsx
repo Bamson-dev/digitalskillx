@@ -252,7 +252,7 @@ export default async function HomePage() {
                 Start here
               </p>
               <div className="mt-8 grid min-w-0 gap-10 lg:grid-cols-2 lg:items-center lg:gap-14">
-                <div className="min-w-0 overflow-hidden rounded-xl">
+                <div className="min-w-0 overflow-hidden rounded-xl bg-neutral-900">
                   <CourseMediaImage
                     src={featured.thumbnail_url}
                     alt={featured.title}

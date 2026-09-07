@@ -7,16 +7,21 @@ import { cn } from "@/lib/utils";
 
 export type CourseMediaAspect = "video" | "hero" | "portrait" | "square" | "none";
 
+/**
+ * Course thumbnails are authored at 1280×720 (16:9). Keep catalog + featured
+ * frames on that ratio so object-cover fills edge-to-edge without letterboxing
+ * or cropping baked-in headline text.
+ */
 const ASPECT: Record<Exclude<CourseMediaAspect, "none">, string> = {
-  video: "aspect-video", // 16:9 — catalog / cards
-  hero: "aspect-[21/9] min-h-[200px] sm:min-h-[260px] lg:aspect-[2.4/1] lg:min-h-[320px]",
-  portrait: "aspect-[4/3]",
+  video: "aspect-video",
+  hero: "aspect-video w-full",
+  portrait: "aspect-video",
   square: "aspect-square",
 };
 
 /**
  * Consistent course thumbnail / cover rendering.
- * Fixed aspect box + object-cover so source dimensions never drive layout height.
+ * Fixed aspect box + absolute fill + object-cover so source dimensions never drive layout.
  */
 export function CourseMediaImage({
   src,
@@ -49,7 +54,7 @@ export function CourseMediaImage({
   return (
     <div
       className={cn(
-        "relative w-full overflow-hidden bg-neutral-100",
+        "relative w-full min-w-0 overflow-hidden bg-neutral-950",
         aspect !== "none" ? ASPECT[aspect] : "h-full w-full",
         frameClassName,
         className,
@@ -63,7 +68,8 @@ export function CourseMediaImage({
           priority={priority}
           sizes={sizes}
           unoptimized={unoptimized}
-          className="object-cover object-center"
+          className="absolute inset-0 h-full w-full object-cover object-center"
+          style={{ objectFit: "cover", objectPosition: "center" }}
           onError={() => setFailed(true)}
         />
       ) : (

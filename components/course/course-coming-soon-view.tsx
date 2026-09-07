@@ -181,12 +181,18 @@ export function CourseComingSoonView({
 
             <aside className="bg-neutral-50 p-6 sm:p-8">
               {isStudent && thumbnailUrl ? (
-                <div className="relative mb-6 aspect-[16/10] overflow-hidden rounded-lg bg-neutral-100 lg:hidden">
-                  <Image src={thumbnailUrl} alt="" fill className="object-cover" sizes="400px" />
+                <div className="relative mb-6 aspect-video overflow-hidden rounded-lg bg-neutral-950 lg:hidden">
+                  <Image
+                    src={thumbnailUrl}
+                    alt=""
+                    fill
+                    className="object-cover object-center"
+                    sizes="400px"
+                  />
                 </div>
               ) : null}
               {!isStudent && !thumbnailUrl && !promoVideoUrl ? (
-                <div className="relative mb-6 hidden aspect-[4/3] overflow-hidden bg-neutral-100 lg:block">
+                <div className="relative mb-6 hidden aspect-video overflow-hidden bg-neutral-100 lg:block">
                   <CourseThumbnailPlaceholder title={title} />
                 </div>
               ) : null}
