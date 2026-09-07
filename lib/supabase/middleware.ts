@@ -38,6 +38,7 @@ const PUBLIC_PATHS = [
   "/api/unsubscribe",
   "/terms",
   "/refund-policy",
+  "/browse",
   "/sitemap.xml",
   "/robots.txt",
 ];
