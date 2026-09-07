@@ -23,7 +23,6 @@ const SELECT_COLS =
   "id, title, message, type, is_active, is_fixed, starts_at, ends_at, created_by, created_at, updated_at";
 
 type LooseClient = {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   from: (table: string) => any;
 };
 

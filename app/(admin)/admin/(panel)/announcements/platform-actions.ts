@@ -67,7 +67,6 @@ export async function createPlatformAnnouncement(
   const parsed = readInput(formData);
   if ("error" in parsed) return { error: parsed.error };
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = (await getAdminSupabase()) as any;
   const { error } = await supabase.from("platform_announcements").insert({
     ...parsed,
@@ -92,7 +91,6 @@ export async function updatePlatformAnnouncement(
   const parsed = readInput(formData);
   if ("error" in parsed) return { error: parsed.error };
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = (await getAdminSupabase()) as any;
   const { error } = await supabase
     .from("platform_announcements")
@@ -111,7 +109,6 @@ export async function deletePlatformAnnouncement(formData: FormData): Promise<vo
   const id = String(formData.get("id") ?? "").trim();
   if (!id) return;
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = (await getAdminSupabase()) as any;
   await supabase.from("platform_announcements").delete().eq("id", id);
   revalidatePath("/admin/announcements");
@@ -124,7 +121,6 @@ export async function togglePlatformAnnouncementActive(formData: FormData): Prom
   const next = formData.get("is_active") === "true";
   if (!id) return;
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = (await getAdminSupabase()) as any;
   await supabase
     .from("platform_announcements")
