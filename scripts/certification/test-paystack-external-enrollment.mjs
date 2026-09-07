@@ -39,7 +39,7 @@ check("product config matches ₦49,999 NGN", () => {
   assert.equal(PRODUCT.expectedAmountKobo, 4_999_900);
   assert.equal(PRODUCT.expectedAmountNgn, 49_999);
   assert.equal(PRODUCT.currency, "NGN");
-  assert.equal(PRODUCT.paymentPageSlug, "aiapp");
+  assert.equal(PRODUCT.paymentPageSlug, "ai-app");
 });
 
 check("valid charge.success product identification", () => {
@@ -132,6 +132,18 @@ check("page slug aiapp identifies product", () => {
   assert.equal(match?.key, "build-software-with-ai");
 });
 
+check("page slug ai-app identifies product", () => {
+  const match = products.identifyPaystackExternalProduct({
+    verified: { ...validVerified, metadata: {} },
+    webhookData: {
+      amount: 4_999_900,
+      currency: "NGN",
+      page: { slug: "ai-app" },
+    },
+  });
+  assert.equal(match?.key, "build-software-with-ai");
+});
+
 check("paystack.shop referrer identifies product", () => {
   const match = products.identifyPaystackExternalProduct({
     verified: { ...validVerified, metadata: {} },
@@ -139,6 +151,18 @@ check("paystack.shop referrer identifies product", () => {
       amount: 4_999_900,
       currency: "NGN",
       metadata: { referrer: "https://paystack.shop/pay/aiapp" },
+    },
+  });
+  assert.equal(match?.key, "build-software-with-ai");
+});
+
+check("paystack.shop ai-app referrer identifies product", () => {
+  const match = products.identifyPaystackExternalProduct({
+    verified: { ...validVerified, metadata: {} },
+    webhookData: {
+      amount: 4_999_900,
+      currency: "NGN",
+      metadata: { referrer: "https://paystack.shop/pay/ai-app" },
     },
   });
   assert.equal(match?.key, "build-software-with-ai");

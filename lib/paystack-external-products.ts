@@ -11,7 +11,10 @@ export type PaystackExternalProduct = {
   expectedAmountNgn: number;
   currency: "NGN";
   paymentPageUrl: string;
+  /** Canonical Paystack shop slug (path after /pay/). */
   paymentPageSlug: string;
+  /** Alternate shop slugs that fulfill the same course. */
+  paymentPageSlugAliases: readonly string[];
   successRedirectUrl: string;
 };
 
@@ -20,6 +23,8 @@ export const BUILD_SOFTWARE_WITH_AI_PRODUCT: PaystackExternalProduct = {
   title: "Build And Monetize Your Software With AI",
   titleAliases: [
     "Build And Monetize Your Software With AI",
+    "Build and monetize app with AI",
+    "Build, Launch & Monetize Mobile Apps With AI",
     "Build Software & Mobile Apps With AI",
     "How To Build Software With AI And Get Paid For It",
   ],
@@ -27,8 +32,10 @@ export const BUILD_SOFTWARE_WITH_AI_PRODUCT: PaystackExternalProduct = {
   expectedAmountKobo: 4_999_900,
   expectedAmountNgn: 49_999,
   currency: "NGN",
-  paymentPageUrl: "https://paystack.shop/pay/aiapp",
-  paymentPageSlug: "aiapp",
+  // Live Paystack shop link used in ads / webinars.
+  paymentPageUrl: "https://paystack.shop/pay/ai-app",
+  paymentPageSlug: "ai-app",
+  paymentPageSlugAliases: ["ai-app", "aiapp"],
   successRedirectUrl: "https://aimoneycode.com.ng/access-page-program/",
 };
 
@@ -56,6 +63,11 @@ export type PaystackChargePayload = {
   page?: { slug?: string; name?: string } | null;
 };
 
+function productSlugs(product: PaystackExternalProduct): string[] {
+  const slugs = [product.paymentPageSlug, ...product.paymentPageSlugAliases];
+  return [...new Set(slugs.map((s) => s.toLowerCase()))];
+}
+
 function metadataString(meta: Record<string, unknown> | undefined, key: string): string | null {
   const raw = meta?.[key];
   if (typeof raw === "string" && raw.trim()) return raw.trim();
@@ -71,7 +83,11 @@ function metadataMatchesProduct(meta: Record<string, unknown> | undefined, produ
     metadataString(meta, "payment_page") ??
     metadataString(meta, "payment_page_slug") ??
     metadataString(meta, "page_slug");
-  if (paymentPage && paymentPage.toLowerCase().includes(product.paymentPageSlug)) return true;
+  const slugs = productSlugs(product);
+  if (paymentPage) {
+    const page = paymentPage.toLowerCase();
+    if (slugs.some((slug) => page === slug || page.includes(slug))) return true;
+  }
 
   const customFields = meta?.custom_fields;
   if (Array.isArray(customFields)) {
@@ -81,7 +97,7 @@ function metadataMatchesProduct(meta: Record<string, unknown> | undefined, produ
       const name = String(row.variable_name ?? "").toLowerCase();
       const value = String(row.value ?? "").toLowerCase();
       if (name.includes("product") && value.includes(product.key)) return true;
-      if (value.includes(product.paymentPageSlug)) return true;
+      if (slugs.some((slug) => value.includes(slug))) return true;
     }
   }
 
@@ -127,10 +143,12 @@ function hasPaymentPageIdentity(
   values: string[],
   product: PaystackExternalProduct,
 ): boolean {
+  const slugs = productSlugs(product);
   return values.some((value) => {
     const slug = pageSlugFromUrl(value);
-    if (slug === product.paymentPageSlug) return true;
-    return value.toLowerCase().includes(`pay/${product.paymentPageSlug}`);
+    if (slug && slugs.includes(slug)) return true;
+    const lower = value.toLowerCase();
+    return slugs.some((s) => lower.includes(`pay/${s}`));
   });
 }
 
@@ -167,7 +185,12 @@ export function identifyPaystackExternalProduct(input: {
       input.webhookData?.page?.slug ??
       metadataString(meta, "page_slug") ??
       metadataString(meta, "slug");
-    if (pageSlug && pageSlug.toLowerCase().includes(product.paymentPageSlug)) return product;
+    if (pageSlug) {
+      const normalized = pageSlug.toLowerCase();
+      if (productSlugs(product).some((slug) => normalized === slug || normalized.includes(slug))) {
+        return product;
+      }
+    }
 
     const haystack: string[] = [];
     collectStrings(meta, haystack);

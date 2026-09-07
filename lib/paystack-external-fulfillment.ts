@@ -162,7 +162,7 @@ async function sendAccessEmail(params: {
 }
 
 /**
- * Fulfill Paystack Payment Page purchases (e.g. paystack.shop/pay/aiapp).
+ * Fulfill Paystack Payment Page purchases (e.g. paystack.shop/pay/ai-app).
  * Idempotent on Paystack reference and student+course enrollment.
  */
 export async function fulfillPaystackExternalCharge(params: {
