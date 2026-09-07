@@ -25,13 +25,7 @@ import {
   waitForStudentProfile,
   type CourseLookup,
 } from "@/lib/admin-student-onboarding";
-
-function siteUrl() {
-  return (process.env.NEXT_PUBLIC_SITE_URL ?? "https://digitalskillx.com").replace(
-    /\/$/,
-    "",
-  );
-}
+import { siteUrl } from "@/lib/org";
 
 export type BulkUploadFailure = {
   row: number;

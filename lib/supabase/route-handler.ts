@@ -2,6 +2,7 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
+import { publicAbsoluteUrl } from "@/lib/public-site-origin";
 
 type CookieToSet = {
   name: string;
@@ -39,7 +40,11 @@ export function redirectWithPendingCookies(
   pending: CookieToSet[],
   pathname: string,
 ) {
-  const response = NextResponse.redirect(new URL(pathname, request.url), 303);
+  // Never base redirects on request.url — inside Docker that is localhost:3000.
+  const response = NextResponse.redirect(
+    publicAbsoluteUrl(pathname, { headers: request.headers, requestUrl: request.url }),
+    303,
+  );
   for (const { name, value, options } of pending) {
     response.cookies.set(name, value, options);
   }

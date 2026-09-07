@@ -3,19 +3,11 @@ import { createAdminClientAsync } from "@/lib/supabase/admin";
 import { sendEmail } from "@/lib/email";
 import { magicLinkEmail, passwordResetEmail } from "@/lib/email/auth-templates";
 import { getEmailSenderConfig, getPlatformSettingsAdmin } from "@/lib/platform-settings";
-import { siteUrl } from "@/lib/org";
 import { formatErrorMessage } from "@/lib/format-error-message";
+import { normalizePublicOrigin } from "@/lib/public-site-origin";
 
 function authSiteOrigin() {
-  const fromEnv = process.env.NEXT_PUBLIC_SITE_URL?.trim();
-  if (fromEnv) {
-    try {
-      return new URL(fromEnv.replace(/\/$/, "")).origin;
-    } catch {
-      // fall through
-    }
-  }
-  return siteUrl();
+  return normalizePublicOrigin(process.env.NEXT_PUBLIC_SITE_URL);
 }
 
 function firstName(fullName: string | null | undefined) {

@@ -7,6 +7,7 @@ import {
   newDeviceKey,
   readDeviceKeyFromRequest,
 } from "@/lib/device-login-limit";
+import { publicSiteOrigin } from "@/lib/public-site-origin";
 
 function otpTypeFromParam(type: string | null): EmailOtpType | null {
   if (type === "recovery" || type === "magiclink" || type === "email" || type === "signup") {
@@ -138,7 +139,9 @@ async function redirectAfterAuth(
  * Server-generated links use token_hash + verifyOtp; client OAuth uses code exchange.
  */
 export async function GET(request: NextRequest) {
-  const { searchParams, origin } = new URL(request.url);
+  const { searchParams } = new URL(request.url);
+  // Coolify/Docker request.url is localhost:3000 — never redirect students there.
+  const origin = publicSiteOrigin({ headers: request.headers, requestUrl: request.url });
   const code = searchParams.get("code");
   const tokenHash = searchParams.get("token_hash");
   const type = otpTypeFromParam(searchParams.get("type"));

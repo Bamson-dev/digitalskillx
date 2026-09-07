@@ -16,6 +16,7 @@ import {
 } from "@/lib/admin-student-onboarding";
 import { sendCourseEnrollmentEmail } from "@/lib/system-email-triggers";
 import { getPlatformSettingsAdmin } from "@/lib/platform-settings";
+import { siteUrl } from "@/lib/org";
 import type { Database } from "@/types/database";
 
 export type BulkUploadFailure = {
@@ -37,10 +38,6 @@ export type BulkUploadResult = {
 
 /** Sync path row cap when job tables are unavailable. */
 export const BULK_SYNC_MAX_ROWS = 150;
-
-function siteUrl() {
-  return (process.env.NEXT_PUBLIC_SITE_URL ?? "https://digitalskillx.com").replace(/\/$/, "");
-}
 
 function isUploadedCsvFile(value: FormDataEntryValue | null): value is File {
   return (

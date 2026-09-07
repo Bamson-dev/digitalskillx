@@ -17,10 +17,7 @@ export type OutboxKind = "welcome" | "enrollment_notice";
 export { isSyntheticTestRecipient } from "@/lib/email/synthetic-recipient";
 
 function siteUrl() {
-  return (process.env.NEXT_PUBLIC_SITE_URL ?? orgSiteUrl() ?? "https://digitalskillx.com").replace(
-    /\/$/,
-    "",
-  );
+  return orgSiteUrl();
 }
 
 export function outboxTableMissing(message: string) {

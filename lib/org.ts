@@ -1,3 +1,5 @@
+import { normalizePublicOrigin } from "@/lib/public-site-origin";
+
 /** Organisation and platform branding constants. Move to a settings table later. */
 export const ORG = {
   platformName: "DigitalSkillX",
@@ -13,13 +15,7 @@ export const ORG = {
 };
 
 export function siteUrl() {
-  const raw = process.env.NEXT_PUBLIC_SITE_URL?.trim();
-  if (!raw) return "https://digitalskillx.com";
-  const normalized = raw.replace(/\/$/, "");
-  try {
-    new URL(normalized);
-    return normalized;
-  } catch {
-    return "https://digitalskillx.com";
-  }
+  // Never emit localhost/private origins in production — Coolify often has
+  // NEXT_PUBLIC_SITE_URL left at http://localhost:3000 from .env.example.
+  return normalizePublicOrigin(process.env.NEXT_PUBLIC_SITE_URL);
 }

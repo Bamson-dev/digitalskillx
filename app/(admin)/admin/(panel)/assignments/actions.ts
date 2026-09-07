@@ -9,11 +9,8 @@ import { sendEmail } from "@/lib/email";
 import { emailTemplates } from "@/lib/email/templates";
 import { createDraftAssignment, publishDraftAssignment } from "@/lib/assignments-admin";
 import { logAudit } from "@/lib/audit";
+import { siteUrl } from "@/lib/org";
 import type { SubmissionStatus } from "@/types/database";
-
-function siteUrl() {
-  return (process.env.NEXT_PUBLIC_SITE_URL ?? "https://digitalskillx.com").replace(/\/$/, "");
-}
 
 export async function createAssignment(formData: FormData) {
   await requireAdmin();

@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { runStudentSignUp } from "@/lib/auth/run-student-signup";
 import { rateLimitedResponse } from "@/lib/api-rate-limit";
+import { publicAbsoluteUrl } from "@/lib/public-site-origin";
 
 export const dynamic = "force-dynamic";
 
@@ -40,7 +41,10 @@ export async function POST(request: NextRequest) {
     if (contentType.includes("application/json")) {
       return NextResponse.json({ error: result.error }, { status: 400 });
     }
-    const errorUrl = new URL("/register", request.url);
+    const errorUrl = publicAbsoluteUrl("/register", {
+      headers: request.headers,
+      requestUrl: request.url,
+    });
     errorUrl.searchParams.set("auth_error", result.error);
     return NextResponse.redirect(errorUrl, 303);
   }
@@ -49,7 +53,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ message: result.message });
   }
 
-  const okUrl = new URL("/login", request.url);
+  const okUrl = publicAbsoluteUrl("/login", {
+    headers: request.headers,
+    requestUrl: request.url,
+  });
   okUrl.searchParams.set("registered", "1");
   return NextResponse.redirect(okUrl, 303);
 }

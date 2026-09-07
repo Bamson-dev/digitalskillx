@@ -2,6 +2,7 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import type { Database } from "@/types/database";
 import { createSupabaseFetch } from "@/lib/supabase/fetch-retry";
+import { publicAbsoluteUrl } from "@/lib/public-site-origin";
 
 const PUBLIC_PREFIXES = [
   "/verify",
@@ -165,19 +166,17 @@ export async function updateSession(request: NextRequest) {
   }
 }
 
-/** Login redirect without inheriting container :3000 from nextUrl. */
+/** Login redirect without inheriting container :3000 from nextUrl / env. */
 function redirectToLogin(request: NextRequest, pathname: string) {
-  const site = (
-    process.env.NEXT_PUBLIC_SITE_URL || "https://www.digitalskillx.com"
-  ).replace(/\/$/, "");
   const loginPath = pathname.startsWith("/admin/mfa")
     ? "/admin/login"
     : pathname.startsWith("/admin")
       ? "/admin/login"
       : "/login";
   const next = `${pathname}${request.nextUrl.search || ""}`;
-  return NextResponse.redirect(
-    `${site}${loginPath}?next=${encodeURIComponent(next)}`,
-    307,
-  );
+  const url = publicAbsoluteUrl(`${loginPath}?next=${encodeURIComponent(next)}`, {
+    headers: request.headers,
+    requestUrl: request.url,
+  });
+  return NextResponse.redirect(url, 307);
 }

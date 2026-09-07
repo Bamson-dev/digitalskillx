@@ -5,6 +5,7 @@ import { bootstrapRuntimeSecrets } from "@/lib/bootstrap-runtime-secrets";
 import { rateLimitedResponse } from "@/lib/api-rate-limit";
 import { checkStudentCourseEnrollment } from "@/lib/student-enrollments";
 import { getContaboIntegrationStatus, getStorageService } from "@/lib/storage";
+import { publicAbsoluteUrl } from "@/lib/public-site-origin";
 
 /**
  * Streams a private resource file (Contabo/server storage preferred, Supabase fallback).
@@ -20,7 +21,11 @@ export async function GET(
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return NextResponse.redirect(new URL("/login", request.url));
+  if (!user) {
+    return NextResponse.redirect(
+      publicAbsoluteUrl("/login", { headers: request.headers, requestUrl: request.url }),
+    );
+  }
 
   await bootstrapRuntimeSecrets();
   const admin = await createAdminClientAsync(supabase);

@@ -15,8 +15,18 @@ import {
   newDeviceKey,
   readDeviceKeyFromRequest,
 } from "@/lib/device-login-limit";
+import { publicAbsoluteUrl } from "@/lib/public-site-origin";
 
 export const dynamic = "force-dynamic";
+
+function loginErrorUrl(request: NextRequest, message: string) {
+  const url = publicAbsoluteUrl("/login", {
+    headers: request.headers,
+    requestUrl: request.url,
+  });
+  url.searchParams.set("auth_error", message);
+  return url;
+}
 
 function appendDeviceCookie(
   response: NextResponse,
@@ -49,16 +59,14 @@ export async function POST(request: NextRequest) {
   });
   if (!limited.ok) {
     secureLogError("auth", ErrorCode.AUTH_RATE_LIMITED, "student login rate limited");
-    const errorUrl = new URL("/login", request.url);
-    errorUrl.searchParams.set("auth_error", "Too many sign-in attempts. Please try again later.");
+    const errorUrl = loginErrorUrl(request, "Too many sign-in attempts. Please try again later.");
     return appendDeviceCookie(NextResponse.redirect(errorUrl, 303), deviceKey);
   }
 
   const result = await runStudentLogin({ email, password });
   if (!result.ok) {
     secureLogError("auth", ErrorCode.AUTH_FAILED, "student login failed");
-    const errorUrl = new URL("/login", request.url);
-    errorUrl.searchParams.set("auth_error", result.error);
+    const errorUrl = loginErrorUrl(request, result.error);
     return appendDeviceCookie(NextResponse.redirect(errorUrl, 303), deviceKey);
   }
 
@@ -73,8 +81,7 @@ export async function POST(request: NextRequest) {
     });
     if (!decision.allowed) {
       secureLogError("auth", ErrorCode.AUTH_FAILED, "device limit blocked login");
-      const errorUrl = new URL("/login", request.url);
-      errorUrl.searchParams.set("auth_error", decision.error);
+      const errorUrl = loginErrorUrl(request, decision.error);
       return appendDeviceCookie(NextResponse.redirect(errorUrl, 303), deviceKey);
     }
   } catch (err) {
@@ -87,8 +94,7 @@ export async function POST(request: NextRequest) {
 
   const { error: sessionError } = await supabase.auth.setSession(result.session);
   if (sessionError) {
-    const errorUrl = new URL("/login", request.url);
-    errorUrl.searchParams.set("auth_error", sessionError.message);
+    const errorUrl = loginErrorUrl(request, sessionError.message);
     return appendDeviceCookie(NextResponse.redirect(errorUrl, 303), deviceKey);
   }
 
@@ -96,8 +102,7 @@ export async function POST(request: NextRequest) {
     await cookiesReady;
   } catch (err) {
     const message = err instanceof Error ? err.message : "Could not persist session.";
-    const errorUrl = new URL("/login", request.url);
-    errorUrl.searchParams.set("auth_error", message);
+    const errorUrl = loginErrorUrl(request, message);
     return appendDeviceCookie(NextResponse.redirect(errorUrl, 303), deviceKey);
   }
 
