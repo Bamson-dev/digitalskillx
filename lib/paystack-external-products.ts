@@ -29,8 +29,8 @@ export const BUILD_SOFTWARE_WITH_AI_PRODUCT: PaystackExternalProduct = {
     "How To Build Software With AI And Get Paid For It",
   ],
   defaultCourseId: "9818cf69-4158-40b5-8926-54a3be38f306",
-  expectedAmountKobo: 4_999_900,
-  expectedAmountNgn: 49_999,
+  expectedAmountKobo: 1_499_900,
+  expectedAmountNgn: 14_999,
   currency: "NGN",
   // Live Paystack shop link used in ads / webinars.
   paymentPageUrl: "https://paystack.shop/pay/ai-app",

@@ -260,7 +260,7 @@ await check("15. missing Paystack reference rejected", () => {
   assert.equal(result.ok, false);
 });
 
-await check("16. valid ₦49,999 transaction accepted", () => {
+await check("16. valid ₦14,999 transaction accepted", () => {
   const payload = buildPayload();
   const parsed = handoff.parseLeadthurHandoffPayload(JSON.stringify(payload));
   const result = handoff.validateLeadthurHandoffPayment({
@@ -269,7 +269,7 @@ await check("16. valid ₦49,999 transaction accepted", () => {
   });
   assert.equal(result.ok, true);
   assert.equal(result.product.key, PRODUCT.key);
-  assert.equal(result.product.expectedAmountKobo, 4_999_900);
+  assert.equal(result.product.expectedAmountKobo, 1_499_900);
 });
 
 await check("17. duplicate reference idempotency uses transactions.reference unique", () => {
