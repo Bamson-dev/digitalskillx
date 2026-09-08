@@ -97,6 +97,7 @@ export async function refulfillPaystackExternalByReference(
     },
     verifiedOverride: verified,
     forceEmail: options?.forceEmail === true,
+    skipPurchaseTracking: true,
     admin,
   });
 

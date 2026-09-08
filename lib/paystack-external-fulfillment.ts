@@ -140,6 +140,7 @@ async function sendAccessEmail(params: {
   courseId: string;
   courseTitle: string;
   isNewAccount: boolean;
+  skipMagicLink?: boolean;
 }) {
   const base = siteUrl();
   const coursePath = `/courses/${params.courseId}`;
@@ -147,14 +148,13 @@ async function sendAccessEmail(params: {
   // Relative `next` so login always accepts it (absolute next broke older emails).
   const loginUrl = `${base}/login?next=${encodeURIComponent(coursePath)}`;
 
-  if (params.isNewAccount) {
-    try {
-      await sendMagicLinkEmail(params.email, `/courses/${params.courseId}`);
-    } catch (err) {
+  if (params.isNewAccount && !params.skipMagicLink) {
+    // Never block access email on magic-link latency/outages.
+    void sendMagicLinkEmail(params.email, `/courses/${params.courseId}`).catch((err) => {
       secureLog("warn", "paystack/external", "magic_link_failed", {
         error: err instanceof Error ? err.message : String(err),
       });
-    }
+    });
   }
 
   return sendPaystackCourseAccessEmail({
@@ -383,6 +383,7 @@ export async function fulfillPaystackExternalCharge(params: {
           courseId: existingTx.course_id,
           courseTitle: course.title,
           isNewAccount: false,
+          skipMagicLink: Boolean(params.verifiedOverride) || Boolean(params.forceEmail),
         });
         await patchTransactionPaystackData(admin, reference, {
           fulfillment_status: emailResult.sent ? "email_sent" : "email_failed",
@@ -563,6 +564,7 @@ export async function fulfillPaystackExternalCharge(params: {
         courseId: course.id,
         courseTitle: course.title,
         isNewAccount,
+        skipMagicLink: Boolean(params.verifiedOverride) || Boolean(params.forceEmail),
       });
     } else {
       secureLog("info", "paystack/external", "duplicate_email_skipped", { reference });
