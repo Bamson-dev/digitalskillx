@@ -14,8 +14,27 @@ import { probeDatabaseConnection } from "@/lib/health-database-probe";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-/** Public: minimal liveness only. Full diagnostics require admin session or CRON_SECRET. */
+/**
+ * Coolify/Traefik hit this every few seconds with a short timeout.
+ * Public responses must stay instant — never block on Supabase/Paystack/admin auth.
+ * Returning slow 200s (or hanging) marks the container unhealthy → "no available server".
+ */
 export async function GET(request: NextRequest) {
+  const wantsDetailed =
+    verifyCronSecret(request).ok ||
+    Boolean(request.headers.get("authorization")) ||
+    Boolean(request.headers.get("cookie"));
+
+  if (!wantsDetailed) {
+    return NextResponse.json(
+      {
+        status: "ok",
+        timestamp: new Date().toISOString(),
+      },
+      { status: 200 },
+    );
+  }
+
   const cron = verifyCronSecret(request);
   let detailed = cron.ok;
   if (!detailed) {
@@ -23,15 +42,11 @@ export async function GET(request: NextRequest) {
     detailed = !("error" in adminAuth);
   }
 
-  const database = await probeDatabaseConnection();
-
   if (!detailed) {
-    // Application liveness is 200 even when DB is degraded — callers read `status` / `database`.
-    // (Returning 503 here previously blocked Playwright webServer readiness forever.)
+    // Cookie/Authorization present but not an admin/cron caller — still liveness only.
     return NextResponse.json(
       {
-        status: database === "connected" ? "ok" : "degraded",
-        database,
+        status: "ok",
         timestamp: new Date().toISOString(),
       },
       { status: 200 },
@@ -39,6 +54,7 @@ export async function GET(request: NextRequest) {
   }
 
   await bootstrapRuntimeSecrets();
+  const database = await probeDatabaseConnection();
 
   const youtube = await youtubeApiKeyDiagnostics();
   const paystackReady = await paystackSecretKeyConfigured();
@@ -81,7 +97,8 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  const httpStatus = checks.status === "ok" ? 200 : 503;
+  // Detailed diagnostics may report degraded DB/Paystack, but still 200 so ops
+  // tooling can read the payload. Coolify uses the public (non-detailed) path.
   return NextResponse.json(
     {
       ...checks,
@@ -89,6 +106,6 @@ export async function GET(request: NextRequest) {
       youtube: await youtubeApiKeyDiagnostics(),
       secrets,
     },
-    { status: httpStatus },
+    { status: 200 },
   );
 }

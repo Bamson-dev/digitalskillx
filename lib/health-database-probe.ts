@@ -3,7 +3,7 @@ import { getServiceRoleKeySync } from "@/lib/env-service-role";
 import { preloadRuntimeEnvIntoProcessEnv } from "@/lib/runtime-env";
 import { createSupabaseFetch } from "@/lib/supabase/fetch-retry";
 
-const PROBE_TIMEOUT_MS = 5_000;
+const PROBE_TIMEOUT_MS = 1_500;
 
 async function restProbe(
   supabaseUrl: string,
@@ -11,8 +11,8 @@ async function restProbe(
 ): Promise<boolean> {
   try {
     const fetchWithRetry = createSupabaseFetch({
-      retries: 2,
-      baseDelayMs: 250,
+      retries: 0,
+      baseDelayMs: 100,
       timeoutMs: PROBE_TIMEOUT_MS,
     });
     const res = await fetchWithRetry(
