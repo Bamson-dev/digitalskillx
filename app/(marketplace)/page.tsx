@@ -52,40 +52,51 @@ async function fetchTrustStats() {
 export default async function HomePage() {
   const supabase = createClient();
   const user = await withTimeout(
-    supabase.auth.getUser().then((res) => res.data.user),
+    (async () => (await supabase.auth.getUser()).data.user)(),
     HOME_FETCH_TIMEOUT_MS,
     null,
   );
 
-  let profile = null;
-  if (user) {
-    const profileRes = await withTimeout(
-      supabase.from("profiles").select("full_name, email, role").eq("id", user.id).single(),
-      HOME_FETCH_TIMEOUT_MS,
-      { data: null, error: null },
-    );
-    profile = profileRes.data;
-  }
+  const profile = user
+    ? await withTimeout(
+        (async () => {
+          const { data } = await supabase
+            .from("profiles")
+            .select("full_name, email, role")
+            .eq("id", user.id)
+            .single();
+          return data;
+        })(),
+        HOME_FETCH_TIMEOUT_MS,
+        null,
+      )
+    : null;
 
   let courses: CatalogCourse[] = [];
   let categories: Awaited<ReturnType<typeof fetchCourseCategories>> = [];
   let trustStats = { students: 0, certificates: 0 };
   try {
-    [courses, categories, trustStats] = await withTimeout(
-      Promise.all([
-        fetchPublishedCourses<CatalogCourse>(
-          "id, title, description, short_description, thumbnail_url, price_ngn, price_usd, instructor_name, is_coming_soon, created_at, category:course_categories(name)",
-        ),
-        fetchCourseCategories(),
-        fetchTrustStats(),
-      ]),
+    const bundle = await withTimeout(
+      (async () => {
+        const [nextCourses, nextCategories, nextTrust] = await Promise.all([
+          fetchPublishedCourses<CatalogCourse>(
+            "id, title, description, short_description, thumbnail_url, price_ngn, price_usd, instructor_name, is_coming_soon, created_at, category:course_categories(name)",
+          ),
+          fetchCourseCategories(),
+          fetchTrustStats(),
+        ]);
+        return { courses: nextCourses, categories: nextCategories, trustStats: nextTrust };
+      })(),
       HOME_FETCH_TIMEOUT_MS,
-      [[], [], { students: 0, certificates: 0 }] as [
-        CatalogCourse[],
-        Awaited<ReturnType<typeof fetchCourseCategories>>,
-        { students: number; certificates: number },
-      ],
+      {
+        courses: [] as CatalogCourse[],
+        categories: [] as Awaited<ReturnType<typeof fetchCourseCategories>>,
+        trustStats: { students: 0, certificates: 0 },
+      },
     );
+    courses = bundle.courses;
+    categories = bundle.categories;
+    trustStats = bundle.trustStats;
   } catch (err) {
     console.error("[HomePage] catalog fetch failed", err);
   }
@@ -97,20 +108,22 @@ export default async function HomePage() {
   const featured = pickFeaturedCourse(catalog);
   const realCategories = (categories ?? []).slice(0, 6);
 
-  let featuredEnrolled = false;
-  if (user && featured) {
-    const enrollRes = await withTimeout(
-      supabase
-        .from("enrollments")
-        .select("id")
-        .eq("student_id", user.id)
-        .eq("course_id", featured.id)
-        .maybeSingle(),
-      HOME_FETCH_TIMEOUT_MS,
-      { data: null, error: null },
-    );
-    featuredEnrolled = Boolean(enrollRes.data);
-  }
+  const featuredEnrolled =
+    user && featured
+      ? await withTimeout(
+          (async () => {
+            const { data } = await supabase
+              .from("enrollments")
+              .select("id")
+              .eq("student_id", user.id)
+              .eq("course_id", featured.id)
+              .maybeSingle();
+            return Boolean(data);
+          })(),
+          HOME_FETCH_TIMEOUT_MS,
+          false,
+        )
+      : false;
 
   const trustItems = [
     { label: "Programs", value: catalog.length },

@@ -22,30 +22,36 @@ export default async function BrowsePage({
 }) {
   const supabase = createClient();
   const user = await withTimeout(
-    supabase.auth.getUser().then((res) => res.data.user),
+    (async () => (await supabase.auth.getUser()).data.user)(),
     BROWSE_FETCH_TIMEOUT_MS,
     null,
   );
 
-  let profile = null;
-  if (user) {
-    const profileRes = await withTimeout(
-      supabase.from("profiles").select("full_name, email, role").eq("id", user.id).single(),
-      BROWSE_FETCH_TIMEOUT_MS,
-      { data: null, error: null },
-    );
-    profile = profileRes.data;
-  }
+  const profile = user
+    ? await withTimeout(
+        (async () => {
+          const { data } = await supabase
+            .from("profiles")
+            .select("full_name, email, role")
+            .eq("id", user.id)
+            .single();
+          return data;
+        })(),
+        BROWSE_FETCH_TIMEOUT_MS,
+        null,
+      )
+    : null;
 
   const [courses, categories] = await withTimeout(
-    Promise.all([
-      fetchPublishedCourses<CatalogCourse>(
-        "id, title, description, short_description, thumbnail_url, price_ngn, price_usd, instructor_name, is_coming_soon, created_at, category:course_categories(name)",
-      ),
-      fetchCourseCategories(),
-    ]),
+    (async () =>
+      Promise.all([
+        fetchPublishedCourses<CatalogCourse>(
+          "id, title, description, short_description, thumbnail_url, price_ngn, price_usd, instructor_name, is_coming_soon, created_at, category:course_categories(name)",
+        ),
+        fetchCourseCategories(),
+      ]))(),
     BROWSE_FETCH_TIMEOUT_MS,
-    [[], []] as [CatalogCourse[], Awaited<ReturnType<typeof fetchCourseCategories>>],
+    [[] as CatalogCourse[], [] as Awaited<ReturnType<typeof fetchCourseCategories>>],
   );
 
   const catalog = (courses ?? []).map((c) => ({
