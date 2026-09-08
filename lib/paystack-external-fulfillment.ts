@@ -148,7 +148,13 @@ async function sendAccessEmail(params: {
   const loginUrl = `${base}/login?next=${encodeURIComponent(coursePath)}`;
 
   if (params.isNewAccount) {
-    await sendMagicLinkEmail(params.email, `/courses/${params.courseId}`);
+    try {
+      await sendMagicLinkEmail(params.email, `/courses/${params.courseId}`);
+    } catch (err) {
+      secureLog("warn", "paystack/external", "magic_link_failed", {
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
   }
 
   return sendPaystackCourseAccessEmail({
@@ -364,7 +370,7 @@ export async function fulfillPaystackExternalCharge(params: {
           .select("full_name")
           .eq("id", existingTx.student_id)
           .maybeSingle();
-        await sendAccessEmail({
+        const emailResult = await sendAccessEmail({
           studentId: existingTx.student_id,
           email: buyerEmail,
           firstName: profile?.full_name?.split(/\s+/)[0] ?? "there",
@@ -373,9 +379,20 @@ export async function fulfillPaystackExternalCharge(params: {
           isNewAccount: false,
         });
         await patchTransactionPaystackData(admin, reference, {
-          fulfillment_status: "email_sent",
-          access_email_sent_at: new Date().toISOString(),
+          fulfillment_status: emailResult.sent ? "email_sent" : "email_failed",
+          access_email_sent_at: emailResult.sent ? new Date().toISOString() : null,
+          fulfillment_error: emailResult.sent ? null : emailResult.error ?? "email_failed",
         });
+        if (!emailResult.sent) {
+          return {
+            handled: true,
+            ok: false,
+            reference,
+            error: emailResult.error ?? "Access email failed to send.",
+            permanent: false,
+            status: 500,
+          };
+        }
       }
       return {
         handled: true,
@@ -568,6 +585,15 @@ export async function fulfillPaystackExternalCharge(params: {
         reference,
         error: emailResult.error,
       });
+      // Enrollment succeeded; ask Paystack to retry so access email is resent.
+      return {
+        handled: true,
+        ok: false,
+        reference,
+        error: emailResult.error ?? "Access email failed to send.",
+        permanent: false,
+        status: 500,
+      };
     }
 
     await logAudit({
@@ -580,7 +606,7 @@ export async function fulfillPaystackExternalCharge(params: {
         email: buyerEmail,
         amount: product.expectedAmountKobo,
         currency: product.currency,
-        fulfillmentStatus: emailResult.sent ? "email_sent" : "email_failed",
+        fulfillmentStatus: "email_sent",
       } as Json,
     });
 

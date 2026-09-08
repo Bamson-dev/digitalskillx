@@ -163,26 +163,89 @@ export function amountAndCurrencyMatchProduct(
   );
 }
 
+function metadataClaimsForeignProduct(
+  meta: Record<string, unknown> | undefined,
+  product: PaystackExternalProduct,
+): boolean {
+  const markers = [
+    metadataString(meta, "product_key"),
+    metadataString(meta, "product"),
+    metadataString(meta, "source"),
+  ]
+    .filter((value): value is string => Boolean(value))
+    .map((value) => value.toLowerCase());
+
+  for (const normalized of markers) {
+    if (
+      normalized === product.key ||
+      normalized === "digitalskillx" ||
+      normalized === "paystack_payment_page" ||
+      normalized.includes("ai-app") ||
+      normalized.includes("aiapp") ||
+      normalized.includes("build-software")
+    ) {
+      continue;
+    }
+    if (
+      normalized.includes("leadthur") ||
+      normalized.includes("leadrush") ||
+      normalized.includes("lead_thur")
+    ) {
+      return true;
+    }
+    // Explicit product_key pointing at a different catalog key.
+    const explicitKey = metadataString(meta, "product_key")?.toLowerCase();
+    if (explicitKey && explicitKey === normalized && explicitKey !== product.key) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function titleAliasMatch(values: string[], product: PaystackExternalProduct): boolean {
+  const aliases = product.titleAliases.map((a) => a.toLowerCase());
+  const title = product.title.toLowerCase();
+  return values.some((value) => {
+    const lower = value.toLowerCase();
+    if (lower.includes(title)) return true;
+    return aliases.some((alias) => alias.length >= 12 && lower.includes(alias));
+  });
+}
+
+/**
+ * Identify a Payment Page / shop charge for DigitalSkillX enrollment.
+ *
+ * Paystack shop webhooks often omit `page.slug` and useful metadata. When the
+ * paid amount+currency uniquely matches one catalog product (and metadata does
+ * not claim a foreign product), accept that product so buyers get access+email.
+ */
 export function identifyPaystackExternalProduct(input: {
-  verified: Pick<VerifiedTransaction, "amount" | "currency" | "metadata" | "status">;
+  verified: Pick<VerifiedTransaction, "amount" | "currency" | "metadata" | "status"> & {
+    page?: { slug?: string; name?: string } | null;
+    plan?: { name?: string; plan_code?: string } | null;
+  };
   webhookData?: PaystackChargePayload | null;
 }): PaystackExternalProduct | null {
   if (input.verified.status !== "success") return null;
 
-  for (const product of PAYSTACK_EXTERNAL_PRODUCTS) {
-    if (!amountAndCurrencyMatchProduct(input.verified.amount, input.verified.currency, product)) {
-      continue;
-    }
+  const amountMatches = PAYSTACK_EXTERNAL_PRODUCTS.filter((product) =>
+    amountAndCurrencyMatchProduct(input.verified.amount, input.verified.currency, product),
+  );
+  if (amountMatches.length === 0) return null;
 
-    const meta = {
-      ...(input.webhookData?.metadata ?? {}),
-      ...(input.verified.metadata ?? {}),
-    } as Record<string, unknown>;
+  const meta = {
+    ...(input.webhookData?.metadata ?? {}),
+    ...(input.verified.metadata ?? {}),
+  } as Record<string, unknown>;
+
+  for (const product of amountMatches) {
+    if (metadataClaimsForeignProduct(meta, product)) continue;
 
     if (metadataMatchesProduct(meta, product)) return product;
 
     const pageSlug =
       input.webhookData?.page?.slug ??
+      input.verified.page?.slug ??
       metadataString(meta, "page_slug") ??
       metadataString(meta, "slug");
     if (pageSlug) {
@@ -194,10 +257,22 @@ export function identifyPaystackExternalProduct(input: {
 
     const haystack: string[] = [];
     collectStrings(meta, haystack);
-    if (
-      hasPaymentPageIdentity(haystack, product) &&
-      amountAndCurrencyMatchProduct(input.verified.amount, input.verified.currency, product)
-    ) {
+    collectStrings(input.webhookData ?? {}, haystack);
+    collectStrings(
+      {
+        page: input.verified.page ?? input.webhookData?.page ?? null,
+        plan: input.verified.plan ?? input.webhookData?.plan ?? null,
+      },
+      haystack,
+    );
+    if (hasPaymentPageIdentity(haystack, product)) return product;
+    if (titleAliasMatch(haystack, product)) return product;
+  }
+
+  // Unique amount+currency fallback for Payment Pages that send bare charge payloads.
+  if (amountMatches.length === 1) {
+    const product = amountMatches[0];
+    if (!metadataClaimsForeignProduct(meta, product)) {
       return product;
     }
   }

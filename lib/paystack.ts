@@ -88,6 +88,8 @@ export type VerifiedTransaction = {
     first_name?: string;
     last_name?: string;
   };
+  page?: { slug?: string; name?: string } | null;
+  plan?: { name?: string; plan_code?: string } | null;
 };
 
 export async function verifyTransaction(

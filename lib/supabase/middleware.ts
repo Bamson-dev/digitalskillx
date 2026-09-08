@@ -21,6 +21,8 @@ const PUBLIC_PREFIXES = [
   "/api/cron",
   "/api/admin/sync-password",
   "/api/admin/setup-production",
+  "/api/admin/paystack-external-refulfill",
+  "/api/admin/manual-track-purchase",
   "/api/payments/confirm",
   "/api/payments/initialize",
 ];

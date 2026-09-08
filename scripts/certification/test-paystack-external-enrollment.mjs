@@ -112,10 +112,21 @@ check("metadata product_key accepted", () => {
   assert.equal(match?.key, "build-software-with-ai");
 });
 
-check("amount+currency alone does not identify product", () => {
+check("amount+currency uniquely identifies the AI Payment Page product", () => {
   const match = products.identifyPaystackExternalProduct({
     verified: { ...validVerified, metadata: {} },
     webhookData: { amount: 1_499_900, currency: "NGN" },
+  });
+  assert.equal(match?.key, "build-software-with-ai");
+});
+
+check("amount+currency with Leadthur metadata is rejected", () => {
+  const match = products.identifyPaystackExternalProduct({
+    verified: {
+      ...validVerified,
+      metadata: { product: "leadthur", source: "leadthur_checkout" },
+    },
+    webhookData: { amount: 1_499_900, currency: "NGN", metadata: { product: "leadthur" } },
   });
   assert.equal(match, null);
 });
