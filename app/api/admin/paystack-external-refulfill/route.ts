@@ -12,6 +12,7 @@ import { runtimeEnv } from "@/lib/runtime-env";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
+export const maxDuration = 120;
 
 function cronSecretMatches(request: NextRequest) {
   const secret = (runtimeEnv("CRON_SECRET") ?? process.env.CRON_SECRET ?? "").trim();
@@ -36,8 +37,8 @@ async function authorize(request: NextRequest) {
 }
 
 /**
- * POST { "reference": "..." } — fulfill one payment
- * POST { "backfill": true, "perPage": 50 } — scan recent Paystack successes at ₦14,999 and fulfill
+ * POST { "reference": "...", "verified"?: {...}, "forceEmail"?: true }
+ * POST { "backfill": true, "perPage": 50, "limit": 10, "forceEmail"?: true }
  */
 export async function POST(request: NextRequest) {
   const auth = await authorize(request);
@@ -54,7 +55,12 @@ export async function POST(request: NextRequest) {
 
   if (body.backfill === true) {
     const perPage = typeof body.perPage === "number" ? body.perPage : 50;
-    const result = await backfillRecentAiAppPayments({ perPage });
+    const limit = typeof body.limit === "number" ? body.limit : 10;
+    const result = await backfillRecentAiAppPayments({
+      perPage,
+      limit,
+      forceEmail: body.forceEmail === true,
+    });
     if (!result.ok) {
       return NextResponse.json({ ok: false, error: result.error }, { status: result.status });
     }
@@ -62,7 +68,10 @@ export async function POST(request: NextRequest) {
   }
 
   const reference = typeof body.reference === "string" ? body.reference : "";
-  const result = await refulfillPaystackExternalByReference(reference);
+  const result = await refulfillPaystackExternalByReference(reference, {
+    verifiedOverride: body.verified,
+    forceEmail: body.forceEmail === true,
+  });
   if (!result.ok) {
     return NextResponse.json(
       {

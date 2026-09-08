@@ -92,17 +92,29 @@ export type VerifiedTransaction = {
   plan?: { name?: string; plan_code?: string } | null;
 };
 
+const PAYSTACK_VERIFY_TIMEOUT_MS = 12_000;
+
 export async function verifyTransaction(
   reference: string,
   supabase?: SupabaseClient<Database>,
 ): Promise<VerifiedTransaction | null> {
   const secret = await getPaystackSecretKey(supabase);
-  const res = await fetch(`${BASE}/transaction/verify/${encodeURIComponent(reference)}`, {
-    headers: { Authorization: `Bearer ${secret}` },
-  });
-  const json = await res.json();
-  if (!json.status) return null;
-  return json.data as VerifiedTransaction;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), PAYSTACK_VERIFY_TIMEOUT_MS);
+  try {
+    const res = await fetch(`${BASE}/transaction/verify/${encodeURIComponent(reference)}`, {
+      headers: { Authorization: `Bearer ${secret}` },
+      signal: controller.signal,
+      cache: "no-store",
+    });
+    const json = await res.json();
+    if (!json.status) return null;
+    return json.data as VerifiedTransaction;
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 export function generateReference() {

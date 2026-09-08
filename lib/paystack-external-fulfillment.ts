@@ -21,7 +21,7 @@ import {
 } from "@/lib/paystack-external-products";
 import { sendPaystackCourseAccessEmail } from "@/lib/system-email-triggers";
 import { trackExternalPurchase } from "@/lib/purchase-tracking";
-import { verifyTransaction } from "@/lib/paystack";
+import { verifyTransaction, type VerifiedTransaction } from "@/lib/paystack";
 import type { Database, Json } from "@/types/database";
 
 type Admin = SupabaseClient<Database>;
@@ -175,6 +175,10 @@ export async function fulfillPaystackExternalCharge(params: {
   reference: string;
   webhookEvent?: string;
   webhookData?: PaystackChargePayload | null;
+  /** When set (admin recovery / signed webhook fallback), skip live Paystack verify. */
+  verifiedOverride?: VerifiedTransaction | null;
+  /** Resend access email even if access_email_sent_at is already set. */
+  forceEmail?: boolean;
   handoffPayment?: LeadthurHandoffPayment;
   admin?: Admin;
   skipPurchaseTracking?: boolean;
@@ -259,7 +263,8 @@ export async function fulfillPaystackExternalCharge(params: {
       eventId: handoff.leadthurEventId ?? null,
     });
   } else {
-    const verified = await verifyTransaction(reference, admin);
+    const verified =
+      params.verifiedOverride ?? (await verifyTransaction(reference, admin));
     if (!verified) {
       secureLog("warn", logSource, "payment_rejected", {
         reference,
@@ -315,6 +320,7 @@ export async function fulfillPaystackExternalCharge(params: {
     secureLog("info", logSource, "payment_verified", {
       reference,
       productKey: product.key,
+      verifiedVia: params.verifiedOverride ? "override" : "paystack_api",
     });
   }
 
@@ -364,7 +370,7 @@ export async function fulfillPaystackExternalCharge(params: {
     const enrolled = await enrollmentExists(admin, existingTx.student_id, existingTx.course_id);
     if (enrolled) {
       secureLog("info", "paystack/external", "duplicate_payment", { reference });
-      if (!externalMeta?.access_email_sent_at && buyerEmail) {
+      if ((!externalMeta?.access_email_sent_at || params.forceEmail) && buyerEmail) {
         const { data: profile } = await admin
           .from("profiles")
           .select("full_name")
@@ -549,7 +555,7 @@ export async function fulfillPaystackExternalCharge(params: {
 
     const firstName = buyerName?.split(/\s+/)[0] || buyerEmail.split("@")[0] || "there";
     let emailResult: { sent: boolean; error?: string | null } = { sent: true };
-    if (!externalMeta?.access_email_sent_at) {
+    if (!externalMeta?.access_email_sent_at || params.forceEmail) {
       emailResult = await sendAccessEmail({
         studentId,
         email: buyerEmail,

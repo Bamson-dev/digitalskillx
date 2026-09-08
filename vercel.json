@@ -83,6 +83,10 @@
     {
       "path": "/api/cron/content-factory",
       "schedule": "5 21 * * *"
+    },
+    {
+      "path": "/api/cron/paystack-external-backfill",
+      "schedule": "*/15 * * * *"
     }
   ],
   "functions": {

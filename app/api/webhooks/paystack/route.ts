@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import * as Sentry from "@sentry/nextjs";
 import { bootstrapRuntimeSecrets } from "@/lib/bootstrap-runtime-secrets";
 import { createAdminClientAsync } from "@/lib/supabase/admin";
-import { verifyWebhookSignature } from "@/lib/paystack";
+import { verifyTransaction, verifyWebhookSignature } from "@/lib/paystack";
 import { completePaidCheckout, readPendingCheckoutDetails } from "@/lib/guest-checkout";
 import { fulfillPaystackExternalCharge } from "@/lib/paystack-external-fulfillment";
 import {
@@ -17,6 +17,7 @@ import { secureLog } from "@/lib/secure-log";
 import type { Json } from "@/types/database";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 export async function POST(request: NextRequest) {
   await bootstrapRuntimeSecrets();
@@ -81,10 +82,27 @@ export async function POST(request: NextRequest) {
     .maybeSingle();
 
   if (!txBefore || readExternalPaystackData(txBefore.paystack_data)) {
+    // Prefer live verify; if Contabo→Paystack times out, fall back to signed webhook payload.
+    const verifiedLive = await verifyTransaction(reference, admin);
+    const webhookFallback =
+      event.data?.status === "success" && typeof event.data.amount === "number"
+        ? {
+            reference,
+            status: "success" as const,
+            amount: event.data.amount,
+            currency: String(event.data.currency ?? "NGN"),
+            metadata: (event.data.metadata as Record<string, string>) ?? {},
+            customer: event.data.customer,
+            page: event.data.page ?? null,
+            plan: event.data.plan ?? null,
+          }
+        : null;
+
     const external = await fulfillPaystackExternalCharge({
       reference,
       webhookEvent: event.event,
       webhookData: event.data,
+      verifiedOverride: verifiedLive ?? webhookFallback,
       admin,
     });
     if (external.handled) {
