@@ -1,9 +1,12 @@
 import type { Metadata } from "next";
-import { createClient } from "@/lib/supabase/server";
-import { fetchCourseCategories, fetchPublishedCourses, type CatalogCourse } from "@/lib/published-courses";
 import { ORG } from "@/lib/org";
 import { MarketplaceNav, MarketplaceFooter } from "@/components/marketplace/marketplace-chrome";
 import { BrowseCatalog } from "@/components/marketplace/browse-catalog";
+import {
+  getCachedCourseCategories,
+  getCachedPublishedCatalog,
+  STOREFRONT_CATALOG_REVALIDATE_SECONDS,
+} from "@/lib/storefront-catalog-cache";
 import { withTimeout } from "@/lib/with-timeout";
 
 export const metadata: Metadata = {
@@ -11,47 +14,22 @@ export const metadata: Metadata = {
   description: `Explore all courses on ${ORG.platformName}.`,
 };
 
-export const dynamic = "force-dynamic";
+export const revalidate = STOREFRONT_CATALOG_REVALIDATE_SECONDS;
 
-const BROWSE_FETCH_TIMEOUT_MS = 4_000;
+const BROWSE_FETCH_TIMEOUT_MS = 3_000;
 
 export default async function BrowsePage({
   searchParams,
 }: {
   searchParams: { q?: string; category?: string };
 }) {
-  const supabase = createClient();
-  const user = await withTimeout(
-    (async () => (await supabase.auth.getUser()).data.user)(),
-    BROWSE_FETCH_TIMEOUT_MS,
-    null,
-  );
-
-  const profile = user
-    ? await withTimeout(
-        (async () => {
-          const { data } = await supabase
-            .from("profiles")
-            .select("full_name, email, role")
-            .eq("id", user.id)
-            .single();
-          return data;
-        })(),
-        BROWSE_FETCH_TIMEOUT_MS,
-        null,
-      )
-    : null;
-
   const [courses, categories] = await withTimeout(
-    (async () =>
-      Promise.all([
-        fetchPublishedCourses<CatalogCourse>(
-          "id, title, description, short_description, thumbnail_url, price_ngn, price_usd, instructor_name, is_coming_soon, created_at, category:course_categories(name)",
-        ),
-        fetchCourseCategories(),
-      ]))(),
+    Promise.all([getCachedPublishedCatalog(), getCachedCourseCategories()]),
     BROWSE_FETCH_TIMEOUT_MS,
-    [[] as CatalogCourse[], [] as Awaited<ReturnType<typeof fetchCourseCategories>>],
+    [
+      [] as Awaited<ReturnType<typeof getCachedPublishedCatalog>>,
+      [] as Awaited<ReturnType<typeof getCachedCourseCategories>>,
+    ],
   );
 
   const catalog = (courses ?? []).map((c) => ({
@@ -61,7 +39,7 @@ export default async function BrowsePage({
 
   return (
     <div className="flex min-h-screen flex-col overflow-x-hidden bg-white text-neutral-800">
-      <MarketplaceNav user={profile} />
+      <MarketplaceNav user={null} />
 
       <main className="flex-1 px-4 py-12 sm:px-8 sm:py-16">
         <div className="mx-auto max-w-[1200px] overflow-x-hidden">

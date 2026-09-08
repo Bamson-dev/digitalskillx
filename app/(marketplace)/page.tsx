@@ -1,15 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowUpRight } from "lucide-react";
-import { createClient } from "@/lib/supabase/server";
-import { bootstrapRuntimeSecrets } from "@/lib/bootstrap-runtime-secrets";
-import { createAdminClientAsync } from "@/lib/supabase/admin";
-import {
-  fetchCourseCategories,
-  fetchPublishedCourses,
-  pickFeaturedCourse,
-  type CatalogCourse,
-} from "@/lib/published-courses";
+import { pickFeaturedCourse } from "@/lib/published-courses";
 import { ORG } from "@/lib/org";
 import { MarketplaceNav, MarketplaceFooter } from "@/components/marketplace/marketplace-chrome";
 import { CourseCard } from "@/components/marketplace/course-card";
@@ -17,6 +9,12 @@ import { CourseMediaImage } from "@/components/marketplace/course-media-image";
 import { PriceDisplay } from "@/components/marketplace/price-display";
 import { EnrollButton } from "@/components/marketplace/enroll-button";
 import { HomepageCurrencyBar } from "@/components/marketplace/homepage-currency-bar";
+import {
+  getCachedCourseCategories,
+  getCachedPublishedCatalog,
+  getCachedStorefrontTrustStats,
+  STOREFRONT_CATALOG_REVALIDATE_SECONDS,
+} from "@/lib/storefront-catalog-cache";
 import { withTimeout } from "@/lib/with-timeout";
 
 export const metadata: Metadata = {
@@ -24,82 +22,28 @@ export const metadata: Metadata = {
   description: ORG.tagline,
 };
 
-export const dynamic = "force-dynamic";
+/** Cached storefront — do not force-dynamic or call getUser (that re-blocks Coolify). */
+export const revalidate = STOREFRONT_CATALOG_REVALIDATE_SECONDS;
 
-/** Keep homepage responsive when Contabo → Supabase is slow/blocked. */
-const HOME_FETCH_TIMEOUT_MS = 4_000;
+const HOME_FETCH_TIMEOUT_MS = 3_000;
 
 const SECTION = "px-4 py-14 sm:px-8 sm:py-16";
 const CONTAINER = "mx-auto w-full min-w-0 max-w-[1120px]";
 
-async function fetchTrustStats() {
-  try {
-    await bootstrapRuntimeSecrets();
-    const admin = await createAdminClientAsync();
-    const [enrollmentsRes, certsRes] = await Promise.all([
-      admin.from("enrollments").select("id", { count: "exact", head: true }),
-      admin.from("certificates").select("id", { count: "exact", head: true }),
-    ]);
-    return {
-      students: enrollmentsRes.count ?? 0,
-      certificates: certsRes.count ?? 0,
-    };
-  } catch {
-    return { students: 0, certificates: 0 };
-  }
-}
-
 export default async function HomePage() {
-  const supabase = createClient();
-  const user = await withTimeout(
-    (async () => (await supabase.auth.getUser()).data.user)(),
+  const [courses, categories, trustStats] = await withTimeout(
+    Promise.all([
+      getCachedPublishedCatalog(),
+      getCachedCourseCategories(),
+      getCachedStorefrontTrustStats(),
+    ]),
     HOME_FETCH_TIMEOUT_MS,
-    null,
+    [
+      [] as Awaited<ReturnType<typeof getCachedPublishedCatalog>>,
+      [] as Awaited<ReturnType<typeof getCachedCourseCategories>>,
+      { students: 0, certificates: 0 },
+    ],
   );
-
-  const profile = user
-    ? await withTimeout(
-        (async () => {
-          const { data } = await supabase
-            .from("profiles")
-            .select("full_name, email, role")
-            .eq("id", user.id)
-            .single();
-          return data;
-        })(),
-        HOME_FETCH_TIMEOUT_MS,
-        null,
-      )
-    : null;
-
-  let courses: CatalogCourse[] = [];
-  let categories: Awaited<ReturnType<typeof fetchCourseCategories>> = [];
-  let trustStats = { students: 0, certificates: 0 };
-  try {
-    const bundle = await withTimeout(
-      (async () => {
-        const [nextCourses, nextCategories, nextTrust] = await Promise.all([
-          fetchPublishedCourses<CatalogCourse>(
-            "id, title, description, short_description, thumbnail_url, price_ngn, price_usd, instructor_name, is_coming_soon, created_at, category:course_categories(name)",
-          ),
-          fetchCourseCategories(),
-          fetchTrustStats(),
-        ]);
-        return { courses: nextCourses, categories: nextCategories, trustStats: nextTrust };
-      })(),
-      HOME_FETCH_TIMEOUT_MS,
-      {
-        courses: [] as CatalogCourse[],
-        categories: [] as Awaited<ReturnType<typeof fetchCourseCategories>>,
-        trustStats: { students: 0, certificates: 0 },
-      },
-    );
-    courses = bundle.courses;
-    categories = bundle.categories;
-    trustStats = bundle.trustStats;
-  } catch (err) {
-    console.error("[HomePage] catalog fetch failed", err);
-  }
 
   const catalog = (courses ?? []).map((c) => ({
     ...c,
@@ -107,23 +51,9 @@ export default async function HomePage() {
   }));
   const featured = pickFeaturedCourse(catalog);
   const realCategories = (categories ?? []).slice(0, 6);
-
-  const featuredEnrolled =
-    user && featured
-      ? await withTimeout(
-          (async () => {
-            const { data } = await supabase
-              .from("enrollments")
-              .select("id")
-              .eq("student_id", user.id)
-              .eq("course_id", featured.id)
-              .maybeSingle();
-            return Boolean(data);
-          })(),
-          HOME_FETCH_TIMEOUT_MS,
-          false,
-        )
-      : false;
+  // Anonymous SSR shell — logged-in nav/enrollment hydrate without blocking TTFB.
+  const profile = null;
+  const featuredEnrolled = false;
 
   const trustItems = [
     { label: "Programs", value: catalog.length },

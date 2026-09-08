@@ -77,12 +77,16 @@ async function enrichSecretsFromDatabase() {
   if (serviceRole && supabaseUrl) {
     try {
       const url = `${supabaseUrl.replace(/\/$/, "")}/rest/v1/platform_secrets?id=eq.default&select=youtube_api_key,deepseek_api_key,paystack_secret_key,supabase_service_role_key,zeptomail_smtp_password`;
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 3_000);
       const res = await fetch(url, {
         headers: {
           apikey: serviceRole,
           Authorization: `Bearer ${serviceRole}`,
         },
+        signal: controller.signal,
       });
+      clearTimeout(timer);
 
       if (res.ok) {
         const rows = await res.json();
@@ -172,7 +176,8 @@ async function main() {
     process.env.NODE_ENV = "production";
   }
 
-  await enrichSecretsFromDatabase();
+  // Listen immediately from process env so Coolify health checks pass during boot.
+  // DB secret enrichment is best-effort and must never block port 3000.
   writeRuntimeEnvFile();
 
   const youtubeStatus = secretStatus("YOUTUBE_API_KEY");
@@ -202,6 +207,17 @@ async function main() {
     cwd: root,
     env: process.env,
     stdio: "inherit",
+  });
+
+  // Background enrich with a hard timeout — never stall the web process.
+  void Promise.race([
+    enrichSecretsFromDatabase().then(() => writeRuntimeEnvFile()),
+    new Promise((resolve) => setTimeout(resolve, 4_000)),
+  ]).catch((err) => {
+    console.warn(
+      "[digitalskillx] Background secret enrichment failed:",
+      err instanceof Error ? err.message : String(err),
+    );
   });
 
   child.on("exit", (code, signal) => {

@@ -175,6 +175,21 @@ export function keepContentFactoryRunning(params: {
   if (!params.moreWork) return;
   const origin = "https://www.digitalskillx.com";
   const depth = params.depth ?? 0;
+  const onVercel = Boolean(process.env.VERCEL);
+
+  // Coolify/Contabo runs a single Node process. Triple self-chain saturates it and
+  // makes Traefik mark the app unhealthy ("no available server"). One delayed kick is enough.
+  if (!onVercel) {
+    scheduleBulkWorkerContinuation({
+      origin,
+      path: "/api/cron/content-factory",
+      depth,
+      reason: params.reason,
+      delayMs: 15_000,
+    });
+    return;
+  }
+
   scheduleBulkWorkerContinuation({
     origin,
     path: "/api/cron/content-factory",
