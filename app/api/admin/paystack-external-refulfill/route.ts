@@ -8,11 +8,21 @@ import {
   backfillRecentAiAppPayments,
   refulfillPaystackExternalByReference,
 } from "@/lib/paystack-external-refulfill";
+import { runtimeEnv } from "@/lib/runtime-env";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
+function cronSecretMatches(request: NextRequest) {
+  const secret = (runtimeEnv("CRON_SECRET") ?? process.env.CRON_SECRET ?? "").trim();
+  if (!secret) return false;
+  const auth = request.headers.get("authorization") ?? "";
+  return auth === `Bearer ${secret}`;
+}
+
 async function authorize(request: NextRequest) {
+  if (cronSecretMatches(request)) return { ok: true as const };
+
   const headerKey = request.headers.get("x-admin-key");
   if (getAdminApiKey() && adminApiKeyMatches(headerKey)) return { ok: true as const };
 
