@@ -21,12 +21,10 @@ export default async function BrowsePage({
   searchParams: { q?: string; category?: string };
 }) {
   const supabase = createClient();
-  const {
-    data: { user },
-  } = await withTimeout(
-    supabase.auth.getUser(),
+  const user = await withTimeout(
+    supabase.auth.getUser().then((res) => res.data.user),
     BROWSE_FETCH_TIMEOUT_MS,
-    { data: { user: null }, error: null } as Awaited<ReturnType<typeof supabase.auth.getUser>>,
+    null,
   );
 
   let profile = null;
