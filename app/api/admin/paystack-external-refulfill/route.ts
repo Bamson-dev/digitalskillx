@@ -77,7 +77,6 @@ export async function POST(request: NextRequest) {
   }
 
   return NextResponse.json({
-    ok: true,
     message: result.alreadyFulfilled
       ? "Payment was already fulfilled; access email resent if needed."
       : "Payment fulfilled: course access granted and access email sent.",
