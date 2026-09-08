@@ -87,7 +87,7 @@ export default async function HomePage() {
                 >
                   Explore courses
                 </Link>
-                {!user ? (
+                {!profile ? (
                   <Link
                     href="/register"
                     className="inline-flex h-12 min-h-[48px] items-center justify-center px-1 text-sm font-medium text-neutral-600 underline-offset-4 hover:text-neutral-950 hover:underline"
@@ -248,7 +248,7 @@ export default async function HomePage() {
                       priceNgn={featured.price_ngn}
                       priceUsd={featured.price_usd}
                       isEnrolled={featuredEnrolled}
-                      isLoggedIn={Boolean(user)}
+                      isLoggedIn={Boolean(profile)}
                       comingSoon={Boolean(featured.is_coming_soon)}
                       className="sm:max-w-[220px]"
                     />
@@ -316,7 +316,7 @@ export default async function HomePage() {
               >
                 Browse all courses
               </Link>
-              {!user ? (
+              {!profile ? (
                 <Link
                   href="/register"
                   className="inline-flex h-12 min-h-[48px] w-full items-center justify-center border border-neutral-300 bg-white px-8 text-sm font-semibold text-neutral-900 hover:border-neutral-500 sm:w-auto"
