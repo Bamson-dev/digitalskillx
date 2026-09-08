@@ -4,6 +4,7 @@ import { fetchCourseCategories, fetchPublishedCourses, type CatalogCourse } from
 import { ORG } from "@/lib/org";
 import { MarketplaceNav, MarketplaceFooter } from "@/components/marketplace/marketplace-chrome";
 import { BrowseCatalog } from "@/components/marketplace/browse-catalog";
+import { withTimeout } from "@/lib/with-timeout";
 
 export const metadata: Metadata = {
   title: "Browse Courses",
@@ -11,6 +12,8 @@ export const metadata: Metadata = {
 };
 
 export const dynamic = "force-dynamic";
+
+const BROWSE_FETCH_TIMEOUT_MS = 4_000;
 
 export default async function BrowsePage({
   searchParams,
@@ -20,24 +23,32 @@ export default async function BrowsePage({
   const supabase = createClient();
   const {
     data: { user },
-  } = await supabase.auth.getUser();
+  } = await withTimeout(
+    supabase.auth.getUser(),
+    BROWSE_FETCH_TIMEOUT_MS,
+    { data: { user: null }, error: null } as Awaited<ReturnType<typeof supabase.auth.getUser>>,
+  );
 
   let profile = null;
   if (user) {
-    const { data } = await supabase
-      .from("profiles")
-      .select("full_name, email, role")
-      .eq("id", user.id)
-      .single();
-    profile = data;
+    const profileRes = await withTimeout(
+      supabase.from("profiles").select("full_name, email, role").eq("id", user.id).single(),
+      BROWSE_FETCH_TIMEOUT_MS,
+      { data: null, error: null },
+    );
+    profile = profileRes.data;
   }
 
-  const [courses, categories] = await Promise.all([
-    fetchPublishedCourses<CatalogCourse>(
-      "id, title, description, short_description, thumbnail_url, price_ngn, price_usd, instructor_name, is_coming_soon, created_at, category:course_categories(name)",
-    ),
-    fetchCourseCategories(),
-  ]);
+  const [courses, categories] = await withTimeout(
+    Promise.all([
+      fetchPublishedCourses<CatalogCourse>(
+        "id, title, description, short_description, thumbnail_url, price_ngn, price_usd, instructor_name, is_coming_soon, created_at, category:course_categories(name)",
+      ),
+      fetchCourseCategories(),
+    ]),
+    BROWSE_FETCH_TIMEOUT_MS,
+    [[], []] as [CatalogCourse[], Awaited<ReturnType<typeof fetchCourseCategories>>],
+  );
 
   const catalog = (courses ?? []).map((c) => ({
     ...c,

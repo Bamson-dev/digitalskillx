@@ -17,6 +17,7 @@ import { CourseMediaImage } from "@/components/marketplace/course-media-image";
 import { PriceDisplay } from "@/components/marketplace/price-display";
 import { EnrollButton } from "@/components/marketplace/enroll-button";
 import { HomepageCurrencyBar } from "@/components/marketplace/homepage-currency-bar";
+import { withTimeout } from "@/lib/with-timeout";
 
 export const metadata: Metadata = {
   title: "Learn Profitable Digital Skills",
@@ -24,6 +25,9 @@ export const metadata: Metadata = {
 };
 
 export const dynamic = "force-dynamic";
+
+/** Keep homepage responsive when Contabo → Supabase is slow/blocked. */
+const HOME_FETCH_TIMEOUT_MS = 4_000;
 
 const SECTION = "px-4 py-14 sm:px-8 sm:py-16";
 const CONTAINER = "mx-auto w-full min-w-0 max-w-[1120px]";
@@ -49,29 +53,41 @@ export default async function HomePage() {
   const supabase = createClient();
   const {
     data: { user },
-  } = await supabase.auth.getUser();
+  } = await withTimeout(
+    supabase.auth.getUser(),
+    HOME_FETCH_TIMEOUT_MS,
+    { data: { user: null }, error: null } as Awaited<ReturnType<typeof supabase.auth.getUser>>,
+  );
 
   let profile = null;
   if (user) {
-    const { data } = await supabase
-      .from("profiles")
-      .select("full_name, email, role")
-      .eq("id", user.id)
-      .single();
-    profile = data;
+    const profileRes = await withTimeout(
+      supabase.from("profiles").select("full_name, email, role").eq("id", user.id).single(),
+      HOME_FETCH_TIMEOUT_MS,
+      { data: null, error: null },
+    );
+    profile = profileRes.data;
   }
 
   let courses: CatalogCourse[] = [];
   let categories: Awaited<ReturnType<typeof fetchCourseCategories>> = [];
   let trustStats = { students: 0, certificates: 0 };
   try {
-    [courses, categories, trustStats] = await Promise.all([
-      fetchPublishedCourses<CatalogCourse>(
-        "id, title, description, short_description, thumbnail_url, price_ngn, price_usd, instructor_name, is_coming_soon, created_at, category:course_categories(name)",
-      ),
-      fetchCourseCategories(),
-      fetchTrustStats(),
-    ]);
+    [courses, categories, trustStats] = await withTimeout(
+      Promise.all([
+        fetchPublishedCourses<CatalogCourse>(
+          "id, title, description, short_description, thumbnail_url, price_ngn, price_usd, instructor_name, is_coming_soon, created_at, category:course_categories(name)",
+        ),
+        fetchCourseCategories(),
+        fetchTrustStats(),
+      ]),
+      HOME_FETCH_TIMEOUT_MS,
+      [[], [], { students: 0, certificates: 0 }] as [
+        CatalogCourse[],
+        Awaited<ReturnType<typeof fetchCourseCategories>>,
+        { students: number; certificates: number },
+      ],
+    );
   } catch (err) {
     console.error("[HomePage] catalog fetch failed", err);
   }
@@ -85,13 +101,17 @@ export default async function HomePage() {
 
   let featuredEnrolled = false;
   if (user && featured) {
-    const { data: fe } = await supabase
-      .from("enrollments")
-      .select("id")
-      .eq("student_id", user.id)
-      .eq("course_id", featured.id)
-      .maybeSingle();
-    featuredEnrolled = Boolean(fe);
+    const enrollRes = await withTimeout(
+      supabase
+        .from("enrollments")
+        .select("id")
+        .eq("student_id", user.id)
+        .eq("course_id", featured.id)
+        .maybeSingle(),
+      HOME_FETCH_TIMEOUT_MS,
+      { data: null, error: null },
+    );
+    featuredEnrolled = Boolean(enrollRes.data);
   }
 
   const trustItems = [
