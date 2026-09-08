@@ -1,12 +1,12 @@
-/** Race a promise against a timeout; returns fallback (or throws) when time expires. */
+/** Race a promise against a timeout; returns fallback when time expires. */
 export function withTimeout<T>(
-  promise: Promise<T>,
+  promise: PromiseLike<T>,
   ms: number,
   fallback: T,
 ): Promise<T> {
   return new Promise((resolve) => {
     const timer = setTimeout(() => resolve(fallback), ms);
-    promise
+    Promise.resolve(promise)
       .then((value) => {
         clearTimeout(timer);
         resolve(value);
