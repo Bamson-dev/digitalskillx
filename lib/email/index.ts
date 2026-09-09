@@ -11,6 +11,10 @@ function hasSyntheticRecipient(to: string | string[]) {
   return (Array.isArray(to) ? to : [to]).some(isSyntheticTestRecipient);
 }
 
+function isDelivered(result: SendEmailResult): result is { messageId: string } {
+  return "messageId" in result && typeof result.messageId === "string" && result.messageId.length > 0;
+}
+
 /**
  * Send a transactional email.
  * Primary: Resend. Fallback: ZeptoMail (keeps password-reset / access mail alive).
@@ -21,13 +25,11 @@ export async function sendEmail(params: SendEmailParams): Promise<SendEmailResul
   }
   const sender = await getEmailSenderConfig();
   const primary = await sendViaResend(params, sender);
-  if (!("error" in primary) && !("skipped" in primary && primary.skipped)) {
-    return primary;
-  }
+  if (isDelivered(primary)) return primary;
+
   if (!zeptoConfigured()) return primary;
+
   const fallback = await sendViaZeptoMail(params, sender);
-  if (!("error" in fallback) && !("skipped" in fallback && fallback.skipped)) {
-    return fallback;
-  }
-  return primary.error ? primary : fallback;
+  if (isDelivered(fallback)) return fallback;
+  return primary;
 }
