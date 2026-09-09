@@ -11,11 +11,12 @@ set search_path = public
 as $$
 begin
   if tg_op = 'UPDATE' then
-    if new.role is distinct from old.role then
+    if new.role is distinct from old.role and auth.role() is distinct from 'service_role' then
       raise exception 'profiles.role cannot be changed by clients';
     end if;
     if new.is_suspended is distinct from old.is_suspended
-       and not public.is_admin() then
+       and not public.is_admin()
+       and auth.role() is distinct from 'service_role' then
       raise exception 'profiles.is_suspended cannot be changed by non-admins';
     end if;
   end if;

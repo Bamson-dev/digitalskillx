@@ -48,7 +48,19 @@ async function sendAuthLinkEmail(params: {
     options: { redirectTo },
   });
 
-  const hashedToken = data?.properties?.hashed_token;
+  // supabase-js usually nests tokens under `properties`; Contabo GoTrue may
+  // also expose them on the top-level payload depending on Auth version.
+  const linkPayload = data as
+    | {
+        properties?: { hashed_token?: string | null } | null;
+        hashed_token?: string | null;
+      }
+    | null
+    | undefined;
+  const hashedToken =
+    linkPayload?.properties?.hashed_token?.trim() ||
+    linkPayload?.hashed_token?.trim() ||
+    "";
   if (error || !hashedToken) {
     console.error(`[auth-email] ${params.type} link failed:`, error);
     return {
