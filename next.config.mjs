@@ -32,6 +32,8 @@ const nextConfig = {
       { protocol: "https", hostname: "i.ytimg.com" },
       { protocol: "https", hostname: "img.youtube.com" },
       { protocol: "https", hostname: "**.supabase.co" },
+      { protocol: "https", hostname: "supabase.digitalskillx.com" },
+      { protocol: "https", hostname: "www.digitalskillx.com" },
     ],
   },
 };

@@ -4,6 +4,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 import { publicAbsoluteUrl } from "@/lib/public-site-origin";
 import { getServerSupabaseUrl } from "@/lib/supabase/url";
+import { createSupabaseFetch } from "@/lib/supabase/fetch-retry";
 
 type CookieToSet = {
   name: string;
@@ -36,6 +37,7 @@ export function createRouteHandlerClientWithPendingCookies(
           }
         },
       },
+      global: { fetch: createSupabaseFetch({ retries: 1, timeoutMs: 20_000 }) },
     },
   );
 }

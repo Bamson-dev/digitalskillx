@@ -1,6 +1,6 @@
 /**
  * Server/middleware Supabase API base URL.
- * Prefer SUPABASE_URL (Docker-internal Kong, e.g. http://…:8000) so the app
+ * Prefer SUPABASE_URL (Docker-internal Kong / upstream) so the app
  * never hairpins through public TLS to reach Contabo Postgres/Auth.
  * Browser clients must keep using NEXT_PUBLIC_SUPABASE_URL (public HTTPS).
  *
@@ -15,6 +15,10 @@ export function getServerSupabaseUrl(): string | undefined {
   const isBuild =
     env.NEXT_PHASE === "phase-production-build" ||
     env.npm_lifecycle_event === "build";
+
+  // Same-container gateway (Edge middleware + Node) when public supabase.* DNS is down.
+  const loopback = env.SUPABASE_LOOPBACK_URL?.trim().replace(/\/$/, "");
+  if (loopback && !isBuild) return loopback;
 
   const internal = env.SUPABASE_URL?.trim().replace(/\/$/, "");
   if (internal && !isBuild) return internal;

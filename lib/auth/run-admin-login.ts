@@ -29,7 +29,15 @@ export async function runAdminLogin(params: {
   const authClient = createSupabaseClient<Database>(
     supabaseUrl,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    { auth: { persistSession: false, autoRefreshToken: false } },
+    {
+      auth: { persistSession: false, autoRefreshToken: false },
+      global: {
+        fetch: (await import("@/lib/supabase/fetch-bridge")).createServerSupabaseFetch({
+          retries: 1,
+          timeoutMs: 20_000,
+        }),
+      },
+    },
   );
 
   const { data, error } = await authClient.auth.signInWithPassword({ email, password });

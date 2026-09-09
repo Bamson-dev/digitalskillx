@@ -17,6 +17,7 @@ const PUBLIC_PREFIXES = [
   "/checkout",
   "/enroll",
   "/enrollment",
+  "/api/sb", // same-origin Contabo Supabase gateway
   "/api/webhooks",
   "/api/health",
   "/api/cron",
