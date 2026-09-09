@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
-# Backup Contabo self-hosted Supabase Postgres (run on the Coolify VPS).
+# Backup Contabo self-hosted Supabase Postgres (run on the Coolify VPS host).
 # Usage:
 #   export POSTGRES_PASSWORD=...   # SERVICE_PASSWORD_POSTGRES from Coolify
+#   # optional: POSTGRES_CONTAINER=... if not using network DNS name
 #   ./scripts/backup-contabo-supabase.sh
 set -euo pipefail
 
@@ -15,12 +16,17 @@ DB_USER=${POSTGRES_USER:-postgres}
 DB_NAME=${POSTGRES_DB:-postgres}
 
 if [[ -z "${POSTGRES_PASSWORD:-}" ]]; then
-  echo "POSTGRES_PASSWORD is required" >&2
+  echo "POSTGRES_PASSWORD is required (Coolify Supabase SERVICE_PASSWORD_POSTGRES)" >&2
   exit 1
 fi
 
 echo "Dumping $DB_NAME @ $DB_HOST → $FILE"
-PGPASSWORD="$POSTGRES_PASSWORD" pg_dump -Fc -h "$DB_HOST" -U "$DB_USER" "$DB_NAME" >"$FILE"
+if [[ -n "${POSTGRES_CONTAINER:-}" ]]; then
+  docker exec -e PGPASSWORD="$POSTGRES_PASSWORD" "$POSTGRES_CONTAINER" \
+    pg_dump -Fc -U "$DB_USER" "$DB_NAME" >"$FILE"
+else
+  PGPASSWORD="$POSTGRES_PASSWORD" pg_dump -Fc -h "$DB_HOST" -U "$DB_USER" "$DB_NAME" >"$FILE"
+fi
 ls -lh "$FILE"
 
 # Keep last 14 dumps
