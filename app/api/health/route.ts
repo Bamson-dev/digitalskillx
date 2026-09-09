@@ -88,6 +88,7 @@ export async function GET(request: NextRequest) {
       const res = await fetch("https://api.paystack.co/transaction/totals", {
         headers: { Authorization: `Bearer ${secret}` },
         cache: "no-store",
+        signal: AbortSignal.timeout(5_000),
       });
       checks.paystack = res.ok ? "reachable" : "error";
       if (!res.ok) checks.status = "degraded";

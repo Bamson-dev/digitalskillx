@@ -1,6 +1,7 @@
 import "server-only";
 import { setCachedIntegrationSecret, getCachedIntegrationSecret } from "@/lib/integration-secrets-cache";
 import { preloadRuntimeEnvIntoProcessEnv, runtimeEnv } from "@/lib/runtime-env";
+import { getServerSupabaseUrl } from "@/lib/supabase/url";
 
 const FETCH_TIMEOUT_MS = 5_000;
 
@@ -69,7 +70,7 @@ export function applyPlatformSecretsRow(row: PlatformSecretsRow) {
 export async function fetchPlatformSecretsWithServiceRole(
   serviceRole: string,
 ): Promise<PlatformSecretsRow | null> {
-  const supabaseUrl = runtimeEnv("NEXT_PUBLIC_SUPABASE_URL");
+  const supabaseUrl = getServerSupabaseUrl();
   if (!supabaseUrl) return null;
 
   const select = Object.keys(COLUMN_TO_ENV).join(",");
@@ -97,7 +98,7 @@ export async function probeCronBootstrapRpc(): Promise<{
   reason: string;
 }> {
   const cronSecret = runtimeEnv("CRON_SECRET")?.trim();
-  const supabaseUrl = runtimeEnv("NEXT_PUBLIC_SUPABASE_URL");
+  const supabaseUrl = getServerSupabaseUrl();
   const anonKey = runtimeEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY");
   if (!cronSecret) return { httpStatus: null, reason: "CRON_SECRET not set" };
   if (!supabaseUrl || !anonKey) return { httpStatus: null, reason: "Supabase URL/anon key missing" };
@@ -156,7 +157,7 @@ export async function probeCronBootstrapRpc(): Promise<{
 /** Load platform_secrets using CRON_SECRET + server_bootstrap_platform_secrets RPC. */
 export async function fetchPlatformSecretsViaCronAuth(): Promise<PlatformSecretsRow | null> {
   const cronSecret = runtimeEnv("CRON_SECRET")?.trim();
-  const supabaseUrl = runtimeEnv("NEXT_PUBLIC_SUPABASE_URL");
+  const supabaseUrl = getServerSupabaseUrl();
   const anonKey = runtimeEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY");
   if (!cronSecret || !supabaseUrl || !anonKey) return null;
 

@@ -2,6 +2,7 @@ import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import type { Database } from "@/types/database";
 import { createSupabaseFetch } from "@/lib/supabase/fetch-retry";
+import { getServerSupabaseUrl } from "@/lib/supabase/url";
 
 /**
  * Supabase client for Server Components, Route Handlers and Server Actions.
@@ -10,9 +11,13 @@ import { createSupabaseFetch } from "@/lib/supabase/fetch-retry";
  */
 export function createClient() {
   const cookieStore = cookies();
+  const supabaseUrl = getServerSupabaseUrl();
+  if (!supabaseUrl || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+    throw new Error("Supabase URL / anon key is not configured");
+  }
 
   return createServerClient<Database>(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    supabaseUrl,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {

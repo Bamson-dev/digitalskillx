@@ -3,6 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import type { Database } from "@/types/database";
 import { createSupabaseFetch } from "@/lib/supabase/fetch-retry";
 import { publicAbsoluteUrl } from "@/lib/public-site-origin";
+import { getServerSupabaseUrl } from "@/lib/supabase/url";
 
 const PUBLIC_PREFIXES = [
   "/verify",
@@ -109,7 +110,7 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.next({ request });
   }
 
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseUrl = getServerSupabaseUrl();
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
   if (!supabaseUrl || !supabaseAnonKey) {

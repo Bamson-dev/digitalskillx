@@ -161,7 +161,8 @@ async function syncProfileEmailIfMissing(
 }
 
 async function signInCheckoutUser(email: string, password: string): Promise<CheckoutSession | null> {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const { getServerSupabaseUrl } = await import("@/lib/supabase/url");
+  const supabaseUrl = getServerSupabaseUrl();
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   if (!supabaseUrl || !supabaseAnonKey) return null;
 

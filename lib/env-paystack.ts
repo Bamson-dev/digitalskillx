@@ -33,16 +33,18 @@ async function readFromAdminSession(
 
 async function readFromDbViaServiceRole(): Promise<string | undefined> {
   const serviceRole = getServiceRoleKeySync();
-  const supabaseUrl = runtimeEnv("NEXT_PUBLIC_SUPABASE_URL");
+  const { getServerSupabaseUrl } = await import("@/lib/supabase/url");
+  const supabaseUrl = getServerSupabaseUrl();
   if (serviceRole && supabaseUrl) {
     try {
-      const url = `${supabaseUrl.replace(/\/$/, "")}/rest/v1/platform_secrets?id=eq.default&select=paystack_secret_key`;
+      const url = `${supabaseUrl}/rest/v1/platform_secrets?id=eq.default&select=paystack_secret_key`;
       const res = await fetch(url, {
         headers: {
           apikey: serviceRole,
           Authorization: `Bearer ${serviceRole}`,
         },
         cache: "no-store",
+        signal: AbortSignal.timeout(5_000),
       });
       if (res.ok) {
         const rows = (await res.json()) as { paystack_secret_key?: string | null }[];

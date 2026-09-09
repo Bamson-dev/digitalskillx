@@ -2,6 +2,7 @@ import "server-only";
 import { getServiceRoleKeySync } from "@/lib/env-service-role";
 import { preloadRuntimeEnvIntoProcessEnv } from "@/lib/runtime-env";
 import { createSupabaseFetch } from "@/lib/supabase/fetch-retry";
+import { getServerSupabaseUrl } from "@/lib/supabase/url";
 
 const PROBE_TIMEOUT_MS = 1_500;
 
@@ -37,7 +38,7 @@ export async function probeDatabaseConnection(): Promise<
 > {
   preloadRuntimeEnvIntoProcessEnv();
 
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
+  const supabaseUrl = getServerSupabaseUrl();
   if (!supabaseUrl) return "unknown";
 
   const serviceRole = getServiceRoleKeySync();

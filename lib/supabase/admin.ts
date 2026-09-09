@@ -1,18 +1,18 @@
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
-import { runtimeEnv } from "@/lib/runtime-env";
 import {
   resolveServiceRoleKey,
   getServiceRoleKeySync,
   serviceRoleKeyMissingMessage,
 } from "@/lib/env-service-role";
 import { createSupabaseFetch } from "@/lib/supabase/fetch-retry";
+import { getServerSupabaseUrl } from "@/lib/supabase/url";
 
 function buildAdminClient(serviceRoleKey: string) {
-  const supabaseUrl = runtimeEnv("NEXT_PUBLIC_SUPABASE_URL");
+  const supabaseUrl = getServerSupabaseUrl();
   if (!supabaseUrl) {
-    throw new Error("NEXT_PUBLIC_SUPABASE_URL is not configured");
+    throw new Error("SUPABASE_URL / NEXT_PUBLIC_SUPABASE_URL is not configured");
   }
 
   return createSupabaseClient<Database>(supabaseUrl, serviceRoleKey, {
