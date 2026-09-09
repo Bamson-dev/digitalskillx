@@ -6,12 +6,13 @@ Digitalskillx production no longer depends on cloud `*.supabase.co`. Auth, Postg
 
 | Item | Value |
 |------|--------|
-| Public API | `https://supabase.digitalskillx.com` (Kong, port map `:8000`) |
+| Public API | `https://supabase.digitalskillx.com` (Kong) |
 | Coolify service UUID | `lacy7js1uuvik6c2owzr4n4j` |
-| Project | AI Money Code → production |
-| Public (browser) | `NEXT_PUBLIC_SUPABASE_URL=https://supabase.digitalskillx.com` |
-| Server (Docker) | `SUPABASE_URL=http://<kong-app-uuid>:8000` on the Coolify network |
-| TLS note | Prefer internal `SUPABASE_URL` for server traffic. `NODE_TLS_REJECT_UNAUTHORIZED=0` is only a fallback for public HTTPS until Let’s Encrypt chain is complete |
+| Browser | `NEXT_PUBLIC_SUPABASE_URL=https://supabase.digitalskillx.com` |
+| Server | `SUPABASE_URL=https://supabase.digitalskillx.com` + `SUPABASE_DOCKER_DNS=coolify-proxy` (Undici DNS bridge avoids public IP hairpin) |
+| TLS | `NODE_TLS_REJECT_UNAUTHORIZED=0` until Let’s Encrypt chain is complete |
+
+Compose snapshot: [`docker-compose.supabase.yml`](../docker-compose.supabase.yml).
 
 ## Keys
 
@@ -20,19 +21,6 @@ Coolify generates:
 - `SERVICE_SUPABASEANON_KEY` → app `NEXT_PUBLIC_SUPABASE_ANON_KEY`
 - `SERVICE_SUPABASESERVICE_KEY` → app `SUPABASE_SERVICE_ROLE_KEY`
 - `SERVICE_PASSWORD_JWT` → must match all `*_JWT_SECRET` vars (materialize `${...}` placeholders if containers exit)
-
-## Schema
-
-Migrations under `supabase/migrations/` were applied via Meta:
-
-```bash
-curl -k -X POST "https://supabase.digitalskillx.com/pg/query" \
-  -H "apikey: $SERVICE_ROLE" -H "Authorization: Bearer $SERVICE_ROLE" \
-  -H "Content-Type: application/json" \
-  -d '{"query":"..."}'
-```
-
-Compose snapshot for disaster recovery: [`docker-compose.supabase.yml`](../docker-compose.supabase.yml) (exported from Coolify).
 
 ## Auth redirects
 
@@ -43,24 +31,26 @@ On Contabo GoTrue:
 
 ## Backups
 
-Daily dump (Coolify scheduled task or host cron):
+Daily host/VPS cron (not inside the Next.js container):
 
 ```bash
-# Inside supabase-db network / with POSTGRES_PASSWORD from Coolify env
-pg_dump -Fc -h supabase-db -U postgres postgres \
-  > /backups/digitalskillx-$(date +%Y%m%d).dump
+export POSTGRES_PASSWORD=...   # SERVICE_PASSWORD_POSTGRES from Coolify Supabase
+export POSTGRES_HOST=<supabase-db container name or IP on docker network>
+./scripts/backup-contabo-supabase.sh
 ```
 
-Or use script: `scripts/backup-contabo-supabase.sh` (run on the VPS with Coolify env).
+Keep last 14 dumps under `/var/lib/coolify/backups/digitalskillx-supabase`.
 
 ## Paystack recovery cron
 
-Coolify scheduled task every 15 minutes:
+Coolify app scheduled task every 15 minutes (`paystack-external-backfill`):
 
+```bash
+# Inside Digitalskillx container (uses $CRON_SECRET from app env)
+wget/curl http://127.0.0.1:3000/api/cron/paystack-external-backfill
 ```
-GET https://www.digitalskillx.com/api/cron/paystack-external-backfill
-Authorization: Bearer $CRON_SECRET
-```
+
+Helper: `scripts/cron-paystack-external-backfill.sh`.
 
 ## Data migration status
 
@@ -69,15 +59,15 @@ Authorization: Bearer $CRON_SECRET
 | Schema (`supabase/migrations`) | Applied |
 | Catalog (`courses` / `modules` / `lessons`) | Restored from cloud (6 / 20 / 92) |
 | Learn library (`learning_paths` / sources) | Restored (136 / 160); factory FKs nulled |
-| Paid ₦14,999 recoveries | 5 profiles + enrollments + transactions |
-| Full `auth.users` + 40k profiles/enrollments | **Deferred** — needs cloud Postgres URI (`pg_dump`) from Supabase Dashboard → Database settings. REST cannot copy password hashes. |
+| Paid ₦14,999 recoveries + ongoing backfill | Contabo enrollments active |
+| Full `auth.users` + historical ~40k profiles | **Deferred** — needs cloud Postgres URI (`pg_dump`). REST cannot copy password hashes. |
 
-After a successful `pg_dump` / `pg_restore` of `auth` + `public`, re-check row counts against cloud and re-verify the five recovery refs still enroll.
+After a full `pg_dump` / `pg_restore`, re-check row counts vs cloud. Keep cloud paused/read-only for 48h, then decommission.
 
 ## Cutover checklist
 
 1. Contabo service `running:healthy` (Kong + Auth + DB).
 2. `curl -k https://supabase.digitalskillx.com/auth/v1/health` → GoTrue JSON.
-3. Digitalskillx detailed `/api/health` → `database: connected`.
-4. Login + admin login + Paystack webhook smoke.
-5. Keep cloud project paused/read-only until a restore drill succeeds; then decommission.
+3. Digitalskillx detailed `/api/health` → `database: connected` (fast).
+4. Login + admin login + Paystack webhook / backfill smoke.
+5. Cloud project paused until restore drill succeeds; then decommission.
