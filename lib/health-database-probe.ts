@@ -1,7 +1,7 @@
 import "server-only";
 import { getServiceRoleKeySync } from "@/lib/env-service-role";
 import { preloadRuntimeEnvIntoProcessEnv } from "@/lib/runtime-env";
-import { createSupabaseFetch } from "@/lib/supabase/fetch-retry";
+import { createServerSupabaseFetch } from "@/lib/supabase/fetch-bridge";
 import { getServerSupabaseUrl } from "@/lib/supabase/url";
 
 const PROBE_TIMEOUT_MS = 3_000;
@@ -16,7 +16,7 @@ async function restProbe(
   apiKey: string,
 ): Promise<{ ok: boolean; detail: string }> {
   try {
-    const fetchWithRetry = createSupabaseFetch({
+    const fetchWithRetry = createServerSupabaseFetch({
       retries: 0,
       baseDelayMs: 100,
       timeoutMs: PROBE_TIMEOUT_MS,

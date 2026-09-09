@@ -1,7 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import type { Database } from "@/types/database";
-import { createSupabaseFetch } from "@/lib/supabase/fetch-retry";
+import { createServerSupabaseFetch } from "@/lib/supabase/fetch-bridge";
 import { getServerSupabaseUrl } from "@/lib/supabase/url";
 
 /**
@@ -42,7 +42,7 @@ export function createClient() {
           }
         },
       },
-      global: { fetch: createSupabaseFetch({ retries: 2, timeoutMs: 12_000 }) },
+      global: { fetch: createServerSupabaseFetch({ retries: 2, timeoutMs: 12_000 }) },
     },
   );
 }
