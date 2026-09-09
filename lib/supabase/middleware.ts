@@ -4,6 +4,11 @@ import type { Database } from "@/types/database";
 import { createSupabaseFetch } from "@/lib/supabase/fetch-retry";
 import { publicAbsoluteUrl } from "@/lib/public-site-origin";
 import { getServerSupabaseUrl } from "@/lib/supabase/url";
+import {
+  COURSE_CONTINUITY_COOKIE,
+  isClassroomContinuityPath,
+  readContinuityPayload,
+} from "@/lib/course-continuity/token";
 
 const PUBLIC_PREFIXES = [
   "/verify",
@@ -17,6 +22,7 @@ const PUBLIC_PREFIXES = [
   "/checkout",
   "/enroll",
   "/enrollment",
+  "/continue", // offline / outage classroom continuity
   "/api/sb", // same-origin Contabo Supabase gateway
   "/api/webhooks",
   "/api/health",
@@ -56,6 +62,12 @@ function isPublic(pathname: string) {
     }
     return pathname.startsWith(p);
   });
+}
+
+function hasSupabaseAuthCookie(request: NextRequest) {
+  return request.cookies
+    .getAll()
+    .some((c) => c.name.includes("-auth-token") && c.value.length > 20);
 }
 
 /** Avoid MIDDLEWARE_INVOCATION_TIMEOUT when Supabase auth is slow or unreachable. */
@@ -118,6 +130,12 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.next({ request });
   }
 
+  const continuity = await readContinuityPayload(
+    request.cookies.get(COURSE_CONTINUITY_COOKIE)?.value,
+  );
+  const allowContinuity =
+    Boolean(continuity) && isClassroomContinuityPath(pathname);
+
   try {
     let response = NextResponse.next({ request });
 
@@ -151,9 +169,26 @@ export async function updateSession(request: NextRequest) {
 
     const {
       data: { user },
+      error: authError,
     } = await getUserWithTimeout(supabase);
 
     if (!user) {
+      // Soft-open classroom routes during Auth timeouts / blips when the browser
+      // already has a session cookie or a signed continuity token.
+      const authTimedOut = authError?.message === "middleware_auth_timeout";
+      if (
+        allowContinuity ||
+        (authTimedOut &&
+          hasSupabaseAuthCookie(request) &&
+          isClassroomContinuityPath(pathname))
+      ) {
+        response.headers.set(
+          "x-dsx-continuity",
+          allowContinuity ? "token" : "session-soft",
+        );
+        return response;
+      }
+
       if (pathname.startsWith("/api/")) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
       }
@@ -163,7 +198,9 @@ export async function updateSession(request: NextRequest) {
     return response;
   } catch (err) {
     console.error("[digitalskillx] middleware session refresh failed:", err);
-    // Fail closed on protected routes — never skip the auth gate on errors.
+    if (allowContinuity) {
+      return NextResponse.next({ request });
+    }
     if (pathname.startsWith("/api/")) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
@@ -179,9 +216,16 @@ function redirectToLogin(request: NextRequest, pathname: string) {
       ? "/admin/login"
       : "/login";
   const next = `${pathname}${request.nextUrl.search || ""}`;
-  const url = publicAbsoluteUrl(`${loginPath}?next=${encodeURIComponent(next)}`, {
-    headers: request.headers,
-    requestUrl: request.url,
-  });
+  const continueHint =
+    loginPath === "/login" && isClassroomContinuityPath(pathname)
+      ? `&continue=${encodeURIComponent("/continue")}`
+      : "";
+  const url = publicAbsoluteUrl(
+    `${loginPath}?next=${encodeURIComponent(next)}${continueHint}`,
+    {
+      headers: request.headers,
+      requestUrl: request.url,
+    },
+  );
   return NextResponse.redirect(url, 307);
 }

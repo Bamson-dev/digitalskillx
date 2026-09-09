@@ -1,6 +1,8 @@
-// DigitalSkillX service worker (PRD §17).
-const CACHE = "digitalskillx-v2";
-const OFFLINE_URLS = ["/", "/dashboard"];
+// DigitalSkillX service worker — classroom continuity cache.
+const CACHE = "digitalskillx-v3";
+const OFFLINE_URLS = ["/", "/dashboard", "/continue", "/login"];
+const CLASSROOM_PREFIXES = ["/courses", "/lessons", "/continue", "/dashboard", "/my-learning"];
+const MAX_CACHED_NAV = 48;
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
@@ -18,7 +20,22 @@ self.addEventListener("activate", (event) => {
   self.clients.claim();
 });
 
-// Network-first for navigations, falling back to cache when offline.
+function shouldCacheNavigation(pathname) {
+  return CLASSROOM_PREFIXES.some(
+    (p) => pathname === p || pathname.startsWith(`${p}/`),
+  );
+}
+
+async function trimCache(cache) {
+  const keys = await cache.keys();
+  if (keys.length <= MAX_CACHED_NAV) return;
+  const overflow = keys.length - MAX_CACHED_NAV;
+  for (let i = 0; i < overflow; i++) {
+    await cache.delete(keys[i]);
+  }
+}
+
+// Network-first for navigations, falling back to cache when offline / outage.
 self.addEventListener("fetch", (event) => {
   const req = event.request;
   if (req.method !== "GET") return;
@@ -28,11 +45,18 @@ self.addEventListener("fetch", (event) => {
     event.respondWith(
       fetch(req)
         .then((res) => {
-          const copy = res.clone();
-          caches.open(CACHE).then((cache) => cache.put(req, copy));
+          if (res.ok && shouldCacheNavigation(url.pathname)) {
+            const copy = res.clone();
+            caches.open(CACHE).then(async (cache) => {
+              await cache.put(req, copy);
+              await trimCache(cache);
+            });
+          }
           return res;
         })
-        .catch(() => caches.match(req).then((r) => r || caches.match("/"))),
+        .catch(() =>
+          caches.match(req).then((r) => r || caches.match("/continue") || caches.match("/")),
+        ),
     );
   }
 });
@@ -48,12 +72,12 @@ self.addEventListener("push", (event) => {
       body: data.body,
       icon: "/icon.svg",
       badge: "/icon.svg",
-      data: { url: data.url || "/dashboard" },
+      data: { url: data.url || "/continue" },
     }),
   );
 });
 
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
-  event.waitUntil(self.clients.openWindow(event.notification.data?.url || "/dashboard"));
+  event.waitUntil(self.clients.openWindow(event.notification.data?.url || "/continue"));
 });

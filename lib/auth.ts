@@ -1,8 +1,13 @@
 import { redirect } from "next/navigation";
+import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { getAdminMfaStatus, isAdminMfaRequired } from "@/lib/admin-mfa";
 import { ensureAdminProfileSession, platformAdminProfileFromUser } from "@/lib/ensure-admin-profile-session";
 import { ensureStudentProfile, studentProfileFromUser } from "@/lib/ensure-student-profile";
+import {
+  COURSE_CONTINUITY_COOKIE,
+  readContinuityPayload,
+} from "@/lib/course-continuity/token";
 import type { Profile } from "@/types/database";
 
 /** Returns the current user's profile, or null if signed out. */
@@ -22,25 +27,65 @@ export async function getProfile(): Promise<Profile | null> {
   return data ?? null;
 }
 
+function profileFromContinuity(payload: {
+  sub: string;
+  email: string;
+  name: string;
+  role: "student" | "admin";
+}): Profile {
+  const now = new Date().toISOString();
+  return {
+    id: payload.sub,
+    email: payload.email,
+    full_name: payload.name,
+    role: payload.role,
+    avatar_url: null,
+    is_suspended: false,
+    tags: [],
+    last_active_at: now,
+    created_at: now,
+    updated_at: now,
+    welcome_email_sent_at: null,
+    max_devices: null,
+  };
+}
+
+async function getContinuityProfile(): Promise<Profile | null> {
+  try {
+    const token = cookies().get(COURSE_CONTINUITY_COOKIE)?.value;
+    const payload = await readContinuityPayload(token);
+    if (!payload) return null;
+    return profileFromContinuity(payload);
+  } catch {
+    return null;
+  }
+}
+
 /** Guards a student route. Redirects to /login when not authenticated. */
 export async function requireStudent(): Promise<Profile> {
-  const supabase = createClient();
-  await supabase.auth.getSession();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) {
-    // Middleware normally adds ?next=; this is a fallback if a route skipped the gate.
-    redirect("/login");
+  try {
+    const supabase = createClient();
+    await supabase.auth.getSession();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (user) {
+      let profile = (await getProfile()) ?? (await ensureStudentProfile());
+      if (!profile) profile = studentProfileFromUser(user);
+      if (!profile) redirect("/login?error=no_profile");
+      if (profile.is_suspended) redirect("/login?error=account_suspended");
+      // Admins can also browse student views, so no role rejection here.
+      void touchLastActive(profile);
+      return profile;
+    }
+  } catch (err) {
+    console.error("[requireStudent] auth unavailable, trying continuity:", err);
   }
 
-  let profile = (await getProfile()) ?? (await ensureStudentProfile());
-  if (!profile) profile = studentProfileFromUser(user);
-  if (!profile) redirect("/login?error=no_profile");
-  if (profile.is_suspended) redirect("/login?error=account_suspended");
-  // Admins can also browse student views, so no role rejection here.
-  void touchLastActive(profile);
-  return profile;
+  const continuityProfile = await getContinuityProfile();
+  if (continuityProfile) return continuityProfile;
+
+  redirect("/login?continue=%2Fcontinue");
 }
 
 /** Throttled last-active heartbeat (updates at most hourly) for inactivity rules. */

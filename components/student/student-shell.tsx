@@ -8,6 +8,7 @@ import {
   BookOpen,
   HelpCircle,
   LayoutDashboard,
+  Library,
   LogOut,
   Menu,
   Settings,
@@ -15,10 +16,12 @@ import {
 } from "lucide-react";
 import { signOut } from "@/app/(auth)/actions";
 import { NotificationBell } from "@/components/student/notification-bell";
+import { CourseContinuityBeacon } from "@/components/student/course-continuity-beacon";
 import { cn } from "@/lib/utils";
 
 const nav = [
   { href: "/dashboard", label: "Overview", icon: LayoutDashboard },
+  { href: "/my-learning", label: "My Learning", icon: Library },
   { href: "/courses", label: "My Courses", icon: BookOpen },
   { href: "/certificates", label: "Certificates", icon: Award },
   { href: "/support", label: "Support", icon: HelpCircle },
@@ -27,6 +30,7 @@ const nav = [
 
 const bottomTabs = [
   { href: "/dashboard", label: "Home", icon: LayoutDashboard },
+  { href: "/my-learning", label: "Learn", icon: BookOpen },
   { href: "/courses", label: "Courses", icon: BookOpen },
   { href: "/certificates", label: "Certs", icon: Award },
   { href: "/settings", label: "Account", icon: Settings },
@@ -87,6 +91,7 @@ export function StudentShell({
 
   return (
     <div className={cn("min-h-screen text-neutral-900", classroom ? "bg-white" : "bg-neutral-50")}>
+      <CourseContinuityBeacon />
       <header
         className={cn(
           "sticky top-0 z-30 border-b border-neutral-200 bg-white lg:hidden",

@@ -37,8 +37,20 @@ export function LoginForm({
         </p>
       ) : null}
 
+      {authError ? (
+        <div className="space-y-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+          <p>{authError === "fetch failed" ? "Sign-in is temporarily unavailable." : authError}</p>
+          <p>
+            Already enrolled on this device?{" "}
+            <Link href="/continue" className="font-semibold underline">
+              Continue learning without waiting
+            </Link>
+          </p>
+        </div>
+      ) : null}
+
       {mode === "password" ? (
-        <StudentPasswordLoginForm next={next} authError={authError} />
+        <StudentPasswordLoginForm next={next} />
       ) : (
         <form action={magicAction} className="space-y-4">
           <input type="hidden" name="next" value={next} />

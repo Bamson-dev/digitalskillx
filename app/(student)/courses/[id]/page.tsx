@@ -17,6 +17,8 @@ import { isLessonComingSoon } from "@/lib/lesson-coming-soon";
 import { isMissingColumnError } from "@/lib/schema-guard";
 import { courseOverviewBlurb } from "@/lib/course-copy-format";
 import type { Lesson, Module } from "@/types/database";
+import { CourseContinuityBeacon } from "@/components/student/course-continuity-beacon";
+import { buildContinuitySnapshot } from "@/lib/course-continuity/snapshot";
 
 export const metadata: Metadata = { title: "Course" };
 
@@ -77,7 +79,7 @@ export default async function CourseDetailPage({
 
   if (courseError) {
     console.error("[CourseDetailPage] course query failed", courseError.message);
-    throw new Error("Could not load this course. Please try again.");
+    redirect("/continue?reason=course_unavailable");
   }
 
   if (!course) notFound();
@@ -304,6 +306,14 @@ export default async function CourseDetailPage({
       ) : null}
 
       <CourseResources resources={resources ?? []} />
+      <CourseContinuityBeacon
+        courseId={course.id}
+        snapshot={buildContinuitySnapshot({
+          courseId: course.id,
+          courseTitle: course.title,
+          modules,
+        })}
+      />
     </div>
   );
 }

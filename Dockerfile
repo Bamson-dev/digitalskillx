@@ -28,4 +28,8 @@ ENV PORT=3000
 ENV HOSTNAME=0.0.0.0
 COPY --from=builder /app ./
 EXPOSE 3000
+# Keep Traefik/Coolify from marking the app down during Auth/DB blips —
+# /api/health is intentionally instant and does not touch Supabase.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=5 \
+  CMD node -e "fetch('http://127.0.0.1:3000/api/health').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 CMD ["npm", "start"]

@@ -27,6 +27,8 @@ import { isMissingColumnError } from "@/lib/schema-guard";
 import { fetchPublishedCourses, type CatalogCourse } from "@/lib/published-courses";
 import { getCourseRecommendationsForDisplay } from "@/lib/course-recommendations";
 import type { Lesson, Module } from "@/types/database";
+import { CourseContinuityBeacon } from "@/components/student/course-continuity-beacon";
+import { buildContinuitySnapshot } from "@/lib/course-continuity/snapshot";
 
 export const metadata: Metadata = { title: "Lesson" };
 
@@ -376,6 +378,14 @@ export default async function LessonPage({ params }: { params: { id: string } })
           </div>
         </div>
       )}
+      <CourseContinuityBeacon
+        courseId={courseId}
+        snapshot={buildContinuitySnapshot({
+          courseId,
+          courseTitle: course?.title ?? "Course",
+          modules: sortedModules,
+        })}
+      />
     </LessonLearningLayout>
   );
 }

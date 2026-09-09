@@ -1,10 +1,15 @@
 import "server-only";
+import { cookies } from "next/headers";
 import { bootstrapRuntimeSecrets } from "@/lib/bootstrap-runtime-secrets";
 import { syncStudentCourseAccess } from "@/lib/admin-student-onboarding";
 import { createAdminClientAsync } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { getCourseProgressSummary } from "@/lib/progress";
 import { isMissingColumnError } from "@/lib/schema-guard";
+import {
+  COURSE_CONTINUITY_COOKIE,
+  readContinuityPayload,
+} from "@/lib/course-continuity/token";
 
 export type StudentCourseRow = {
   enrollmentId: string;
@@ -23,14 +28,34 @@ export type StudentCourseRow = {
   } | null;
 };
 
+async function continuityAllowsCourse(studentId: string, courseId: string) {
+  try {
+    const payload = await readContinuityPayload(
+      cookies().get(COURSE_CONTINUITY_COOKIE)?.value,
+    );
+    if (!payload || payload.sub !== studentId) return false;
+    // Only courses previously stamped onto the continuity cookie.
+    return payload.courses.includes(courseId);
+  } catch {
+    return false;
+  }
+}
+
 async function assertOwnStudentAccess(studentId: string) {
   const supabase = createClient();
   await supabase.auth.getSession();
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) throw new Error("Not authenticated.");
-  if (user.id !== studentId) throw new Error("Forbidden.");
+  if (user) {
+    if (user.id !== studentId) throw new Error("Forbidden.");
+    return;
+  }
+  const payload = await readContinuityPayload(
+    cookies().get(COURSE_CONTINUITY_COOKIE)?.value,
+  );
+  if (payload?.sub === studentId) return;
+  throw new Error("Not authenticated.");
 }
 
 async function safeSyncStudentAccess(
@@ -55,28 +80,49 @@ export async function checkStudentCourseEnrollment(
   courseId: string,
 ): Promise<{ enrolled: boolean; enrollmentId: string | null; targetStudentId: string }> {
   await assertOwnStudentAccess(studentId);
-  await bootstrapRuntimeSecrets();
-  const admin = await createAdminClientAsync(createClient());
 
-  const { data: profile } = await admin
-    .from("profiles")
-    .select("email")
-    .eq("id", studentId)
-    .maybeSingle();
+  try {
+    await bootstrapRuntimeSecrets();
+    const admin = await createAdminClientAsync(createClient());
 
-  const targetStudentId = await safeSyncStudentAccess(admin, studentId, profile?.email);
+    const { data: profile } = await admin
+      .from("profiles")
+      .select("email")
+      .eq("id", studentId)
+      .maybeSingle();
 
-  const { data: enrollment } = await admin
-    .from("enrollments")
-    .select("id")
-    .eq("student_id", targetStudentId)
-    .eq("course_id", courseId)
-    .maybeSingle();
+    const targetStudentId = await safeSyncStudentAccess(admin, studentId, profile?.email);
+
+    const { data: enrollment } = await admin
+      .from("enrollments")
+      .select("id")
+      .eq("student_id", targetStudentId)
+      .eq("course_id", courseId)
+      .maybeSingle();
+
+    if (enrollment) {
+      return {
+        enrolled: true,
+        enrollmentId: enrollment.id,
+        targetStudentId,
+      };
+    }
+  } catch (err) {
+    console.error("[checkStudentCourseEnrollment] db unavailable:", err);
+  }
+
+  if (await continuityAllowsCourse(studentId, courseId)) {
+    return {
+      enrolled: true,
+      enrollmentId: null,
+      targetStudentId: studentId,
+    };
+  }
 
   return {
-    enrolled: Boolean(enrollment),
-    enrollmentId: enrollment?.id ?? null,
-    targetStudentId,
+    enrolled: false,
+    enrollmentId: null,
+    targetStudentId: studentId,
   };
 }
 
