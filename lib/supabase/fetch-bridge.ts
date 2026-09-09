@@ -54,6 +54,19 @@ function getSupabaseDispatcher(): Agent | undefined {
 export function createServerSupabaseFetch(
   options: SupabaseFetchRetryOptions = {},
 ): typeof fetch {
+  const env = process.env as Record<string, string | undefined>;
+  const isBuild =
+    env.NEXT_PHASE === "phase-production-build" ||
+    env.npm_lifecycle_event === "build";
+  if (isBuild) {
+    // Build containers cannot resolve coolify-proxy / Kong — keep SSG fast.
+    return createSupabaseFetch({
+      ...options,
+      retries: options.retries ?? 0,
+      timeoutMs: options.timeoutMs ?? 2_500,
+    });
+  }
+
   const retries = options.retries ?? 3;
   const baseDelayMs = options.baseDelayMs ?? 400;
   const timeoutMs = options.timeoutMs ?? 12_000;
