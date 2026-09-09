@@ -3,10 +3,13 @@ import { setCachedIntegrationSecret, getCachedIntegrationSecret } from "@/lib/in
 import { preloadRuntimeEnvIntoProcessEnv, runtimeEnv } from "@/lib/runtime-env";
 import { getServerSupabaseUrl } from "@/lib/supabase/url";
 
+import { createSupabaseFetch } from "@/lib/supabase/fetch-retry";
+
 const FETCH_TIMEOUT_MS = 5_000;
+const supabaseFetch = createSupabaseFetch({ retries: 0, timeoutMs: FETCH_TIMEOUT_MS });
 
 function fetchWithTimeout(url: string, init: RequestInit, timeoutMs = FETCH_TIMEOUT_MS) {
-  return fetch(url, {
+  return supabaseFetch(url, {
     ...init,
     signal: AbortSignal.timeout(timeoutMs),
   });
