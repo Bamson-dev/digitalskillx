@@ -8,9 +8,16 @@
  */
 export function getServerSupabaseUrl(): string | undefined {
   const env = process.env as Record<string, string | undefined>;
-  const internal = env.SUPABASE_URL?.trim().replace(/\/$/, "");
-  if (internal) return internal;
-
   const pub = env.NEXT_PUBLIC_SUPABASE_URL?.trim().replace(/\/$/, "");
+
+  // Build containers cannot resolve Coolify service hostnames — never use
+  // Docker-internal SUPABASE_URL during `next build` static generation.
+  const isBuild =
+    env.NEXT_PHASE === "phase-production-build" ||
+    env.npm_lifecycle_event === "build";
+
+  const internal = env.SUPABASE_URL?.trim().replace(/\/$/, "");
+  if (internal && !isBuild) return internal;
+
   return pub || undefined;
 }
