@@ -26,43 +26,46 @@ async function loadProfileByEmail(email: string) {
   return data;
 }
 
+function extractHashedToken(data: unknown): string {
+  if (!data || typeof data !== "object") return "";
+  const row = data as Record<string, unknown>;
+  const props = row.properties;
+  if (props && typeof props === "object") {
+    const token = (props as Record<string, unknown>).hashed_token;
+    if (typeof token === "string" && token.trim()) return token.trim();
+  }
+  if (typeof row.hashed_token === "string" && row.hashed_token.trim()) {
+    return row.hashed_token.trim();
+  }
+  return "";
+}
+
 async function sendAuthLinkEmail(params: {
   email: string;
   type: "recovery" | "magiclink";
   nextPath?: string;
 }) {
   const normalized = params.email.trim().toLowerCase();
-  const profile = await loadProfileByEmail(normalized);
-  if (!profile) {
-    return { sent: false as const, skipped: true as const };
-  }
-
   const origin = authSiteOrigin();
   const nextPath = params.nextPath ?? (params.type === "recovery" ? "/reset-password" : "/dashboard");
   const redirectTo = `${origin}/auth/callback?next=${encodeURIComponent(nextPath)}`;
 
   const admin = await createAdminClientAsync();
+  const profile = await loadProfileByEmail(normalized);
+
   const { data, error } = await admin.auth.admin.generateLink({
     type: params.type,
     email: normalized,
     options: { redirectTo },
   });
 
-  // supabase-js usually nests tokens under `properties`; Contabo GoTrue may
-  // also expose them on the top-level payload depending on Auth version.
-  const linkPayload = data as
-    | {
-        properties?: { hashed_token?: string | null } | null;
-        hashed_token?: string | null;
-      }
-    | null
-    | undefined;
-  const hashedToken =
-    linkPayload?.properties?.hashed_token?.trim() ||
-    linkPayload?.hashed_token?.trim() ||
-    "";
+  const hashedToken = extractHashedToken(data);
   if (error || !hashedToken) {
     console.error(`[auth-email] ${params.type} link failed:`, error);
+    // Unknown email — do not leak existence; caller shows generic success.
+    if (error?.message?.toLowerCase().includes("user not found") || !data) {
+      return { sent: false as const, skipped: true as const };
+    }
     return {
       sent: false as const,
       error: formatErrorMessage(error, "Could not generate sign-in link."),
@@ -77,7 +80,7 @@ async function sendAuthLinkEmail(params: {
     getPlatformSettingsAdmin(),
   ]);
   const supportEmail = sender.replyTo ?? sender.fromAddress;
-  const name = firstName(profile.full_name);
+  const name = firstName(profile?.full_name);
 
   const tpl =
     params.type === "recovery"

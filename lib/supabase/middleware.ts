@@ -37,6 +37,7 @@ const PUBLIC_PREFIXES = [
 
 const PUBLIC_PATHS = [
   "/",
+  "/continue",
   "/login",
   "/register",
   "/forgot-password",
@@ -60,7 +61,7 @@ function isPublic(pathname: string) {
     if (p === "/course") {
       return pathname === "/course" || pathname.startsWith("/course/");
     }
-    return pathname.startsWith(p);
+    return pathname === p || pathname.startsWith(`${p}/`);
   });
 }
 

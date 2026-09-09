@@ -1,8 +1,8 @@
 /**
  * Server/middleware Supabase API base URL.
- * Prefer SUPABASE_URL (Docker-internal Kong / upstream) so the app
- * never hairpins through public TLS to reach Contabo Postgres/Auth.
- * Browser clients must keep using NEXT_PUBLIC_SUPABASE_URL (public HTTPS).
+ * Prefer SUPABASE_URL (Kong via Docker DNS bridge) so Node server actions
+ * never self-fetch through `/api/sb` loopback (that caused "fetch failed" under load).
+ * Browser clients must keep using NEXT_PUBLIC_SUPABASE_URL (public HTTPS /api/sb).
  *
  * Intentionally free of `server-only` so middleware can import it.
  */
@@ -16,12 +16,14 @@ export function getServerSupabaseUrl(): string | undefined {
     env.NEXT_PHASE === "phase-production-build" ||
     env.npm_lifecycle_event === "build";
 
-  // Same-container gateway (Edge middleware + Node) when public supabase.* DNS is down.
-  const loopback = env.SUPABASE_LOOPBACK_URL?.trim().replace(/\/$/, "");
-  if (loopback && !isBuild) return loopback;
+  if (isBuild) return pub || undefined;
 
   const internal = env.SUPABASE_URL?.trim().replace(/\/$/, "");
-  if (internal && !isBuild) return internal;
+  if (internal) return internal;
+
+  // Fallback only when Kong URL is unset (Edge / emergency).
+  const loopback = env.SUPABASE_LOOPBACK_URL?.trim().replace(/\/$/, "");
+  if (loopback) return loopback;
 
   return pub || undefined;
 }

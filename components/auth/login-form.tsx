@@ -27,7 +27,14 @@ export function LoginForm({
       <div>
         <h1 className="text-xl font-bold">Welcome back</h1>
         <p className="mt-1 text-sm text-muted">
-          Log in to continue your learning.
+          Log in at{" "}
+          <a
+            href="https://www.digitalskillx.com/login"
+            className="font-medium text-brand underline"
+          >
+            www.digitalskillx.com/login
+          </a>{" "}
+          (avoid the non-www link if Safari errors).
         </p>
       </div>
 
@@ -39,11 +46,18 @@ export function LoginForm({
 
       {authError ? (
         <div className="space-y-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-          <p>{authError === "fetch failed" ? "Sign-in is temporarily unavailable." : authError}</p>
           <p>
-            Already enrolled on this device?{" "}
+            {authError === "fetch failed"
+              ? "Sign-in briefly failed. Retry on www.digitalskillx.com, or reset your password."
+              : authError}
+          </p>
+          <p>
+            <Link href="/forgot-password" className="font-semibold underline">
+              Reset password
+            </Link>
+            {" · "}
             <Link href="/continue" className="font-semibold underline">
-              Continue learning without waiting
+              Continue learning on this device
             </Link>
           </p>
         </div>
