@@ -4,12 +4,17 @@ import { preloadRuntimeEnvIntoProcessEnv } from "@/lib/runtime-env";
 import { createSupabaseFetch } from "@/lib/supabase/fetch-retry";
 import { getServerSupabaseUrl } from "@/lib/supabase/url";
 
-const PROBE_TIMEOUT_MS = 1_500;
+const PROBE_TIMEOUT_MS = 2_500;
+
+export type DatabaseProbeResult = {
+  status: "unknown" | "connected" | "error";
+  detail?: string;
+};
 
 async function restProbe(
   supabaseUrl: string,
   apiKey: string,
-): Promise<boolean> {
+): Promise<{ ok: boolean; detail: string }> {
   try {
     const fetchWithRetry = createSupabaseFetch({
       retries: 0,
@@ -26,9 +31,12 @@ async function restProbe(
         cache: "no-store",
       },
     );
-    return res.ok;
-  } catch {
-    return false;
+    if (res.ok) return { ok: true, detail: `http_${res.status}` };
+    const body = (await res.text().catch(() => "")).slice(0, 160);
+    return { ok: false, detail: `http_${res.status}:${body}` };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return { ok: false, detail: msg.slice(0, 200) };
   }
 }
 
@@ -36,20 +44,37 @@ async function restProbe(
 export async function probeDatabaseConnection(): Promise<
   "unknown" | "connected" | "error"
 > {
+  return (await probeDatabaseConnectionDetailed()).status;
+}
+
+export async function probeDatabaseConnectionDetailed(): Promise<DatabaseProbeResult> {
   preloadRuntimeEnvIntoProcessEnv();
 
   const supabaseUrl = getServerSupabaseUrl();
-  if (!supabaseUrl) return "unknown";
+  if (!supabaseUrl) return { status: "unknown", detail: "missing_supabase_url" };
 
   const serviceRole = getServiceRoleKeySync();
-  if (serviceRole && (await restProbe(supabaseUrl, serviceRole))) {
-    return "connected";
+  if (serviceRole) {
+    const result = await restProbe(supabaseUrl, serviceRole);
+    if (result.ok) return { status: "connected", detail: result.detail };
+    const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim();
+    if (anonKey) {
+      const anon = await restProbe(supabaseUrl, anonKey);
+      if (anon.ok) return { status: "connected", detail: `anon:${anon.detail}` };
+      return {
+        status: "error",
+        detail: `service:${result.detail}|anon:${anon.detail}`,
+      };
+    }
+    return { status: "error", detail: `service:${result.detail}` };
   }
 
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim();
-  if (anonKey && (await restProbe(supabaseUrl, anonKey))) {
-    return "connected";
+  if (anonKey) {
+    const anon = await restProbe(supabaseUrl, anonKey);
+    if (anon.ok) return { status: "connected", detail: anon.detail };
+    return { status: "error", detail: `anon:${anon.detail}` };
   }
 
-  return "error";
+  return { status: "unknown", detail: "missing_api_keys" };
 }

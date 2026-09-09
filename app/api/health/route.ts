@@ -6,7 +6,7 @@ import { runtimeEnv, runtimeEnvDiagnostics } from "@/lib/runtime-env";
 import { getServiceRoleKeySync } from "@/lib/env-service-role";
 import { supabaseProjectRef } from "@/lib/supabase-project-ref";
 import { configuredAdminEmail } from "@/lib/admin-email";
-import { probeDatabaseConnection } from "@/lib/health-database-probe";
+import { probeDatabaseConnectionDetailed } from "@/lib/health-database-probe";
 import { getServerSupabaseUrl } from "@/lib/supabase/url";
 
 export const dynamic = "force-dynamic";
@@ -52,7 +52,8 @@ export async function GET(request: NextRequest) {
   }
 
   await bootstrapRuntimeSecrets();
-  const database = await probeDatabaseConnection();
+  const databaseProbe = await probeDatabaseConnectionDetailed();
+  const database = databaseProbe.status;
 
   // Env-only extras — never open long-retry Supabase clients here (that hung
   // Contabo detailed health for 20–60s when Kong was slow/unreachable).
@@ -80,6 +81,7 @@ export async function GET(request: NextRequest) {
         ? "vercel"
         : "unknown",
     database,
+    databaseDetail: databaseProbe.detail ?? "",
     paystack: paystackEnv ? "configured" : "unconfigured",
     contabo: contabo.configured ? "configured" : "unconfigured",
     contaboProvider: contabo.provider,
