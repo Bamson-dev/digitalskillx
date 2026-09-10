@@ -1,17 +1,21 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import type { Database } from "@/types/database";
+import { authCookieOptions } from "@/lib/supabase/auth-cookie";
 import { createServerSupabaseFetch } from "@/lib/supabase/fetch-bridge";
-import { getAuthSupabaseUrl } from "@/lib/supabase/url";
+import { getAdminSupabaseUrl, getAuthSupabaseUrl } from "@/lib/supabase/url";
 
 /**
  * Supabase client for Server Components, Route Handlers and Server Actions.
  * Bound to the request cookie store so the user's session is available
  * server-side. RLS is enforced for this client.
+ *
+ * Uses Kong when available (DNS bridge). Cookie name is pinned so it still
+ * matches the browser's sb-www-auth-token.
  */
 export function createClient() {
   const cookieStore = cookies();
-  const supabaseUrl = getAuthSupabaseUrl();
+  const supabaseUrl = getAdminSupabaseUrl() ?? getAuthSupabaseUrl();
   if (!supabaseUrl || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
     throw new Error("Supabase URL / anon key is not configured");
   }
@@ -20,6 +24,7 @@ export function createClient() {
     supabaseUrl,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
+      cookieOptions: authCookieOptions(),
       cookies: {
         getAll() {
           return cookieStore.getAll();

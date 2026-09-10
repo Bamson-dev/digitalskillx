@@ -3,7 +3,11 @@ import { NextResponse, type NextRequest } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 import { publicAbsoluteUrl } from "@/lib/public-site-origin";
-import { getAuthSupabaseUrl } from "@/lib/supabase/url";
+import {
+  authCookieOptions,
+  expireLegacyAuthCookies,
+} from "@/lib/supabase/auth-cookie";
+import { getAdminSupabaseUrl, getAuthSupabaseUrl } from "@/lib/supabase/url";
 import { createServerSupabaseFetch } from "@/lib/supabase/fetch-bridge";
 
 type CookieToSet = {
@@ -17,8 +21,9 @@ export function createRouteHandlerClientWithPendingCookies(
   request: NextRequest,
   pending: CookieToSet[],
 ): SupabaseClient<Database> {
-  // Must match NEXT_PUBLIC_SUPABASE_URL hostname or cookies won't be read by middleware.
-  const supabaseUrl = getAuthSupabaseUrl();
+  // Cookie name is pinned to sb-www-auth-token. Prefer Kong + DNS bridge so
+  // setSession does not depend on public hairpin to /api/sb.
+  const supabaseUrl = getAdminSupabaseUrl() ?? getAuthSupabaseUrl();
   if (!supabaseUrl || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
     throw new Error("Supabase URL / anon key is not configured");
   }
@@ -26,6 +31,7 @@ export function createRouteHandlerClientWithPendingCookies(
     supabaseUrl,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
+      cookieOptions: authCookieOptions(),
       cookies: {
         getAll() {
           return request.cookies.getAll();
@@ -57,6 +63,10 @@ export function redirectWithPendingCookies(
   for (const { name, value, options } of pending) {
     response.cookies.set(name, value, options);
   }
+  expireLegacyAuthCookies(
+    (name, value, options) => response.cookies.set(name, value, options),
+    request.cookies.getAll().map((c) => c.name),
+  );
   return response;
 }
 

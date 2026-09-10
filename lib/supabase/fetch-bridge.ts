@@ -22,9 +22,12 @@ function getSupabaseDispatcher(): Agent | undefined {
   const bridgeHost = env.SUPABASE_DOCKER_DNS?.trim() || "coolify-proxy";
   const publicHost = (() => {
     try {
+      // Prefer Kong/upstream hostname for SNI + Docker DNS remap.
+      // Never use NEXT_PUBLIC (/api/sb on www) here — that would remap www to
+      // coolify-proxy and break same-origin fetches.
       return new URL(
-        env.NEXT_PUBLIC_SUPABASE_URL ||
-          env.SUPABASE_URL ||
+        env.SUPABASE_URL ||
+          env.SUPABASE_UPSTREAM_URL ||
           "https://supabase.digitalskillx.com",
       ).hostname;
     } catch {

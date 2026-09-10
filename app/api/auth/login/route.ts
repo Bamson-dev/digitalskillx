@@ -54,10 +54,10 @@ export async function POST(request: NextRequest) {
     readDeviceKeyFromRequest(request) ||
     newDeviceKey();
 
-  const limited = await enforceRateLimit(request, "auth-login", 30, 15 * 60 * 1000, {
-    failClosed: true,
-  });
-  if (!limited.ok) {
+  // Fail-open when the rate-limit store is down — never lock students out of login
+  // because Postgres/rate_limit_buckets is briefly unavailable.
+  const limited = await enforceRateLimit(request, "auth-login", 40, 15 * 60 * 1000);
+  if (!limited.ok && !limited.unavailable) {
     secureLogError("auth", ErrorCode.AUTH_RATE_LIMITED, "student login rate limited");
     const errorUrl = loginErrorUrl(request, "Too many sign-in attempts. Please try again later.");
     return appendDeviceCookie(NextResponse.redirect(errorUrl, 303), deviceKey);

@@ -1,12 +1,9 @@
 /**
  * Supabase URL helpers.
  *
- * Cookie names from @supabase/ssr are derived from the URL hostname
- * (`sb-<first-label>-auth-token`). Auth/session clients MUST share one
- * hostname with the browser (NEXT_PUBLIC_SUPABASE_URL → /api/sb) or
- * middleware will ignore a successful login and bounce students to /login.
- *
- * Admin/service-role clients may use Kong (SUPABASE_URL) + Docker DNS bridge.
+ * Cookie names are pinned via `lib/supabase/auth-cookie.ts` (`sb-www-auth-token`).
+ * Do NOT derive session cookie names from these URLs again — that caused the
+ * Kong vs /api/sb login bounce.
  *
  * Intentionally free of `server-only` so middleware can import it.
  */
@@ -24,19 +21,35 @@ function isBuildPhase(): boolean {
   );
 }
 
-/** Browser + cookie/session clients (middleware, RSC, login setSession). */
+/**
+ * Browser + Edge-safe auth API base (same-origin `/api/sb` gateway).
+ * Pair every createBrowserClient / createServerClient with authCookieOptions().
+ */
 export function getAuthSupabaseUrl(): string | undefined {
   const env = process.env as Record<string, string | undefined>;
   const pub = trimUrl(env.NEXT_PUBLIC_SUPABASE_URL);
   if (isBuildPhase()) return pub;
-
-  // Prefer public same-origin gateway so cookie key matches the browser client.
   if (pub) return pub;
 
   const loopback = trimUrl(env.SUPABASE_LOOPBACK_URL);
   if (loopback) return loopback;
 
   return trimUrl(env.SUPABASE_URL);
+}
+
+/**
+ * Middleware session refresh URL.
+ * Prefer container loopback to `/api/sb` so we never hairpin the public IP
+ * (cookie name is pinned, so loopback hostname is safe).
+ */
+export function getMiddlewareSupabaseUrl(): string | undefined {
+  const env = process.env as Record<string, string | undefined>;
+  if (isBuildPhase()) return getAuthSupabaseUrl();
+
+  const loopback = trimUrl(env.SUPABASE_LOOPBACK_URL);
+  if (loopback) return loopback;
+
+  return getAuthSupabaseUrl();
 }
 
 /**

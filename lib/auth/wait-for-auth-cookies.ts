@@ -1,10 +1,21 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { AUTH_STORAGE_KEY } from "@/lib/supabase/auth-cookie";
 
 type PendingCookie = {
   name: string;
   value: string;
   options?: Record<string, unknown>;
 };
+
+function hasSessionCookie(pending: PendingCookie[]) {
+  return pending.some(
+    (c) =>
+      (c.name === AUTH_STORAGE_KEY ||
+        c.name.startsWith(`${AUTH_STORAGE_KEY}.`) ||
+        c.name.includes("-auth-token")) &&
+      c.value.length > 0,
+  );
+}
 
 /**
  * @supabase/ssr writes auth cookies in an async onAuthStateChange handler.
@@ -28,7 +39,7 @@ export function waitForSignedInCookies(
     };
 
     const timer = setTimeout(() => {
-      if (pending.some((c) => c.name.includes("-auth-token") && c.value.length > 0)) {
+      if (hasSessionCookie(pending)) {
         finish(true);
       } else {
         finish(false, "Timed out waiting for session cookies after sign-in");
@@ -39,10 +50,7 @@ export function waitForSignedInCookies(
       if (event !== "SIGNED_IN" && event !== "TOKEN_REFRESHED") return;
 
       for (let i = 0; i < 200; i++) {
-        const hasSessionCookie = pending.some(
-          (c) => c.name.includes("-auth-token") && c.value.length > 0,
-        );
-        if (hasSessionCookie) {
+        if (hasSessionCookie(pending)) {
           finish(true);
           return;
         }

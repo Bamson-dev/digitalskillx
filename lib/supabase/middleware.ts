@@ -3,7 +3,11 @@ import { NextResponse, type NextRequest } from "next/server";
 import type { Database } from "@/types/database";
 import { createSupabaseFetch } from "@/lib/supabase/fetch-retry";
 import { publicAbsoluteUrl } from "@/lib/public-site-origin";
-import { getAuthSupabaseUrl } from "@/lib/supabase/url";
+import {
+  authCookieOptions,
+  hasCanonicalAuthCookie,
+} from "@/lib/supabase/auth-cookie";
+import { getMiddlewareSupabaseUrl } from "@/lib/supabase/url";
 import {
   COURSE_CONTINUITY_COOKIE,
   isClassroomContinuityPath,
@@ -66,9 +70,10 @@ function isPublic(pathname: string) {
 }
 
 function hasSupabaseAuthCookie(request: NextRequest) {
-  return request.cookies
-    .getAll()
-    .some((c) => c.name.includes("-auth-token") && c.value.length > 20);
+  const all = request.cookies.getAll();
+  if (hasCanonicalAuthCookie(all)) return true;
+  // Soft-open still honors any auth-token cookie during Auth blips (legacy keys).
+  return all.some((c) => c.name.includes("-auth-token") && c.value.length > 20);
 }
 
 /** Avoid MIDDLEWARE_INVOCATION_TIMEOUT when Supabase auth is slow or unreachable. */
@@ -124,7 +129,7 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.next({ request });
   }
 
-  const supabaseUrl = getAuthSupabaseUrl();
+  const supabaseUrl = getMiddlewareSupabaseUrl();
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
   if (!supabaseUrl || !supabaseAnonKey) {
@@ -136,6 +141,8 @@ export async function updateSession(request: NextRequest) {
   );
   const allowContinuity =
     Boolean(continuity) && isClassroomContinuityPath(pathname);
+  const softOpenStudentPath =
+    hasSupabaseAuthCookie(request) && isClassroomContinuityPath(pathname);
 
   try {
     let response = NextResponse.next({ request });
@@ -144,6 +151,7 @@ export async function updateSession(request: NextRequest) {
       supabaseUrl,
       supabaseAnonKey,
       {
+        cookieOptions: authCookieOptions(),
         cookies: {
           getAll() {
             return request.cookies.getAll();
@@ -174,18 +182,17 @@ export async function updateSession(request: NextRequest) {
     } = await getUserWithTimeout(supabase);
 
     if (!user) {
-      // Soft-open classroom routes during Auth timeouts / blips when the browser
-      // already has a session cookie or a signed continuity token.
-      const authTimedOut = authError?.message === "middleware_auth_timeout";
-      if (
-        allowContinuity ||
-        (authTimedOut &&
-          hasSupabaseAuthCookie(request) &&
-          isClassroomContinuityPath(pathname))
-      ) {
+      // Soft-open student classroom routes during Auth timeouts / blips when the
+      // browser already has a session cookie or a signed continuity token.
+      // Never bounce a cookied student to /login just because Auth was slow.
+      if (allowContinuity || softOpenStudentPath) {
         response.headers.set(
           "x-dsx-continuity",
-          allowContinuity ? "token" : "session-soft",
+          allowContinuity
+            ? "token"
+            : authError?.message === "middleware_auth_timeout"
+              ? "session-soft"
+              : "session-cookie",
         );
         return response;
       }
@@ -199,7 +206,7 @@ export async function updateSession(request: NextRequest) {
     return response;
   } catch (err) {
     console.error("[digitalskillx] middleware session refresh failed:", err);
-    if (allowContinuity) {
+    if (allowContinuity || softOpenStudentPath) {
       return NextResponse.next({ request });
     }
     if (pathname.startsWith("/api/")) {

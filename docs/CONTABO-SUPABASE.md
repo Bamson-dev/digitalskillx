@@ -6,10 +6,12 @@ Digitalskillx production no longer depends on cloud `*.supabase.co`. Auth, Postg
 
 | Item | Value |
 |------|--------|
-| Public API | `https://supabase.digitalskillx.com` (Kong) |
+| Public API | `https://supabase.digitalskillx.com` (Kong; no public DNS — Docker bridge) |
 | Coolify service UUID | `lacy7js1uuvik6c2owzr4n4j` |
-| Browser | `NEXT_PUBLIC_SUPABASE_URL=https://supabase.digitalskillx.com` |
-| Server | `SUPABASE_URL=https://supabase.digitalskillx.com` + `SUPABASE_DOCKER_DNS=coolify-proxy` (Undici DNS bridge avoids public IP hairpin) |
+| Browser Auth | `NEXT_PUBLIC_SUPABASE_URL=https://www.digitalskillx.com/api/sb` (same-origin proxy) |
+| Server Auth cookies | Pinned `sb-www-auth-token` via `lib/supabase/auth-cookie.ts` (never derive from Kong hostname) |
+| Server data plane | `SUPABASE_URL=https://supabase.digitalskillx.com` + `SUPABASE_DOCKER_DNS=coolify-proxy` |
+| Middleware Auth | Prefer `SUPABASE_LOOPBACK_URL=http://127.0.0.1:3000/api/sb` (avoids public hairpin) |
 | TLS | `NODE_TLS_REJECT_UNAUTHORIZED=0` until Let’s Encrypt chain is complete |
 
 Compose snapshot: [`docker-compose.supabase.yml`](../docker-compose.supabase.yml).
