@@ -4,7 +4,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 import { publicAbsoluteUrl } from "@/lib/public-site-origin";
 import { getServerSupabaseUrl } from "@/lib/supabase/url";
-import { createSupabaseFetch } from "@/lib/supabase/fetch-retry";
+import { createServerSupabaseFetch } from "@/lib/supabase/fetch-bridge";
 
 type CookieToSet = {
   name: string;
@@ -37,7 +37,8 @@ export function createRouteHandlerClientWithPendingCookies(
           }
         },
       },
-      global: { fetch: createSupabaseFetch({ retries: 1, timeoutMs: 20_000 }) },
+      // Must use DNS bridge — supabase.* has no public DNS on Contabo.
+      global: { fetch: createServerSupabaseFetch({ retries: 1, timeoutMs: 20_000 }) },
     },
   );
 }

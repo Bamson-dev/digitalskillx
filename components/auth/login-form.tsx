@@ -33,10 +33,21 @@ export function LoginForm({
             className="font-medium text-brand underline"
           >
             www.digitalskillx.com/login
-          </a>{" "}
-          (avoid the non-www link if Safari errors).
+          </a>
+          .
         </p>
       </div>
+
+      <p className="rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm text-neutral-700">
+        Can&apos;t sign in right now?{" "}
+        <Link href="/forgot-password" className="font-semibold text-brand underline">
+          Reset password
+        </Link>
+        {" · "}
+        <Link href="/continue" className="font-semibold text-brand underline">
+          Continue on this device
+        </Link>
+      </p>
 
       {registered ? (
         <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
@@ -50,15 +61,6 @@ export function LoginForm({
             {authError === "fetch failed"
               ? "Sign-in briefly failed. Retry on www.digitalskillx.com, or reset your password."
               : authError}
-          </p>
-          <p>
-            <Link href="/forgot-password" className="font-semibold underline">
-              Reset password
-            </Link>
-            {" · "}
-            <Link href="/continue" className="font-semibold underline">
-              Continue learning on this device
-            </Link>
           </p>
         </div>
       ) : null}
