@@ -3,7 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 import { publicAbsoluteUrl } from "@/lib/public-site-origin";
-import { getServerSupabaseUrl } from "@/lib/supabase/url";
+import { getAuthSupabaseUrl } from "@/lib/supabase/url";
 import { createServerSupabaseFetch } from "@/lib/supabase/fetch-bridge";
 
 type CookieToSet = {
@@ -17,7 +17,8 @@ export function createRouteHandlerClientWithPendingCookies(
   request: NextRequest,
   pending: CookieToSet[],
 ): SupabaseClient<Database> {
-  const supabaseUrl = getServerSupabaseUrl();
+  // Must match NEXT_PUBLIC_SUPABASE_URL hostname or cookies won't be read by middleware.
+  const supabaseUrl = getAuthSupabaseUrl();
   if (!supabaseUrl || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
     throw new Error("Supabase URL / anon key is not configured");
   }

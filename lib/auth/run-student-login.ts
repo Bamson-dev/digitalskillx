@@ -6,7 +6,7 @@ import {
   syncStudentCourseAccess,
 } from "@/lib/admin-student-onboarding";
 import type { Database } from "@/types/database";
-import { getServerSupabaseUrl } from "@/lib/supabase/url";
+import { getAdminSupabaseUrl, getAuthSupabaseUrl } from "@/lib/supabase/url";
 
 export type LoginSession = {
   access_token: string;
@@ -26,7 +26,8 @@ export async function runStudentLogin(params: {
     return { ok: false, error: "Email and password are required." };
   }
 
-  const supabaseUrl = getServerSupabaseUrl();
+  // Password verify may use Kong; session cookies are set via auth URL (/api/sb).
+  const supabaseUrl = getAdminSupabaseUrl() ?? getAuthSupabaseUrl();
   if (!supabaseUrl || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
     return { ok: false, error: "Supabase is not configured." };
   }

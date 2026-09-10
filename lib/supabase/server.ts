@@ -2,7 +2,7 @@ import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import type { Database } from "@/types/database";
 import { createServerSupabaseFetch } from "@/lib/supabase/fetch-bridge";
-import { getServerSupabaseUrl } from "@/lib/supabase/url";
+import { getAuthSupabaseUrl } from "@/lib/supabase/url";
 
 /**
  * Supabase client for Server Components, Route Handlers and Server Actions.
@@ -11,7 +11,7 @@ import { getServerSupabaseUrl } from "@/lib/supabase/url";
  */
 export function createClient() {
   const cookieStore = cookies();
-  const supabaseUrl = getServerSupabaseUrl();
+  const supabaseUrl = getAuthSupabaseUrl();
   if (!supabaseUrl || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
     throw new Error("Supabase URL / anon key is not configured");
   }

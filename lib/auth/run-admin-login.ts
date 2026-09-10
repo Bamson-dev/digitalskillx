@@ -7,7 +7,7 @@ import { isAdminMfaRequired } from "@/lib/admin-mfa";
 import { logAudit } from "@/lib/audit";
 import type { Database } from "@/types/database";
 import type { LoginSession } from "@/lib/auth/run-student-login";
-import { getServerSupabaseUrl } from "@/lib/supabase/url";
+import { getAdminSupabaseUrl, getAuthSupabaseUrl } from "@/lib/supabase/url";
 
 export async function runAdminLogin(params: {
   email: string;
@@ -21,7 +21,7 @@ export async function runAdminLogin(params: {
     return { ok: false, error: "Email and password are required." };
   }
 
-  const supabaseUrl = getServerSupabaseUrl();
+  const supabaseUrl = getAdminSupabaseUrl() ?? getAuthSupabaseUrl();
   if (!supabaseUrl || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
     return { ok: false, error: "Supabase is not configured." };
   }

@@ -3,7 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import type { Database } from "@/types/database";
 import { createSupabaseFetch } from "@/lib/supabase/fetch-retry";
 import { publicAbsoluteUrl } from "@/lib/public-site-origin";
-import { getServerSupabaseUrl } from "@/lib/supabase/url";
+import { getAuthSupabaseUrl } from "@/lib/supabase/url";
 import {
   COURSE_CONTINUITY_COOKIE,
   isClassroomContinuityPath,
@@ -124,7 +124,7 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.next({ request });
   }
 
-  const supabaseUrl = getServerSupabaseUrl();
+  const supabaseUrl = getAuthSupabaseUrl();
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
   if (!supabaseUrl || !supabaseAnonKey) {

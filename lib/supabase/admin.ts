@@ -7,10 +7,10 @@ import {
   serviceRoleKeyMissingMessage,
 } from "@/lib/env-service-role";
 import { createServerSupabaseFetch } from "@/lib/supabase/fetch-bridge";
-import { getServerSupabaseUrl } from "@/lib/supabase/url";
+import { getAdminSupabaseUrl } from "@/lib/supabase/url";
 
 function buildAdminClient(serviceRoleKey: string) {
-  const supabaseUrl = getServerSupabaseUrl();
+  const supabaseUrl = getAdminSupabaseUrl();
   if (!supabaseUrl) {
     throw new Error("SUPABASE_URL / NEXT_PUBLIC_SUPABASE_URL is not configured");
   }
