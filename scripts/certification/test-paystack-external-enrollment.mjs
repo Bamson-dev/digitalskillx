@@ -232,16 +232,31 @@ check("access email subject and course title", () => {
   assert.match(tpl.html, /Start learning/);
 });
 
-check("new account email mentions secure sign-in", () => {
+check("new account email includes login password credentials", () => {
   const tpl = emailTpl.paystackCourseAccessReadyEmail({
     firstName: "Ada",
     courseTitle: PRODUCT.title,
     courseUrl: "https://www.digitalskillx.com/courses/abc",
-    loginUrl: "https://www.digitalskillx.com/login",
+    loginUrl: "https://www.digitalskillx.com/login?next=%2Fcourses%2Fabc",
     isNewAccount: true,
+    email: "ada@example.com",
+    password: "TempPass123!",
     supportEmail: "support@digitalskillx.com",
   });
-  assert.match(tpl.html, /secure sign-in link/i);
+  assert.equal(tpl.subject, "Your DigitalSkillX login and course access");
+  assert.match(tpl.html, /Your DigitalSkillX login/);
+  assert.match(tpl.html, /ada@example\.com/);
+  assert.match(tpl.html, /TempPass123!/);
+  assert.match(tpl.html, /Log in and start learning/);
+});
+
+check("manual track issues login password with access email", () => {
+  const tracking = read("lib/manual-purchase-tracking.ts");
+  assert.match(tracking, /issueLoginPassword:\s*true/);
+  assert.match(tracking, /forceEmail:\s*true/);
+  const fulfillment = read("lib/paystack-external-fulfillment.ts");
+  assert.match(fulfillment, /issueLoginPassword/);
+  assert.match(fulfillment, /issueStudentLoginPassword/);
 });
 
 check("webhook route supports Leadthur handoff and direct Paystack", () => {

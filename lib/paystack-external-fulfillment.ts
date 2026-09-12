@@ -3,6 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { createAdminClientAsync } from "@/lib/supabase/admin";
 import { logAudit } from "@/lib/audit";
 import { resolveOrCreateStudentForPurchase } from "@/lib/guest-checkout";
+import { generateStrongPassword } from "@/lib/admin-student-onboarding";
 import { fulfillPurchase } from "@/lib/purchase";
 import { sendMagicLinkEmail } from "@/lib/auth-email";
 import { siteUrl } from "@/lib/org";
@@ -140,6 +141,7 @@ async function sendAccessEmail(params: {
   courseId: string;
   courseTitle: string;
   isNewAccount: boolean;
+  password?: string;
   skipMagicLink?: boolean;
 }) {
   const base = siteUrl();
@@ -148,8 +150,9 @@ async function sendAccessEmail(params: {
   // Relative `next` so login always accepts it (absolute next broke older emails).
   const loginUrl = `${base}/login?next=${encodeURIComponent(coursePath)}`;
 
-  if (params.isNewAccount && !params.skipMagicLink) {
-    // Never block access email on magic-link latency/outages.
+  // Prefer password credentials. Magic links are a fallback only when no password
+  // was issued (legacy new-account path without credentials).
+  if (params.isNewAccount && !params.password && !params.skipMagicLink) {
     void sendMagicLinkEmail(params.email, `/courses/${params.courseId}`).catch((err) => {
       secureLog("warn", "paystack/external", "magic_link_failed", {
         error: err instanceof Error ? err.message : String(err),
@@ -164,7 +167,21 @@ async function sendAccessEmail(params: {
     courseUrl,
     loginUrl,
     isNewAccount: params.isNewAccount,
+    password: params.password,
   });
+}
+
+async function issueStudentLoginPassword(
+  admin: Admin,
+  studentId: string,
+): Promise<string> {
+  const password = generateStrongPassword();
+  const { error } = await admin.auth.admin.updateUserById(studentId, {
+    password,
+    email_confirm: true,
+  });
+  if (error) throw new Error(error.message);
+  return password;
 }
 
 /**
@@ -179,6 +196,11 @@ export async function fulfillPaystackExternalCharge(params: {
   verifiedOverride?: VerifiedTransaction | null;
   /** Resend access email even if access_email_sent_at is already set. */
   forceEmail?: boolean;
+  /**
+   * Always set a fresh login password and include it in the access email.
+   * Used by admin Manual Track so recipients get platform credentials, not only a link.
+   */
+  issueLoginPassword?: boolean;
   handoffPayment?: LeadthurHandoffPayment;
   admin?: Admin;
   skipPurchaseTracking?: boolean;
@@ -376,14 +398,30 @@ export async function fulfillPaystackExternalCharge(params: {
           .select("full_name")
           .eq("id", existingTx.student_id)
           .maybeSingle();
+        let password: string | undefined;
+        if (params.issueLoginPassword) {
+          try {
+            password = await issueStudentLoginPassword(admin, existingTx.student_id);
+          } catch (err) {
+            return {
+              handled: true,
+              ok: false,
+              reference,
+              error: err instanceof Error ? err.message : "Could not issue login password.",
+              permanent: false,
+              status: 500,
+            };
+          }
+        }
         const emailResult = await sendAccessEmail({
           studentId: existingTx.student_id,
           email: buyerEmail,
           firstName: profile?.full_name?.split(/\s+/)[0] ?? "there",
           courseId: existingTx.course_id,
           courseTitle: course.title,
-          isNewAccount: false,
-          skipMagicLink: Boolean(params.verifiedOverride) || Boolean(params.forceEmail),
+          isNewAccount: Boolean(password),
+          password,
+          skipMagicLink: true,
         });
         await patchTransactionPaystackData(admin, reference, {
           fulfillment_status: emailResult.sent ? "email_sent" : "email_failed",
@@ -432,6 +470,7 @@ export async function fulfillPaystackExternalCharge(params: {
 
   let studentId = existingTx?.student_id ?? null;
   let isNewAccount = false;
+  let loginPassword: string | undefined;
 
   try {
     const resolved = await resolveOrCreateStudentForPurchase(admin, {
@@ -440,6 +479,12 @@ export async function fulfillPaystackExternalCharge(params: {
     });
     studentId = resolved.studentId;
     isNewAccount = resolved.isNewAccount;
+    loginPassword = resolved.password;
+    if (params.issueLoginPassword) {
+      // Manual track always emails a fresh password so the buyer can log in.
+      loginPassword = await issueStudentLoginPassword(admin, studentId);
+      isNewAccount = true;
+    }
     secureLog("info", "paystack/external", isNewAccount ? "user_created" : "user_found", {
       reference,
       productKey: product.key,
@@ -556,15 +601,20 @@ export async function fulfillPaystackExternalCharge(params: {
 
     const firstName = buyerName?.split(/\s+/)[0] || buyerEmail.split("@")[0] || "there";
     let emailResult: { sent: boolean; error?: string | null } = { sent: true };
-    if (!externalMeta?.access_email_sent_at || params.forceEmail) {
+    if (!externalMeta?.access_email_sent_at || params.forceEmail || params.issueLoginPassword) {
       emailResult = await sendAccessEmail({
         studentId,
         email: buyerEmail,
         firstName,
         courseId: course.id,
         courseTitle: course.title,
-        isNewAccount,
-        skipMagicLink: Boolean(params.verifiedOverride) || Boolean(params.forceEmail),
+        isNewAccount: isNewAccount || Boolean(loginPassword),
+        password: loginPassword,
+        skipMagicLink:
+          Boolean(loginPassword) ||
+          Boolean(params.issueLoginPassword) ||
+          Boolean(params.verifiedOverride) ||
+          Boolean(params.forceEmail),
       });
     } else {
       secureLog("info", "paystack/external", "duplicate_email_skipped", { reference });

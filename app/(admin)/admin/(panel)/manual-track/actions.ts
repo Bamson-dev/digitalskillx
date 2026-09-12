@@ -46,7 +46,7 @@ export async function submitManualTrackPurchase(
 
     revalidatePath("/admin/manual-track");
     return {
-      message: `Student enrolled and purchase tracked successfully for ${parsed.value.email}`,
+      message: `Student account ready for ${parsed.value.email}. They were enrolled and emailed their login password + course access.`,
       warning: result.trackingWarning,
     };
   } catch (err) {

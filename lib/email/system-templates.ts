@@ -264,16 +264,27 @@ export type PaystackCourseAccessEmailParams = {
   isNewAccount: boolean;
   supportEmail: string;
   brandColor?: string;
+  /** When set, email includes platform login credentials (preferred over magic links). */
+  email?: string;
+  password?: string;
 };
 
 export function paystackCourseAccessReadyEmail(p: PaystackCourseAccessEmailParams) {
-  const newAccountLine = p.isNewAccount
-    ? `<p style="margin:0 0 16px;font-size:15px;line-height:1.7;color:#475569;">
-        If you are new to DigitalSkillX, use the secure sign-in link we sent separately to open your account, then return here to start learning.
-      </p>`
-    : `<p style="margin:0 0 16px;font-size:15px;line-height:1.7;color:#475569;">
-        If you already have a DigitalSkillX account, log in using your existing account.
-      </p>`;
+  const credentialsBlock =
+    p.email && p.password
+      ? `<div style="margin:0 0 20px;padding:18px;background:#fff7ed;border:1px solid #fed7aa;border-radius:12px;">
+        <p style="margin:0 0 12px;font-size:14px;font-weight:700;color:#9a3412;">Your DigitalSkillX login</p>
+        <p style="margin:0 0 8px;font-size:14px;line-height:1.6;color:#334155;"><strong>Email:</strong> ${escapeHtml(p.email)}</p>
+        <p style="margin:0 0 12px;font-size:14px;line-height:1.6;color:#334155;"><strong>Password:</strong> <code style="font-size:15px;font-weight:700;color:#111827;background:#fff;padding:4px 8px;border-radius:6px;border:1px solid #e2e8f0;">${escapeHtml(p.password)}</code></p>
+        <p style="margin:0;font-size:13px;line-height:1.6;color:#9a3412;">Log in at <a href="${escapeHtml(p.loginUrl)}" style="color:#b91c1c;text-decoration:underline;">www.digitalskillx.com/login</a>, then change this password after your first sign-in.</p>
+      </div>`
+      : p.isNewAccount
+        ? `<p style="margin:0 0 16px;font-size:15px;line-height:1.7;color:#475569;">
+            Your DigitalSkillX account is ready. Use <a href="${escapeHtml(p.loginUrl.replace(/\/login.*/, "/forgot-password"))}" style="color:#b91c1c;text-decoration:underline;">Forgot password</a> if you need to set a password, then start learning.
+          </p>`
+        : `<p style="margin:0 0 16px;font-size:15px;line-height:1.7;color:#475569;">
+            If you already have a DigitalSkillX account, log in with your existing email and password.
+          </p>`;
 
   const bodyHtml = `
     <h1 style="margin:0 0 12px;font-size:24px;line-height:1.3;color:#111827;">Hello ${escapeHtml(p.firstName)},</h1>
@@ -281,26 +292,28 @@ export function paystackCourseAccessReadyEmail(p: PaystackCourseAccessEmailParam
       Your payment for <strong>${escapeHtml(p.courseTitle)}</strong> was successful.
     </p>
     <p style="margin:0 0 16px;font-size:15px;line-height:1.7;color:#475569;">
-      Your course access is now ready.
+      Your course access is now ready — you are a student on the DigitalSkillX platform.
     </p>
     <div style="margin:0 0 20px;padding:16px 18px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;">
       <p style="margin:0 0 8px;font-size:14px;font-weight:700;color:#111827;">Course</p>
       <p style="margin:0;font-size:15px;line-height:1.6;color:#334155;">${escapeHtml(p.courseTitle)}</p>
     </div>
-    ${newAccountLine}
+    ${credentialsBlock}
     <p style="margin:0;font-size:14px;line-height:1.7;color:#475569;">
-      Access your course at
-      <a href="${escapeHtml(p.loginUrl)}" style="color:#b91c1c;text-decoration:underline;">${escapeHtml(p.loginUrl)}</a>
+      Open your course after login:
+      <a href="${escapeHtml(p.courseUrl)}" style="color:#b91c1c;text-decoration:underline;">${escapeHtml(p.courseUrl)}</a>
     </p>`;
 
   return {
-    subject: "Your course access is ready",
+    subject: p.password
+      ? "Your DigitalSkillX login and course access"
+      : "Your course access is ready",
     html: emailLayout({
       brandColor: p.brandColor,
       title: "Your course access is ready",
       bodyHtml,
       // loginUrl includes ?next=/courses/... so Start learning resumes after sign-in.
-      cta: { label: "Start learning", url: p.loginUrl },
+      cta: { label: p.password ? "Log in and start learning" : "Start learning", url: p.loginUrl },
       supportEmail: p.supportEmail,
     }),
   };

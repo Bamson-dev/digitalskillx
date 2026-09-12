@@ -16,10 +16,10 @@ export default async function ManualTrackPurchasePage() {
       <div>
         <h1 className="text-2xl font-bold">Manual purchase tracking</h1>
         <p className="mt-1 max-w-2xl text-sm text-muted">
-          Paste the buyer’s email and click Track. They get enrolled into{" "}
-          <span className="font-medium text-ink">Build And Monetize Your Software With AI</span>{" "}
-          and Stape + Meta purchase events fire automatically (amount, product, and reference are
-          defaults).
+          Paste the buyer’s email and click Track. We create (or update) their DigitalSkillX
+          student account, email them a login password, enroll them into{" "}
+          <span className="font-medium text-ink">Build And Monetize Your Software With AI</span>,
+          and fire Stape + Meta purchase events (amount, product, and reference are defaults).
         </p>
       </div>
 

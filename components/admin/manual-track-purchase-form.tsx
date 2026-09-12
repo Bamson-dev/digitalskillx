@@ -43,7 +43,8 @@ export function ManualTrackPurchaseForm() {
           placeholder="buyer@email.com"
         />
         <p className="mt-1.5 text-xs text-muted">
-          That’s all you need. Amount (₦{BUILD_SOFTWARE_WITH_AI_PRODUCT.expectedAmountNgn.toLocaleString("en-NG")}),
+          That’s all you need. We create their DigitalSkillX login (email + password), enroll them,
+          and email the credentials. Amount (₦{BUILD_SOFTWARE_WITH_AI_PRODUCT.expectedAmountNgn.toLocaleString("en-NG")}),
           product name, and payment reference are filled in automatically.
         </p>
       </div>

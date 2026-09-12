@@ -64,7 +64,7 @@ export async function POST(request: NextRequest) {
       ok: true,
       enrolled: true,
       trackingFailed: result.trackingFailed ?? false,
-      message: `Student enrolled and purchase tracked successfully for ${parsed.value.email}`,
+      message: `Student account ready for ${parsed.value.email}. Login password and course access were emailed.`,
       warning: result.trackingWarning,
       email: parsed.value.email,
       reference: parsed.value.reference,

@@ -98,6 +98,8 @@ export async function runManualTrackPurchase(
     enrolled = await fulfillPaystackExternalCharge({
       reference: input.reference,
       skipPurchaseTracking: true,
+      forceEmail: true,
+      issueLoginPassword: true,
       handoffPayment: {
         productKey: product.key,
         amount: amountKobo,

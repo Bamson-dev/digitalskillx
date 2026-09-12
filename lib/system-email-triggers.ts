@@ -162,6 +162,7 @@ export async function sendPaystackCourseAccessEmail(params: {
   courseUrl: string;
   loginUrl: string;
   isNewAccount: boolean;
+  password?: string;
 }) {
   const settings = await getPlatformSettingsAdmin();
   const sender = await getEmailSenderConfig();
@@ -171,6 +172,8 @@ export async function sendPaystackCourseAccessEmail(params: {
     courseUrl: params.courseUrl,
     loginUrl: params.loginUrl,
     isNewAccount: params.isNewAccount,
+    email: params.email,
+    password: params.password,
     supportEmail: sender.replyTo ?? sender.fromAddress,
     brandColor: settings.primary_color,
   });
@@ -181,7 +184,11 @@ export async function sendPaystackCourseAccessEmail(params: {
     subject: tpl.subject,
     html: tpl.html,
     replyTo: sender.replyTo,
-    payload: { courseTitle: params.courseTitle, isNewAccount: params.isNewAccount },
+    payload: {
+      courseTitle: params.courseTitle,
+      isNewAccount: params.isNewAccount,
+      hasPassword: Boolean(params.password),
+    },
   });
 }
 
