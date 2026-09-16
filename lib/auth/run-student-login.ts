@@ -13,6 +13,21 @@ export type LoginSession = {
   refresh_token: string;
 };
 
+function studentFacingLoginError(message: string) {
+  const normalized = message.trim().toLowerCase();
+  if (
+    normalized.includes("invalid login credentials") ||
+    normalized.includes("user not found") ||
+    normalized.includes("email not found")
+  ) {
+    return "We could not accept that email and password. Use the exact email shown in your DigitalSkillX course-access message, or tap Forgot password to get a fresh login.";
+  }
+  if (normalized.includes("email not confirmed")) {
+    return "Your account exists but the email is not confirmed yet. Use Forgot password to receive a fresh login.";
+  }
+  return message;
+}
+
 export async function runStudentLogin(params: {
   email: string;
   password: string;
@@ -47,7 +62,7 @@ export async function runStudentLogin(params: {
   );
 
   const { data, error } = await authClient.auth.signInWithPassword({ email, password });
-  if (error) return { ok: false, error: error.message };
+  if (error) return { ok: false, error: studentFacingLoginError(error.message) };
   if (!data.session) return { ok: false, error: "No session returned from sign-in." };
 
   try {

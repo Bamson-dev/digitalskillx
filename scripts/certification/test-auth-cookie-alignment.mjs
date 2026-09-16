@@ -53,6 +53,16 @@ assert(
   "student login does not fail-closed on rate-limit store outages",
 );
 
+const studentLogin = read("lib/auth/run-student-login.ts");
+assert(
+  studentLogin.includes("studentFacingLoginError"),
+  "student login maps misleading Auth errors to recovery guidance",
+);
+assert(
+  studentLogin.includes("exact email shown in your DigitalSkillX course-access message"),
+  "login error directs students to their registered course email",
+);
+
 const bridge = read("lib/supabase/fetch-bridge.ts");
 assert(
   bridge.includes("Never use NEXT_PUBLIC") ||
