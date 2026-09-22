@@ -39,6 +39,14 @@ export function isCourseFree(course: PricedCourse, currency: CurrencyCode) {
   return getCoursePrice(course, currency) <= 0;
 }
 
+/**
+ * Catalog-level free check (homepage / browse filters).
+ * A course is free only when both listed currencies are zero — matches CourseCard badges.
+ */
+export function isCatalogCourseFree(course: PricedCourse) {
+  return Number(course.price_ngn ?? 0) <= 0 && Number(course.price_usd ?? 0) <= 0;
+}
+
 /** Convert Naira to Paystack kobo. */
 export function nairaToKobo(naira: number) {
   return Math.round(naira * 100);

@@ -19,13 +19,13 @@ const DEFAULT_LANDING_SELECT =
 
 export const getCachedPublishedCatalog = unstable_cache(
   async () => fetchPublishedCourses<CatalogCourse>(DEFAULT_CATALOG_SELECT),
-  ["storefront-catalog-v1"],
+  ["storefront-catalog-v2"],
   { revalidate: STOREFRONT_CATALOG_REVALIDATE_SECONDS },
 );
 
 export const getCachedCourseCategories = unstable_cache(
   async () => fetchCourseCategories(),
-  ["storefront-categories-v1"],
+  ["storefront-categories-v2"],
   { revalidate: STOREFRONT_CATALOG_REVALIDATE_SECONDS },
 );
 
@@ -44,7 +44,7 @@ export const getCachedStorefrontTrustStats = unstable_cache(
       certificates: certsRes.count ?? 0,
     };
   },
-  ["storefront-trust-stats-v1"],
+  ["storefront-trust-stats-v2"],
   { revalidate: STOREFRONT_CATALOG_REVALIDATE_SECONDS },
 );
 

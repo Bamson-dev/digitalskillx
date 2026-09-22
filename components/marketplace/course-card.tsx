@@ -4,6 +4,7 @@ import Link from "next/link";
 import { ArrowUpRight } from "lucide-react";
 import { useCurrency } from "@/components/providers/currency-provider";
 import { CourseMediaImage } from "@/components/marketplace/course-media-image";
+import { isCatalogCourseFree } from "@/lib/currency";
 import { cn } from "@/lib/utils";
 
 export type MarketplaceCourse = {
@@ -34,7 +35,8 @@ export function CourseCard({
   const blurb = course.short_description ?? course.description;
   const category = course.category_name?.trim() || null;
   const instructor = course.instructor_name?.trim() || null;
-  const isFree = !course.is_coming_soon && course.price_ngn === 0 && course.price_usd === 0;
+  const isFree = !course.is_coming_soon && isCatalogCourseFree(course);
+  const ctaLabel = course.is_coming_soon ? "Preview" : isFree ? "Enroll free" : "View course";
 
   if (variant === "compact") {
     return (
@@ -81,7 +83,7 @@ export function CourseCard({
         className,
       )}
     >
-      <div className="relative">
+      <div className="relative overflow-hidden">
         <CourseMediaImage
           src={course.thumbnail_url}
           alt={course.title}
@@ -122,7 +124,7 @@ export function CourseCard({
             &nbsp;
           </p>
         )}
-        <div className="mt-auto flex items-end justify-between gap-3 pt-4">
+        <div className="mt-auto flex items-end justify-between gap-3 border-t border-neutral-100 pt-4">
           {course.is_coming_soon ? (
             <span className="text-sm font-semibold uppercase tracking-wider text-neutral-600">
               Coming soon
@@ -133,8 +135,8 @@ export function CourseCard({
             </span>
           )}
           <span className="inline-flex items-center gap-0.5 text-xs font-semibold uppercase tracking-wider text-neutral-500 transition group-hover:text-brand">
-            View
-            <ArrowUpRight className="h-3.5 w-3.5" strokeWidth={2.5} />
+            {ctaLabel}
+            <ArrowUpRight className="h-3.5 w-3.5" strokeWidth={2.5} aria-hidden />
           </span>
         </div>
       </div>
@@ -150,13 +152,14 @@ export function CourseCardHorizontal({
   badge?: string;
 }) {
   const { formatCoursePrice } = useCurrency();
+  const isFree = isCatalogCourseFree(course);
 
   return (
     <Link
       href={`/course/${course.id}`}
       className="group flex min-h-[44px] flex-col overflow-hidden rounded-xl border border-neutral-200 bg-white py-0 transition hover:border-neutral-400 sm:flex-row sm:gap-0"
     >
-      <div className="relative w-full shrink-0 sm:w-52">
+      <div className="relative w-full shrink-0 overflow-hidden sm:w-52">
         <CourseMediaImage
           src={course.thumbnail_url}
           alt={course.title}
@@ -179,7 +182,7 @@ export function CourseCardHorizontal({
           </p>
         ) : null}
         <p className="mt-4 font-display text-lg font-bold tabular-nums text-brand">
-          {formatCoursePrice(course)}
+          {isFree ? "Free" : formatCoursePrice(course)}
         </p>
       </div>
     </Link>

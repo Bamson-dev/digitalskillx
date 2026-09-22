@@ -1,27 +1,53 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
 import { Search } from "lucide-react";
 import { CourseCard, type MarketplaceCourse } from "@/components/marketplace/course-card";
+import { isCatalogCourseFree } from "@/lib/currency";
 import { cn } from "@/lib/utils";
 
 type Category = { id: string; name: string; slug: string | null };
 type SortKey = "newest" | "price-asc" | "price-desc" | "title";
+type PriceFilter = "" | "free" | "paid";
+
+function normalizePriceFilter(value: string | undefined): PriceFilter {
+  if (value === "free" || value === "paid") return value;
+  return "";
+}
 
 export function BrowseCatalog({
   courses,
   categories,
   initialQuery = "",
   initialCategory = "",
+  initialPrice = "",
 }: {
   courses: MarketplaceCourse[];
   categories: Category[];
   initialQuery?: string;
   initialCategory?: string;
+  initialPrice?: string;
 }) {
+  const router = useRouter();
+  const pathname = usePathname();
   const [query, setQuery] = useState(initialQuery);
   const [category, setCategory] = useState(initialCategory);
+  const [price, setPrice] = useState<PriceFilter>(normalizePriceFilter(initialPrice));
   const [sort, setSort] = useState<SortKey>("newest");
+
+  const syncPriceToUrl = useCallback(
+    (next: PriceFilter) => {
+      setPrice(next);
+      const params = new URLSearchParams();
+      if (query.trim()) params.set("q", query.trim());
+      if (category) params.set("category", category);
+      if (next) params.set("price", next);
+      const qs = params.toString();
+      router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+    },
+    [category, pathname, query, router],
+  );
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -32,6 +58,10 @@ export function BrowseCatalog({
         categories.find((cat) => cat.slug === category || cat.name === category)?.name ===
           c.category_name;
       if (!matchesCategory) return false;
+
+      if (price === "free" && !isCatalogCourseFree(c)) return false;
+      if (price === "paid" && isCatalogCourseFree(c)) return false;
+
       if (!q) return true;
       const haystack = [c.title, c.short_description, c.description, c.instructor_name, c.category_name]
         .filter(Boolean)
@@ -56,7 +86,13 @@ export function BrowseCatalog({
       }
     });
     return sorted;
-  }, [courses, query, category, categories, sort]);
+  }, [courses, query, category, categories, price, sort]);
+
+  const priceFilters: { id: PriceFilter; label: string }[] = [
+    { id: "", label: "All" },
+    { id: "free", label: "Free" },
+    { id: "paid", label: "Paid" },
+  ];
 
   return (
     <div className="overflow-x-hidden">
@@ -93,19 +129,38 @@ export function BrowseCatalog({
         </div>
       </div>
 
+      <div className="mt-5 flex flex-wrap gap-2" role="group" aria-label="Filter by price">
+        {priceFilters.map((item) => (
+          <button
+            key={item.id || "all-price"}
+            type="button"
+            onClick={() => syncPriceToUrl(item.id)}
+            className={cn(
+              "min-h-[44px] shrink-0 border px-3.5 py-2 text-xs font-semibold uppercase tracking-wider transition",
+              price === item.id
+                ? "border-brand bg-brand text-white"
+                : "border-neutral-200 bg-white text-neutral-600 hover:border-neutral-400",
+            )}
+            aria-pressed={price === item.id}
+          >
+            {item.label}
+          </button>
+        ))}
+      </div>
+
       {categories.length > 0 ? (
-        <div className="mt-5 flex gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <div className="mt-4 flex gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           <button
             type="button"
             onClick={() => setCategory("")}
             className={cn(
-              "shrink-0 border px-3.5 py-2 text-xs font-semibold uppercase tracking-wider transition min-h-[44px]",
+              "min-h-[44px] shrink-0 border px-3.5 py-2 text-xs font-semibold uppercase tracking-wider transition",
               !category
                 ? "border-neutral-950 bg-neutral-950 text-white"
                 : "border-neutral-200 bg-white text-neutral-600 hover:border-neutral-400",
             )}
           >
-            All
+            All topics
           </button>
           {categories.map((cat) => (
             <button
@@ -113,7 +168,7 @@ export function BrowseCatalog({
               type="button"
               onClick={() => setCategory(cat.name)}
               className={cn(
-                "shrink-0 border px-3.5 py-2 text-xs font-semibold uppercase tracking-wider transition min-h-[44px]",
+                "min-h-[44px] shrink-0 border px-3.5 py-2 text-xs font-semibold uppercase tracking-wider transition",
                 category === cat.name
                   ? "border-neutral-950 bg-neutral-950 text-white"
                   : "border-neutral-200 bg-white text-neutral-600 hover:border-neutral-400",
@@ -128,10 +183,10 @@ export function BrowseCatalog({
       {filtered.length === 0 ? (
         <div className="mt-16 rounded-xl border border-dashed border-neutral-300 bg-neutral-50 px-6 py-16 text-center">
           <p className="font-display text-lg font-semibold text-neutral-800">No courses match</p>
-          <p className="mt-2 text-sm text-neutral-500">Try a different keyword or category.</p>
+          <p className="mt-2 text-sm text-neutral-500">Try a different keyword, price filter, or topic.</p>
         </div>
       ) : (
-        <div className="mt-10 grid grid-cols-1 gap-6 sm:grid-cols-2 sm:gap-7 lg:grid-cols-3 lg:gap-8">
+        <div className="mt-10 grid grid-cols-1 gap-5 sm:grid-cols-2 sm:gap-6 lg:grid-cols-3 lg:gap-7">
           {filtered.map((course) => (
             <CourseCard key={course.id} course={course} />
           ))}

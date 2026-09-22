@@ -43,21 +43,40 @@ async function catalogClient() {
   return createAdminClientAsync(createClient());
 }
 
+const CATALOG_SELECT_NO_CATEGORY =
+  "id, title, description, short_description, thumbnail_url, price_ngn, price_usd, instructor_name, is_coming_soon, created_at";
+
 /** Public storefront catalog — bypasses RLS (published course marketing data). */
 export async function fetchPublishedCourses<T extends { title?: string | null } = CatalogCourse>(
   select: string,
   options?: { includeHiddenDevCourses?: boolean },
 ): Promise<T[]> {
   const admin = await catalogClient();
-  const { data, error } = await admin
+  let activeSelect = select;
+  let { data, error } = await admin
     .from("courses")
-    .select(select)
+    .select(activeSelect)
     .eq("visibility", "published")
     .order("created_at", { ascending: false });
 
-  if (error && isMissingColumnError(error.message) && select.includes("is_coming_soon")) {
+  // Category embed can fail on schema drift — retry without it before giving up.
+  if (error && /category|course_categories|embed|relationship/i.test(error.message)) {
+    console.error("[fetchPublishedCourses] category embed failed; retrying flat select", error.message);
+    activeSelect = CATALOG_SELECT_NO_CATEGORY;
+    const retry = await admin
+      .from("courses")
+      .select(activeSelect)
+      .eq("visibility", "published")
+      .order("created_at", { ascending: false });
+    data = retry.data;
+    error = retry.error;
+  }
+
+  if (error && isMissingColumnError(error.message) && activeSelect.includes("is_coming_soon")) {
     console.error("[fetchPublishedCourses] schema drift; retrying without is_coming_soon", error.message);
-    const fallbackSelect = select.replace(/,?\s*is_coming_soon\b/g, "").replace(/is_coming_soon,?\s*/g, "");
+    const fallbackSelect = activeSelect
+      .replace(/,?\s*is_coming_soon\b/g, "")
+      .replace(/is_coming_soon,?\s*/g, "");
     const fallback = await admin
       .from("courses")
       .select(fallbackSelect)
