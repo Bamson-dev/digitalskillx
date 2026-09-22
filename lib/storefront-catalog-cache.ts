@@ -19,7 +19,7 @@ const DEFAULT_LANDING_SELECT =
 
 export const getCachedPublishedCatalog = unstable_cache(
   async () => fetchPublishedCourses<CatalogCourse>(DEFAULT_CATALOG_SELECT),
-  ["storefront-catalog-v2"],
+  ["storefront-catalog-v3"],
   { revalidate: STOREFRONT_CATALOG_REVALIDATE_SECONDS },
 );
 

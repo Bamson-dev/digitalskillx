@@ -5,7 +5,6 @@ import { BrowseCatalog } from "@/components/marketplace/browse-catalog";
 import {
   getCachedCourseCategories,
   getCachedPublishedCatalog,
-  STOREFRONT_CATALOG_REVALIDATE_SECONDS,
 } from "@/lib/storefront-catalog-cache";
 import { withTimeout } from "@/lib/with-timeout";
 
@@ -14,7 +13,9 @@ export const metadata: Metadata = {
   description: `Explore free and premium courses on ${ORG.platformName}.`,
 };
 
-export const revalidate = STOREFRONT_CATALOG_REVALIDATE_SECONDS;
+/** Match homepage — never serve a build-time empty catalog shell. */
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 const BROWSE_CATALOG_TIMEOUT_MS = 12_000;
 const BROWSE_SECONDARY_TIMEOUT_MS = 4_000;

@@ -17,7 +17,6 @@ import {
   getCachedCourseCategories,
   getCachedPublishedCatalog,
   getCachedStorefrontTrustStats,
-  STOREFRONT_CATALOG_REVALIDATE_SECONDS,
 } from "@/lib/storefront-catalog-cache";
 import { withTimeout } from "@/lib/with-timeout";
 
@@ -27,8 +26,13 @@ export const metadata: Metadata = {
     "Learn practical digital skills on DigitalSkillX — start with free courses or go deeper with premium programs. Learn at your pace and apply what you build.",
 };
 
-/** Cached storefront — do not force-dynamic or call getUser (that re-blocks Coolify). */
-export const revalidate = STOREFRONT_CATALOG_REVALIDATE_SECONDS;
+/**
+ * Always render against the live Contabo catalog.
+ * ISR/build-time generation was baking an empty course list into the HTML when
+ * Kong was unreachable during `next build`, which hid free/paid sections in prod.
+ */
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 /** Catalog needs more headroom than trust stats — never let a slow count wipe courses. */
 const HOME_CATALOG_TIMEOUT_MS = 12_000;
