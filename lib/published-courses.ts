@@ -1,7 +1,6 @@
 import "server-only";
 import { bootstrapRuntimeSecrets } from "@/lib/bootstrap-runtime-secrets";
 import { createAdminClientAsync } from "@/lib/supabase/admin";
-import { createClient } from "@/lib/supabase/server";
 import { isMissingColumnError } from "@/lib/schema-guard";
 import { filterStorefrontCourses, isStorefrontHiddenTitle } from "@/lib/storefront-visibility";
 
@@ -40,7 +39,9 @@ export {
 
 async function catalogClient() {
   await bootstrapRuntimeSecrets();
-  return createAdminClientAsync(createClient());
+  // Do not pass createClient() here — cookies() breaks inside unstable_cache
+  // and was emptying the storefront catalog while individual course pages still worked.
+  return createAdminClientAsync();
 }
 
 const CATALOG_SELECT_NO_CATEGORY =

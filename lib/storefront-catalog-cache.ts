@@ -12,14 +12,19 @@ import {
 export const STOREFRONT_CATALOG_REVALIDATE_SECONDS = 120;
 
 const DEFAULT_CATALOG_SELECT =
-  "id, title, description, short_description, thumbnail_url, price_ngn, price_usd, instructor_name, is_coming_soon, created_at, category:course_categories(name)";
+  "id, title, description, short_description, thumbnail_url, price_ngn, price_usd, instructor_name, is_coming_soon, created_at";
 
 const DEFAULT_LANDING_SELECT =
   "id, title, description, short_description, thumbnail_url, price_ngn, price_usd, learning_outcomes, instructor_name, instructor_bio, promo_video_url, certificate_enabled, is_coming_soon, modules(id, title, position, lessons(id, title, position, lesson_type))";
 
 export const getCachedPublishedCatalog = unstable_cache(
-  async () => fetchPublishedCourses<CatalogCourse>(DEFAULT_CATALOG_SELECT),
-  ["storefront-catalog-v3"],
+  async () => {
+    // Prefer the flat select — category embeds have failed silently on Contabo
+    // and produced empty storefront shells. Category names remain optional on cards.
+    const rows = await fetchPublishedCourses<CatalogCourse>(DEFAULT_CATALOG_SELECT);
+    return rows;
+  },
+  ["storefront-catalog-v4-flat"],
   { revalidate: STOREFRONT_CATALOG_REVALIDATE_SECONDS },
 );
 
