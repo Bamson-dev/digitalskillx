@@ -63,15 +63,8 @@ export default async function HomePage() {
           page: 1,
           pageSize: 48,
           total: 0,
-          params: {
-            q: "",
-            category: "all",
-            page: 1,
-            difficulty: null,
-            duration: null,
-            certificate: "any",
-            sort: "newest",
-          },
+          category: "all",
+          q: "",
         } as Awaited<ReturnType<typeof getCachedHomepageFreeLibrary>>)
       : Promise.resolve(null),
   ]);

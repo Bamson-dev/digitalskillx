@@ -3,10 +3,10 @@ import { unstable_cache } from "next/cache";
 import { createAnonClient } from "@/lib/supabase/anon";
 import {
   getPublishedLearningPathBySlug,
+  listPublishedLearningLibrary,
   listRelatedPublishedLearningPaths,
   loadLearningPathCurriculum,
 } from "@/lib/content-factory/learning-paths";
-import { listDiscoverableLearningLibrary } from "@/lib/learn-discovery/discovery";
 import {
   listPublishedAuthorityArticles,
   listPublishedAuthorityForPath,
@@ -29,42 +29,26 @@ import type { LibraryCategoryId } from "@/lib/content-factory/library-shared";
 import type { AuthorityContentType } from "@/lib/content-factory/authority-shared";
 import { AUTHORITY_PATH_READING_LIMIT } from "@/lib/content-factory/authority-shared";
 
+/** Matches the committed `/learn` page contract (category + q on the result). */
 export const getCachedPublishedLibrary = unstable_cache(
-  async (
-    q: string,
-    category: string,
-    page: string,
-    difficulty: string,
-    duration: string,
-    certificate: string,
-    sort: string,
-  ) => {
-    return listDiscoverableLearningLibrary(createAnonClient(), {
-      q,
-      category,
-      page,
-      difficulty: difficulty || undefined,
-      duration: duration || undefined,
-      certificate: certificate || undefined,
-      sort: sort || undefined,
-    });
+  async (q: string, category: string, page: string) => {
+    return listPublishedLearningLibrary(createAnonClient(), { q, category, page });
   },
-  ["learn-library-v2"],
+  ["learn-library-v1"],
   { revalidate: 300 },
 );
 
-/** Homepage free-learning strip — larger first page, no query filters. */
+/** Homepage free-learning strip — larger first page of published paths. */
 export const getCachedHomepageFreeLibrary = unstable_cache(
   async () => {
-    return listDiscoverableLearningLibrary(createAnonClient(), {
+    return listPublishedLearningLibrary(createAnonClient(), {
       q: "",
       category: "all",
-      page: 1,
+      page: "1",
       pageSize: 48,
-      sort: "newest",
     });
   },
-  ["homepage-free-library-v1"],
+  ["homepage-free-library-v2"],
   { revalidate: 300 },
 );
 
