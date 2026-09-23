@@ -82,11 +82,11 @@ export default async function HomePage() {
     category: path.category,
     difficulty: path.difficulty,
     artwork_public_url: path.artwork_public_url,
-    artwork_storage_path: path.artwork_storage_path,
-    artwork_status: path.artwork_status,
+    artwork_storage_path: path.artwork_storage_path ?? null,
+    artwork_status: path.artwork_status ?? null,
     creator_name: path.creator_name ?? null,
-    estimated_duration_seconds: path.estimated_duration_seconds,
-    certificate_enabled: path.certificate_enabled,
+    estimated_duration_seconds: null,
+    certificate_enabled: null,
   }));
   const freeLibraryTotal = freeLibraryResult?.total ?? freeLibraryPaths.length;
   const realCategories = (categories ?? []).slice(0, 6);
