@@ -7,10 +7,7 @@ import { CourseMediaImage } from "@/components/marketplace/course-media-image";
 import { PriceDisplay } from "@/components/marketplace/price-display";
 import { EnrollButton } from "@/components/marketplace/enroll-button";
 import { HomepageCurrencyBar } from "@/components/marketplace/homepage-currency-bar";
-import {
-  HomepageCourseGrid,
-  HomepageSectionHeader,
-} from "@/components/marketplace/homepage-course-grid";
+import { HomepageProgramSearch } from "@/components/marketplace/homepage-program-search";
 import { isCatalogCourseFree } from "@/lib/currency";
 import { partitionHomepageCatalog } from "@/lib/homepage-catalog";
 import {
@@ -18,6 +15,8 @@ import {
   getCachedPublishedCatalog,
   getCachedStorefrontTrustStats,
 } from "@/lib/storefront-catalog-cache";
+import { getCachedHomepageFreeLibrary } from "@/lib/content-factory/library-cache";
+import { contentFactoryEnabled } from "@/lib/content-factory/feature-flag";
 import { withTimeout } from "@/lib/with-timeout";
 
 export const metadata: Metadata = {
@@ -42,7 +41,8 @@ const SECTION = "px-4 py-14 sm:px-8 sm:py-16";
 const CONTAINER = "mx-auto w-full min-w-0 max-w-[1120px]";
 
 export default async function HomePage() {
-  const [courses, categories, trustStats] = await Promise.all([
+  const learnEnabled = contentFactoryEnabled();
+  const [courses, categories, trustStats, freeLibraryResult] = await Promise.all([
     withTimeout(
       getCachedPublishedCatalog(),
       HOME_CATALOG_TIMEOUT_MS,
@@ -57,14 +57,45 @@ export default async function HomePage() {
       students: 0,
       certificates: 0,
     }),
+    learnEnabled
+      ? withTimeout(getCachedHomepageFreeLibrary(), HOME_CATALOG_TIMEOUT_MS, {
+          paths: [],
+          page: 1,
+          pageSize: 48,
+          total: 0,
+          params: {
+            q: "",
+            category: "all",
+            page: 1,
+            difficulty: null,
+            duration: null,
+            certificate: "any",
+            sort: "newest",
+          },
+        } as Awaited<ReturnType<typeof getCachedHomepageFreeLibrary>>)
+      : Promise.resolve(null),
   ]);
 
   const catalog = (courses ?? []).map((c) => ({
     ...c,
     category_name: c.category?.name ?? null,
   }));
-  const { featured, free, paid, freePreview, paidPreview, hasMoreFree, hasMorePaid } =
+  const { featured, free, paid, freePreview, paidPreview, hasMorePaid } =
     partitionHomepageCatalog(catalog);
+  const freeLibraryPaths = (freeLibraryResult?.paths ?? []).map((path) => ({
+    slug: path.slug,
+    title: path.title,
+    short_description: path.short_description,
+    category: path.category,
+    difficulty: path.difficulty,
+    artwork_public_url: path.artwork_public_url,
+    artwork_storage_path: path.artwork_storage_path,
+    artwork_status: path.artwork_status,
+    creator_name: path.creator_name ?? null,
+    estimated_duration_seconds: path.estimated_duration_seconds,
+    certificate_enabled: path.certificate_enabled,
+  }));
+  const freeLibraryTotal = freeLibraryResult?.total ?? freeLibraryPaths.length;
   const realCategories = (categories ?? []).slice(0, 6);
   // Anonymous SSR shell — logged-in nav/enrollment hydrate without blocking TTFB.
   const profile = null;
@@ -72,8 +103,9 @@ export default async function HomePage() {
   const featuredIsFree = featured ? isCatalogCourseFree(featured) : false;
 
   const trustItems = [
-    { label: "Programs", value: catalog.length },
+    { label: "Programs", value: catalog.length + freeLibraryTotal },
     { label: "Free courses", value: free.length },
+    { label: "Free learning paths", value: freeLibraryTotal },
     { label: "Students", value: trustStats.students },
     { label: "Certificates issued", value: trustStats.certificates },
   ].filter((item) => item.value > 0);
@@ -105,7 +137,7 @@ export default async function HomePage() {
                   Explore courses
                 </Link>
                 <Link
-                  href={free.length > 0 ? "#free-courses" : "/browse?price=free"}
+                  href={freeLibraryPaths.length > 0 ? "#free-learning" : free.length > 0 ? "#free-courses" : "/learn"}
                   className="inline-flex h-12 min-h-[48px] items-center justify-center border border-neutral-300 bg-white px-8 text-sm font-semibold text-neutral-900 transition hover:border-neutral-500"
                 >
                   Start learning free
@@ -287,16 +319,16 @@ export default async function HomePage() {
 
             <div className="mt-6">
               <h2 className="font-display text-2xl font-bold text-neutral-950 sm:text-3xl">
-                Course catalog
+                Courses &amp; programs
               </h2>
               <p className="mt-2 max-w-2xl text-sm text-neutral-500 sm:text-[15px]">
-                {catalog.length > 0
-                  ? `${ORG.platformName} offers free courses and premium programs — pick a path and start building.`
+                {catalog.length + freeLibraryTotal > 0
+                  ? `Search free learning paths and premium courses — ${ORG.platformName} has programs you can start today.`
                   : "New programs launching soon."}
               </p>
             </div>
 
-            {catalog.length === 0 ? (
+            {catalog.length === 0 && freeLibraryPaths.length === 0 ? (
               <div className="mt-12 rounded-xl border border-dashed border-neutral-300 bg-neutral-50 px-6 py-12 text-center">
                 <p className="font-display text-lg font-semibold text-neutral-900">
                   Courses launching soon
@@ -304,55 +336,13 @@ export default async function HomePage() {
                 <p className="mt-2 text-sm text-neutral-500">Check back shortly for new programs.</p>
               </div>
             ) : (
-              <div className="mt-12 space-y-16 sm:mt-14 sm:space-y-20">
-                {free.length > 0 ? (
-                  <div>
-                    <HomepageSectionHeader
-                      id="free-courses"
-                      eyebrow="No payment required"
-                      title="Learn for free"
-                      description="Start learning for free. Build practical digital skills with free courses from DigitalSkillX."
-                      actionHref="/browse?price=free"
-                      actionLabel="View all free courses"
-                    />
-                    <HomepageCourseGrid courses={freePreview} />
-                    {hasMoreFree ? (
-                      <div className="mt-8 flex justify-center sm:hidden">
-                        <Link
-                          href="/browse?price=free"
-                          className="inline-flex h-11 min-h-[44px] items-center justify-center border border-neutral-300 bg-white px-5 text-sm font-semibold text-neutral-900"
-                        >
-                          View all free courses
-                        </Link>
-                      </div>
-                    ) : null}
-                  </div>
-                ) : null}
-
-                {paid.length > 0 ? (
-                  <div>
-                    <HomepageSectionHeader
-                      id="premium-courses"
-                      eyebrow="Go deeper"
-                      title="Premium courses"
-                      description="Practical programs designed to help you build and apply valuable digital skills."
-                      actionHref="/browse?price=paid"
-                      actionLabel="View all premium courses"
-                    />
-                    <HomepageCourseGrid courses={paidPreview} />
-                    {hasMorePaid ? (
-                      <div className="mt-8 flex justify-center sm:hidden">
-                        <Link
-                          href="/browse?price=paid"
-                          className="inline-flex h-11 min-h-[44px] items-center justify-center border border-neutral-300 bg-white px-5 text-sm font-semibold text-neutral-900"
-                        >
-                          View all premium courses
-                        </Link>
-                      </div>
-                    ) : null}
-                  </div>
-                ) : null}
-              </div>
+              <HomepageProgramSearch
+                freeCourses={freePreview}
+                paidCourses={paidPreview}
+                freeLibrary={freeLibraryPaths}
+                freeLibraryTotal={freeLibraryTotal}
+                hasMorePaid={hasMorePaid}
+              />
             )}
           </div>
         </section>
@@ -363,21 +353,21 @@ export default async function HomePage() {
               Ready to start learning?
             </h2>
             <p className="mx-auto mt-3 max-w-md text-sm text-neutral-600">
-              Browse the full catalog, start a free course, or create an account to save progress and
-              earn certificates.
+              Browse free learning programs, explore premium courses, or create an account to save
+              progress and earn certificates.
             </p>
             <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
               <Link
-                href="/browse"
+                href="/learn"
                 className="inline-flex h-12 min-h-[48px] w-full items-center justify-center bg-brand px-8 text-sm font-semibold text-white hover:bg-brand-700 sm:w-auto"
               >
-                Browse all courses
+                Browse free learning
               </Link>
               <Link
-                href="/browse?price=free"
+                href="/browse"
                 className="inline-flex h-12 min-h-[48px] w-full items-center justify-center border border-neutral-300 bg-white px-8 text-sm font-semibold text-neutral-900 hover:border-neutral-500 sm:w-auto"
               >
-                View free courses
+                Browse all courses
               </Link>
             </div>
           </div>

@@ -18,7 +18,8 @@ function NavSearch({ className }: { className?: string }) {
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
     const q = query.trim();
-    router.push(q ? `/browse?q=${encodeURIComponent(q)}` : "/browse");
+    // Free learning library holds the majority of programs; courses stay on /browse.
+    router.push(q ? `/learn?q=${encodeURIComponent(q)}` : "/learn");
   }
 
   return (
@@ -29,9 +30,9 @@ function NavSearch({ className }: { className?: string }) {
           type="search"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search courses"
+          placeholder="Search programs"
           className="h-10 w-full border border-neutral-200 bg-neutral-50 pl-9 pr-3 text-sm text-neutral-800 placeholder:text-neutral-400 focus:border-neutral-400 focus:bg-white focus:outline-none"
-          aria-label="Search courses"
+          aria-label="Search free learning programs"
         />
       </div>
     </form>

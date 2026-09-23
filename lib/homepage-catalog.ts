@@ -15,8 +15,8 @@ export type HomepageCatalogCourse = {
   created_at?: string | null;
 };
 
-/** Max cards shown on the homepage before “view all” — keeps the page scannable. */
-export const HOMEPAGE_SECTION_COURSE_LIMIT = 6;
+/** Premium grid preview when the paid catalog grows very large. Free courses always show in full. */
+export const HOMEPAGE_PAID_COURSE_LIMIT = 24;
 
 export function partitionHomepageCatalog<T extends HomepageCatalogCourse>(courses: T[]) {
   const featured = pickFeaturedCourse(courses);
@@ -27,9 +27,12 @@ export function partitionHomepageCatalog<T extends HomepageCatalogCourse>(course
     featured,
     free,
     paid,
-    freePreview: free.slice(0, HOMEPAGE_SECTION_COURSE_LIMIT),
-    paidPreview: paid.slice(0, HOMEPAGE_SECTION_COURSE_LIMIT),
-    hasMoreFree: free.length > HOMEPAGE_SECTION_COURSE_LIMIT,
-    hasMorePaid: paid.length > HOMEPAGE_SECTION_COURSE_LIMIT,
+    /** Every published free marketplace course belongs on the homepage. */
+    freePreview: free,
+    paidPreview: paid.slice(0, HOMEPAGE_PAID_COURSE_LIMIT),
+    hasMoreFree: false,
+    hasMorePaid: paid.length > HOMEPAGE_PAID_COURSE_LIMIT,
   };
 }
+
+export const HOMEPAGE_FREE_LIBRARY_LIMIT = 48;

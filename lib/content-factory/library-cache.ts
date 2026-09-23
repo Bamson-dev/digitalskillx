@@ -3,10 +3,10 @@ import { unstable_cache } from "next/cache";
 import { createAnonClient } from "@/lib/supabase/anon";
 import {
   getPublishedLearningPathBySlug,
-  listPublishedLearningLibrary,
   listRelatedPublishedLearningPaths,
   loadLearningPathCurriculum,
 } from "@/lib/content-factory/learning-paths";
+import { listDiscoverableLearningLibrary } from "@/lib/learn-discovery/discovery";
 import {
   listPublishedAuthorityArticles,
   listPublishedAuthorityForPath,
@@ -30,10 +30,41 @@ import type { AuthorityContentType } from "@/lib/content-factory/authority-share
 import { AUTHORITY_PATH_READING_LIMIT } from "@/lib/content-factory/authority-shared";
 
 export const getCachedPublishedLibrary = unstable_cache(
-  async (q: string, category: string, page: string) => {
-    return listPublishedLearningLibrary(createAnonClient(), { q, category, page });
+  async (
+    q: string,
+    category: string,
+    page: string,
+    difficulty: string,
+    duration: string,
+    certificate: string,
+    sort: string,
+  ) => {
+    return listDiscoverableLearningLibrary(createAnonClient(), {
+      q,
+      category,
+      page,
+      difficulty: difficulty || undefined,
+      duration: duration || undefined,
+      certificate: certificate || undefined,
+      sort: sort || undefined,
+    });
   },
-  ["learn-library-v1"],
+  ["learn-library-v2"],
+  { revalidate: 300 },
+);
+
+/** Homepage free-learning strip — larger first page, no query filters. */
+export const getCachedHomepageFreeLibrary = unstable_cache(
+  async () => {
+    return listDiscoverableLearningLibrary(createAnonClient(), {
+      q: "",
+      category: "all",
+      page: 1,
+      pageSize: 48,
+      sort: "newest",
+    });
+  },
+  ["homepage-free-library-v1"],
   { revalidate: 300 },
 );
 
@@ -101,11 +132,23 @@ export const getCachedPublishedLearningPath = unstable_cache(
   { revalidate: 300 },
 );
 
-export function libraryCacheKey(searchParams: { q?: string; category?: string; page?: string }) {
+export function libraryCacheKey(searchParams: {
+  q?: string;
+  category?: string;
+  page?: string;
+  difficulty?: string;
+  duration?: string;
+  certificate?: string;
+  sort?: string;
+}) {
   return {
     q: sanitizeLibraryQuery(searchParams.q),
     category: parseLibraryCategory(searchParams.category),
     page: String(parseLibraryPage(searchParams.page)),
+    difficulty: String(searchParams.difficulty ?? "").trim().toLowerCase(),
+    duration: String(searchParams.duration ?? "").trim().toLowerCase(),
+    certificate: String(searchParams.certificate ?? "").trim().toLowerCase(),
+    sort: String(searchParams.sort ?? "").trim().toLowerCase(),
   };
 }
 
