@@ -1,24 +1,29 @@
-# Coolify / Docker — multi-stage Next.js build for small VPS hosts.
+# Coolify / Docker — Next.js build for small VPS hosts.
 # In Coolify: Build Pack → Dockerfile.
 # Do not pass Sentry upload tokens as build-time env (Coolify often injects them).
-
-FROM node:22-alpine AS deps
-WORKDIR /app
-COPY package.json package-lock.json ./
-RUN npm ci --include=dev
+#
+# One builder stage on purpose: copying node_modules between stages duplicates a
+# huge file tree and BuildKit often SIGKILLs that COPY (exit 255) on 2–4GB hosts.
 
 FROM node:22-alpine AS builder
 WORKDIR /app
-COPY --from=deps /app/node_modules ./node_modules
-COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV DOCKER_BUILD=1
-# Keep V8 heap under typical 2–4GB Coolify RAM so the cgroup does not SIGKILL the build.
-ENV NODE_OPTIONS="--max-old-space-size=1280"
+ENV CI=true
+ENV NPM_CONFIG_UPDATE_NOTIFIER=false
+ENV NPM_CONFIG_FUND=false
+ENV NPM_CONFIG_AUDIT=false
+# Keep V8 heap under typical Coolify RAM so the cgroup does not SIGKILL the build.
+ENV NODE_OPTIONS="--max-old-space-size=1024"
 # Prevent Sentry webpack plugin from activating if Coolify injects upload secrets.
 ENV SENTRY_AUTH_TOKEN=
 ENV SENTRY_ORG=
 ENV SENTRY_PROJECT=
+
+COPY package.json package-lock.json ./
+RUN npm ci --include=dev --no-audit --no-fund
+
+COPY . .
 RUN npm run build && npm prune --omit=dev
 
 FROM node:22-alpine AS runner

@@ -8,3 +8,11 @@ design-reference
 *.log
 coverage
 .DS_Store
+tmp
+agent-transcripts
+e2e
+playwright-report
+test-results
+**/*.md
+!content/**/*.md
+

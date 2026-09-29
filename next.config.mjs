@@ -7,7 +7,12 @@ const nextConfig = {
   reactStrictMode: true,
   productionBrowserSourceMaps: false,
   // Coolify builds already lint in CI / locally; skipping saves peak RAM on small VPS.
-  ...(dockerBuild ? { eslint: { ignoreDuringBuilds: true } } : {}),
+  ...(dockerBuild
+    ? {
+        eslint: { ignoreDuringBuilds: true },
+        typescript: { ignoreBuildErrors: true },
+      }
+    : {}),
   experimental: {
     serverActions: {
       bodySizeLimit: "25mb",
