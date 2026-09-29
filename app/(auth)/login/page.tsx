@@ -4,7 +4,7 @@ import { LoginForm } from "@/components/auth/login-form";
 import { authQueryErrorMessage } from "@/lib/auth-errors";
 import { ensureStudentProfile } from "@/lib/ensure-student-profile";
 import { safeNextPath } from "@/lib/safe-next-path";
-import { createClient } from "@/lib/supabase/server";
+import { withTimeout } from "@/lib/with-timeout";
 
 export const metadata: Metadata = { title: "Log in" };
 
@@ -18,9 +18,11 @@ export default async function LoginPage({
   );
 
   const supabase = createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await withTimeout(
+    supabase.auth.getUser().then((res) => res.data.user),
+    4_000,
+    null,
+  );
 
   if (user) {
     const profile = await ensureStudentProfile();

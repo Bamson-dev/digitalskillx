@@ -1,26 +1,27 @@
 "use client";
 
 import Link from "next/link";
-import { useFormState } from "react-dom";
-import { sendPasswordReset, type AuthState } from "@/app/(auth)/actions";
 import { Input, Label } from "@/components/ui/input";
 import { SubmitButton } from "@/components/auth/submit-button";
 
-const initial: AuthState = {};
-
-export function ForgotPasswordForm() {
-  const [state, action] = useFormState(sendPasswordReset, initial);
-
+export function ForgotPasswordForm({
+  sent,
+  error,
+}: {
+  sent?: boolean;
+  error?: string;
+}) {
   return (
     <div className="space-y-5">
       <div>
         <h1 className="text-xl font-bold">Forgot your password?</h1>
         <p className="mt-1 text-sm text-muted">
-          Enter your email and we&apos;ll send a reset link.
+          Enter the email you used to buy or enroll. We will send a link so you can set a new
+          password and open your program.
         </p>
       </div>
 
-      <form action={action} className="space-y-4">
+      <form action="/api/auth/forgot-password" method="POST" className="space-y-4">
         <div>
           <Label htmlFor="email">Email</Label>
           <Input id="email" name="email" type="email" required autoComplete="email" />
@@ -30,18 +31,18 @@ export function ForgotPasswordForm() {
         </SubmitButton>
       </form>
 
-      {state.error ? (
-        <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
-          {state.error}
-        </p>
+      {error ? (
+        <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>
       ) : null}
-      {state.message ? (
+      {sent ? (
         <p className="rounded-lg bg-green-50 px-3 py-2 text-sm text-green-700">
-          {state.message}
+          If that email has a DigitalSkillX account or purchase, a password reset link is on its
+          way. Check inbox and spam, then use the link to set a new password.
         </p>
       ) : null}
 
       <p className="text-center text-sm text-muted">
+        Remembered it?{" "}
         <Link href="/login" className="font-medium text-brand hover:underline">
           Back to login
         </Link>

@@ -39,14 +39,11 @@ export function LoginForm({
       </div>
 
       <p className="rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm text-neutral-700">
-        Can&apos;t sign in right now?{" "}
+        Can&apos;t sign in?{" "}
         <Link href="/forgot-password" className="font-semibold text-brand underline">
-          Reset password
+          Forgot password — reset it here
         </Link>
-        {" · "}
-        <Link href="/continue" className="font-semibold text-brand underline">
-          Continue on this device
-        </Link>
+        . Use the same email from your course-access message.
       </p>
 
       {registered ? (
@@ -55,18 +52,8 @@ export function LoginForm({
         </p>
       ) : null}
 
-      {authError ? (
-        <div className="space-y-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-          <p>
-            {authError === "fetch failed"
-              ? "Sign-in briefly failed. Retry on www.digitalskillx.com, or reset your password."
-              : authError}
-          </p>
-        </div>
-      ) : null}
-
       {mode === "password" ? (
-        <StudentPasswordLoginForm next={next} />
+        <StudentPasswordLoginForm next={next} authError={authError} />
       ) : (
         <form action={magicAction} className="space-y-4">
           <input type="hidden" name="next" value={next} />

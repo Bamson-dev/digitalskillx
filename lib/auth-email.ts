@@ -29,13 +29,26 @@ async function loadProfileByEmail(email: string) {
 function extractHashedToken(data: unknown): string {
   if (!data || typeof data !== "object") return "";
   const row = data as Record<string, unknown>;
-  const props = row.properties;
-  if (props && typeof props === "object") {
-    const token = (props as Record<string, unknown>).hashed_token;
-    if (typeof token === "string" && token.trim()) return token.trim();
+  const props =
+    row.properties && typeof row.properties === "object"
+      ? (row.properties as Record<string, unknown>)
+      : row;
+  for (const key of ["hashed_token", "email_otp", "token_hash", "token"]) {
+    const value = props[key];
+    if (typeof value === "string" && value.trim()) return value.trim();
   }
-  if (typeof row.hashed_token === "string" && row.hashed_token.trim()) {
-    return row.hashed_token.trim();
+  const actionLink = typeof props.action_link === "string" ? props.action_link : "";
+  if (actionLink) {
+    try {
+      const url = new URL(actionLink);
+      const fromQuery =
+        url.searchParams.get("token") ||
+        url.searchParams.get("token_hash") ||
+        url.searchParams.get("hashed_token");
+      if (fromQuery?.trim()) return fromQuery.trim();
+    } catch {
+      /* ignore */
+    }
   }
   return "";
 }
@@ -119,9 +132,12 @@ async function sendAuthLinkEmail(params: {
   return { sent: true as const };
 }
 
-/** Password reset via Resend (no Supabase Auth email). */
+/** Password reset via Resend/ZeptoMail (no Supabase Auth SMTP). */
 export async function sendPasswordResetEmail(email: string) {
-  return sendAuthLinkEmail({ email, type: "recovery", nextPath: "/reset-password" });
+  const { sendStudentPasswordReset } = await import("@/lib/auth/password-recovery");
+  const result = await sendStudentPasswordReset(email);
+  if (!result.ok) return { sent: false as const, error: new Error(result.error) };
+  return { sent: true as const };
 }
 
 /** Magic-link sign-in via Resend (no Supabase Auth email). */

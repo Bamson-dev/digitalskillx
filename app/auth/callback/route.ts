@@ -21,6 +21,7 @@ async function redirectAfterAuth(
   supabase: ReturnType<typeof createClient>,
   origin: string,
   next: string | null,
+  options?: { skipDeviceLimit?: boolean },
 ) {
   const {
     data: { user },
@@ -35,7 +36,7 @@ async function redirectAfterAuth(
 
     const deviceKey = readDeviceKeyFromRequest(request) || newDeviceKey();
 
-    if (profile?.role === "student") {
+    if (profile?.role === "student" && !options?.skipDeviceLimit) {
       try {
         const { createAdminClientAsync } = await import("@/lib/supabase/admin");
         const admin = await createAdminClientAsync(supabase);
@@ -143,7 +144,8 @@ export async function GET(request: NextRequest) {
   // Coolify/Docker request.url is localhost:3000 — never redirect students there.
   const origin = publicSiteOrigin({ headers: request.headers, requestUrl: request.url });
   const code = searchParams.get("code");
-  const tokenHash = searchParams.get("token_hash");
+  const tokenHash =
+    searchParams.get("token_hash") || searchParams.get("token") || searchParams.get("hashed_token");
   const type = otpTypeFromParam(searchParams.get("type"));
   const next = searchParams.get("next");
 
@@ -152,9 +154,17 @@ export async function GET(request: NextRequest) {
   if (tokenHash && type) {
     const { error } = await supabase.auth.verifyOtp({ token_hash: tokenHash, type });
     if (!error) {
-      return redirectAfterAuth(request, supabase, origin, next);
+      const recoveryNext = type === "recovery" ? next || "/reset-password" : next;
+      return redirectAfterAuth(request, supabase, origin, recoveryNext, {
+        skipDeviceLimit: type === "recovery",
+      });
     }
     console.error("[auth/callback] verifyOtp failed:", error.message);
+    if (type === "recovery") {
+      return NextResponse.redirect(
+        `${origin}/forgot-password?error=${encodeURIComponent("That reset link is invalid or has expired. Request a new one.")}`,
+      );
+    }
     return NextResponse.redirect(`${origin}/login?error=auth_link_invalid`);
   }
 

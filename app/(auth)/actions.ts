@@ -3,7 +3,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClientAsync } from "@/lib/supabase/admin";
-import { sendMagicLinkEmail, sendPasswordResetEmail } from "@/lib/auth-email";
+import { sendMagicLinkEmail } from "@/lib/auth-email";
 import { serviceRoleKeyMissingMessage, serviceRoleKeyMissingMessageAsync } from "@/lib/env-service-role";
 import { formatErrorMessage } from "@/lib/format-error-message";
 import { verifyAccessToken } from "@/lib/verify-access-token";
@@ -78,7 +78,7 @@ export async function signInWithMagicLink(
   }
 }
 
-/** Forgot password — reset link sent via Resend (not Supabase Auth). */
+/** Forgot password — reset link sent via Resend/ZeptoMail (not Supabase Auth SMTP). */
 export async function sendPasswordReset(
   _prev: AuthState,
   formData: FormData,
@@ -87,15 +87,10 @@ export async function sendPasswordReset(
   if (!email) return { error: "Enter your email address." };
 
   try {
-    const result = await sendPasswordResetEmail(email);
-    if (!result.sent && !result.skipped) {
-      const message = formatErrorMessage(result.error, "Could not send reset link.");
-      if (message.includes("service role")) {
-        return { error: await serviceRoleKeyMissingMessageAsync() };
-      }
-      return { error: message };
-    }
-    return { message: "If that email exists, a reset link is on its way." };
+    const { sendStudentPasswordReset } = await import("@/lib/auth/password-recovery");
+    const result = await sendStudentPasswordReset(email);
+    if (!result.ok) return { error: result.error };
+    return { message: result.message };
   } catch (err) {
     const message = err instanceof Error ? err.message : "Could not send reset link.";
     if (message.includes("service role")) {

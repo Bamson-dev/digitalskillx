@@ -44,13 +44,13 @@ export function StudentPasswordLoginForm({
         <Input id="email" name="email" type="email" required autoComplete="email" />
       </div>
       <div>
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-3">
           <Label htmlFor="password">Password</Label>
           <Link
             href="/forgot-password"
-            className="mb-1.5 text-xs font-medium text-brand hover:underline"
+            className="mb-1.5 text-sm font-semibold text-brand underline"
           >
-            Forgot?
+            Forgot password
           </Link>
         </div>
         <PasswordInput
@@ -67,8 +67,17 @@ export function StudentPasswordLoginForm({
       <SubmitButton className="w-full" pendingText="Signing in…">
         Log in
       </SubmitButton>
+      <p className="text-center text-sm">
+        <Link href="/forgot-password" className="font-semibold text-brand underline">
+          Forgot password? Get a reset link
+        </Link>
+      </p>
       {authError ? (
-        <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{authError}</p>
+        <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
+          {authError === "fetch failed"
+            ? "Sign-in briefly failed. Retry, or use Forgot password to get a fresh login."
+            : authError}
+        </p>
       ) : null}
     </form>
   );
