@@ -5,6 +5,7 @@ import { magicLinkEmail, passwordResetEmail } from "@/lib/email/auth-templates";
 import { getEmailSenderConfig, getPlatformSettingsAdmin } from "@/lib/platform-settings";
 import { formatErrorMessage } from "@/lib/format-error-message";
 import { normalizePublicOrigin } from "@/lib/public-site-origin";
+import { extractGoTrueHashedToken } from "@/lib/auth/extract-gotrue-token";
 
 function authSiteOrigin() {
   return normalizePublicOrigin(process.env.NEXT_PUBLIC_SITE_URL);
@@ -22,36 +23,11 @@ async function loadProfileByEmail(email: string) {
     .from("profiles")
     .select("id, full_name")
     .ilike("email", email)
+    .limit(1)
     .maybeSingle();
   return data;
 }
 
-function extractHashedToken(data: unknown): string {
-  if (!data || typeof data !== "object") return "";
-  const row = data as Record<string, unknown>;
-  const props =
-    row.properties && typeof row.properties === "object"
-      ? (row.properties as Record<string, unknown>)
-      : row;
-  for (const key of ["hashed_token", "email_otp", "token_hash", "token"]) {
-    const value = props[key];
-    if (typeof value === "string" && value.trim()) return value.trim();
-  }
-  const actionLink = typeof props.action_link === "string" ? props.action_link : "";
-  if (actionLink) {
-    try {
-      const url = new URL(actionLink);
-      const fromQuery =
-        url.searchParams.get("token") ||
-        url.searchParams.get("token_hash") ||
-        url.searchParams.get("hashed_token");
-      if (fromQuery?.trim()) return fromQuery.trim();
-    } catch {
-      /* ignore */
-    }
-  }
-  return "";
-}
 
 async function sendAuthLinkEmail(params: {
   email: string;
@@ -72,7 +48,7 @@ async function sendAuthLinkEmail(params: {
     options: { redirectTo },
   });
 
-  const hashedToken = extractHashedToken(data);
+  const hashedToken = extractGoTrueHashedToken(data);
   if (error || !hashedToken) {
     console.error(`[auth-email] ${params.type} link failed:`, error);
     // Unknown email — do not leak existence; caller shows generic success.

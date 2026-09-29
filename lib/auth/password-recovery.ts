@@ -1,11 +1,16 @@
 import "server-only";
 import { createAdminClientAsync } from "@/lib/supabase/admin";
-import { generateStrongPassword } from "@/lib/admin-student-onboarding";
+import {
+  generateStrongPassword,
+  reconcileOrphanCertificatesForEmail,
+  syncStudentCourseAccess,
+} from "@/lib/admin-student-onboarding";
 import { sendEmail } from "@/lib/email";
 import { passwordResetEmail } from "@/lib/email/auth-templates";
 import { getEmailSenderConfig, getPlatformSettingsAdmin } from "@/lib/platform-settings";
 import { formatErrorMessage } from "@/lib/format-error-message";
 import { normalizePublicOrigin } from "@/lib/public-site-origin";
+import { extractGoTrueHashedToken } from "@/lib/auth/extract-gotrue-token";
 import { isMissingColumnError } from "@/lib/schema-guard";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -23,45 +28,19 @@ function firstName(fullName: string | null | undefined) {
   return trimmed.split(/\s+/)[0] ?? "there";
 }
 
-function extractLinkToken(data: unknown): string {
-  if (!data || typeof data !== "object") return "";
-  const row = data as Record<string, unknown>;
-  const props = row.properties && typeof row.properties === "object"
-    ? (row.properties as Record<string, unknown>)
-    : row;
-
-  for (const key of ["hashed_token", "email_otp", "token_hash", "token"]) {
-    const value = props[key];
-    if (typeof value === "string" && value.trim()) return value.trim();
-  }
-
-  const actionLink = typeof props.action_link === "string" ? props.action_link : "";
-  if (actionLink) {
-    try {
-      const url = new URL(actionLink);
-      const fromQuery =
-        url.searchParams.get("token") ||
-        url.searchParams.get("token_hash") ||
-        url.searchParams.get("hashed_token");
-      if (fromQuery?.trim()) return fromQuery.trim();
-    } catch {
-      /* ignore malformed action_link */
-    }
-  }
-  return "";
-}
 
 async function lookupPaidOrEnrolledEmail(
   admin: Awaited<ReturnType<typeof createAdminClientAsync>>,
   email: string,
 ) {
-  const { data: profile } = await admin
+  const { data: profiles } = await admin
     .from("profiles")
     .select("id, full_name, email, is_suspended")
     .ilike("email", email)
-    .maybeSingle();
+    .limit(8);
 
-  if (profile?.is_suspended) {
+  const profile = profiles?.[0] ?? null;
+  if (profiles?.some((row) => row.is_suspended)) {
     return { eligible: false as const, suspended: true as const, profile };
   }
 
@@ -70,7 +49,7 @@ async function lookupPaidOrEnrolledEmail(
   const txQuery = await admin
     .from("transactions")
     .select("id")
-    .eq("buyer_email", email)
+    .ilike("buyer_email", email)
     .limit(1)
     .maybeSingle();
   if (txQuery.error && !isMissingColumnError(txQuery.error.message)) {
@@ -90,6 +69,7 @@ async function findOrCreateAuthUser(
   const recovery = await admin.auth.admin.generateLink({
     type: "recovery",
     email,
+    options: { redirectTo: `${authSiteOrigin()}/auth/callback?next=${encodeURIComponent("/reset-password")}` },
   });
   if (!recovery.error && recovery.data?.user?.id) {
     const userId = recovery.data.user.id;
@@ -122,7 +102,11 @@ async function findOrCreateAuthUser(
     throw new Error(created.error?.message ?? "Could not create a login for this email.");
   }
 
-  const retry = await admin.auth.admin.generateLink({ type: "recovery", email });
+  const retry = await admin.auth.admin.generateLink({
+    type: "recovery",
+    email,
+    options: { redirectTo: `${authSiteOrigin()}/auth/callback?next=${encodeURIComponent("/reset-password")}` },
+  });
   if (retry.error) throw new Error(retry.error.message);
   return { userId: created.data.user.id, linkData: retry.data };
 }
@@ -157,19 +141,34 @@ export async function sendStudentPasswordReset(emailRaw: string): Promise<{
       );
       linkData = ensured.linkData;
 
-      if (record.profile && record.profile.id !== ensured.userId) {
-        // Keep Auth + profile aligned when possible; enrollments use student_id.
-      } else if (!record.profile) {
-        const { error: insertError } = await admin.from("profiles").insert({
+      const { error: upsertError } = await admin.from("profiles").upsert(
+        {
           id: ensured.userId,
           email,
-          full_name: email.split("@")[0],
+          full_name: record.profile?.full_name || email.split("@")[0],
           role: "student",
           is_suspended: false,
+        },
+        { onConflict: "id" },
+      );
+      if (upsertError && !/duplicate|unique/i.test(upsertError.message)) {
+        console.error("[password-recovery] profile upsert", upsertError.message);
+      }
+
+      try {
+        await syncStudentCourseAccess(admin, {
+          authUserId: ensured.userId,
+          profileEmail: email,
         });
-        if (insertError && !/duplicate|unique/i.test(insertError.message)) {
-          console.error("[password-recovery] profile insert", insertError.message);
-        }
+        await reconcileOrphanCertificatesForEmail(admin, {
+          authUserId: ensured.userId,
+          email,
+        });
+      } catch (syncErr) {
+        console.error(
+          "[password-recovery] access sync",
+          syncErr instanceof Error ? syncErr.message : syncErr,
+        );
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -186,7 +185,7 @@ export async function sendStudentPasswordReset(emailRaw: string): Promise<{
       };
     }
 
-    const hashedToken = extractLinkToken(linkData);
+    const hashedToken = extractGoTrueHashedToken(linkData);
     if (!hashedToken) {
       console.error("[password-recovery] missing token in generateLink payload");
       return {

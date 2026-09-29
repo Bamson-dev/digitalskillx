@@ -13,6 +13,10 @@ assert.match(route, /sendStudentPasswordReset/);
 assert.match(route, /export async function POST/);
 
 const recovery = read("lib/auth/password-recovery.ts");
+const loginPage = read("app/(auth)/login/page.tsx");
+assert.match(loginPage, /from "@\/lib\/supabase\/server"/);
+assert.match(recovery, /extractGoTrueHashedToken/);
+assert.match(recovery, /syncStudentCourseAccess/);
 assert.match(recovery, /generateLink/);
 assert.match(recovery, /createUser/);
 assert.match(recovery, /type: "recovery"/);

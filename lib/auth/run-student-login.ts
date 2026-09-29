@@ -102,18 +102,15 @@ export async function runStudentLogin(params: {
         .update({
           email,
           full_name: fullName,
-          last_active_at: new Date().toISOString(),
         })
         .eq("id", data.user.id);
       if (updateError) throw new Error(updateError.message);
     }
 
-    if (!existing) {
-      await admin
-        .from("profiles")
-        .update({ last_active_at: new Date().toISOString() })
-        .eq("id", data.user.id);
-    }
+    await admin
+      .from("profiles")
+      .update({ last_active_at: new Date().toISOString() })
+      .eq("id", data.user.id);
 
     const { data: verified, error: verifyError } = await admin
       .from("profiles")
