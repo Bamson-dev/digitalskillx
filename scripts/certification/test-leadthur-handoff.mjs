@@ -319,7 +319,7 @@ await check("24. DigitalSkillX 5xx on nonce store failure", () => {
 
 await check("25. network timeout is Leadthur retry concern", () => {
   const leadthur = readFileSync(
-    join(root, "../LeadRush/backend/src/services/paystack-digitalskillx-forward.ts"),
+    join(process.env.LEADRUSH_BACKEND_DIR || join(root, "../LeadRush/backend"), "src/services/paystack-digitalskillx-forward.ts"),
     "utf8",
   );
   assert.match(leadthur, /FORWARD_TIMEOUT_MS/);
