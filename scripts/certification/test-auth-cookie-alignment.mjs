@@ -62,6 +62,16 @@ assert(
   studentLogin.includes("exact email shown in your DigitalSkillX course-access message"),
   "login error directs students to their registered course email",
 );
+assert(
+  (studentLogin.match(/course access reconciliation failed/g) ?? []).length === 1 &&
+    (studentLogin.match(/certificate reconciliation failed/g) ?? []).length === 1,
+  "course and certificate repair failures are isolated from valid password login",
+);
+assert(
+  read("app/(auth)/actions.ts").includes("supabase.auth.setSession(result.session)") &&
+    read("app/(auth)/login-actions.ts").includes("supabase.auth.setSession(result.session)"),
+  "server-action login paths persist the verified session before redirecting",
+);
 
 const bridge = read("lib/supabase/fetch-bridge.ts");
 assert(

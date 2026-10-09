@@ -22,6 +22,9 @@ export async function completeStudentLogin(input: {
   const next = safeNextPath(input.next);
   const result = await runStudentLogin({ email: input.email, password: input.password });
   if (!result.ok) return { error: result.error };
+  const supabase = createClient();
+  const { error } = await supabase.auth.setSession(result.session);
+  if (error) return { error: "We couldn't start your session. Please try again." };
   redirect(next);
 }
 

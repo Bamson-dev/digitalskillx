@@ -41,7 +41,16 @@ export function StudentPasswordLoginForm({
       <input type="hidden" name="device_key" value={deviceKey} />
       <div>
         <Label htmlFor="email">Email</Label>
-        <Input id="email" name="email" type="email" required autoComplete="email" />
+        <Input
+          id="email"
+          name="email"
+          type="text"
+          inputMode="email"
+          required
+          autoComplete="email"
+          autoCapitalize="none"
+          spellCheck={false}
+        />
       </div>
       <div>
         <div className="flex items-center justify-between gap-3">

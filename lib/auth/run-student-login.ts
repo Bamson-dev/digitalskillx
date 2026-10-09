@@ -126,22 +126,33 @@ export async function runStudentLogin(params: {
       };
     }
 
-    await syncStudentCourseAccess(admin, {
-      authUserId: data.user.id,
-      profileEmail: email,
-    });
+    // Account maintenance must not turn a valid password into a failed login.
+    // These idempotent repairs also run from dashboard/course reads, so a
+    // transient data-plane error can safely be retried after the session starts.
+    try {
+      await syncStudentCourseAccess(admin, {
+        authUserId: data.user.id,
+        profileEmail: email,
+      });
+    } catch (repairError) {
+      console.error("[auth/login] course access reconciliation failed", repairError);
+    }
 
-    const { data: authUserData } = await admin.auth.admin.getUserById(data.user.id);
-    const authEmail = authUserData.user?.email?.trim().toLowerCase() ?? email;
-    await reconcileOrphanCertificatesForEmail(admin, {
-      authUserId: data.user.id,
-      email: authEmail,
-    });
-    if (authEmail !== email) {
+    try {
+      const { data: authUserData } = await admin.auth.admin.getUserById(data.user.id);
+      const authEmail = authUserData.user?.email?.trim().toLowerCase() ?? email;
       await reconcileOrphanCertificatesForEmail(admin, {
         authUserId: data.user.id,
-        email,
+        email: authEmail,
       });
+      if (authEmail !== email) {
+        await reconcileOrphanCertificatesForEmail(admin, {
+          authUserId: data.user.id,
+          email,
+        });
+      }
+    } catch (repairError) {
+      console.error("[auth/login] certificate reconciliation failed", repairError);
     }
 
     return {
