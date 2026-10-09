@@ -78,3 +78,49 @@ Updated: 2026-10-09
 7. Merge this workflow and Docker hardening into `main`; add the GitHub Actions variables and restricted Coolify API token secret; add required branch checks; then verify a later `main` push deploys the exact SHA and returns healthy over HTTPS. Keep Vercel resources intact.
 
 See [deployment runbook](CONTABO-DEPLOYMENT-RUNBOOK.md) and [rollback plan](CONTABO-ROLLBACK.md).
+
+## 2026-10-09 production release follow-up
+
+### Repository and verification
+
+- GitHub heads were rechecked: `main` is `b99da43732749fa9a665644a710c72404b3b75fa`; `codex/contabo-migration` was `b7b3c9d41294ce63f00d5fd3a11ed86df811f84d` before this follow-up. The migration branch is nine commits ahead of `main`.
+- The Learn library regression was caused by the committed `/learn` page not using its discovery controls/library card integration. The appropriate implementation was restored in a separate learning-only commit (`d8ecc9cb63c7994779d189d7ec800fec6f1348f3`); it preserves the `LearnPathCard` user flow and query parameters. The exact certification test passes all 13 checks.
+- Node `v22.23.3` and npm `10.9.2` were used for local checks. `npm run typecheck`, `npm run lint`, `npm run test:unit`, `npm run test:content-factory`, `npm run test:course-publish-outbox`, `npm run test:security-scan`, `npm run test:platform-hardening`, `npm run test:phase8`, and `npm run test:library-build` passed. The unit suite's Paystack external and Leadthur handoff tests resolve a sibling `/tmp/LeadRush` checkout in this workstation; its working files are not part of this repository. GitHub Actions does not have that sibling checkout, and an earlier remote run therefore failed those cross-repository checks. The local full-suite pass does not establish a reproducible CI pass.
+- `npm run build` passed with placeholder public build variables. Next.js emitted a `require-in-the-middle` critical-dependency build warning and expected dynamic-cookie/rendering diagnostics; no build error occurred.
+- Docker CLI is installed but the local Docker daemon is unavailable (`Cannot connect to the Docker daemon`). The prior Actions run `37957799680` did build the image successfully for commit `ed26099`; no image build has been observed for the new Learn fix.
+- GitHub Actions repository secrets, variables, and webhooks were empty when checked. No Coolify API token is available to the workflow. Coolify's native Auto Deploy remains enabled. Thus automatic deployment from `main` is not configured or verified, and this follow-up has not triggered a deployment.
+- No GitHub ruleset/branch protection was present. Do not merge while the remote verification gate is red or deployment requirements remain unresolved.
+
+### Production application observations (read-only)
+
+- The separate DigitalSkillX Coolify app (`digitalskillx:main`, UUID `ay1sfm49mfbzm1x1a6pil8tm`) was healthy at commit `0ab7201dd8377ee701c172de10c1e984f0c2e702`; the public HTTPS health endpoint returned 200 with normal TLS verification. This confirms liveness only, not database readiness or student journeys.
+- The running app process is UID 0. The deployed application has no configured persistent mount; `/app/.data/storage` was absent. Storage provider variables were absent and code defaults to local filesystem storage. Inventory of all potentially persisted production assets and a safe durable-storage plan are therefore unresolved.
+- The current public `/api/health` is a liveness endpoint. It is not a readiness gate for database connectivity. No readiness route or deployment-side readiness check was verified.
+- Production authentication, password recovery, course entitlement, payment webhook, storage, outbox, and rollback journeys were not exercised in this audit. No database/schema, credentials, traffic, scheduler, storage, DNS, or production app settings were changed.
+
+### Scheduler ownership audit
+
+Coolify's eight scheduled tasks target `127.0.0.1:3000` with bearer authentication. Vercel and Coolify are both active, so the base invocation listed below is duplicated; Vercel also has additional webinar and content-factory invocations. No scheduler ownership changes were made. Vercel entries are UTC per `vercel.json`; Coolify task commands were inspected as local-container invocations, but schedule timezone settings should be confirmed before any ownership switch.
+
+| Route | Vercel schedule(s), UTC | Coolify task | Current result |
+| --- | --- | --- | --- |
+| `/api/cron/inactivity` | `0 9 * * *` | `0 9 * * *` | Duplicate; both active |
+| `/api/cron/bulk-import` | `15 9 * * *` | `15 9 * * *` | Duplicate; both active |
+| `/api/cron/email-outbox` | `45 9 * * *` | `45 9 * * *` | Duplicate; both active |
+| `/api/cron/email-campaigns` | `55 9 * * *` | `55 9 * * *` | Duplicate; both active |
+| `/api/cron/webinar-follow-up` | `5 8`, `25 10`, `5 11`, `0 14`, `5 13`, `0 18`, `5 15`, `0 20`, `5 17`, `30 21`, `0 22` daily | `25 10 * * *` | Base invocation duplicated; Vercel has 10 additional invocations |
+| `/api/cron/checkout-abandon` | `20 10 * * *` | `20 10 * * *` | Duplicate; both active |
+| `/api/cron/content-factory` | `5 10`, `35 12`, `5 15`, `5 18`, `5 21` daily | `5 10 * * *` | Base invocation duplicated; Vercel has 4 additional invocations |
+| `/api/cron/paystack-external-backfill` | `*/15 * * * *` | `*/15 * * * *` | Duplicate; both active |
+
+The extra Vercel entries are intended workload until proven otherwise; do not remove them. Select one scheduler owner per route only after verifying locking/idempotency and a timed cutover plan. The additional Coolify backup-reminder task is not one of these app cron routes; its execution/backup success is unverified.
+
+### Release blockers
+
+1. Make the LeadPilot/LeadRush integration tests reproducible from an immutable, reviewed dependency or repository-contained contract; do not rely on this workstation's dirty sibling checkout.
+2. Re-run the exact branch gate and Docker build in GitHub Actions after the Learn fix. Resolve any remaining failures without weakening tests.
+3. Configure the minimum-scope Coolify API token and repository variables, validate API behavior, then ensure exactly one deployment trigger owns production. Do not disable current Auto Deploy before the verified workflow is ready.
+4. Correct the production runtime to non-root and establish whether data exists outside the currently missing local-storage path before adding/changing persistent mounts.
+5. Establish a database-aware readiness check and verify Coolify rollback image availability before production rollout.
+6. Resolve duplicated schedule ownership with verified job behavior and preserve all existing cadences.
+7. Verify isolated staging, controlled test accounts/email sink and Supabase backup/restore before applying migration 0054. Migration 0054 remains unapplied to production.

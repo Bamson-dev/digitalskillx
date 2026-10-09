@@ -46,3 +46,11 @@ Record the current authoritative Supabase project, DNS records and TTL, Paystack
 ## Post-rollback checks
 
 Track app availability, authentication/session refresh, course-access denials, webhook deliveries and idempotency, outbox/campaign retry state, storage 404s, cron ownership, CPU/RAM/disk and backup age. Notify affected students only after measuring scope and obtaining separate authorization; do not launch a bulk recovery email from this runbook.
+
+## 2026-10-09 verification update
+
+The running production app was read-only observed healthy at commit `0ab7201dd8377ee701c172de10c1e984f0c2e702`, and public HTTPS `/api/health` returned 200 with TLS verification enabled. This endpoint only proves liveness. Coolify showed retention of two images, but the rollback image list did not load; a usable previous image and an actual rollback have not been verified. Do not describe rollback as tested or rely on the retention count alone.
+
+No deployment, storage, scheduler, DNS, database, secret, or runtime configuration changes were made. GitHub Actions had no Coolify URL/UUID variables or API token secret. Production automatic deployment is therefore not active through the workflow, and Coolify's existing native Auto Deploy remains on. The deployed container process was UID 0, and no persistent volume was configured; `/app/.data/storage` was absent. Before another production release, verify existing file locations and recovery artifacts, establish durable storage as needed, and review a non-root-compatible deployment. Avoid changing mounts or stopping the current app until those preconditions are met.
+
+The release workflow's last observed Docker build passed on an older commit, but its aggregate gate failed and deployment was skipped. The new Learn fix has passed local tests; updated Actions/image results are still required. The broad local unit suite used an untracked sibling LeadRush checkout and does not prove GitHub CI reproducibility. No production rollback or user journey was tested. Existing Vercel and Coolify schedules remain simultaneously enabled; do not toggle either scheduler as part of rollback until route ownership and in-flight jobs are checked.
