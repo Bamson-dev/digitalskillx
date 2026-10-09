@@ -4,7 +4,7 @@
 
 - Apex and `www` DNS resolve to the Contabo Coolify server and public HTTPS health checks return 200. The DigitalSkillX Coolify app is running healthy on commit `0ab7201dd8377ee701c172de10c1e984f0c2e702`; its latest successful deployment in history was a manual run on 2026-09-29.
 - Vercel still has a production deployment/domain attached and its Cron setting lists 22 enabled invocations. Coolify lists 8 DigitalSkillX scheduled tasks with overlapping routes. Their exact commands, cadence parity and actual invocations are unverified; DNS points to Contabo, but scheduler ownership is unresolved.
-- Automatic GitHub deployment has not been verified: Coolify's Auto Deploy option is on, but there is no GitHub repository webhook and the latest deployment was manual. The production release workflow is staged on `codex/contabo-migration` and has not run.
+- Automatic GitHub deployment has not been verified: Coolify's Auto Deploy option is on, but there is no GitHub repository webhook and the latest deployment was manual. The production release workflow is on `codex/contabo-migration`; its first GitHub Actions run passed toolchain installation, typecheck and lint, then failed the broad unit suite on the Learn page component expectation before image build. No production deploy job ran.
 - No production resources or schedules were changed in this turn. The current Coolify rollback retention is set to 2 images, but the rollback image list was still loading in the dashboard; availability of a known-good rollback image is not yet verified.
 - No isolated staging environment was verified. The Coolify app labelled `digitalskillx:staging` reports unknown health and appears under an environment labelled `production`.
 

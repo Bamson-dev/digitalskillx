@@ -43,15 +43,23 @@ jobs:
       - name: Lint
         run: npm run lint
 
-      - name: Run relevant regression suites
-        run: |
-          npm run test:unit
-          npm run test:content-factory
-          npm run test:course-publish-outbox
-          npm run test:security-scan
-          npm run test:platform-hardening
-          npm run test:paystack-external
-          npm run test:leadthur-handoff
+      - name: Content factory regressions
+        run: npm run test:content-factory
+
+      - name: Course publish outbox regressions
+        run: npm run test:course-publish-outbox
+
+      - name: Security regression scan
+        run: npm run test:security-scan
+
+      - name: Platform hardening regressions
+        run: npm run test:platform-hardening
+
+      - name: Paystack external enrollment regressions
+        run: npm run test:paystack-external
+
+      - name: Leadthur handoff regressions
+        run: npm run test:leadthur-handoff
 
       - name: Build the production container image
         env:
@@ -68,6 +76,9 @@ jobs:
             --build-arg "NEXT_PUBLIC_SITE_URL=${NEXT_PUBLIC_SITE_URL}" \
             --build-arg "NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY=${NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY}" \
             .
+
+      - name: Run broader unit suite
+        run: npm run test:unit
 
   deploy:
     name: deploy-production
