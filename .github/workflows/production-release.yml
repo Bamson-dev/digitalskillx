@@ -44,24 +44,38 @@ jobs:
         run: npm run lint
 
       - name: Content factory regressions
+        id: content_factory
+        continue-on-error: true
         run: npm run test:content-factory
 
       - name: Course publish outbox regressions
+        id: course_publish_outbox
+        continue-on-error: true
         run: npm run test:course-publish-outbox
 
       - name: Security regression scan
+        id: security_scan
+        continue-on-error: true
         run: npm run test:security-scan
 
       - name: Platform hardening regressions
+        id: platform_hardening
+        continue-on-error: true
         run: npm run test:platform-hardening
 
       - name: Paystack external enrollment regressions
+        id: paystack_external
+        continue-on-error: true
         run: npm run test:paystack-external
 
       - name: Leadthur handoff regressions
+        id: leadthur
+        continue-on-error: true
         run: npm run test:leadthur-handoff
 
       - name: Build the production container image
+        id: docker_image
+        continue-on-error: true
         env:
           NEXT_PUBLIC_SUPABASE_URL: https://ci-placeholder.supabase.co
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ci-placeholder-anon-key
@@ -78,7 +92,31 @@ jobs:
             .
 
       - name: Run broader unit suite
+        id: unit_suite
+        continue-on-error: true
         run: npm run test:unit
+
+      - name: Enforce every regression and image build result
+        if: always()
+        env:
+          CONTENT_FACTORY: ${{ steps.content_factory.outcome }}
+          COURSE_PUBLISH_OUTBOX: ${{ steps.course_publish_outbox.outcome }}
+          SECURITY_SCAN: ${{ steps.security_scan.outcome }}
+          PLATFORM_HARDENING: ${{ steps.platform_hardening.outcome }}
+          PAYSTACK_EXTERNAL: ${{ steps.paystack_external.outcome }}
+          LEADTHUR: ${{ steps.leadthur.outcome }}
+          DOCKER_IMAGE: ${{ steps.docker_image.outcome }}
+          UNIT_SUITE: ${{ steps.unit_suite.outcome }}
+        run: |
+          failed=0
+          for check in CONTENT_FACTORY COURSE_PUBLISH_OUTBOX SECURITY_SCAN PLATFORM_HARDENING PAYSTACK_EXTERNAL LEADTHUR DOCKER_IMAGE UNIT_SUITE; do
+            outcome="${!check}"
+            if [ "$outcome" != success ]; then
+              echo "$check did not pass (outcome: ${outcome:-missing})" >&2
+              failed=1
+            fi
+          done
+          exit "$failed"
 
   deploy:
     name: deploy-production
