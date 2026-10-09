@@ -40,7 +40,24 @@ Never set `NODE_TLS_REJECT_UNAUTHORIZED=0`. Do not copy the old environment whol
 5. Build and deploy the image. Check Coolify health and reverse-proxy logs without revealing environment values. Verify TLS externally and `GET https://<staging-host>/api/health` returns healthy. Verify container runs as non-root and port 3000 is not directly internet-accessible.
 6. Run staging checks using test accounts: valid and invalid login; email normalization; session cookie persistence across refresh/navigation; logout; password reset to a controlled inbox; redirect allowlist; owned and unowned course access; admin authorization; course/certificate reconciliation error isolation. Browser evidence must confirm the cookie and destination, not just password success.
 7. Exercise Paystack test-mode webhook signature, transaction verification and duplicate delivery; verify no duplicate transaction/enrollment/email. Test Leadthur handoff only with controlled fixtures. Test Supabase Storage upload/download against staging and confirm existing production object URLs are unchanged. Test controlled email delivery only.
-8. Apply `supabase/migrations/0054_course_publish_email_outbox.sql` to isolated staging only. Restart the staging container with a safe course-publish email pending; verify the existing scheduled `/api/cron/email-outbox` drain reclaims stale claims and sends the message once. Force a controlled provider failure and confirm retry/backoff. Verify other database-backed outbox/campaign/bulk/webinar jobs and logs. Never apply this migration to production as part of staging verification. Confirm app data does not depend on container writable storage; mount a volume only if a verified feature actually needs it.
+8. Before applying schema, take a staging-only database backup/export and verify it is restorable. Check the `0032` prerequisites in the staging SQL editor (both the delivery table and enum value must exist):
+
+   ```sql
+   select
+     to_regclass('public.program_course_publish_deliveries') is not null as migration_0032_delivery_table_ready,
+     to_regclass('public.courses') is not null as courses_table_ready,
+     to_regclass('public.profiles') is not null as profiles_table_ready,
+     exists (
+       select 1
+       from pg_type t
+       join pg_enum e on e.enumtypid = t.oid
+       where t.typnamespace = 'public'::regnamespace
+         and t.typname = 'notification_type'
+         and e.enumlabel = 'program_course_added'
+     ) as migration_0032_notification_type_ready;
+   ```
+
+   Continue only if all four values are `true`. Then apply `supabase/migrations/0054_course_publish_email_outbox.sql` to isolated staging only. Restart the staging container with a safe course-publish email pending; verify the existing scheduled `/api/cron/email-outbox` drain reclaims stale claims and sends the message once. Force a controlled provider failure and confirm retry/backoff. Verify other database-backed outbox/campaign/bulk/webinar jobs and logs. Never apply this migration to production as part of staging verification. Confirm app data does not depend on container writable storage; mount a volume only if a verified feature actually needs it.
 9. Configure one copy of each cron expression below in Coolify/host cron, UTC. Send `Authorization: Bearer <staging CRON_SECRET>` (or the exact route mechanism) to the staging URL. Start with a harmless/no-due-work observation and confirm exactly one invocation. Prevent Vercel and VPS from running the same environment's schedules simultaneously.
 
 ## Cron parity (UTC)

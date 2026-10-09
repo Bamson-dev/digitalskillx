@@ -9,6 +9,15 @@ Updated: 2026-10-09
 - Existing dirty and untracked learning/analytics work was present before implementation and has been left in place. Some TypeScript/type integration changes in the same areas are interleaved with that work; do not stage those paths without reviewing them as user WIP.
 - No active Docker daemon or authenticated Contabo/Coolify/DNS access is available in this session. The live production host and authoritative Supabase project therefore remain unconfirmed. Repository files mention both Vercel and a Supabase host on Contabo; those are not proof of current topology.
 
+## Staging tooling verification (2026-10-09)
+
+- Fetched GitHub `origin/codex/contabo-migration`; it points to `9aaf86dec54dce24504723a35bd7120df5d41d6b`, matching this checkout. The working tree contains separate uncommitted learning/analytics changes, which remain untouched.
+- Available local versions are Node `v26.0.0` and npm `11.12.1`. `.nvmrc` requests Node 22 and `package.json` pins npm `10.9.2`; no Node 22 version manager/runtime is installed. No Node 22 checks are claimed here.
+- Docker CLI is installed, but `docker info` cannot connect to a daemon. `gh`, Coolify CLI/configuration and authorized remote build tools are unavailable. Environment/config presence checks found no staging or Coolify credentials. No remote image build or staging deployment was possible; no staging URL exists.
+- No Supabase staging project credentials were available. Migration 0054 has not been run, and neither staging nor production schema was modified. The runbook now includes a read-only 0032 preflight query and a backup-before-0054 procedure.
+- Compose health-check configuration now uses the Node runtime's built-in `fetch`, matching the Dockerfile health check and avoiding reliance on `wget` being installed. Docker image/container validation remains unverified.
+- Compose model parsing can be checked with placeholder public values and a temporary empty `.env`; that validates syntax only and is not an image build or runtime check.
+
 ## Confirmed from repository
 
 - Next.js 14 App Router, React 18, TypeScript, npm; Node 22 is now declared in `.nvmrc`, package engines and Docker base image. npm is pinned to 10.9.2 in package metadata. The interactive workspace itself is Node 26/npm 11, so it is not the pinned validation runtime.

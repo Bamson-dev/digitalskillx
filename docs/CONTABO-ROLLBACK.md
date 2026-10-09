@@ -1,5 +1,13 @@
 # Contabo migration rollback plan
 
+## Current staging verification state (2026-10-09)
+
+- GitHub `origin/codex/contabo-migration` was verified at `9aaf86dec54dce24504723a35bd7120df5d41d6b`.
+- No Coolify credentials/configuration, Node 22 runtime, or active Docker daemon is available in this environment. No staging deployment URL exists and no staging database migration has been applied.
+- No production resource was changed. The procedures below remain future operator steps, not evidence that staging or production is live.
+
+For a future staging rollback, stop staging-only cron invocations, preserve the staging database/outbox and storage volume, then redeploy the prior staging image. Do not drop `program_course_publish_email_outbox` or delete pending rows until the staging issue is diagnosed; this migration has not been applied here. Production rollback instructions below apply only after a separately approved production cutover.
+
 Rollback is an operator action requiring explicit approval when it changes production DNS, scheduler ownership, webhook destinations or traffic. Do not delete data or volumes during rollback.
 
 ## Rollback triggers
