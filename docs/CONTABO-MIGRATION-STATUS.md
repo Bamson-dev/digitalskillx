@@ -124,3 +124,11 @@ The extra Vercel entries are intended workload until proven otherwise; do not re
 5. Establish a database-aware readiness check and verify Coolify rollback image availability before production rollout.
 6. Resolve duplicated schedule ownership with verified job behavior and preserve all existing cadences.
 7. Verify isolated staging, controlled test accounts/email sink and Supabase backup/restore before applying migration 0054. Migration 0054 remains unapplied to production.
+
+### Latest remote verification (GitHub Actions run 37960864420)
+
+Run: https://github.com/Bamson-dev/digitalskillx/actions/runs/37960864420 for commit `1209dc9501f2b297f47c2a64f4744643269f5d5b`.
+
+- **Passed:** Node 22.23.3, npm 10.9.2, `npm ci`, typecheck, lint, Content Factory, course-publish outbox, security scan, platform hardening, and the actual Docker image build (completed in 1m54s).
+- **Failed:** Paystack external enrollment and Leadthur handoff tests both attempt to read `/home/runner/work/digitalskillx/LeadRush/backend/src/api/webhook-router.ts`, which is not checked out in CI. The broad unit suite also failed because it includes the same external-repository-dependent tests. The final aggregate gate failed and `deploy-production` was skipped.
+- The Learn test and core verification remain passing. The failures must be resolved at the dependency/repository boundary without skipping or weakening the checks. A clean CI checkout must contain the reviewed LeadPilot/LeadRush contract at a pinned immutable revision or the tests must be refactored with equivalent contract coverage; the current workstation's sibling checkout is not evidence of that.
