@@ -37,6 +37,17 @@ jobs:
       - name: Install locked dependencies
         run: npm ci --no-audit --no-fund
 
+      - name: Fetch pinned LeadPilot source for cross-repo contract tests
+        env:
+          LEADPILOT_SHA: e681cf845875542a01717ce324f89407b62b3018
+        run: |
+          dir="$RUNNER_TEMP/leadpilot"
+          git init --quiet "$dir"
+          git -C "$dir" fetch --quiet --depth 1 https://github.com/Bamson-dev/LeadPilot.git "$LEADPILOT_SHA"
+          git -C "$dir" checkout --quiet --detach FETCH_HEAD
+          test "$(git -C "$dir" rev-parse HEAD)" = "$LEADPILOT_SHA"
+          echo "LEADRUSH_BACKEND_DIR=$dir/backend" >> "$GITHUB_ENV"
+
       - name: Typecheck
         run: npm run typecheck
 
