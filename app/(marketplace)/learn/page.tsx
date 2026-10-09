@@ -2,49 +2,53 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { contentFactoryEnabled } from "@/lib/content-factory/feature-flag";
 import { getCachedPublishedLibrary, libraryCacheKey } from "@/lib/content-factory/library-cache";
-import {
-  LIBRARY_CATEGORIES,
-  libraryCategoryLabel,
-  libraryHref,
-  parseLibraryCategory,
-  parseLibraryPage,
-  sanitizeLibraryQuery,
-} from "@/lib/content-factory/library-shared";
+import { libraryCategoryLabel, LIBRARY_CATEGORIES } from "@/lib/content-factory/library-shared";
+import { learnDiscoveryHref, parseLearnDiscoverySearchParams } from "@/lib/learn-discovery/discovery-shared";
 import { MarketplaceNav, MarketplaceFooter } from "@/components/marketplace/marketplace-chrome";
-import { LearnCover } from "@/components/learn/learn-cover";
+import { LearnDiscoveryToolbar } from "@/components/learn/learn-discovery-toolbar";
+import { LearnPathCard } from "@/components/learn/learn-path-card";
 import { siteUrl } from "@/lib/org";
 
 export const revalidate = 300;
 
-type Search = { q?: string; category?: string; page?: string };
+type Search = {
+  q?: string;
+  category?: string;
+  page?: string;
+  difficulty?: string;
+  duration?: string;
+  certificate?: string;
+  sort?: string;
+};
 
 export async function generateMetadata({ searchParams }: { searchParams: Search }): Promise<Metadata> {
-  const q = sanitizeLibraryQuery(searchParams.q);
-  const category = parseLibraryCategory(searchParams.category);
-  const page = parseLibraryPage(searchParams.page);
-  const categoryLabel = libraryCategoryLabel(category);
-  const title = q
-    ? `Search free learning: ${q}`
-    : category === "all"
-      ? page > 1
-        ? `Free Learning Library · Page ${page}`
+  const params = parseLearnDiscoverySearchParams(searchParams);
+  const categoryLabel = libraryCategoryLabel(params.category);
+  const title = params.q
+    ? `Search free learning: ${params.q}`
+    : params.category === "all"
+      ? params.page > 1
+        ? `Free Learning Library · Page ${params.page}`
         : "Free Learning Library"
-      : page > 1
-        ? `${categoryLabel} · Free Learning · Page ${page}`
+      : params.page > 1
+        ? `${categoryLabel} · Free Learning · Page ${params.page}`
         : `${categoryLabel} · Free Learning Library`;
   const canonical =
-    !q && category !== "all" && page <= 1
-      ? `${siteUrl()}/learn/${category}`
-      : `${siteUrl()}${libraryHref({
-          category: q ? undefined : category === "all" ? undefined : category,
-          page: q ? undefined : page,
+    !params.q && params.category !== "all" && params.page <= 1
+      ? `${siteUrl()}/learn/${params.category}`
+      : `${siteUrl()}${learnDiscoveryHref({
+          category: params.q ? undefined : params.category === "all" ? undefined : params.category,
+          page: params.q ? undefined : params.page,
         })}`;
   return {
     title,
     description:
       "Learn profitable skills for free. DigitalSkillX organizes public YouTube lessons into structured learning paths with clear creator credit.",
     alternates: { canonical },
-    robots: q || page > 1 || category !== "all" ? { index: false, follow: true } : undefined,
+    robots:
+      params.q || params.page > 1 || params.category !== "all" || params.difficulty || params.duration
+        ? { index: false, follow: true }
+        : undefined,
     openGraph: {
       title: "Learn profitable skills for free",
       description:
@@ -72,27 +76,38 @@ export default async function LearnIndexPage({ searchParams }: { searchParams: S
   }
 
   const key = libraryCacheKey(searchParams);
+  const discoveryParams = parseLearnDiscoverySearchParams(searchParams);
   let result: Awaited<ReturnType<typeof getCachedPublishedLibrary>> = {
     paths: [],
     page: 1,
     pageSize: 20,
     total: 0,
-    category: "all",
-    q: "",
+    category: discoveryParams.category,
+    q: discoveryParams.q,
+    params: discoveryParams,
   };
   try {
-    result = await getCachedPublishedLibrary(key.q, key.category, key.page);
+    result = await getCachedPublishedLibrary(
+      key.q,
+      key.category,
+      key.page,
+      key.difficulty,
+      key.duration,
+      key.certificate,
+      key.sort,
+    );
   } catch {
-    result = { ...result, q: key.q, category: key.category };
+    result = { ...result, params: discoveryParams };
   }
 
-  const { paths, page, pageSize, total, category, q } = result;
+  const { paths, page, pageSize, total } = result;
+  const params = result.params ?? discoveryParams;
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
-  const hasQuery = Boolean(q);
+  const hasQuery = Boolean(params.q);
   const emptyMessage = hasQuery
-    ? "No learning paths match your search."
-    : category !== "all"
-      ? `No published ${libraryCategoryLabel(category).toLowerCase()} paths yet.`
+    ? "No learning paths match your search and filters."
+    : params.category !== "all"
+      ? `No published ${libraryCategoryLabel(params.category).toLowerCase()} paths yet.`
       : "No published learning paths yet.";
 
   return (
@@ -111,33 +126,20 @@ export default async function LearnIndexPage({ searchParams }: { searchParams: S
           </p>
         </header>
 
-        <form action="/learn" method="get" className="mt-8 max-w-xl" role="search">
-          <label htmlFor="learn-q" className="sr-only">
-            Search learning paths
-          </label>
-          <div className="flex flex-col gap-2 sm:flex-row">
-            <input
-              id="learn-q"
-              name="q"
-              type="search"
-              defaultValue={q}
-              placeholder="Search title, creator, topic, or description"
-              className="h-11 min-w-0 flex-1 rounded-xl border border-app bg-white px-3 text-sm focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
-            />
-            {category !== "all" ? <input type="hidden" name="category" value={category} /> : null}
-            <button
-              type="submit"
-              className="h-11 shrink-0 rounded-xl bg-brand px-4 text-sm font-semibold text-white hover:bg-brand-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
-            >
-              Search
-            </button>
-          </div>
-        </form>
+        <LearnDiscoveryToolbar initial={params} total={total} />
 
         <nav className="mt-6 flex flex-wrap gap-2" aria-label="Learning categories">
           {LIBRARY_CATEGORIES.map((item) => {
-            const href = libraryHref({ q, category: item.id, page: 1 });
-            const active = category === item.id;
+            const href = learnDiscoveryHref({
+              q: params.q,
+              category: item.id,
+              difficulty: params.difficulty,
+              duration: params.duration,
+              certificate: params.certificate,
+              sort: params.sort,
+              page: 1,
+            });
+            const active = params.category === item.id;
             return (
               <Link
                 key={item.id}
@@ -157,29 +159,16 @@ export default async function LearnIndexPage({ searchParams }: { searchParams: S
 
         {hasQuery ? (
           <p className="mt-4 text-sm text-muted">
-            Showing results for “{q}”{category !== "all" ? ` in ${libraryCategoryLabel(category)}` : ""}.
+            Showing results for “{params.q}”
+            {params.category !== "all" ? ` in ${libraryCategoryLabel(params.category)}` : ""}.
           </p>
         ) : null}
 
-        <div className="mt-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+        <ul className="mt-8 grid list-none gap-5 sm:grid-cols-2 lg:grid-cols-3">
           {paths.map((path) => (
-            <Link
-              key={path.id}
-              href={`/learn/${path.slug}`}
-              className="group min-w-0 overflow-hidden rounded-2xl border border-app bg-white transition hover:border-brand focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
-            >
-              <LearnCover path={path} />
-              <div className="space-y-1 p-4">
-                <p className="text-xs uppercase tracking-wide text-muted">{path.category || "Skills"}</p>
-                <h2 className="font-semibold group-hover:text-brand">{path.title}</h2>
-                {path.creator_name ? (
-                  <p className="text-sm text-neutral-700">Learn from {path.creator_name}</p>
-                ) : null}
-                <p className="line-clamp-2 text-sm text-neutral-600">{path.short_description}</p>
-              </div>
-            </Link>
+            <LearnPathCard key={path.id} path={path} />
           ))}
-        </div>
+        </ul>
 
         {!paths.length ? <p className="mt-10 text-sm text-muted">{emptyMessage}</p> : null}
 
@@ -187,7 +176,7 @@ export default async function LearnIndexPage({ searchParams }: { searchParams: S
           <nav className="mt-10 flex flex-wrap items-center gap-2" aria-label="Pagination">
             {page > 1 ? (
               <Link
-                href={libraryHref({ q, category, page: page - 1 })}
+                href={learnDiscoveryHref({ ...params, page: page - 1 })}
                 className="rounded-lg border border-app px-3 py-2 text-sm hover:border-brand focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
                 rel="prev"
               >
@@ -199,7 +188,7 @@ export default async function LearnIndexPage({ searchParams }: { searchParams: S
             </p>
             {page < totalPages ? (
               <Link
-                href={libraryHref({ q, category, page: page + 1 })}
+                href={learnDiscoveryHref({ ...params, page: page + 1 })}
                 className="rounded-lg border border-app px-3 py-2 text-sm hover:border-brand focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
                 rel="next"
               >
