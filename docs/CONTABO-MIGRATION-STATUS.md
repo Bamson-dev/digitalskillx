@@ -2,18 +2,32 @@
 
 Updated: 2026-10-09
 
-## State
+## Verified production and release state (2026-10-09)
 
-- Working branch: `codex/contabo-migration`, continuing from `f094702`.
-- Migration changes are committed and pushed only on `codex/contabo-migration`. No production, DNS, VPS, Coolify, or database changes were made.
-- Existing dirty and untracked learning/analytics work was present before implementation and has been left in place. Some TypeScript/type integration changes in the same areas are interleaved with that work; do not stage those paths without reviewing them as user WIP.
-- No active Docker daemon or authenticated Contabo/Coolify/DNS access is available in this session. The live production host and authoritative Supabase project therefore remain unconfirmed. Repository files mention both Vercel and a Supabase host on Contabo; those are not proof of current topology.
+- GitHub `main` is `b99da43732749fa9a665644a710c72404b3b75fa`. `codex/contabo-migration` is `dcf1ea0a2db5f9fc4e01d970b3a7eb167b0bdff7`. The Coolify production app commit `0ab7201dd8377ee701c172de10c1e984f0c2e702` is an ancestor of `main`, but is older than it.
+- DNS A records for `digitalskillx.com` and `www.digitalskillx.com` resolve to Contabo `207.180.248.233`. Both public HTTPS `/api/health` requests returned HTTP 200 and curl TLS verification succeeded. The Coolify production application has matching domains and is `digitalskillx:main`, currently running and healthy. Public apex/`www` traffic is therefore routed to Contabo's Coolify proxy at the time checked.
+- Vercel still has a DigitalSkillX production deployment and the same domains attached, but DNS currently points to Contabo. Vercel's Cron Jobs setting is enabled. The exact Vercel deployment commit was not available in the inspected deployment UI.
+- Coolify v4.1.2 production app source is public GitHub `Bamson-dev/digitalskillx`, branch `main`, commit setting `HEAD`; its most recent successful deployment shown was a manual deployment of `0ab7201…` on 2026-09-29. Container port 3000 is exposed behind HTTPS, the HTTP `/api/health` check uses port 3000, force HTTPS is enabled, and no Coolify persistent-storage mount is configured. `Auto Deploy` is enabled, but GitHub Settings > Webhooks showed no repository webhook. No push-triggered production deployment has been verified.
+- The Dockerfile at deployed commit `0ab7201…` does not specify a non-root `USER`, so the image defaults to root; the runtime process UID was not directly inspected. The migration branch Dockerfile now specifies the `node` user but has not been deployed.
+- The authenticated Coolify administration UI is reachable on plain HTTP at server port 8000. Restrict this management interface to a VPN/trusted network or put it behind verified HTTPS before treating the control plane as hardened. No access/firewall settings were changed.
+- Coolify lists 8 DigitalSkillX application cron tasks and Vercel reports 22 scheduled invocations enabled, with overlapping routes including email outbox. Exact Coolify task commands/cadences were not inspected, so complete schedule parity and which service actually executes each job are unverified. Treat overlap as a duplicate-scheduler risk and possible missing-schedule risk. No schedule was run, disabled, or edited. The existing Coolify staging app is under an environment labelled `production` and reports unknown health; it is not treated as isolated staging.
+- The Coolify host reports Ubuntu 24.04.4, 6 CPU cores and 11.7 GB RAM. Free disk, actual container limits and the authoritative Supabase project were not verified.
+- No production deployment, app setting, secret, DNS record, database/schema, payment webhook, storage object, or scheduler setting was changed. The user authorizes direct production deployment as the intended workflow; the release still requires the reviewed workflow to reach `main` and GitHub Actions configuration to be completed.
+- Existing dirty and untracked learning/analytics work remains untouched. Do not stage those user-owned paths.
 
-## Staging tooling verification (2026-10-09)
+## Automatic production release implementation
+
+- Added `.github/workflows/production-release.yml`: PRs to `main` and pushes to `main` run Node 22/npm 10.9.2, `npm ci`, typecheck, lint, relevant regression suites, a Docker image build and the production build. Pushes to `main` then use the Coolify API to pin the exact Git SHA, disable independent Coolify auto-deploy triggers, queue the deployment, wait until Coolify reports the same SHA and check public HTTPS health.
+- The workflow is on `codex/contabo-migration`, not `main`; GitHub will not run it for main until this reviewed change is merged. No GitHub branch protection rules currently exist. Configure the `verify` status check as required for `main`.
+- Required GitHub Actions configuration (values are never committed): variable `COOLIFY_API_BASE_URL=https://coolify.leadpilot.live/api/v1`, variable `COOLIFY_APP_UUID=ay1sfm49mfbzm1x1a6pil8tm`, and secret `COOLIFY_API_TOKEN` with only permissions needed to read/update this application and deploy. Confirm token scope on the installed Coolify version. The workflow uses only push events on exact ref `refs/heads/main`; forks and feature branches do not receive the secret.
+- The Actions workflow has not run in this branch. Coolify API calls, exact-commit deployment, health preservation, rollback after a failed image, and required branch checks remain untested. Automatic deployment is not active until the workflow is merged, the Actions variables/secret and protection are set, and a later `main` push is observed end-to-end.
+- Vercel Cron is enabled while Coolify has matching scheduled tasks. Preserve both while identifying the invoking owner; then disable only a confirmed duplicate in a planned change. Do not add another scheduler.
+
+## Local tooling and staging verification (2026-10-09)
 
 - Fetched GitHub `origin/codex/contabo-migration`; it points to the latest migration commit recorded in Git history. The working tree contains separate uncommitted learning/analytics changes, which remain untouched.
 - Available local versions are Node `v26.0.0` and npm `11.12.1`. `.nvmrc` requests Node 22 and `package.json` pins npm `10.9.2`; no Node 22 version manager/runtime is installed. No Node 22 checks are claimed here.
-- Docker CLI is installed, but `docker info` cannot connect to a daemon. `gh`, Coolify CLI/configuration and authorized remote build tools are unavailable. Environment/config presence checks found no staging or Coolify credentials. No remote image build or staging deployment was possible; no staging URL exists.
+- Docker CLI is installed, but `docker info` cannot connect to a local daemon. `gh` and Coolify CLI configuration are unavailable. An authenticated Coolify web session was available for read-only inspection, but no Coolify API token was available for workflow setup or deployment. No remote image build or staging deployment was attempted; no isolated staging URL was verified.
 - No Supabase staging project credentials were available. Migration 0054 has not been run, and neither staging nor production schema was modified. The runbook now includes a read-only 0032 preflight query and a backup-before-0054 procedure.
 - Compose health-check configuration now uses the Node runtime's built-in `fetch`, matching the Dockerfile health check and avoiding reliance on `wget` being installed. Docker image/container validation remains unverified.
 - `docker compose -f docker-compose.prod.yml config --quiet` passed with placeholder public values and a temporary empty `.env`; that validates Compose syntax only and is not an image build or runtime check. The Compose health check now uses Node's built-in fetch like the Dockerfile health check.
@@ -49,15 +63,15 @@ Updated: 2026-10-09
 - `npm run test:unit`: passed after correcting the stale content-factory limit assertion and updating the older Resend-only test to match the intentional Resend-primary/ZeptoMail fallback while asserting idempotent jobs do not fall through to a second provider.
 - AI Money Code campaign continuation test passes after replacing its Vercel-only `waitUntil` assumption with the Node background-task path; the 22 cron schedules remain unchanged.
 - `npm run check-env`: reports the three expected Supabase variables missing from local environment; no values were printed. No live credentials were requested.
-- Docker CLI exists but no daemon is running. Compose syntax validates with placeholder public values and a temporary empty `.env`; Docker image/container checks are unavailable. Node 22/npm 10.9.2 are also unavailable in this workspace. Coolify staging, domain TLS, live auth, webhook, storage and cron behavior remain unverified.
+- Docker CLI exists but no local daemon is running. Compose syntax validates with placeholder public values and a temporary empty `.env`; Docker image/container checks are unavailable locally. Node 22/npm 10.9.2 were unavailable at the start of this session; the new workflow has not yet run on GitHub. Public production TLS and health did verify from this workstation. Auth flows, webhook processing, storage writes, email delivery, outbox retries and restart recovery have not been tested against production (and will not be).
 
 ## External blockers and next steps
 
-1. Confirm the production app host, authoritative Supabase project, and whether Supabase Auth/Postgres/Storage already run on the VPS. Confirm VPS CPU/RAM/disk, Docker/Coolify status and backup target.
+1. Confirm the authoritative Supabase project and whether Supabase Auth/Postgres/Storage already run on the VPS. Confirm available disk, container limits and backup target.
 2. Run the Docker image under Node 22/npm 10.9.2 on a staging hostname with staging Supabase, payment test-mode, email sink/provider and separate `CRON_SECRET`/`CRON_WORKER_ORIGIN`.
 3. Apply migration 0054 only to isolated staging, then verify pending, retry, provider-idempotent send, stale-claim recovery and container restart behavior before enabling course-publish notifications.
-5. Configure the exact 22 cron entries in UTC once in Coolify/host cron only after staging proves authentication, no overlap duplication, retries and queue recovery. Disable Vercel schedules only during an approved cutover window.
+5. Resolve the verified Vercel/Coolify scheduled-task overlap after identifying which system is invoking each workload. Keep exactly one owner per workload and validate queue/idempotency behavior before disabling a schedule.
 6. Verify Supabase Auth redirect allowlists, cookie domain/HTTPS, Paystack webhook destination, storage, backup restoration and rollback on staging.
-7. Obtain explicit approval before any production DNS, webhook target, credential, database schema, production deployment, or Vercel schedule change.
+7. Merge this workflow and Docker hardening into `main`; add the GitHub Actions variables and restricted Coolify API token secret; add required branch checks; then verify a later `main` push deploys the exact SHA and returns healthy over HTTPS. Keep Vercel resources intact.
 
 See [deployment runbook](CONTABO-DEPLOYMENT-RUNBOOK.md) and [rollback plan](CONTABO-ROLLBACK.md).

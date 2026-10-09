@@ -1,14 +1,16 @@
 # Contabo migration rollback plan
 
-## Current staging verification state (2026-10-09)
+## Verified production state (2026-10-09)
 
-- GitHub `origin/codex/contabo-migration` was verified at the latest migration commit in Git history.
-- No Coolify credentials/configuration, Node 22 runtime, or active Docker daemon is available in this environment. No staging deployment URL exists and no staging database migration has been applied.
-- No production resource was changed. The procedures below remain future operator steps, not evidence that staging or production is live.
+- Apex and `www` DNS resolve to the Contabo Coolify server and public HTTPS health checks return 200. The DigitalSkillX Coolify app is running healthy on commit `0ab7201dd8377ee701c172de10c1e984f0c2e702`; its latest successful deployment in history was a manual run on 2026-09-29.
+- Vercel still has a production deployment/domain attached and its Cron setting lists 22 enabled invocations. Coolify lists 8 DigitalSkillX scheduled tasks with overlapping routes. Their exact commands, cadence parity and actual invocations are unverified; DNS points to Contabo, but scheduler ownership is unresolved.
+- Automatic GitHub deployment has not been verified: Coolify's Auto Deploy option is on, but there is no GitHub repository webhook and the latest deployment was manual. The production release workflow is staged on `codex/contabo-migration` and has not run.
+- No production resources or schedules were changed in this turn. The current Coolify rollback retention is set to 2 images, but the rollback image list was still loading in the dashboard; availability of a known-good rollback image is not yet verified.
+- No isolated staging environment was verified. The Coolify app labelled `digitalskillx:staging` reports unknown health and appears under an environment labelled `production`.
 
-For a future staging rollback, stop staging-only cron invocations, preserve the staging database/outbox and storage volume, then redeploy the prior staging image. Do not drop `program_course_publish_email_outbox` or delete pending rows until the staging issue is diagnosed; this migration has not been applied here. Production rollback instructions below apply only after a separately approved production cutover.
+For staging rollback, first verify the environment truly uses isolated Supabase, email, Paystack and storage. Preserve its database/outbox and storage, then redeploy its prior image. Do not drop `program_course_publish_email_outbox` or delete pending rows until diagnosed. Production rollback must never restore production data as part of an application image rollback.
 
-Rollback is an operator action requiring explicit approval when it changes production DNS, scheduler ownership, webhook destinations or traffic. Do not delete data or volumes during rollback.
+The user has explicitly authorized direct production deployment as the intended workflow. Rollback must not remove data, volumes, backups or the previous Vercel deployment. Scheduler and traffic changes should be coordinated to retain one active owner and a usable fallback.
 
 ## Rollback triggers
 
@@ -21,7 +23,7 @@ Rollback is an operator action requiring explicit approval when it changes produ
 
 ## Before cutover
 
-Record the current authoritative application host, Supabase project, DNS records and TTL, webhook target, Vercel deployment ID, scheduler owner and cron configuration. Save the tested Contabo image digest and previous known-good image/deployment ID. Verify database/Auth/Storage recovery artifacts in an isolated environment. Keep the previous host, secrets, database and storage intact.
+Record the current authoritative Supabase project, DNS records and TTL, Paystack webhook target, Vercel deployment ID, scheduler owner and cron configuration. Save the tested Coolify image/commit and previous known-good image/deployment ID. Confirm the previous image appears under Coolify Configuration > Rollback and that the API health check is enabled. Verify database/Auth/Storage recovery artifacts in an isolated environment. Keep the previous host, secrets, database and storage intact.
 
 ## Revert application traffic
 

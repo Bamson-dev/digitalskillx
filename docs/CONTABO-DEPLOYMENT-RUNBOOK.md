@@ -1,6 +1,15 @@
 # Contabo / Coolify deployment runbook
 
-This runbook prepares a self-hosted Next.js app container. It does not authorize production deployment, database changes, DNS edits, payment webhook edits, or Vercel schedule changes. Keep Supabase Auth, Postgres/RLS, Storage, identities, purchases, enrollments, payment records and certificates at their currently authoritative location.
+This runbook configures a self-hosted Next.js app container and an automated release path. Keep Supabase Auth, Postgres/RLS, Storage, identities, purchases, enrollments, payment records and certificates at their currently authoritative location. Do not apply schema migrations automatically as part of a code release.
+
+## Verified live topology (2026-10-09)
+
+- Public DNS A records for `digitalskillx.com` and `www.digitalskillx.com` resolve to `207.180.248.233`, the Coolify Contabo server. Both HTTPS `/api/health` checks returned HTTP 200 with certificate verification enabled. Coolify's matching production app is `digitalskillx:main`, app UUID `ay1sfm49mfbzm1x1a6pil8tm`, with the same domains. Therefore public web traffic is currently routed through Contabo/Coolify. Vercel still has a production project/deployment and the domains attached, but it is not the current apex/`www` DNS target.
+- The Coolify app points at GitHub `main` and its latest visible successful deployment is commit `0ab7201dd8377ee701c172de10c1e984f0c2e702` (2026-09-29). GitHub `main` is newer (`b99da43732749fa9a665644a710c72404b3b75fa`). Coolify's `Auto Deploy` switch is enabled, but the GitHub repository has no webhook configured; the latest deployment was manual. Automatic deployments are not active yet.
+- The current app has a Coolify HTTP health check on `localhost:3000/api/health`, force HTTPS enabled, exposed container port `3000`, and no Coolify persistent-storage mount. Coolify reports Ubuntu 24.04.4 with 6 CPU cores and 11.7 GB RAM; disk availability and actual app/container resource use have not been verified.
+- The deployed Dockerfile at commit `0ab7201…` has no non-root `USER`, so Docker defaults to root. The migration branch image specifies `USER node`, but it is not live yet. The Coolify administration UI was reachable over plain HTTP on port 8000; restrict it to a trusted network or verified HTTPS before hardening sign-off. This management-plane change is not part of the release workflow.
+- Vercel Cron is enabled with 22 scheduled invocations; Coolify lists 8 DigitalSkillX application cron tasks with overlapping routes. Exact Coolify task commands/cadences and actual invocations have not been inspected, so both duplicate execution and missing cadence risk remain. Do not create or change schedules until each workload's owner and recent invocations are reconciled. Preserve existing jobs during that investigation.
+- Coolify also contains a `digitalskillx:staging` app in an environment labelled `production`, and its health is `unknown`. Do not use it as staging until its Supabase target, secrets, domain, and scheduler ownership are verified as isolated.
 
 ## Target architecture
 
@@ -30,6 +39,21 @@ Set the following in Coolify. Do not commit populated env files, pass privileged
 - Existing application options: preserve the current configured flags/values for certificates, auth, AI, email campaigns, course content factory, analytics and external payment products. Use the runtime variable names consumed in `process.env`/`runtimeEnv`; compare against the deployed environment without displaying values.
 
 Never set `NODE_TLS_REJECT_UNAUTHORIZED=0`. Do not copy the old environment wholesale until each value is classified as public build-time or server runtime. `.env.production.example` intentionally contains only empty public keys and no credentials.
+
+## Main branch checks and deployment
+
+The repository workflow is `.github/workflows/production-release.yml`. It runs checks for pull requests targeting `main` and pushes to `main` or `codex/contabo-migration`; only a push event on exact ref `refs/heads/main` can deploy. It pins the tested GitHub commit into Coolify, turns off a competing provider auto-deploy trigger, queues deployment, checks the Coolify deployment record for the same commit, and verifies HTTPS health. It does not touch Vercel cron, database schema, Supabase, Paystack, storage, or email campaigns.
+
+Before enabling the workflow:
+
+1. Merge the reviewed migration branch changes into `main` only after the `verify` job passes. The currently running production app predates the migration branch's non-root Dockerfile and related hardening; confirm the Dockerfile in the proposed `main` merge before production rollout.
+2. In GitHub repository Settings, add Actions variables `COOLIFY_API_BASE_URL=https://coolify.leadpilot.live/api/v1` and `COOLIFY_APP_UUID=ay1sfm49mfbzm1x1a6pil8tm`. Add secret `COOLIFY_API_TOKEN` from Coolify's API token screen. Grant only the smallest available read/update/deploy permissions for this application. Never put API tokens or deploy URLs in the repository.
+3. Add a GitHub ruleset for `main` requiring pull requests and the `verify` status check, disabling force pushes and branch deletion. This keeps failing changes from being promoted to `main`. Confirm administrators do not bypass it unintentionally.
+4. Confirm Coolify's current rollback-image retention includes the running known-good image; current configured retention is 2 images. Preserve the existing production app and image. Do not change app environment variables or run a manual deployment during setup.
+5. After the workflow is merged and the secret is configured, use a reviewed deployment-related commit to `main` as the first automated release. Confirm GitHub reports the exact release SHA, Coolify history records that SHA and the deployment finishes, Coolify health is healthy, and the public HTTPS health endpoint verifies. Only then treat the pipeline as active. A manual production deployment is not required to test webhook delivery; the production push itself is the explicitly authorized deploy action.
+6. If the deployment fails, Coolify's configured health check should keep an unhealthy replacement from replacing a healthy running container when rolling updates are supported. Verify this behavior from the installed Coolify version before relying on it. Use Configuration > Rollback to deploy the retained previous image if needed; then verify its SHA, health and critical user journeys. A container/image rollback does not reverse database changes.
+
+The workflow API behavior has not yet been executed. It requires the above repository variables/secret and a successful run on `main`; no webhook, auto-deploy or exact-commit release is claimed as configured until then.
 
 ## Build and deploy to staging
 
@@ -77,11 +101,11 @@ These are the currently committed Vercel schedules; preserve every cadence and d
 
 Vercel function durations do not transfer to Node; confirm server/proxy timeouts for long-running routes. Routes use durable database state/idempotency in several flows, but overlap and crash recovery still need staging verification. Do not assume all handlers are safe to overlap.
 
-## Production cutover (approval required)
+## Production traffic and rollback
 
-Do not proceed without explicit approval and a tested rollback.
+The current apex and `www` DNS already resolve to Contabo. Do not change DNS or remove Vercel while configuring automatic releases. Before changing production traffic in any later migration step, keep the prior host/image available and test the rollback procedure.
 
-1. Freeze release inputs: reviewed migration commit and immutable image digest; save the prior Vercel deployment identifier/image and current Coolify config snapshot.
+1. Freeze release inputs: reviewed `main` commit and immutable deployment record; save the prior Vercel deployment identifier/image and current Coolify config snapshot.
 2. Take and verify restorable backups: Supabase database schema/data and Auth records using the provider-supported backup/export process; Supabase Storage object inventory/export or provider snapshot; deployment environment-variable names and encrypted values in the secret manager; DNS records; Vercel deployment and cron configuration. Verify restore to an isolated project and compare row counts/relationships without exposing personal data.
 3. Confirm current production app host, authoritative Supabase project, domain registrar/DNS provider, webhook destination, mail provider, and VPS capacity. Do not infer any of these from repo docs.
 4. Deploy the exact tested image to the production Coolify app with reviewed runtime values; leave existing Vercel deployment and schedules intact while validating the new origin privately. Validate health, TLS, auth/cookies, student entitlements, admin access, storage, payment test path, email test recipient and cron authorization.
