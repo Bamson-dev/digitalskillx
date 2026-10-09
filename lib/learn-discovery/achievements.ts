@@ -23,10 +23,10 @@ export async function loadLearnerAchievements(admin: Admin, studentId: string) {
   }
   return (data ?? []).map((row) => ({
     code: row.achievement_code,
-    title: (row.definition as { title?: string } | null)?.title ?? row.achievement_code,
-    description: (row.definition as { description?: string } | null)?.description ?? "",
+    title: row.definition?.title ?? row.achievement_code,
+    description: row.definition?.description ?? "",
     earnedAt: row.earned_at,
-    sortOrder: (row.definition as { sort_order?: number } | null)?.sort_order ?? 0,
+    sortOrder: row.definition?.sort_order ?? 0,
   }));
 }
 
@@ -57,7 +57,7 @@ export async function grantLearnerAchievements(
     earned_at: new Date().toISOString(),
   }));
 
-  const { error } = await admin.from("learn_learner_achievements").upsert(rows as never, {
+  const { error } = await admin.from("learn_learner_achievements").upsert(rows, {
     onConflict: "student_id,achievement_code",
     ignoreDuplicates: true,
   });

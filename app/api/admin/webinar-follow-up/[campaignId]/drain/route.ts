@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { waitUntil } from "@vercel/functions";
+import { runBackgroundTask } from "@/lib/background-tasks";
 import { requireAdminApiAuth } from "@/lib/admin-api-auth";
 import { logAudit } from "@/lib/audit";
 import { keepWebinarFollowupSending } from "@/lib/bulk-import-continue";
@@ -14,7 +14,7 @@ export const maxDuration = 120;
 
 /**
  * Admin "Send due emails now" — return immediately so the browser does not 504.
- * Heavy draining continues via waitUntil + cron self-chain.
+ * Heavy draining continues in-process; durable campaign rows are resumed by cron.
  */
 export async function POST(
   _request: NextRequest,
@@ -48,7 +48,7 @@ export async function POST(
     reason: "admin_wfu_kick",
   });
 
-  waitUntil(
+  runBackgroundTask(
     (async () => {
       try {
         const drain = await kickWebinarFollowupDrain(auth.admin, {
@@ -70,6 +70,7 @@ export async function POST(
         });
       }
     })(),
+    "webinar-followup-admin-drain",
   );
 
   return NextResponse.json({

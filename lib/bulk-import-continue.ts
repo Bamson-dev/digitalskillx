@@ -1,24 +1,26 @@
 import "server-only";
-import { waitUntil } from "@vercel/functions";
+import { runBackgroundTask } from "@/lib/background-tasks";
 import { bulkImportStage } from "@/lib/bulk-import-telemetry";
 
 const MAX_CHAIN = 250;
 
 /**
- * Always call the public www host. Apex 308s and drops Authorization.
- * *.vercel.app is often behind Deployment Protection, which also 401s the cron token.
+ * Resolve the worker from explicit environment configuration or this deployment's
+ * public origin. The production canonical host is used only in production.
  */
 export function resolveCronContinuationOrigin(passedOrigin: string): string {
-  let raw = passedOrigin.trim() || "https://www.digitalskillx.com";
+  let raw = (process.env.CRON_WORKER_ORIGIN?.trim() || passedOrigin.trim() || process.env.NEXT_PUBLIC_SITE_URL?.trim() || "").trim();
+  if (!raw) throw new Error("CRON_WORKER_ORIGIN or NEXT_PUBLIC_SITE_URL must be configured");
   if (!/^https?:\/\//i.test(raw)) raw = `https://${raw}`;
   try {
     const url = new URL(raw);
     if (url.hostname === "digitalskillx.com" || url.hostname.endsWith(".vercel.app")) {
+      if (process.env.NODE_ENV !== "production") throw new Error("Refusing production worker origin outside production");
       return "https://www.digitalskillx.com";
     }
     return url.origin;
   } catch {
-    return "https://www.digitalskillx.com";
+    throw new Error("Invalid cron worker origin");
   }
 }
 
@@ -26,7 +28,7 @@ function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-/** Fire-and-forget self-invoke so Hobby (daily cron only) still drains jobs. */
+/** Fire-and-forget self-invoke; database-backed cron drains recover queued work. */
 export function scheduleBulkWorkerContinuation(params: {
   origin: string;
   path:
@@ -102,15 +104,14 @@ export function scheduleBulkWorkerContinuation(params: {
       });
 
   const delayMs = Math.max(0, params.delayMs ?? 0);
-  // Keep the isolate alive until this request is in flight. Otherwise Vercel
-  // freezes the function after the HTTP response and the next chunk never starts.
-  waitUntil(delayMs > 0 ? sleep(delayMs).then(fire) : fire());
+  // Database queue rows remain the source of truth if this process restarts.
+  runBackgroundTask(delayMs > 0 ? sleep(delayMs).then(fire) : fire(), `continuation:${params.path}`);
 }
 
 /**
  * Keep draining webinar follow-up even if one continuation request fails.
- * Retries must fit inside remaining waitUntil budget after the drain
- * (Hobby maxDuration is 120s — a 45s delay after a long drain never fires).
+ * Short retries recover transient self-invocation failures; scheduled drains
+ * remain the durable recovery path after process restarts.
  */
 export function keepWebinarFollowupSending(params: {
   moreDue: boolean;
@@ -118,7 +119,8 @@ export function keepWebinarFollowupSending(params: {
   reason: string;
 }) {
   if (!params.moreDue) return;
-  const origin = "https://www.digitalskillx.com";
+  const origin = process.env.CRON_WORKER_ORIGIN?.trim() || process.env.NEXT_PUBLIC_SITE_URL?.trim() || "";
+  if (!origin) return;
   const depth = params.depth ?? 0;
   scheduleBulkWorkerContinuation({
     origin,
@@ -173,7 +175,8 @@ export function keepContentFactoryRunning(params: {
   reason: string;
 }) {
   if (!params.moreWork) return;
-  const origin = "https://www.digitalskillx.com";
+  const origin = process.env.CRON_WORKER_ORIGIN?.trim() || process.env.NEXT_PUBLIC_SITE_URL?.trim() || "";
+  if (!origin) return;
   const depth = params.depth ?? 0;
   const onVercel = Boolean(process.env.VERCEL);
 

@@ -1,5 +1,5 @@
 import "server-only";
-import { waitUntil } from "@vercel/functions";
+import { runBackgroundTask } from "@/lib/background-tasks";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 import { sendEmail } from "@/lib/email";
@@ -130,9 +130,10 @@ export function scheduleWebinarFollowupDrain(
   opts: { campaignId?: string; reason: string; budgetMs?: number },
 ): void {
   keepWebinarFollowupSending({ moreDue: true, depth: 0, reason: opts.reason });
-  waitUntil(
+  runBackgroundTask(
     kickWebinarFollowupDrain(admin, opts).catch((err) => {
       console.error(`[wfu-schedule-drain] ${opts.reason}`, err);
     }),
+    `webinar-followup:${opts.reason}`,
   );
 }

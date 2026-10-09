@@ -1,11 +1,11 @@
 import "server-only";
-import { waitUntil } from "@vercel/functions";
+import { runBackgroundTask } from "@/lib/background-tasks";
 import { resolveCronContinuationOrigin } from "@/lib/bulk-import-continue";
 import { siteUrl } from "@/lib/org";
 
 /**
- * Kick a separate Vercel function to send publish notifications.
- * That route awaits Resend delivery (maxDuration 120) so emails actually go out.
+ * Kick the application notification route; pending notification state remains
+ * in the database and scheduled drains recover work after process restarts.
  */
 export function scheduleCoursePublishNotify(params: {
   courseId: string;
@@ -21,7 +21,7 @@ export function scheduleCoursePublishNotify(params: {
   const url = new URL(`/api/admin/courses/${params.courseId}/notify-publish`, origin);
   if (params.forceResend) url.searchParams.set("force", "1");
 
-  waitUntil(
+  runBackgroundTask(
     fetch(url.toString(), {
       method: "POST",
       headers: {
@@ -30,15 +30,8 @@ export function scheduleCoursePublishNotify(params: {
       cache: "no-store",
       redirect: "error",
     })
-      .then(async (res) => {
-        const body = await res.text();
-        console.info(
-          `[course-program-notify] kick ${params.courseId} status=${res.status} body=${body.slice(0, 500)}`,
-        );
-      })
-      .catch((err) => {
-        console.error("[course-program-notify] kick failed:", err);
-      }),
+      .then((res) => console.info(`[course-program-notify] kick ${params.courseId} status=${res.status}`)),
+    "course-program-notify",
   );
 
   return true;

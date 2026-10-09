@@ -554,12 +554,13 @@ const campaignFixture = {
     "utf8",
   );
   assert.match(cont, /www\.digitalskillx\.com/);
-  assert.match(cont, /waitUntil/);
+  assert.match(cont, /runBackgroundTask/);
+  assert.match(cont, /CRON_WORKER_ORIGIN/);
   assert.match(cont, /redirect: "error"/);
   assert.match(cont, /\.vercel\.app/);
   assert.doesNotMatch(cont, /VERCEL_URL/);
-  assert.match(actions, /https:\/\/www\.digitalskillx\.com/);
-  // Hobby plan allows only once-daily crons; campaign drain continues via waitUntil chain.
+  assert.match(actions, /siteUrl\(\)/);
+  // Preserve cron cadence; database-backed campaign rows recover after process restart.
   assert.match(vercel, /"path": "\/api\/cron\/email-campaigns"/);
   assert.match(vercel, /"55 9 \* \* \*"/);
   assert.match(vercel, /"45 9 \* \* \*"/);

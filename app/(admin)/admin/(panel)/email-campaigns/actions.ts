@@ -5,6 +5,7 @@ import { requireAdmin } from "@/lib/auth";
 import { getAdminSupabase } from "@/lib/admin-supabase";
 import { logAudit } from "@/lib/audit";
 import { scheduleBulkWorkerContinuation } from "@/lib/bulk-import-continue";
+import { siteUrl } from "@/lib/org";
 import { sendEmail } from "@/lib/email";
 import { AIMONEYCODE_CAMPAIGN_SLUG, AIMONEYCODE_TOTAL_STEPS, isValidEmail } from "@/lib/email-campaigns/constants";
 import { isSyntheticTestRecipient } from "@/lib/email/synthetic-recipient";
@@ -41,7 +42,7 @@ export type CampaignActionState = {
 
 function kickCampaignProcessor(reason: string) {
   scheduleBulkWorkerContinuation({
-    origin: "https://www.digitalskillx.com",
+    origin: siteUrl(),
     path: "/api/cron/email-campaigns",
     reason,
   });

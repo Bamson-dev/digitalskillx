@@ -1513,6 +1513,20 @@ export type Database = {
           Rel<"learning_path_progress_student_id_fkey", "student_id", "profiles", "id">,
         ]
       >;
+      learn_learner_streaks: Table<
+        { student_id: string; current_streak: number; longest_streak: number; last_active_day: string | null; updated_at: string },
+        [Rel<"learn_learner_streaks_student_id_fkey", "student_id", "profiles", "id", true>]
+      >;
+      learn_achievement_definitions: Table<{
+        code: string; title: string; description: string; sort_order: number; active: boolean; created_at: string;
+      }>;
+      learn_learner_achievements: Table<
+        { id: string; student_id: string; achievement_code: string; earned_at: string },
+        [
+          Rel<"learn_learner_achievements_student_id_fkey", "student_id", "profiles", "id">,
+          Rel<"learn_learner_achievements_achievement_code_fkey", "achievement_code", "learn_achievement_definitions", "code">
+        ]
+      >;
       content_factory_jobs: Table<
         ContentFactoryJob,
         [

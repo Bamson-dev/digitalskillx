@@ -35,7 +35,7 @@ function getSupabaseDispatcher(): Agent | undefined {
     }
   })();
 
-  const rejectUnauthorized = env.NODE_TLS_REJECT_UNAUTHORIZED !== "0";
+  const rejectUnauthorized = true;
 
   sharedDispatcher = new Agent({
     connect: {
