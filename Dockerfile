@@ -3,8 +3,6 @@ FROM node:22-alpine AS build
 WORKDIR /app
 ENV NEXT_TELEMETRY_DISABLED=1 NPM_CONFIG_FUND=false NPM_CONFIG_AUDIT=false
 ENV DOCKER_BUILD=1 CI=true NODE_OPTIONS=--max-old-space-size=1536
-# Do not let platform-injected Sentry runtime secrets activate upload plugins in the build.
-ENV SENTRY_AUTH_TOKEN= SENTRY_ORG= SENTRY_PROJECT=
 ARG NEXT_PUBLIC_SUPABASE_URL
 ARG NEXT_PUBLIC_SUPABASE_ANON_KEY
 ARG NEXT_PUBLIC_SITE_URL
