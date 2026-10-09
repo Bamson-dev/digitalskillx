@@ -11,12 +11,12 @@ Updated: 2026-10-09
 
 ## Staging tooling verification (2026-10-09)
 
-- Fetched GitHub `origin/codex/contabo-migration`; it points to `9aaf86dec54dce24504723a35bd7120df5d41d6b`, matching this checkout. The working tree contains separate uncommitted learning/analytics changes, which remain untouched.
+- Fetched GitHub `origin/codex/contabo-migration`; it points to the latest migration commit recorded in Git history. The working tree contains separate uncommitted learning/analytics changes, which remain untouched.
 - Available local versions are Node `v26.0.0` and npm `11.12.1`. `.nvmrc` requests Node 22 and `package.json` pins npm `10.9.2`; no Node 22 version manager/runtime is installed. No Node 22 checks are claimed here.
 - Docker CLI is installed, but `docker info` cannot connect to a daemon. `gh`, Coolify CLI/configuration and authorized remote build tools are unavailable. Environment/config presence checks found no staging or Coolify credentials. No remote image build or staging deployment was possible; no staging URL exists.
 - No Supabase staging project credentials were available. Migration 0054 has not been run, and neither staging nor production schema was modified. The runbook now includes a read-only 0032 preflight query and a backup-before-0054 procedure.
 - Compose health-check configuration now uses the Node runtime's built-in `fetch`, matching the Dockerfile health check and avoiding reliance on `wget` being installed. Docker image/container validation remains unverified.
-- Compose model parsing can be checked with placeholder public values and a temporary empty `.env`; that validates syntax only and is not an image build or runtime check.
+- `docker compose -f docker-compose.prod.yml config --quiet` passed with placeholder public values and a temporary empty `.env`; that validates Compose syntax only and is not an image build or runtime check. The Compose health check now uses Node's built-in fetch like the Dockerfile health check.
 
 ## Confirmed from repository
 

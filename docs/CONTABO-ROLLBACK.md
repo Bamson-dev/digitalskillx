@@ -2,7 +2,7 @@
 
 ## Current staging verification state (2026-10-09)
 
-- GitHub `origin/codex/contabo-migration` was verified at `9aaf86dec54dce24504723a35bd7120df5d41d6b`.
+- GitHub `origin/codex/contabo-migration` was verified at the latest migration commit in Git history.
 - No Coolify credentials/configuration, Node 22 runtime, or active Docker daemon is available in this environment. No staging deployment URL exists and no staging database migration has been applied.
 - No production resource was changed. The procedures below remain future operator steps, not evidence that staging or production is live.
 
