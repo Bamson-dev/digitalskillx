@@ -14,8 +14,15 @@ export function resolveCronContinuationOrigin(passedOrigin: string): string {
   if (!/^https?:\/\//i.test(raw)) raw = `https://${raw}`;
   try {
     const url = new URL(raw);
-    if (url.hostname === "digitalskillx.com" || url.hostname.endsWith(".vercel.app")) {
-      if (process.env.NODE_ENV !== "production") throw new Error("Refusing production worker origin outside production");
+    const deploymentEnv = (process.env.DIGITALSKILLX_DEPLOYMENT_ENV?.trim() || process.env.VERCEL_ENV?.trim() || "").toLowerCase();
+    const productionHost =
+      url.hostname === "digitalskillx.com" ||
+      url.hostname === "www.digitalskillx.com" ||
+      url.hostname.endsWith(".vercel.app");
+    if (productionHost) {
+      if (deploymentEnv !== "production") {
+        throw new Error("Refusing production worker origin unless DIGITALSKILLX_DEPLOYMENT_ENV=production");
+      }
       return "https://www.digitalskillx.com";
     }
     return url.origin;

@@ -3,6 +3,7 @@ import { requireAdminApiAuth } from "@/lib/admin-api-auth";
 import { verifyCronSecret } from "@/lib/cron-auth";
 import { notifyProgramStudentsOfNewCourse } from "@/lib/course-program-notify";
 import { createAdminClientAsync } from "@/lib/supabase/admin";
+import { scheduleBulkWorkerContinuation } from "@/lib/bulk-import-continue";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -60,6 +61,20 @@ export async function POST(
       forceResend,
       sendEmails: true,
     });
+    const { count: queuedRemaining, error: countError } = await admin
+      .from("program_course_publish_email_outbox" as never)
+      .select("id", { count: "exact", head: true })
+      .eq("course_id", courseId)
+      .eq("status", "pending")
+      .lte("scheduled_at", new Date().toISOString());
+    if (countError) throw new Error(`Could not count queued course notifications: ${countError.message}`);
+    if ((queuedRemaining ?? 0) > 0) {
+      scheduleBulkWorkerContinuation({
+        origin: request.nextUrl.origin,
+        path: "/api/cron/email-outbox",
+        reason: "course_publish_email_outbox_remaining",
+      });
+    }
 
     console.info(
       `[course-program-notify] sync ${courseId}: notified=${result.notified} emails=${result.emailsSent}${result.reason ? ` (${result.reason})` : ""}`,
@@ -71,6 +86,7 @@ export async function POST(
       forceResend,
       notified: result.notified,
       emailsSent: result.emailsSent,
+      queuedRemaining: queuedRemaining ?? 0,
       reason: result.reason ?? null,
       schemaNote: result.schemaNote ?? null,
       message:

@@ -26,6 +26,7 @@
     "test:product-experience": "node scripts/certification/test-product-experience-phase7.mjs",
     "test:phase8": "node scripts/certification/test-phase8-commerce.mjs",
     "test:content-factory": "node scripts/certification/test-content-factory.mjs",
+    "test:course-publish-outbox": "node scripts/certification/test-course-publish-outbox.mjs",
     "test:library-build": "node --import ./scripts/certification/register-ts-ext.mjs scripts/certification/test-library-build-engine.mjs",
     "test:learn-discovery": "node --import ./scripts/certification/register-ts-ext.mjs scripts/certification/test-learn-discovery-experience.mjs",
     "test:learn-analytics": "node --import ./scripts/certification/register-ts-ext.mjs scripts/certification/test-learn-analytics.mjs",

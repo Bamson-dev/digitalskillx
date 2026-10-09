@@ -14,6 +14,7 @@ import { runLibraryBuildThroughputTick } from "@/lib/content-factory/library-bui
 import { isMissingRelationError } from "@/lib/schema-guard";
 import { FACTORY_RETRY_MAX_ATTEMPTS, isRetryableFactoryError } from "@/lib/content-factory/ops-shared";
 import type { ContentFactoryJob } from "@/types/database";
+import { contentFactoryJobClaimLimit } from "@/lib/content-factory/worker-policy";
 
 const JOB_SUMMARY =
   "id, status, phase, progress, error_message, learning_path_id, input_value, result_snapshot, updated_at";
@@ -169,12 +170,11 @@ export async function POST(request: NextRequest) {
     };
   }
 
-  const factoryJobLimit = libraryThroughput?.discoveryBacklog.created
-    ? 8
-    : (libraryThroughput?.qualification.qualified ?? 0) > 0 ||
-        (libraryThroughput?.generation.created ?? 0) > 0
-      ? 6
-      : 4;
+  const factoryJobLimit = contentFactoryJobClaimLimit({
+    discoveryBacklogCreated: libraryThroughput?.discoveryBacklog.created ?? 0,
+    qualified: libraryThroughput?.qualification.qualified ?? 0,
+    generated: libraryThroughput?.generation.created ?? 0,
+  });
   const { data: claimed, error } = await admin.rpc("claim_content_factory_jobs", {
     p_limit: factoryJobLimit,
   });

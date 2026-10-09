@@ -43,6 +43,7 @@ supabase/.temp
 
 # Local Contabo/storage adapter root (Sales Page Phase 1)
 .data/
+tmp/
 
 # Local Contabo / Vercel secret pulls (never commit)
 .env.contabo.local

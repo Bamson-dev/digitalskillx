@@ -24,8 +24,10 @@ function ok(label) {
   const index = readFileSync(join(root, "lib/email/index.ts"), "utf8");
   assert.match(index, /sendViaResend/);
   assert.ok(!/nodemailer/.test(index));
-  assert.ok(!/sendViaZeptoMail|resolveSmtpConfig|createTransport/.test(index));
-  ok("sendEmail is Resend-only (no Nodemailer/ZeptoMail path)");
+  assert.match(index, /sendViaZeptoMail/, "legacy transactional fallback remains available");
+  assert.match(index, /if \(params\.idempotencyKey\) return primary/, "idempotent outbox sends stay on Resend retries");
+  assert.ok(!/resolveSmtpConfig|createTransport/.test(index));
+  ok("sendEmail preserves ZeptoMail fallback while idempotent outbox sends retry Resend only");
 }
 
 {
