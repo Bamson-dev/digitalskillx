@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import os from "node:os";
 import path from "node:path";
-import { createStorageAdapterFromEnv } from "../../lib/storage/index.ts";
+import { createStorageAdapterFromEnv, wrapStorageAdapter } from "../../lib/storage/index.ts";
 
 const CLEAR = ["STORAGE_PROVIDER", "CONTABO_S3_ENDPOINT", "CONTABO_S3_BUCKET", "CONTABO_S3_ACCESS_KEY", "CONTABO_S3_SECRET_KEY", "CONTABO_STORAGE_ROOT", "STORAGE_FS_ROOT", "STORAGE_LOCAL_ROOT", "STORAGE_ALLOW_EPHEMERAL"];
 
@@ -24,9 +24,10 @@ function blockedMessage(fn) {
 }
 
 async function writeIsBlocked(adapter) {
+  const service = wrapStorageAdapter(adapter);
   for (const op of ["upload", "replace"]) {
     try {
-      await adapter[op](input);
+      await service[op](input);
     } catch (error) {
       if (/Storage write blocked/.test(String(error && error.message))) continue;
     }
@@ -36,9 +37,10 @@ async function writeIsBlocked(adapter) {
 }
 
 async function writeIsNotBlocked(adapter) {
+  const service = wrapStorageAdapter(adapter);
   for (const op of ["upload", "replace"]) {
     try {
-      await adapter[op](input);
+      await service[op](input);
     } catch (error) {
       if (/Storage write blocked/.test(String(error && error.message))) return false;
     }
