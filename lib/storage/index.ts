@@ -110,6 +110,7 @@ export function wrapStorageAdapter(adapter: StorageAdapter): StorageService {
     getPublicUrl: (p) => adapter.getPublicUrl(p),
     copy: (a, b) => adapter.copy(a, b),
     move: (a, b) => adapter.move(a, b),
+    assertWritable: () => (adapter as StorageAdapter & { assertWritable?: () => void }).assertWritable?.(),
     async replace(input: StorageUploadInput) {
       (adapter as StorageAdapter & { assertWritable?: () => void }).assertWritable?.();
       const safe = sanitizeStoragePath(input.path);
