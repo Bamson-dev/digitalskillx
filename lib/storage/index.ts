@@ -94,7 +94,7 @@ export function createStorageAdapterFromEnv(): StorageAdapter {
   return guardEphemeralLocalStorage(new LocalStorageAdapter(localRoot), Boolean(env("STORAGE_LOCAL_ROOT")));
 }
 
-function guardEphemeralLocalStorage(adapter: StorageAdapter, explicitRoot: boolean): StorageAdapter { if (explicitRoot || process.env.NODE_ENV !== "production" || env("STORAGE_ALLOW_EPHEMERAL") === "1") return adapter; const blocked = new Set(["upload", "replace", "copy", "move"]); return new Proxy(adapter, { get(target, prop, receiver) { const value = Reflect.get(target, prop, receiver); if (typeof prop === "string" && blocked.has(prop) && typeof value === "function") { return () => { throw new Error("Storage write blocked: no persistent storage configured in production. Set CONTABO_S3_* or STORAGE_LOCAL_ROOT to a mounted volume, or STORAGE_ALLOW_EPHEMERAL=1 to accept data loss on redeploy."); }; } return typeof value === "function" ? value.bind(target) : value; }, }); }
+function guardEphemeralLocalStorage(adapter: StorageAdapter, explicitRoot: boolean): StorageAdapter { if (explicitRoot || process.env.NODE_ENV !== "production" || env("STORAGE_ALLOW_EPHEMERAL") === "1") return adapter; const fail = () => { throw new Error("Storage write blocked: no persistent storage configured in production. Set CONTABO_S3_* or STORAGE_LOCAL_ROOT to a mounted volume, or STORAGE_ALLOW_EPHEMERAL=1 to accept data loss on redeploy."); }; const blocked = new Set(["upload", "copy", "move", "assertWritable"]); return new Proxy(adapter, { get(target, prop, receiver) { if (typeof prop === "string" && blocked.has(prop)) return fail; const value = Reflect.get(target, prop, receiver); return typeof value === "function" ? value.bind(target) : value; }, }); }
 
 let cached: StorageService | null = null;
 
@@ -111,6 +111,7 @@ export function wrapStorageAdapter(adapter: StorageAdapter): StorageService {
     copy: (a, b) => adapter.copy(a, b),
     move: (a, b) => adapter.move(a, b),
     async replace(input: StorageUploadInput) {
+      (adapter as StorageAdapter & { assertWritable?: () => void }).assertWritable?.();
       const safe = sanitizeStoragePath(input.path);
       if (await adapter.exists(safe)) {
         await adapter.delete(safe);
