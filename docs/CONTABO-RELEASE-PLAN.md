@@ -42,3 +42,16 @@ Vercel's Git integration is still attached and reports a failing Vercel status. 
 ## Storage write guard
 
 lib/storage/index.ts now blocks upload, replace, copy and move on the local adapter in production when STORAGE_LOCAL_ROOT is unset. Reads, exists and delete still work. Impact until persistent storage exists: admin sales-page asset upload, landing import and content-factory artwork writes return an error instead of saving to a disk that disappears on redeploy. Fix: configure S3 or a mounted volume (after inventory and backup), or set STORAGE_ALLOW_EPHEMERAL=1 to accept data loss. Test: scripts/certification/test-storage-ephemeral-guard.mjs, part of test:platform-hardening.
+## Update 2026-10-10 evening
+
+Release trigger step 1 is done: ruleset 24832751 on main requires a pull request and the verify check from GitHub Actions, and blocks force push and deletion. Steps 2 and 3 remain.
+
+## TLS cutover (blocks the release)
+
+The branch enforces certificate verification for the Supabase bridge. Production today sets NODE_TLS_REJECT_UNAUTHORIZED=0, and the Supabase hostname in SUPABASE_URL has no public DNS record, so Traefik cannot present a trusted certificate for it. Order of work:
+1. Owner, DNS: add a DNS-only A record for the Supabase hostname pointing at the VPS. No AAAA unless IPv6 works end to end.
+2. Confirm Traefik issued a Let's Encrypt certificate for that exact hostname (Coolify proxy logs, or a browser visit to the hostname).
+3. From inside the app container: openssl s_client -connect coolify-proxy:443 -servername <supabase host> -verify_hostname <supabase host> -verify_return_error </dev/null must end with Verify return code: 0 (ok).
+4. From inside the app container, with NODE_TLS_REJECT_UNAUTHORIZED unset for that one command: a Node probe using the same lookup and servername as lib/supabase/fetch-bridge.ts and rejectUnauthorized: true must complete the handshake, then one read-only query through the server Supabase client must succeed.
+5. Delete NODE_TLS_REJECT_UNAUTHORIZED in Coolify, deploy the release, and check logs for SELF_SIGNED_CERT_IN_CHAIN, UNABLE_TO_VERIFY_LEAF_SIGNATURE and ERR_TLS_CERT_ALTNAME_INVALID. Then test login, a course page, a Paystack verification and one email send.
+Do not deploy this branch before step 4 passes. Calling Kong over plain HTTP on the Docker network was rejected because it removes TLS for service-role traffic. A private CA (pinned per Agent, rejectUnauthorized kept true) is the fallback if the hostname must stay private.
