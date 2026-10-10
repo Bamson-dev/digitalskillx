@@ -16,7 +16,7 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 export const maxDuration = 120;
 
-/** Leave headroom for waitUntil continuation retries after the drain. */
+/** Leave headroom for short continuation retries after this drain pass. */
 const DRAIN_BUDGET_MS = WEBINAR_FOLLOWUP_DRAIN_BUDGET_MS - 15_000;
 
 export async function GET(request: NextRequest) {

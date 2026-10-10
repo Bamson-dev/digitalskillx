@@ -31,8 +31,8 @@ import { AUTHORITY_PATH_READING_LIMIT } from "@/lib/content-factory/authority-sh
 
 /** Matches the committed `/learn` page contract (category + q on the result). */
 export const getCachedPublishedLibrary = unstable_cache(
-  async (q: string, category: string, page: string) => {
-    return listPublishedLearningLibrary(createAnonClient(), { q, category, page });
+  async (q: string, category: string, page: string, difficulty: string, duration: string, certificate: string, sort: string) => {
+    return listPublishedLearningLibrary(createAnonClient(), { q, category, page, difficulty, duration, certificate, sort });
   },
   ["learn-library-v1"],
   { revalidate: 300 },

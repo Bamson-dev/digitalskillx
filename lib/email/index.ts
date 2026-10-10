@@ -27,6 +27,11 @@ export async function sendEmail(params: SendEmailParams): Promise<SendEmailResul
   const primary = await sendViaResend(params, sender);
   if (isDelivered(primary)) return primary;
 
+  // Stable provider retries are required for durable outbox messages. Falling
+  // through to a second provider after an ambiguous Resend response could send
+  // the same message twice; those jobs retry Resend with the same key instead.
+  if (params.idempotencyKey) return primary;
+
   if (!zeptoConfigured()) return primary;
 
   const fallback = await sendViaZeptoMail(params, sender);

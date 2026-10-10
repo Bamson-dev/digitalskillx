@@ -23,7 +23,7 @@ export async function probeProgramCourseNotifySchema(
 
 export function programCourseNotifySchemaHint(deliveryTableReady: boolean) {
   if (deliveryTableReady) return null;
-  return "Delivery log table missing — notifications still send, but run sql/apply-program-course-notify.sql in Supabase to enable resend tracking.";
+  return "Course publish notification schema is missing — apply supabase/migrations/0054_course_publish_email_outbox.sql in staging before enabling course publish emails.";
 }
 
 export async function loadProgramCourseDeliveries(

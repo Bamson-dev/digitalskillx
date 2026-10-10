@@ -66,7 +66,7 @@ const optional = [
   { key: "DEEPSEEK_API_KEY", label: "DeepSeek AI assistant" },
   { key: "DEEPSEEK_MODEL", label: "DeepSeek model", fallback: "deepseek-chat" },
   { key: "ANTHROPIC_API_KEY", label: "Anthropic AI assistant (fallback)" },
-  { key: "CRON_SECRET", label: "Vercel cron auth" },
+  { key: "CRON_SECRET", label: "Scheduled job authorization" },
 ];
 
 console.log("\nDigitalSkillX — environment check\n");

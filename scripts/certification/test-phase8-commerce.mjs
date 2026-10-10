@@ -123,13 +123,14 @@ async function main() {
   assert.match(triggers, /72|cooldown|checkout_abandon_reminders/);
   console.log("PASS: abandonment cron + idempotent email");
 
-  // Resend-only still
+  // Resend primary with configured ZeptoMail fallback; no Nodemailer transport.
   const emailIdx = read("lib/email/index.ts");
   assert.match(emailIdx, /sendViaResend/);
   assert.doesNotMatch(emailIdx, /from ["']nodemailer["']|require\(["']nodemailer["']\)/);
   assert.doesNotMatch(emailIdx, /createTransport\s*\(/);
-  assert.doesNotMatch(emailIdx, /sendViaZepto|zeptomail\.smtp/i);
-  console.log("PASS: Resend-only email path intact");
+  assert.match(emailIdx, /sendViaZeptoMail/);
+  assert.match(emailIdx, /zeptoConfigured/);
+  console.log("PASS: Resend primary and configured ZeptoMail fallback");
 
   // No affiliate
   const sidebar = read("components/admin/admin-sidebar.tsx");

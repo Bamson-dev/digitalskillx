@@ -1,0 +1,32 @@
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
+const root = join(fileURLToPath(new URL("..", import.meta.url)), "..");
+const migration = readFileSync(join(root, "supabase/migrations/0054_course_publish_email_outbox.sql"), "utf8");
+const sender = readFileSync(join(root, "lib/course-publish-email-outbox.ts"), "utf8");
+const cron = readFileSync(join(root, "app/api/cron/email-outbox/route.ts"), "utf8");
+const notifyRoute = readFileSync(join(root, "app/api/admin/courses/[courseId]/notify-publish/route.ts"), "utf8");
+const continuation = readFileSync(join(root, "lib/bulk-import-continue.ts"), "utf8");
+assert.match(migration, /unique \(course_id, student_id\)/i, "one durable delivery row per course/student");
+assert.match(migration, /for update skip locked/i, "concurrent workers claim disjoint rows");
+assert.match(migration, /reclaim_program_course_publish_email_outbox/i, "stale sending claims can recover after restart");
+assert.match(sender, /coursePublishIdempotencyKey\(row\.course_id, row\.student_id\)/, "provider retries use a stable key");
+assert.match(sender, /status: "pending"/, "failed deliveries remain in the automatic retry queue");
+assert.match(sender, /scheduled_at: new Date\(Date\.now\(\) \+ coursePublishRetryDelayMs\(attempts\)\)/, "failures use delayed retry");
+assert.match(cron, /drainCoursePublishEmailOutbox/, "existing scheduled email worker drains the queue");
+assert.match(notifyRoute, /course_publish_email_outbox_remaining/, "large audiences continue draining after the immediate batch");
+assert.match(continuation, /DIGITALSKILLX_DEPLOYMENT_ENV=production/, "production worker origins require an explicit production deployment marker");
+
+const { spawnSync } = await import("node:child_process");
+const result = spawnSync(process.execPath, ["--import", join(root, "scripts/certification/register-ts-ext.mjs"), "--input-type=module", "-e", `
+  import assert from 'node:assert/strict';
+  import { coursePublishRetryDelayMs as delay, coursePublishIdempotencyKey as key } from './lib/course-publish-email-policy.ts';
+  assert.equal(delay(1), 60_000);
+  assert.equal(delay(2), 120_000);
+  assert.equal(delay(99), 24 * 60 * 60_000);
+  assert.equal(key('course-a', 'student-b'), key('course-a', 'student-b'));
+  assert.notEqual(key('course-a', 'student-b'), key('course-a', 'student-c'));
+`], { cwd: root, encoding: "utf8" });
+assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
+console.log("PASS: course publish outbox retry, idempotency, and restart recovery");

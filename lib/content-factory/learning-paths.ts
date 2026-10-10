@@ -8,10 +8,16 @@ import {
   categoryMatchesFilter,
   parseLibraryCategory,
   parseLibraryPage,
-  relatedLearningPaths,
   sanitizeLibraryQuery,
   type LibraryCategoryId,
 } from "@/lib/content-factory/library-shared";
+import {
+  pathMatchesDiscoveryFilters,
+  sortDiscoverablePaths,
+  parseLearnDiscoverySearchParams,
+  relatedCoursesRanked,
+  type LearnDiscoveryParams,
+} from "@/lib/learn-discovery/discovery-shared";
 
 export async function getLearningPathById(admin: SupabaseClient<Database>, id: string) {
   const { data, error } = await admin.from("learning_paths").select("*").eq("id", id).maybeSingle();
@@ -70,19 +76,20 @@ const LIBRARY_LIST_SELECT_LEGACY =
 
 export async function listPublishedLearningLibrary(
   client: SupabaseClient<Database>,
-  params: { q?: string | null; category?: string | null; page?: string | null; pageSize?: number },
-): Promise<{ paths: PublishedLibraryPath[]; page: number; pageSize: number; total: number; category: LibraryCategoryId; q: string }> {
+  params: { q?: string | null; category?: string | null; page?: string | null; pageSize?: number; difficulty?: string | null; duration?: string | null; certificate?: string | null; sort?: string | null },
+): Promise<{ paths: PublishedLibraryPath[]; page: number; pageSize: number; total: number; category: LibraryCategoryId; q: string; params?: LearnDiscoveryParams }> {
   const q = sanitizeLibraryQuery(params.q);
   const category = parseLibraryCategory(params.category);
   const page = parseLibraryPage(params.page);
   const pageSize = params.pageSize ?? LIBRARY_PAGE_SIZE;
   const from = (page - 1) * pageSize;
   const to = from + pageSize - 1;
-  const needsMemoryFilter = category !== "all";
+  const discovery = parseLearnDiscoverySearchParams({ ...params, q, category, page: String(page) });
+  const needsMemoryFilter = category !== "all" || Boolean(discovery.difficulty || discovery.duration || discovery.certificate !== "any" || discovery.sort !== "newest");
 
   let query = client
     .from("learning_paths")
-    .select(LIBRARY_LIST_SELECT, { count: "exact" })
+      .select(`${LIBRARY_LIST_SELECT}, description, learning_objectives, estimated_duration_seconds, certificate_enabled, certificate_pricing_mode, updated_at`, { count: "exact" })
     .eq("status", "published")
     .order("published_at", { ascending: false });
 
@@ -108,7 +115,7 @@ export async function listPublishedLearningLibrary(
   if (error && /artwork_status|artwork_storage_path|column/i.test(error.message)) {
     let legacyQuery = client
       .from("learning_paths")
-      .select(LIBRARY_LIST_SELECT_LEGACY, { count: "exact" })
+      .select(`${LIBRARY_LIST_SELECT_LEGACY}, description, learning_objectives, estimated_duration_seconds, certificate_enabled, certificate_pricing_mode, updated_at`, { count: "exact" })
       .eq("status", "published")
       .order("published_at", { ascending: false });
     if (q) {
@@ -137,9 +144,10 @@ export async function listPublishedLearningLibrary(
 
   let paths = (data ?? []) as PublishedLibraryPath[];
   if (needsMemoryFilter) {
-    paths = paths.filter((row) => categoryMatchesFilter(row.category, category));
+    paths = paths.filter((row) => pathMatchesDiscoveryFilters(row, discovery));
   }
   const total = needsMemoryFilter ? paths.length : count ?? paths.length;
+  if (discovery.sort !== "newest") paths = sortDiscoverablePaths(paths, discovery.sort);
   if (needsMemoryFilter) paths = paths.slice(from, to + 1);
 
   const creatorIds = [...new Set(paths.map((row) => row.creator_profile_id).filter((id): id is string => Boolean(id)))];
@@ -162,6 +170,7 @@ export async function listPublishedLearningLibrary(
     total,
     category,
     q,
+    params: discovery,
   };
 }
 
@@ -177,7 +186,7 @@ export async function listRelatedPublishedLearningPaths(
     .order("published_at", { ascending: false })
     .limit(24);
   if (error) throw new Error(error.message);
-  return relatedLearningPaths((data ?? []) as PublishedLibraryPath[], seed, LIBRARY_RELATED_LIMIT);
+  return relatedCoursesRanked((data ?? []) as PublishedLibraryPath[], seed, LIBRARY_RELATED_LIMIT);
 }
 
 export async function loadLearningPathCurriculum(

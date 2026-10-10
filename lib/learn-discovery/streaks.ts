@@ -57,7 +57,7 @@ export async function recordLearnStreakActivity(
       longest_streak: refreshed.longestStreak,
       last_active_day: refreshed.lastActiveDay,
       updated_at: new Date().toISOString(),
-    } as never,
+    },
     { onConflict: "student_id" },
   );
   if (error && !isMissingRelationError(error.message)) {
@@ -95,7 +95,7 @@ export async function syncLearnerStreakFromHistory(admin: Admin, studentId: stri
       longest_streak: state.longestStreak,
       last_active_day: state.lastActiveDay,
       updated_at: new Date().toISOString(),
-    } as never,
+    },
     { onConflict: "student_id" },
   );
   if (upsertError && !isMissingRelationError(upsertError.message)) {

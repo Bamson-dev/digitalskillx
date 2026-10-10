@@ -47,4 +47,6 @@ export interface StorageAdapter {
 export type StorageService = StorageAdapter & {
   validatePath(path: string): string;
   replace(input: StorageUploadInput): Promise<StorageUploadResult>;
+  /** Throws when writes are blocked, for example ephemeral local storage in production. */
+  assertWritable?(): void;
 };

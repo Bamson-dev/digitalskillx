@@ -1,0 +1,28 @@
+{
+  "description": "Coolify scheduled task plan derived from vercel.json. Tasks marked missing are NOT created or enabled. Vercel schedules stay in place until Vercel cron execution is shown to be off.",
+  "command_template": "curl -fsS -m 300 -H \"Authorization: Bearer $CRON_SECRET\" http://localhost:3000{path}",
+  "tasks": [
+    {"name":"inactivity-0h9","path":"/api/cron/inactivity","schedule":"0 9 * * *","timezone":"UTC","status":"existing_in_coolify"},
+    {"name":"bulk-import-15h9","path":"/api/cron/bulk-import","schedule":"15 9 * * *","timezone":"UTC","status":"existing_in_coolify"},
+    {"name":"email-outbox-45h9","path":"/api/cron/email-outbox","schedule":"45 9 * * *","timezone":"UTC","status":"existing_in_coolify"},
+    {"name":"email-campaigns-55h9","path":"/api/cron/email-campaigns","schedule":"55 9 * * *","timezone":"UTC","status":"existing_in_coolify"},
+    {"name":"webinar-follow-up-25h10","path":"/api/cron/webinar-follow-up","schedule":"25 10 * * *","timezone":"UTC","status":"existing_in_coolify"},
+    {"name":"webinar-follow-up-5h8","path":"/api/cron/webinar-follow-up","schedule":"5 8 * * *","timezone":"UTC","status":"missing_in_coolify_do_not_enable_until_vercel_crons_are_off"},
+    {"name":"webinar-follow-up-5h11","path":"/api/cron/webinar-follow-up","schedule":"5 11 * * *","timezone":"UTC","status":"missing_in_coolify_do_not_enable_until_vercel_crons_are_off"},
+    {"name":"webinar-follow-up-5h13","path":"/api/cron/webinar-follow-up","schedule":"5 13 * * *","timezone":"UTC","status":"missing_in_coolify_do_not_enable_until_vercel_crons_are_off"},
+    {"name":"webinar-follow-up-5h15","path":"/api/cron/webinar-follow-up","schedule":"5 15 * * *","timezone":"UTC","status":"missing_in_coolify_do_not_enable_until_vercel_crons_are_off"},
+    {"name":"webinar-follow-up-5h17","path":"/api/cron/webinar-follow-up","schedule":"5 17 * * *","timezone":"UTC","status":"missing_in_coolify_do_not_enable_until_vercel_crons_are_off"},
+    {"name":"webinar-follow-up-0h14","path":"/api/cron/webinar-follow-up","schedule":"0 14 * * *","timezone":"UTC","status":"missing_in_coolify_do_not_enable_until_vercel_crons_are_off"},
+    {"name":"webinar-follow-up-0h18","path":"/api/cron/webinar-follow-up","schedule":"0 18 * * *","timezone":"UTC","status":"missing_in_coolify_do_not_enable_until_vercel_crons_are_off"},
+    {"name":"webinar-follow-up-0h20","path":"/api/cron/webinar-follow-up","schedule":"0 20 * * *","timezone":"UTC","status":"missing_in_coolify_do_not_enable_until_vercel_crons_are_off"},
+    {"name":"webinar-follow-up-30h21","path":"/api/cron/webinar-follow-up","schedule":"30 21 * * *","timezone":"UTC","status":"missing_in_coolify_do_not_enable_until_vercel_crons_are_off"},
+    {"name":"webinar-follow-up-0h22","path":"/api/cron/webinar-follow-up","schedule":"0 22 * * *","timezone":"UTC","status":"missing_in_coolify_do_not_enable_until_vercel_crons_are_off"},
+    {"name":"checkout-abandon-20h10","path":"/api/cron/checkout-abandon","schedule":"20 10 * * *","timezone":"UTC","status":"existing_in_coolify"},
+    {"name":"content-factory-5h10","path":"/api/cron/content-factory","schedule":"5 10 * * *","timezone":"UTC","status":"existing_in_coolify"},
+    {"name":"content-factory-35h12","path":"/api/cron/content-factory","schedule":"35 12 * * *","timezone":"UTC","status":"missing_in_coolify_do_not_enable_until_vercel_crons_are_off"},
+    {"name":"content-factory-5h15","path":"/api/cron/content-factory","schedule":"5 15 * * *","timezone":"UTC","status":"missing_in_coolify_do_not_enable_until_vercel_crons_are_off"},
+    {"name":"content-factory-5h18","path":"/api/cron/content-factory","schedule":"5 18 * * *","timezone":"UTC","status":"missing_in_coolify_do_not_enable_until_vercel_crons_are_off"},
+    {"name":"content-factory-5h21","path":"/api/cron/content-factory","schedule":"5 21 * * *","timezone":"UTC","status":"missing_in_coolify_do_not_enable_until_vercel_crons_are_off"},
+    {"name":"paystack-external-backfill-every15min","path":"/api/cron/paystack-external-backfill","schedule":"*/15 * * * *","timezone":"UTC","status":"existing_in_coolify"}
+  ]
+}

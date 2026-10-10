@@ -123,9 +123,7 @@ export async function resolveServiceRoleKey(
 
   return {
     hint:
-      process.env.VERCEL === "1"
-        ? "Add SUPABASE_SERVICE_ROLE_KEY in Vercel → Settings → Environment Variables (Production) and redeploy. Staging/Coolify env vars do not apply to digitalskillx.com."
-        : "Save the service role key under Admin → Settings → Integrations, or set SUPABASE_SERVICE_ROLE_KEY (Runtime only) and redeploy.",
+      "Set SUPABASE_SERVICE_ROLE_KEY in this deployment's runtime environment and redeploy, or configure it under Admin → Settings → Integrations.",
   };
 }
 
@@ -142,11 +140,9 @@ export async function serviceRoleKeyConfigured(supabase?: SupabaseClient<Databas
 }
 
 export function serviceRoleKeyMissingMessage() {
-  const host = process.env.VERCEL === "1" ? "Vercel" : "Coolify";
   return (
-    `Server could not load the Supabase service role key. Production runs on ${host}. ` +
-    `Add SUPABASE_SERVICE_ROLE_KEY under ${host} → Environment Variables (Production), then redeploy. ` +
-    "Or paste real keys into platform_secrets in your PRODUCTION Supabase project (not staging)."
+    "Server could not load the Supabase service role key. Set SUPABASE_SERVICE_ROLE_KEY in this deployment's runtime environment and redeploy. " +
+    "Or configure the key in the authoritative Supabase project's platform_secrets table."
   );
 }
 
@@ -159,25 +155,22 @@ export async function serviceRoleKeyMissingMessageAsync(): Promise<string> {
     d.cronBootstrapDetail.includes("placeholder")
   ) {
     return (
-      "Your PRODUCTION Supabase database still has placeholder keys (PASTE_…_HERE). " +
-      "Staging works because it uses a different database or Coolify env. " +
-      "Fix: Vercel → Settings → Environment Variables → Production → add SUPABASE_SERVICE_ROLE_KEY " +
-      "(Supabase Dashboard → Project Settings → API → service_role for the project linked to digitalskillx.com). " +
-      "Redeploy, then run: curl -X POST -H \"Authorization: Bearer YOUR_CRON_SECRET\" https://www.digitalskillx.com/api/admin/setup-production"
+      "The authoritative Supabase database still has placeholder integration keys. " +
+      "Set SUPABASE_SERVICE_ROLE_KEY securely in the production runtime for the matching project, redeploy, " +
+      "then use the protected setup-production route only after confirming the target project."
     );
   }
 
   if (d.cronBootstrapDetail.includes("cron_auth_secret")) {
     return (
-      "CRON_SECRET on Vercel does not match platform_settings.cron_auth_secret in Supabase. " +
-      "Run sql/server-bootstrap-platform-secrets.sql, then set cron_auth_secret to the same value as Vercel CRON_SECRET."
+      "CRON_SECRET does not match platform_settings.cron_auth_secret in Supabase. " +
+      "Review the secure runtime value and the authoritative database setting before retrying."
     );
   }
 
   if (d.deployment === "vercel" && !d.serviceRoleFromEnv) {
     return (
-      "Add SUPABASE_SERVICE_ROLE_KEY in Vercel → Environment Variables → Production and redeploy. " +
-      "Coolify/staging env vars do not apply to www.digitalskillx.com."
+      "Set SUPABASE_SERVICE_ROLE_KEY in the production deployment's runtime environment and redeploy."
     );
   }
 

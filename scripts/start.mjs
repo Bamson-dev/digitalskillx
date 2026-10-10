@@ -4,7 +4,7 @@
  * Writes runtime secrets to disk and preloads them into Next.js via node -r.
  */
 import { spawn } from "node:child_process";
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -40,11 +40,7 @@ function secretStatus(name) {
 }
 
 function runtimeTargets() {
-  return [
-    join(root, "runtime-env.json"),
-    join(root, ".next", "runtime-env.json"),
-    "/tmp/digitalskillx-runtime-env.json",
-  ];
+  return ["/tmp/digitalskillx-runtime-env.json"];
 }
 
 function writeRuntimeEnvFile() {
@@ -54,15 +50,11 @@ function writeRuntimeEnvFile() {
     if (value) payload[key] = value;
   }
 
-  for (const target of runtimeTargets()) {
-    mkdirSync(dirname(target), { recursive: true });
-    writeFileSync(target, JSON.stringify(payload, null, 2));
-    console.log(
-      `[digitalskillx] Wrote runtime secrets → ${target} (${Object.keys(payload).length} keys)`,
-    );
-  }
+  const target = runtimeTargets()[0];
+  writeFileSync(target, JSON.stringify(payload), { mode: 0o600 });
+  chmodSync(target, 0o600);
 
-  process.env.DIGITALSKILLX_RUNTIME_ENV_FILE = join(root, "runtime-env.json");
+  process.env.DIGITALSKILLX_RUNTIME_ENV_FILE = target;
 }
 
 /** Load missing integration keys from platform_secrets when service role is available at boot. */
@@ -187,10 +179,6 @@ async function main() {
   console.log(`  NODE_ENV=${process.env.NODE_ENV}`);
   console.log(`  SUPABASE_SERVICE_ROLE_KEY=${secretStatus("SUPABASE_SERVICE_ROLE_KEY")}`);
   console.log(`  YOUTUBE_API_KEY=${youtubeStatus}`);
-  if (youtubeStatus === "ok") {
-    const key = readEnv("YOUTUBE_API_KEY");
-    console.log(`  YOUTUBE_API_KEY prefix=${key.slice(0, 8)}…`);
-  }
   console.log(`  DEEPSEEK_API_KEY=${secretStatus("DEEPSEEK_API_KEY")}`);
   console.log(`  PAYSTACK_SECRET_KEY=${secretStatus("PAYSTACK_SECRET_KEY")}`);
   console.log(`  EMAIL_PROVIDER=${readEnv("EMAIL_PROVIDER") || "(resend)"}`);
@@ -224,6 +212,9 @@ async function main() {
     if (signal) process.kill(process.pid, signal);
     process.exit(code ?? 1);
   });
+  for (const signal of ["SIGTERM", "SIGINT", "SIGHUP"]) {
+    process.on(signal, () => child.kill(signal));
+  }
 }
 
 main().catch((err) => {

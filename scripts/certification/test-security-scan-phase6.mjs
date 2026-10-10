@@ -34,6 +34,7 @@ function walk(dir, out = []) {
       name === "node_modules" ||
       name === ".next" ||
       name === ".git" ||
+      name === "tmp" ||
       name === "playwright-report" ||
       name === "test-results"
     ) {

@@ -2312,8 +2312,17 @@ function matchesCandidateFilters(row, filters) {
   const cron = read("app/api/cron/content-factory/route.ts");
   const mig = read("supabase/migrations/0042_content_factory_learning_library.sql");
   assert.match(cron, /claim_content_factory_jobs/);
-  assert.match(cron, /p_limit: 1/);
+  assert.match(cron, /p_limit: factoryJobLimit/);
   assert.match(mig, /for update skip locked/);
+  const { spawnSync } = await import("node:child_process");
+  const policyTest = spawnSync(process.execPath, ["--import", join(root, "scripts/certification/register-ts-ext.mjs"), "--input-type=module", "-e", `
+    import assert from 'node:assert/strict';
+    import { contentFactoryJobClaimLimit as limit } from './lib/content-factory/worker-policy.ts';
+    assert.equal(limit({ discoveryBacklogCreated: 1, qualified: 0, generated: 0 }), 8);
+    assert.equal(limit({ discoveryBacklogCreated: 0, qualified: 1, generated: 0 }), 6);
+    assert.equal(limit({ discoveryBacklogCreated: 0, qualified: 0, generated: 0 }), 4);
+  `], { cwd: root, encoding: "utf8" });
+  assert.equal(policyTest.status, 0, `${policyTest.stdout}\n${policyTest.stderr}`);
   console.log("PASS: S6-15 concurrent claim safety");
 }
 
@@ -2967,8 +2976,6 @@ console.log("\nAll Content Factory Phase 1 + Stage 1–9 offline checks passed."
 }
 
 console.log("\nAll Content Factory Phase 1 + Stage 1–10 offline checks passed.");
-
-
 
 
 

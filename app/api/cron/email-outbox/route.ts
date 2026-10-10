@@ -14,6 +14,7 @@ import {
   scheduleBulkWorkerContinuation,
 } from "@/lib/bulk-import-continue";
 import { nudgeWebinarFollowupFromCron } from "@/lib/webinar-followup/live-drain";
+import { drainCoursePublishEmailOutbox } from "@/lib/course-publish-email-outbox";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -42,6 +43,7 @@ export async function POST(request: NextRequest) {
       batchSize: 40,
       budgetMs: 100_000,
     });
+    const coursePublish = await drainCoursePublishEmailOutbox(admin, 100);
 
     if (jobId) {
       await maybeFinalizeJobPhase(admin, jobId);
@@ -50,7 +52,13 @@ export async function POST(request: NextRequest) {
     const remaining = jobId
       ? (await countPendingOutboxForJob(admin, jobId)).total
       : await countGlobalPendingOutbox(admin);
-    const more = remaining > 0;
+    const { count: coursePublishRemaining, error: courseCountError } = await admin
+      .from("program_course_publish_email_outbox" as never)
+      .select("id", { count: "exact", head: true })
+      .eq("status", "pending")
+      .lte("scheduled_at", new Date().toISOString());
+    if (courseCountError) throw new Error(`Could not count course publish email jobs: ${courseCountError.message}`);
+    const more = remaining > 0 || (coursePublishRemaining ?? 0) > 0;
 
     if (more) {
       scheduleBulkWorkerContinuation({
@@ -70,9 +78,11 @@ export async function POST(request: NextRequest) {
       chained: more,
       jobId,
       remaining,
+      coursePublishRemaining,
+      coursePublish,
       ...result,
     });
-    return NextResponse.json({ ok: true, depth, chained: more, jobId, remaining, ...result });
+    return NextResponse.json({ ok: true, depth, chained: more, jobId, remaining, coursePublishRemaining, coursePublish, ...result });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     bulkImportStage("cron_email_outbox_tick", { ok: false, error: message, depth, jobId });

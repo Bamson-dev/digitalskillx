@@ -10,7 +10,7 @@ export function verifyCronSecret(request: NextRequest): { ok: true } | { ok: fal
     return {
       ok: false,
       status: 503,
-      error: "CRON_SECRET is not set on the server (Vercel → Settings → Environment Variables).",
+      error: "CRON_SECRET is not set in the server runtime environment.",
     };
   }
 

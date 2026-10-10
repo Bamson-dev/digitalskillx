@@ -450,7 +450,7 @@ export async function drainBulkImportEmailOutboxUntilBudget(
       batches: 0,
       resendReady: false as const,
       error:
-        "Resend is not configured. Add RESEND_API_KEY in Vercel → Environment Variables, then redeploy.",
+        "Resend is not configured. Add RESEND_API_KEY to the server runtime environment, then redeploy.",
     };
   }
 

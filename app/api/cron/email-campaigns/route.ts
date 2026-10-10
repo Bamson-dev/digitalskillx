@@ -8,6 +8,7 @@ import {
   scheduleBulkWorkerContinuation,
 } from "@/lib/bulk-import-continue";
 import { nudgeWebinarFollowupFromCron } from "@/lib/webinar-followup/live-drain";
+import { siteUrl } from "@/lib/org";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -31,7 +32,7 @@ export async function POST(request: NextRequest) {
     const result = await runLiveAimoneycodeDrain(admin, { budgetMs: 100_000 });
     if (result.moreDue) {
       scheduleBulkWorkerContinuation({
-        origin: "https://www.digitalskillx.com",
+        origin: siteUrl(),
         path: "/api/cron/email-campaigns",
         depth,
         reason: "more_campaign_due",

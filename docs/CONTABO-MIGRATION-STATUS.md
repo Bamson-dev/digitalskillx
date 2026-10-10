@@ -1,0 +1,138 @@
+# Contabo migration status
+
+Updated: 2026-10-09
+
+## Verified production and release state (2026-10-09)
+
+- GitHub `main` is `b99da43732749fa9a665644a710c72404b3b75fa`. At audit start, `codex/contabo-migration` was `dcf1ea0a2db5f9fc4e01d970b3a7eb167b0bdff7`; this release-workflow update was pushed as `63813d4ca3ee59a8f156e3e67de91af2f61a67e8`. The Coolify production app commit `0ab7201dd8377ee701c172de10c1e984f0c2e702` is an ancestor of `main`, but is older than it.
+- DNS A records for `digitalskillx.com` and `www.digitalskillx.com` resolve to Contabo `207.180.248.233`. Both public HTTPS `/api/health` requests returned HTTP 200 and curl TLS verification succeeded. The Coolify production application has matching domains and is `digitalskillx:main`, currently running and healthy. Public apex/`www` traffic is therefore routed to Contabo's Coolify proxy at the time checked.
+- Vercel still has a DigitalSkillX production deployment and the same domains attached, but DNS currently points to Contabo. Vercel's Cron Jobs setting is enabled. The exact Vercel deployment commit was not available in the inspected deployment UI.
+- Coolify v4.1.2 production app source is public GitHub `Bamson-dev/digitalskillx`, branch `main`, commit setting `HEAD`; its most recent successful deployment shown was a manual deployment of `0ab7201…` on 2026-09-29. Container port 3000 is exposed behind HTTPS, the HTTP `/api/health` check uses port 3000, force HTTPS is enabled, and no Coolify persistent-storage mount is configured. `Auto Deploy` is enabled, but GitHub Settings > Webhooks showed no repository webhook. No push-triggered production deployment has been verified.
+- The Dockerfile at deployed commit `0ab7201…` does not specify a non-root `USER`, so the image defaults to root; the runtime process UID was not directly inspected. The migration branch Dockerfile now specifies the `node` user but has not been deployed.
+- The authenticated Coolify administration UI is reachable on plain HTTP at server port 8000. Restrict this management interface to a VPN/trusted network or put it behind verified HTTPS before treating the control plane as hardened. No access/firewall settings were changed.
+- Coolify lists 8 DigitalSkillX application cron tasks and Vercel reports 22 scheduled invocations enabled, with overlapping routes including email outbox. Exact Coolify task commands/cadences were not inspected, so complete schedule parity and which service actually executes each job are unverified. Treat overlap as a duplicate-scheduler risk and possible missing-schedule risk. No schedule was run, disabled, or edited. The existing Coolify staging app is under an environment labelled `production` and reports unknown health; it is not treated as isolated staging.
+- The Coolify host reports Ubuntu 24.04.4, 6 CPU cores and 11.7 GB RAM. Free disk, actual container limits and the authoritative Supabase project were not verified.
+- No production deployment, app setting, secret, DNS record, database/schema, payment webhook, storage object, or scheduler setting was changed. The user authorizes direct production deployment as the intended workflow; the release still requires the reviewed workflow to reach `main` and GitHub Actions configuration to be completed.
+- Existing dirty and untracked learning/analytics work remains untouched. Do not stage those user-owned paths.
+
+## Automatic production release implementation
+
+- Added `.github/workflows/production-release.yml`: PRs to `main` and pushes to `main` run Node 22/npm 10.9.2, `npm ci`, typecheck, lint, relevant regression suites, a Docker image build and the production build. Pushes to `main` then use the Coolify API to pin the exact Git SHA, disable independent Coolify auto-deploy triggers, queue the deployment, wait until Coolify reports the same SHA and check public HTTPS health.
+- The workflow is on `codex/contabo-migration`, not `main`; GitHub will not run it for main until this reviewed change is merged. No GitHub branch protection rules currently exist. Configure the `verify` status check as required for `main`.
+- Required GitHub Actions configuration (values are never committed): variable `COOLIFY_API_BASE_URL=https://coolify.leadpilot.live/api/v1`, variable `COOLIFY_APP_UUID=ay1sfm49mfbzm1x1a6pil8tm`, and secret `COOLIFY_API_TOKEN` with only permissions needed to read/update this application and deploy. Confirm token scope on the installed Coolify version. The workflow uses only push events on exact ref `refs/heads/main`; forks and feature branches do not receive the secret.
+- GitHub Actions run `37957080134` on commit `63813d4ca3ee59a8f156e3e67de91af2f61a67e8` ran Node 22 and npm 10.9.2 successfully; dependency install, typecheck and lint passed. `npm run test:unit` failed at `scripts/certification/test-learn-library-completion.mjs:181`: it expected `LearnPathCard` in the committed `/learn` page, which renders links and `LearnCover`. This is in the separate learning workstream; those working-tree changes were left untouched and the assertion was not weakened. The failure stopped the initial run before focused migration regressions and Docker build. The workflow now runs those focused checks and image build before the broader unit suite, while keeping any unit failure deployment-blocking. This updated workflow has not yet run.
+- GitHub Actions run `37957458086` on commit `15ceda4547cb0c05ba87d175e98619455153c593` again passed Node 22/npm 10.9.2 setup, `npm ci`, typecheck and lint, then failed `scripts/certification/test-content-factory.mjs` because committed `/learn/page.tsx` lacks `/LearnDiscoveryToolbar/`. The failure is associated with the separate learning UI workstream; it was preserved and neither the implementation nor test was changed. No focused regression or Docker image build ran in that workflow version.
+- The workflow now records each independent regression and image-build outcome, continues after individual failures, and enforces all outcomes in a final gate. GitHub Actions run `37957799680` on `ed26099314e4bb657bc5e8443124e308294a2b52` verified Node `v22.23.3`/npm `10.9.2`; install, typecheck, lint, all six focused migration regression steps, and the Docker image build passed. The broader unit suite failed on the same `LearnPathCard` assertion in `scripts/certification/test-learn-library-completion.mjs`; the aggregate gate failed and `deploy-production` was skipped. This is the first actual container image build in the verified Node 22 toolchain. No production deployment was attempted.
+- Coolify API calls, exact-commit deployment, health preservation, rollback after a failed image, and required branch checks remain untested. Automatic deployment is not active until the workflow is merged, the Actions variables/secret and protection are set, and a later `main` push is observed end-to-end.
+- Vercel Cron is enabled with 22 scheduled invocations while Coolify lists 8 app cron tasks with overlapping routes. Preserve current settings while identifying owners and cadence parity; then consolidate only after confirming recent invocations and recovery behavior. Do not add another scheduler.
+
+## Local tooling and staging verification (2026-10-09)
+
+- Fetched GitHub `origin/codex/contabo-migration`; it points to the latest migration commit recorded in Git history. The working tree contains separate uncommitted learning/analytics changes, which remain untouched.
+- Available local versions are Node `v26.0.0` and npm `11.12.1`. `.nvmrc` requests Node 22 and `package.json` pins npm `10.9.2`; no Node 22 version manager/runtime is installed locally. GitHub-hosted runners verified Node 22/npm 10.9.2 in Actions runs `37957080134` and `37957458086`.
+- Docker CLI is installed, but `docker info` cannot connect to a local daemon. `gh` and Coolify CLI configuration are unavailable. An authenticated Coolify web session was available for read-only inspection, but no Coolify API token was available for workflow setup or deployment. No remote image build or staging deployment was attempted; no isolated staging URL was verified.
+- No Supabase staging project credentials were available. Migration 0054 has not been run, and neither staging nor production schema was modified. The runbook now includes a read-only 0032 preflight query and a backup-before-0054 procedure.
+- Compose health-check configuration now uses the Node runtime's built-in `fetch`, matching the Dockerfile health check and avoiding reliance on `wget` being installed. Docker image/container validation remains unverified.
+- `docker compose -f docker-compose.prod.yml config --quiet` passed with placeholder public values and a temporary empty `.env`; that validates Compose syntax only and is not an image build or runtime check. The Compose health check now uses Node's built-in fetch like the Dockerfile health check.
+
+## Confirmed from repository
+
+- Next.js 14 App Router, React 18, TypeScript, npm; Node 22 is now declared in `.nvmrc`, package engines and Docker base image. npm is pinned to 10.9.2 in package metadata. The interactive workspace itself is Node 26/npm 11, so it is not the pinned validation runtime.
+- The application has App Router pages, route handlers, server actions, Middleware and Supabase SSR auth/cookies. It uses Supabase Auth/Postgres/RLS, Paystack webhook and transaction verification, Leadthur handoff, Resend/ZeptoMail, Supabase Storage and a configurable local/S3 storage adapter.
+- The public learning/course asset paths and existing Supabase object URLs must remain unchanged. The local storage adapter defaults to `.data/storage`; it is not durable in a container unless explicitly mounted. Keep the existing Supabase Storage provider unless a separately verified object migration is approved.
+- `vercel.json` contains 22 cron entries: inactivity `0 9 * * *`; bulk import `15 9 * * *`; email outbox `45 9 * * *`; campaigns `55 9 * * *`; webinar follow-up at `5 8`, `25 10`, `5 11`, `5 13`, `5 15`, `5 17`, `0 14`, `0 18`, `0 20`, `30 21`, and `0 22` UTC daily; checkout abandonment `20 10 * * *`; content factory at `5 10`, `35 12`, `5 15`, `5 18`, and `5 21` UTC daily; Paystack external backfill `*/15 * * * *`.
+- Routes for health, auth callback/session, `/api/sb`, Paystack webhooks, and cron handlers are present. The build output enumerates routes; Next self-hosting supports server rendering, route handlers, cookies, middleware and server actions in a Node server.
+- Route inventory: 90 `app/api` handlers (51 admin, 10 cron, 6 auth, plus student, learn, payments, enroll, Supabase proxy, webhooks, assets/downloads, analytics and health groups) and 21 files with server actions. Auth is Supabase SSR in server, route-handler and middleware clients; cookie options are centralized in `lib/supabase/url.ts`. `/api/sb/[...path]` proxies Supabase through the app origin. Paystack uses `x-paystack-signature`, live transaction verification/fallback and transaction-reference idempotency before fulfillment; `/api/payments/confirm` handles redirect fallback. Preserve all paths, methods and headers.
+- Upload/storage audit: storage adapters support local, filesystem and S3-compatible storage; asset routes include `/api/landing-assets`, `/api/sales-page-assets` and `/api/resources/[id]/download`. Compose persists the local adapter directory in the named `digitalskillx-storage` volume; the volume must be backed up off-host. Existing Supabase Storage objects and URLs remain untouched.
+- Environment-name audit only (values are never recorded): client/build values `NEXT_PUBLIC_SITE_URL`, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY`, `NEXT_PUBLIC_SENTRY_DSN`; server/auth/security `SUPABASE_SERVICE_ROLE_KEY` (plus legacy aliases `SUPABASE_SERVICE_KEY`, `SERVICE_ROLE_KEY`), `ADMIN_API_KEY`, `ADMIN_EMAIL`, `ADMIN_MFA_REQUIRED`, `ADMIN_PASSWORD`, `ADMIN_PASSWORD_SYNC`, `CRON_SECRET`, `CRON_WORKER_ORIGIN`, `DIGITALSKILLX_DEPLOYMENT_ENV`, `DIGITALSKILLX_FORWARD_SECRET`, `EMAIL_UNSUBSCRIBE_SECRET`; payments `PAYSTACK_SECRET_KEY`, `PAYSTACK_USD_ENABLED`, `PAYSTACK_AIAPP_COURSE_ID`; email `EMAIL_PROVIDER`, `RESEND_API_KEY`, `RESEND_FROM_EMAIL`, `RESEND_FROM_NAME`, `ZEPTOMAIL_SMTP_HOST`, `ZEPTOMAIL_SMTP_PORT`, `ZEPTOMAIL_SMTP_USER`, `ZEPTOMAIL_SMTP_PASSWORD`, `ZEPTOMAIL_FROM_EMAIL`, `ZEPTOMAIL_FROM_NAME`, `EMAIL_CAMPAIGN_TEST_ADDRESSES`; AI/content `YOUTUBE_API_KEY`, `DEEPSEEK_API_KEY`, `DEEPSEEK_MODEL`, `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL`, `OPENAI_API_KEY`, `OPENAI_IMAGE_MODEL`, all `CONTENT_FACTORY_*` and `CONTENT_AUTHORITY_*` limits/flags, `ENROLLMENT_LINKS_ENABLED`, `SALES_PAGE_IMPORT_ENABLED`; storage `STORAGE_PROVIDER`, `STORAGE_LOCAL_ROOT`, `CONTABO_STORAGE_ROOT`, `STORAGE_FS_ROOT`, `CONTABO_S3_ENDPOINT`, `CONTABO_S3_ACCESS_KEY`, `CONTABO_S3_SECRET_KEY`, `CONTABO_S3_BUCKET`, `CONTABO_S3_REGION`, `CONTABO_S3_PUBLIC_BASE_URL`, and corresponding `STORAGE_S3_*` aliases / `STORAGE_PUBLIC_BASE_URL`; analytics/tracking `STAPE_SERVER_URL`, `META_PIXEL_ID`, `META_CAPI_TOKEN`, `GOOGLE_SEARCH_CONSOLE_CONNECTED`, `GOOGLE_SEARCH_CONSOLE_SITE_URL`; runtime/build/platform `NODE_ENV`, `DIGITALSKILLX_RUNTIME_ENV_FILE`, `SENTRY_AUTH_TOKEN`, `SENTRY_ENVIRONMENT`, `SENTRY_ORG`, `SENTRY_PROJECT`, `COOLIFY_RESOURCE_UUID`, `VERCEL`, `INACTIVITY_DAYS`, `WEBINAR_FOLLOWUP_TEST_EMAILS`. Some values are optional or read dynamically from the platform settings/secrets tables. Compare names against the existing deployment securely before rollout; do not copy credentials into this report.
+- `waitUntil` and `@vercel/functions` were removed. Background kicks now run in-process. Course-publish email now uses additive migration `0054_course_publish_email_outbox.sql`, per-recipient uniqueness, atomic `SKIP LOCKED` claims, stale-claim recovery, retry backoff, Resend idempotency keys, and the existing scheduled `/api/cron/email-outbox` drain. The migration is not applied anywhere; verify this path only on isolated staging. Provider idempotency cannot remove the narrow ambiguity for messages accepted before a database failure after the provider's idempotency window. Worker origins now require `DIGITALSKILLX_DEPLOYMENT_ENV=production` (or Vercel's production environment) before production canonical/Vercel targets are accepted. There is no separate durable worker process.
+
+## Work completed locally
+
+- Removed Docker-only lint and TypeScript build bypasses.
+- Added a multi-stage Node 22 image, non-root runtime, healthcheck, public-only build args, private-network-only service exposure through Compose, and a named volume at `/app/.data/storage` for the existing local storage adapter. Actual runtime secrets are supplied to the container at runtime.
+- Excluded `.env*`, `.vercel`, Git metadata, local DB files, keys, local data, and test output from Docker context; added a values-free production env template.
+- Limited the runtime secret bootstrap file to `/tmp/digitalskillx-runtime-env.json` with mode `0600`; removed API-key prefix logging and added child-process signal forwarding. TLS verification in the Supabase fetch bridge is now always enabled.
+- Made worker continuation origins deployment-specific using `CRON_WORKER_ORIGIN` / `NEXT_PUBLIC_SITE_URL` and changed email-campaign continuation to use the active site's URL.
+- Added the durable course-publish email outbox, retry/reclaim behavior, Resend idempotency, outbox regression checks, and an explicit deployment-stage guard for worker origins. Added `tmp/` to Git ignore and confirmed the secret artifact is excluded by both Git and Docker without opening or copying it.
+- Corrected discovery query/type integration with the learning/analytics WIP so the current working tree typechecks.
+
+## Validation results
+
+- `npm run typecheck`, `npm run lint`, `npm run build`: passed on local Node 26/npm 11 after the migration changes. Build reports Sentry/OpenTelemetry dynamic-require and expected dynamic-cookie prerender diagnostics. Must repeat using Node 22/npm 10.9.2.
+- Clean staged-tree typecheck and production build both passed in isolated temporary checkouts, without the unrelated untracked learning/analytics WIP; this confirms the migration branch snapshot builds independently. These checks still ran under local Node 26/npm 11, not the pinned Node 22/npm 10 toolchain.
+- Learn discovery (29 checks), Learn analytics (19), Paystack external enrollment (36), Leadthur handoff (30), and platform hardening offline (10/10): passed.
+- `npm run test:content-factory`, `npm run test:course-publish-outbox`, `npm run test:security-scan`, and `npm run test:platform-hardening`: passed. The content-factory test now checks the bounded adaptive worker policy and DB `SKIP LOCKED`; the outbox test checks retry delays, stable idempotency, uniqueness and stale-claim recovery. The security scan skips ignored local `tmp/` artifacts; the secret JSON was not read or printed.
+- `npm run test:unit`: passed after correcting the stale content-factory limit assertion and updating the older Resend-only test to match the intentional Resend-primary/ZeptoMail fallback while asserting idempotent jobs do not fall through to a second provider.
+- AI Money Code campaign continuation test passes after replacing its Vercel-only `waitUntil` assumption with the Node background-task path; the 22 cron schedules remain unchanged.
+- `npm run check-env`: reports the three expected Supabase variables missing from local environment; no values were printed. No live credentials were requested.
+- Docker CLI exists but no local daemon is running. Compose syntax validates with placeholder public values and a temporary empty `.env`; the actual Docker image build passed on GitHub's runner in `37957799680`. Node 22/npm 10.9.2, typecheck, lint and focused migration regressions passed there; the broad unit suite blocked deployment on the existing Learn page expectation. Public production TLS and health did verify from this workstation. Auth flows, webhook processing, storage writes, email delivery, outbox retries and restart recovery have not been tested against production.
+
+## External blockers and next steps
+
+1. Confirm the authoritative Supabase project and whether Supabase Auth/Postgres/Storage already run on the VPS. Confirm available disk, container limits and backup target.
+2. Run the Docker image under Node 22/npm 10.9.2 on a staging hostname with staging Supabase, payment test-mode, email sink/provider and separate `CRON_SECRET`/`CRON_WORKER_ORIGIN`.
+3. Apply migration 0054 only to isolated staging, then verify pending, retry, provider-idempotent send, stale-claim recovery and container restart behavior before enabling course-publish notifications.
+5. Resolve the verified Vercel/Coolify scheduled-task overlap after identifying which system is invoking each workload. Keep exactly one owner per workload and validate queue/idempotency behavior before disabling a schedule.
+6. Verify Supabase Auth redirect allowlists, cookie domain/HTTPS, Paystack webhook destination, storage, backup restoration and rollback on staging.
+7. Merge this workflow and Docker hardening into `main`; add the GitHub Actions variables and restricted Coolify API token secret; add required branch checks; then verify a later `main` push deploys the exact SHA and returns healthy over HTTPS. Keep Vercel resources intact.
+
+See [deployment runbook](CONTABO-DEPLOYMENT-RUNBOOK.md) and [rollback plan](CONTABO-ROLLBACK.md).
+
+## 2026-10-09 production release follow-up
+
+### Repository and verification
+
+- GitHub heads were rechecked: `main` is `b99da43732749fa9a665644a710c72404b3b75fa`; `codex/contabo-migration` was `b7b3c9d41294ce63f00d5fd3a11ed86df811f84d` before this follow-up. The migration branch is nine commits ahead of `main`.
+- The Learn library regression was caused by the committed `/learn` page not using its discovery controls/library card integration. The appropriate implementation was restored in a separate learning-only commit (`d8ecc9cb63c7994779d189d7ec800fec6f1348f3`); it preserves the `LearnPathCard` user flow and query parameters. The exact certification test passes all 13 checks.
+- Node `v22.23.3` and npm `10.9.2` were used for local checks. `npm run typecheck`, `npm run lint`, `npm run test:unit`, `npm run test:content-factory`, `npm run test:course-publish-outbox`, `npm run test:security-scan`, `npm run test:platform-hardening`, `npm run test:phase8`, and `npm run test:library-build` passed. The unit suite's Paystack external and Leadthur handoff tests resolve a sibling `/tmp/LeadRush` checkout in this workstation; its working files are not part of this repository. GitHub Actions does not have that sibling checkout, and an earlier remote run therefore failed those cross-repository checks. The local full-suite pass does not establish a reproducible CI pass.
+- `npm run build` passed with placeholder public build variables. Next.js emitted a `require-in-the-middle` critical-dependency build warning and expected dynamic-cookie/rendering diagnostics; no build error occurred.
+- Docker CLI is installed but the local Docker daemon is unavailable (`Cannot connect to the Docker daemon`). The prior Actions run `37957799680` did build the image successfully for commit `ed26099`; no image build has been observed for the new Learn fix.
+- GitHub Actions repository secrets, variables, and webhooks were empty when checked. No Coolify API token is available to the workflow. Coolify's native Auto Deploy remains enabled. Thus automatic deployment from `main` is not configured or verified, and this follow-up has not triggered a deployment.
+- No GitHub ruleset/branch protection was present. Do not merge while the remote verification gate is red or deployment requirements remain unresolved.
+
+### Production application observations (read-only)
+
+- The separate DigitalSkillX Coolify app (`digitalskillx:main`, UUID `ay1sfm49mfbzm1x1a6pil8tm`) was healthy at commit `0ab7201dd8377ee701c172de10c1e984f0c2e702`; the public HTTPS health endpoint returned 200 with normal TLS verification. This confirms liveness only, not database readiness or student journeys.
+- The running app process is UID 0. The deployed application has no configured persistent mount; `/app/.data/storage` was absent. Storage provider variables were absent and code defaults to local filesystem storage. Inventory of all potentially persisted production assets and a safe durable-storage plan are therefore unresolved.
+- The current public `/api/health` is a liveness endpoint. It is not a readiness gate for database connectivity. No readiness route or deployment-side readiness check was verified.
+- Production authentication, password recovery, course entitlement, payment webhook, storage, outbox, and rollback journeys were not exercised in this audit. No database/schema, credentials, traffic, scheduler, storage, DNS, or production app settings were changed.
+
+### Scheduler ownership audit
+
+Coolify's eight scheduled tasks target `127.0.0.1:3000` with bearer authentication. Vercel and Coolify are both active, so the base invocation listed below is duplicated; Vercel also has additional webinar and content-factory invocations. No scheduler ownership changes were made. Vercel entries are UTC per `vercel.json`; Coolify task commands were inspected as local-container invocations, but schedule timezone settings should be confirmed before any ownership switch.
+
+| Route | Vercel schedule(s), UTC | Coolify task | Current result |
+| --- | --- | --- | --- |
+| `/api/cron/inactivity` | `0 9 * * *` | `0 9 * * *` | Duplicate; both active |
+| `/api/cron/bulk-import` | `15 9 * * *` | `15 9 * * *` | Duplicate; both active |
+| `/api/cron/email-outbox` | `45 9 * * *` | `45 9 * * *` | Duplicate; both active |
+| `/api/cron/email-campaigns` | `55 9 * * *` | `55 9 * * *` | Duplicate; both active |
+| `/api/cron/webinar-follow-up` | `5 8`, `25 10`, `5 11`, `0 14`, `5 13`, `0 18`, `5 15`, `0 20`, `5 17`, `30 21`, `0 22` daily | `25 10 * * *` | Base invocation duplicated; Vercel has 10 additional invocations |
+| `/api/cron/checkout-abandon` | `20 10 * * *` | `20 10 * * *` | Duplicate; both active |
+| `/api/cron/content-factory` | `5 10`, `35 12`, `5 15`, `5 18`, `5 21` daily | `5 10 * * *` | Base invocation duplicated; Vercel has 4 additional invocations |
+| `/api/cron/paystack-external-backfill` | `*/15 * * * *` | `*/15 * * * *` | Duplicate; both active |
+
+The extra Vercel entries are intended workload until proven otherwise; do not remove them. Select one scheduler owner per route only after verifying locking/idempotency and a timed cutover plan. The additional Coolify backup-reminder task is not one of these app cron routes; its execution/backup success is unverified.
+
+### Release blockers
+
+1. Make the LeadPilot/LeadRush integration tests reproducible from an immutable, reviewed dependency or repository-contained contract; do not rely on this workstation's dirty sibling checkout.
+2. Re-run the exact branch gate and Docker build in GitHub Actions after the Learn fix. Resolve any remaining failures without weakening tests.
+3. Configure the minimum-scope Coolify API token and repository variables, validate API behavior, then ensure exactly one deployment trigger owns production. Do not disable current Auto Deploy before the verified workflow is ready.
+4. Correct the production runtime to non-root and establish whether data exists outside the currently missing local-storage path before adding/changing persistent mounts.
+5. Establish a database-aware readiness check and verify Coolify rollback image availability before production rollout.
+6. Resolve duplicated schedule ownership with verified job behavior and preserve all existing cadences.
+7. Verify isolated staging, controlled test accounts/email sink and Supabase backup/restore before applying migration 0054. Migration 0054 remains unapplied to production.
+
+### Latest remote verification (GitHub Actions run 37960864420)
+
+Run: https://github.com/Bamson-dev/digitalskillx/actions/runs/37960864420 for commit `1209dc9501f2b297f47c2a64f4744643269f5d5b`.
+
+- **Passed:** Node 22.23.3, npm 10.9.2, `npm ci`, typecheck, lint, Content Factory, course-publish outbox, security scan, platform hardening, and the actual Docker image build (completed in 1m54s).
+- **Failed:** Paystack external enrollment and Leadthur handoff tests both attempt to read `/home/runner/work/digitalskillx/LeadRush/backend/src/api/webhook-router.ts`, which is not checked out in CI. The broad unit suite also failed because it includes the same external-repository-dependent tests. The final aggregate gate failed and `deploy-production` was skipped.
+- The Learn test and core verification remain passing. The failures must be resolved at the dependency/repository boundary without skipping or weakening the checks. A clean CI checkout must contain the reviewed LeadPilot/LeadRush contract at a pinned immutable revision or the tests must be refactored with equivalent contract coverage; the current workstation's sibling checkout is not evidence of that.
+
+### Main protection configuration attempt
+
+GitHub confirmed there are currently no repository rulesets. An active `main` ruleset was prepared in the UI to require a pull request, require the `verify` check to pass on the latest base, block force pushes/deletion, and allow no bypass actors. GitHub required fresh email identity verification before saving; it sent a code to the account's masked Gmail address. The form remains unsaved and no ruleset has been applied. Complete the verification in the open GitHub Ruleset tab and save the prepared rule. This is required before merging to `main`.

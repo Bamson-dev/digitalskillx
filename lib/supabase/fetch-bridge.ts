@@ -14,11 +14,13 @@ import {
 let sharedDispatcher: Agent | undefined;
 let dispatcherReady = false;
 
-function getSupabaseDispatcher(): Agent | undefined {
-  if (dispatcherReady) return sharedDispatcher;
-  dispatcherReady = true;
-
-  const env = process.env as Record<string, string | undefined>;
+/**
+ * Connection settings for the Supabase bridge. Certificate verification is always
+ * on: NODE_TLS_REJECT_UNAUTHORIZED and every other env value are ignored here.
+ */
+export function supabaseBridgeConnectOptions(
+  env: Record<string, string | undefined> = process.env as Record<string, string | undefined>,
+): { rejectUnauthorized: true; servername: string; bridgeHost: string; publicHost: string } {
   const bridgeHost = env.SUPABASE_DOCKER_DNS?.trim() || "coolify-proxy";
   const publicHost = (() => {
     try {
@@ -34,13 +36,19 @@ function getSupabaseDispatcher(): Agent | undefined {
       return "supabase.digitalskillx.com";
     }
   })();
+  return { rejectUnauthorized: true, servername: publicHost, bridgeHost, publicHost };
+}
 
-  const rejectUnauthorized = env.NODE_TLS_REJECT_UNAUTHORIZED !== "0";
+function getSupabaseDispatcher(): Agent | undefined {
+  if (dispatcherReady) return sharedDispatcher;
+  dispatcherReady = true;
+
+  const { rejectUnauthorized, servername, bridgeHost, publicHost } = supabaseBridgeConnectOptions();
 
   sharedDispatcher = new Agent({
     connect: {
-      rejectUnauthorized: rejectUnauthorized ? undefined : false,
-      servername: publicHost,
+      rejectUnauthorized,
+      servername,
       lookup(hostname, options, callback) {
         const target =
           hostname === publicHost || hostname === "supabase.digitalskillx.com"

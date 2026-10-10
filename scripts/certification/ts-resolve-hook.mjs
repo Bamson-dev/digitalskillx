@@ -18,7 +18,7 @@ export async function resolve(specifier, context, nextResolve) {
   }
   if (specifier.startsWith("@/")) {
     const rel = join(root, specifier.slice(2));
-    for (const ext of [".ts", ".tsx", ".js", ".mjs"]) {
+    for (const ext of [".ts", ".tsx", ".js", ".mjs", "/index.ts"]) {
       try {
         return await nextResolve(pathToFileURL(`${rel}${ext}`).href, context);
       } catch {

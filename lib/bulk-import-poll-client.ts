@@ -258,7 +258,7 @@ export async function pollBulkImportJob(
               : ""
           }.${
             statusJson.resendReady === false
-              ? " Resend is not configured on Vercel — add RESEND_API_KEY and redeploy."
+              ? " Resend is not configured in the server runtime — add RESEND_API_KEY and redeploy."
               : statusJson.emailError
                 ? ` Last error: ${statusJson.emailError.slice(0, 120)}`
                 : ""

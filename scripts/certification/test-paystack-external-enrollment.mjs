@@ -10,7 +10,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
-const leadthurBackend = resolve(root, "../LeadRush/backend");
+const leadthurBackend = resolve(process.env.LEADRUSH_BACKEND_DIR || resolve(root, "../LeadRush/backend"));
 const ts = (rel) => pathToFileURL(join(root, rel)).href;
 const read = (rel) => readFileSync(join(root, rel), "utf8");
 const readLeadthur = (rel) => readFileSync(join(leadthurBackend, rel), "utf8");

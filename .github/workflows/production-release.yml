@@ -1,0 +1,230 @@
+name: Production release
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main, codex/contabo-migration]
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Check out the exact change
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Pin the declared npm version
+        run: npm install --global npm@10.9.2
+
+      - name: Verify toolchain
+        run: |
+          test "$(node --version | cut -d. -f1)" = "v22"
+          test "$(npm --version)" = "10.9.2"
+
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Fetch pinned LeadPilot source for cross-repo contract tests
+        env:
+          LEADPILOT_SHA: e681cf845875542a01717ce324f89407b62b3018
+        run: |
+          dir="$RUNNER_TEMP/leadpilot"
+          git init --quiet "$dir"
+          git -C "$dir" fetch --quiet --depth 1 https://github.com/Bamson-dev/LeadPilot.git "$LEADPILOT_SHA"
+          git -C "$dir" checkout --quiet --detach FETCH_HEAD
+          test "$(git -C "$dir" rev-parse HEAD)" = "$LEADPILOT_SHA"
+          echo "LEADRUSH_BACKEND_DIR=$dir/backend" >> "$GITHUB_ENV"
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Content factory regressions
+        id: content_factory
+        continue-on-error: true
+        run: npm run test:content-factory
+
+      - name: Course publish outbox regressions
+        id: course_publish_outbox
+        continue-on-error: true
+        run: npm run test:course-publish-outbox
+
+      - name: Security regression scan
+        id: security_scan
+        continue-on-error: true
+        run: npm run test:security-scan
+
+      - name: Platform hardening regressions
+        id: platform_hardening
+        continue-on-error: true
+        run: npm run test:platform-hardening
+
+      - name: Paystack external enrollment regressions
+        id: paystack_external
+        continue-on-error: true
+        run: npm run test:paystack-external
+
+      - name: Leadthur handoff regressions
+        id: leadthur
+        continue-on-error: true
+        run: npm run test:leadthur-handoff
+
+      - name: Build the production container image
+        id: docker_image
+        continue-on-error: true
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://ci-placeholder.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ci-placeholder-anon-key
+          NEXT_PUBLIC_SITE_URL: https://digitalskillx.com
+          NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY: pk_test_ci_placeholder
+        run: |
+          docker build \
+            --file Dockerfile \
+            --tag "digitalskillx:${GITHUB_SHA}" \
+            --build-arg "NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL}" \
+            --build-arg "NEXT_PUBLIC_SUPABASE_ANON_KEY=${NEXT_PUBLIC_SUPABASE_ANON_KEY}" \
+            --build-arg "NEXT_PUBLIC_SITE_URL=${NEXT_PUBLIC_SITE_URL}" \
+            --build-arg "NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY=${NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY}" \
+            .
+
+      - name: Run broader unit suite
+        id: unit_suite
+        continue-on-error: true
+        run: npm run test:unit
+
+      - name: Enforce every regression and image build result
+        if: always()
+        env:
+          CONTENT_FACTORY: ${{ steps.content_factory.outcome }}
+          COURSE_PUBLISH_OUTBOX: ${{ steps.course_publish_outbox.outcome }}
+          SECURITY_SCAN: ${{ steps.security_scan.outcome }}
+          PLATFORM_HARDENING: ${{ steps.platform_hardening.outcome }}
+          PAYSTACK_EXTERNAL: ${{ steps.paystack_external.outcome }}
+          LEADTHUR: ${{ steps.leadthur.outcome }}
+          DOCKER_IMAGE: ${{ steps.docker_image.outcome }}
+          UNIT_SUITE: ${{ steps.unit_suite.outcome }}
+        run: |
+          failed=0
+          for check in CONTENT_FACTORY COURSE_PUBLISH_OUTBOX SECURITY_SCAN PLATFORM_HARDENING PAYSTACK_EXTERNAL LEADTHUR DOCKER_IMAGE UNIT_SUITE; do
+            outcome="${!check}"
+            if [ "$outcome" != success ]; then
+              echo "$check did not pass (outcome: ${outcome:-missing})" >&2
+              failed=1
+            fi
+          done
+          exit "$failed"
+
+  deploy:
+    name: deploy-production
+    needs: verify
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    concurrency:
+      group: digitalskillx-production
+      cancel-in-progress: false
+    env:
+      COOLIFY_API_BASE_URL: ${{ vars.COOLIFY_API_BASE_URL }}
+      COOLIFY_APP_UUID: ${{ vars.COOLIFY_APP_UUID }}
+      COOLIFY_API_TOKEN: ${{ secrets.COOLIFY_API_TOKEN }}
+    steps:
+      - name: Validate production deployment configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = "refs/heads/main"
+          test -n "$COOLIFY_API_BASE_URL"
+          test -n "$COOLIFY_APP_UUID"
+          test -n "$COOLIFY_API_TOKEN"
+          case "$COOLIFY_API_BASE_URL" in
+            https://*) ;;
+            *) echo "Coolify API URL must use HTTPS" >&2; exit 1 ;;
+          esac
+
+      - name: Pin and queue the exact checked commit
+        id: deploy
+        shell: bash
+        run: |
+          set -euo pipefail
+          api="${COOLIFY_API_BASE_URL%/}"
+          auth_header="Authorization: Bearer ${COOLIFY_API_TOKEN}"
+          payload="$(jq -nc --arg sha "$GITHUB_SHA" '{git_commit_sha:$sha,is_auto_deploy_enabled:false}')"
+          curl --silent --show-error --fail \
+            --request PATCH \
+            --header "$auth_header" \
+            --header 'Content-Type: application/json' \
+            --data "$payload" \
+            --output /dev/null \
+            "$api/applications/$COOLIFY_APP_UUID"
+          response="$(mktemp)"
+          trap 'rm -f "$response"' EXIT
+          curl --silent --show-error --fail \
+            --request POST \
+            --header "$auth_header" \
+            --output "$response" \
+            "$api/applications/$COOLIFY_APP_UUID/start?force=false&instant_deploy=false"
+          deployment_uuid="$(jq -er '.deployment_uuid' "$response")"
+          echo "deployment_uuid=$deployment_uuid" >> "$GITHUB_OUTPUT"
+
+      - name: Wait for Coolify deployment and verify commit
+        shell: bash
+        env:
+          DEPLOYMENT_UUID: ${{ steps.deploy.outputs.deployment_uuid }}
+        run: |
+          set -euo pipefail
+          api="${COOLIFY_API_BASE_URL%/}"
+          auth_header="Authorization: Bearer ${COOLIFY_API_TOKEN}"
+          response="$(mktemp)"
+          trap 'rm -f "$response"' EXIT
+          for attempt in $(seq 1 90); do
+            curl --silent --show-error --fail \
+              --header "$auth_header" \
+              --output "$response" \
+              "$api/deployments/$DEPLOYMENT_UUID"
+            status="$(jq -er '.status' "$response")"
+            commit="$(jq -er '.commit' "$response")"
+            if [ "$commit" != "$GITHUB_SHA" ]; then
+              echo "Coolify reports a different commit than the checked GitHub SHA" >&2
+              exit 1
+            fi
+            case "$status" in
+              finished|success|successful) exit 0 ;;
+              failed|error|cancelled|cancelled-by-user)
+                echo "Coolify deployment ended with status: $status" >&2
+                exit 1
+                ;;
+            esac
+            sleep 20
+          done
+          echo "Timed out waiting for Coolify deployment" >&2
+          exit 1
+
+      - name: Verify public HTTPS health
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 12); do
+            if curl --silent --show-error --fail --max-time 10 \
+              --output /dev/null https://digitalskillx.com/api/health; then
+              echo "Public HTTPS health endpoint returned HTTP 200 with TLS verification enabled"
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "Public HTTPS health verification failed" >&2
+          exit 1
