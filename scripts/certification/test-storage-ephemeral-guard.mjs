@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { createStorageAdapterFromEnv, wrapStorageAdapter } from "../../lib/storage/index.ts";
+import { createStorageAdapterFromEnv, resetStorageServiceCache, wrapStorageAdapter } from "../../lib/storage/index.ts";
 
 const CLEAR = ["STORAGE_PROVIDER", "CONTABO_S3_ENDPOINT", "CONTABO_S3_BUCKET", "CONTABO_S3_ACCESS_KEY", "CONTABO_S3_SECRET_KEY", "CONTABO_STORAGE_ROOT", "STORAGE_FS_ROOT", "STORAGE_LOCAL_ROOT", "STORAGE_ALLOW_EPHEMERAL"];
 const BLOCKED = /Storage write blocked/;
@@ -65,6 +65,34 @@ for (const [label, svc, file] of roots) {
   await svc.upload(upload("first-" + label));
   await svc.replace(upload("second-" + label));
   assert.equal(fs.readFileSync(file, "utf8"), "second-" + label, label + " allows upload and replace");
+}
+
+// assertWritable lets callers stop before expensive work.
+assert.throws(() => service("production").assertWritable(), BLOCKED, "assertWritable throws when writes are blocked");
+service("development").assertWritable();
+service("production", { STORAGE_ALLOW_EPHEMERAL: "1" }).assertWritable();
+
+// Content factory artwork must not call the paid image API when the result cannot be stored.
+for (const key of CLEAR) delete process.env[key];
+process.env.NODE_ENV = "production";
+process.env.OPENAI_API_KEY = "test-key-not-real";
+resetStorageServiceCache();
+const realFetch = globalThis.fetch;
+let imageCalls = 0;
+globalThis.fetch = async () => {
+  imageCalls += 1;
+  throw new Error("network disabled in test");
+};
+try {
+  const { generateAndStoreLearningPathArtwork } = await import("../../lib/content-factory/artwork.ts");
+  const result = await generateAndStoreLearningPathArtwork({ learningPathId: "guard-test", title: "Guard test", category: "test" });
+  assert.equal(result.status, "failed", "artwork reports failure");
+  assert.match(String(result.error), BLOCKED, "artwork failure names the storage block");
+  assert.equal(imageCalls, 0, "no image API call when storage is blocked");
+} finally {
+  globalThis.fetch = realFetch;
+  delete process.env.OPENAI_API_KEY;
+  resetStorageServiceCache();
 }
 
 fs.rmSync(sandbox, { recursive: true, force: true });
