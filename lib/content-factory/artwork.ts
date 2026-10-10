@@ -85,6 +85,8 @@ export async function generateAndStoreLearningPathArtwork(params: {
       error: "OPENAI_API_KEY is not configured.",
     };
   }
+  // Check storage before paying for image generation: a blocked write would waste every attempt.
+  try { getStorageService().assertWritable?.(); } catch (err) { return { storagePath: null, publicUrl: null, status: "failed", source: null, error: err instanceof Error ? err.message : String(err) }; }
 
   const prompt = buildLearningPathArtworkPrompt({
     title: params.title,
