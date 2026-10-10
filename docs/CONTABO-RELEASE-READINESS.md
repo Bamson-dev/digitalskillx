@@ -1,3 +1,10 @@
+
+## Update 2026-10-10 (verified)
+- Commit 277248a (docs only) passed check verify on pull_request and push (runs 38005264707 and 38005261145). deploy-production was skipped, as intended off main. The combined status also lists a separate Vercel status. It comes from Vercel's Git integration, not from GitHub Actions, and it is not a required check.
+- Later commits add the storage write guard (lib/storage/index.ts), tests for it and for the cron plan (both run inside test:platform-hardening), ops/coolify-cron-tasks.json and docs/CONTABO-RELEASE-PLAN.md. Run those tests locally: storage guard, cron plan and Phase 6 hardening all pass.
+- Review of PR 1 beyond hosting: the course publish email outbox (migration 0054, notify-publish route, cron email-outbox) needs the schema check in CONTABO-RELEASE-PLAN.md before merge. lib/background-tasks.ts replaces Vercel waitUntil with fire and forget work, so durability depends on the outbox and cron drains. next.config.mjs no longer ignores TypeScript and ESLint errors in Docker builds, and the Docker build sets a 1536 MB Node heap, so a low-memory build host can fail. The @vercel/functions dependency is removed. package.json pins engines (node 22, npm 10).
+- Storage, cron, migration and release-trigger plans: see docs/CONTABO-RELEASE-PLAN.md.
+- Still open, owner actions: save the main ruleset (GitHub email verification), add COOLIFY_API_TOKEN, inventory and back up /app/.data/storage, run the read-only migration checks on production, confirm Vercel crons are off, then create the 14 Coolify tasks.
 # Release readiness (2026-10-10)
 
 Branch codex/contabo-migration, PR #1. Merge is blocked until the items below are closed.
