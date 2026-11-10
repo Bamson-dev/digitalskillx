@@ -4,6 +4,8 @@ import { redirect } from "next/navigation";
 import { AdminLoginForm } from "@/components/auth/admin-login-form";
 import { createAdminClientAsync } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import { isNextRedirect } from "@/lib/is-next-redirect";
+import { withTimeout } from "@/lib/with-timeout";
 
 export const metadata: Metadata = { title: "Admin login" };
 
@@ -12,38 +14,45 @@ export default async function AdminLoginPage({
 }: {
   searchParams?: { auth_error?: string };
 }) {
-  const supabase = createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  try {
+    const supabase = createClient();
+    const user = await withTimeout(
+      supabase.auth.getUser().then((res) => res.data.user),
+      4_000,
+      null,
+    );
 
-  if (user) {
-    let profile: { role: string; is_suspended: boolean } | null = null;
-    const { data: row } = await supabase
-      .from("profiles")
-      .select("role, is_suspended")
-      .eq("id", user.id)
-      .maybeSingle();
-    profile = row;
+    if (user) {
+      let profile: { role: string; is_suspended: boolean } | null = null;
+      const { data: row } = await supabase
+        .from("profiles")
+        .select("role, is_suspended")
+        .eq("id", user.id)
+        .maybeSingle();
+      profile = row;
 
-    if (!profile) {
-      try {
-        const admin = await createAdminClientAsync();
-        const { data: verified } = await admin
-          .from("profiles")
-          .select("role, is_suspended")
-          .eq("id", user.id)
-          .maybeSingle();
-        profile = verified;
-      } catch {
-        profile = null;
+      if (!profile) {
+        try {
+          const admin = await createAdminClientAsync();
+          const { data: verified } = await admin
+            .from("profiles")
+            .select("role, is_suspended")
+            .eq("id", user.id)
+            .maybeSingle();
+          profile = verified;
+        } catch {
+          profile = null;
+        }
       }
-    }
 
-    if (profile?.role === "admin" && !profile.is_suspended) {
-      redirect("/admin/dashboard");
+      if (profile?.role === "admin" && !profile.is_suspended) {
+        redirect("/admin/dashboard");
+      }
+      await supabase.auth.signOut();
     }
-    await supabase.auth.signOut();
+  } catch (err) {
+    if (isNextRedirect(err)) throw err;
+    // Always render the login form. A session lookup failure must not 500 this page.
   }
 
   const authError =

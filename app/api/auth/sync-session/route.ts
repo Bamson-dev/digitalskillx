@@ -2,6 +2,8 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import type { Database } from "@/types/database";
+import { authCookieOptions, expireLegacyAuthCookies } from "@/lib/supabase/auth-cookie";
+import { getAuthSupabaseUrl } from "@/lib/supabase/url";
 
 export const dynamic = "force-dynamic";
 
@@ -22,13 +24,14 @@ export async function POST(request: NextRequest) {
 
   let response = NextResponse.json({ ok: true });
 
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseUrl = getAuthSupabaseUrl();
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   if (!supabaseUrl || !supabaseAnonKey) {
     return NextResponse.json({ error: "Supabase is not configured." }, { status: 503 });
   }
 
   const supabase = createServerClient<Database>(supabaseUrl, supabaseAnonKey, {
+    cookieOptions: authCookieOptions(),
     cookies: {
       getAll() {
         return request.cookies.getAll();
@@ -45,6 +48,11 @@ export async function POST(request: NextRequest) {
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 400 });
   }
+
+  expireLegacyAuthCookies(
+    (name, value, options) => response.cookies.set(name, value, options),
+    request.cookies.getAll().map((c) => c.name),
+  );
 
   return response;
 }

@@ -1,5 +1,13 @@
 import "server-only";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { createAdminClient, createAdminClientAsync } from "@/lib/supabase/admin";
+
+async function rateLimitAdminClient() {
+  try {
+    return createAdminClient();
+  } catch {
+    return createAdminClientAsync();
+  }
+}
 
 const WINDOW_MS = 15 * 60 * 1000;
 const DEFAULT_LIMIT = 100;
@@ -14,7 +22,7 @@ type RateLimitResult = {
 
 async function readBucket(key: string, limit: number, windowMs: number): Promise<RateLimitResult> {
   try {
-    const admin = createAdminClient();
+    const admin = await rateLimitAdminClient();
     const now = Date.now();
     const { data: row } = await admin
       .from("rate_limit_buckets")
@@ -46,7 +54,7 @@ export async function rateLimit(
   windowMs = WINDOW_MS,
 ): Promise<RateLimitResult> {
   try {
-    const admin = createAdminClient();
+    const admin = await rateLimitAdminClient();
     const now = Date.now();
     const { data: row } = await admin
       .from("rate_limit_buckets")

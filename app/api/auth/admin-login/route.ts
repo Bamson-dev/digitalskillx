@@ -27,10 +27,10 @@ export async function POST(request: NextRequest) {
   const email = String(formData.get("email") ?? "");
   const password = String(formData.get("password") ?? "");
 
-  const limited = await enforceRateLimit(request, "auth-admin-login", 20, 15 * 60 * 1000, {
-    failClosed: true,
-  });
-  if (!limited.ok) {
+  // Fail-open when the rate-limit store is unavailable. Per-email failure counting
+  // still applies, and a store outage must not lock the admin out of the dashboard.
+  const limited = await enforceRateLimit(request, "auth-admin-login", 30, 15 * 60 * 1000);
+  if (!limited.ok && !limited.unavailable) {
     secureLogError("auth", ErrorCode.AUTH_RATE_LIMITED, "admin login rate limited");
     return NextResponse.redirect(
       adminLoginErrorUrl(request, "Too many sign-in attempts. Please try again later."),
@@ -48,6 +48,8 @@ export async function POST(request: NextRequest) {
   const pending: Parameters<typeof createRouteHandlerClientWithPendingCookies>[1] = [];
   const supabase = createRouteHandlerClientWithPendingCookies(request, pending);
   const cookiesReady = waitForSignedInCookies(supabase, pending);
+  // Early returns below must not leave a rejected promise unhandled.
+  cookiesReady.catch(() => undefined);
 
   const { error: sessionError } = await supabase.auth.setSession(result.session);
   if (sessionError) {

@@ -45,7 +45,7 @@ export async function runAdminLogin(params: {
     await logAudit({ action: "admin_login_failed", metadata: { email } });
     const hint =
       error.message === "Invalid login credentials"
-        ? " Set ADMIN_PASSWORD in Vercel, redeploy, then run setup-production."
+        ? " Check ADMIN_EMAIL and ADMIN_PASSWORD in the runtime environment, set ADMIN_PASSWORD_SYNC=true, redeploy, then run setup-production."
         : "";
     return { ok: false, error: `${error.message}${hint}` };
   }

@@ -91,6 +91,8 @@ export async function POST(request: NextRequest) {
   const pending: Parameters<typeof createRouteHandlerClientWithPendingCookies>[1] = [];
   const supabase = createRouteHandlerClientWithPendingCookies(request, pending);
   const cookiesReady = waitForSignedInCookies(supabase, pending);
+  // Early returns below must not leave a rejected promise unhandled.
+  cookiesReady.catch(() => undefined);
 
   const { error: sessionError } = await supabase.auth.setSession(result.session);
   if (sessionError) {
