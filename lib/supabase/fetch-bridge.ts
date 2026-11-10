@@ -14,6 +14,33 @@ import {
 let sharedDispatcher: Agent | undefined;
 let dispatcherReady = false;
 
+type UndiciResponse = Awaited<ReturnType<typeof undiciFetch>>;
+
+/** Statuses that must be constructed with a null body. */
+const NULL_BODY_STATUSES = new Set([204, 205, 304]);
+
+/**
+ * undici's Response is a different class from the global Response. supabase-js
+ * auth (GoTrue) checks instanceof Response when a request fails, so an
+ * undici response made every auth error read as "{}" instead of
+ * "Invalid login credentials". Re-wrap it as a native Response.
+ */
+async function toNativeResponse(res: UndiciResponse): Promise<Response> {
+  const headers = new Headers();
+  res.headers.forEach((value, key) => {
+    const lower = key.toLowerCase();
+    // Body is already decoded by undici, so these would no longer match it.
+    if (lower === "content-encoding" || lower === "content-length") return;
+    headers.append(key, value);
+  });
+  const body = NULL_BODY_STATUSES.has(res.status) ? null : await res.arrayBuffer();
+  return new Response(body, {
+    status: res.status,
+    statusText: res.statusText,
+    headers,
+  });
+}
+
 function getSupabaseDispatcher(): Agent | undefined {
   if (dispatcherReady) return sharedDispatcher;
   dispatcherReady = true;
@@ -93,7 +120,7 @@ export function createServerSupabaseFetch(
           signal: controller.signal,
           dispatcher,
         } as Parameters<typeof undiciFetch>[1]);
-        return response as unknown as Response;
+        return await toNativeResponse(response);
       } catch (err) {
         lastError = err;
         if (attempt >= retries) break;
