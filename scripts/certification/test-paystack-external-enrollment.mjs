@@ -232,6 +232,39 @@ check("access email subject and course title", () => {
   assert.match(tpl.html, /Start learning/);
 });
 
+check("early access email never says lessons are ready to start", () => {
+  const tpl = emailTpl.paystackCourseAccessReadyEmail({
+    firstName: "Ada",
+    courseTitle: "AI Ads Automation Masterclass",
+    courseUrl: "https://www.digitalskillx.com/courses/abc",
+    loginUrl: "https://www.digitalskillx.com/login?next=%2Fcourses%2Fabc",
+    isNewAccount: true,
+    email: "ada@example.com",
+    password: "TempPass123!",
+    supportEmail: "support@digitalskillx.com",
+    earlyAccess: true,
+  });
+  assert.equal(tpl.subject, "Your DigitalSkillX login and early access enrolment");
+  assert.match(tpl.html, /early access/i);
+  assert.match(tpl.html, /release dates/i);
+  assert.doesNotMatch(tpl.html, /course access is now ready/i);
+  assert.doesNotMatch(tpl.html, /Start learning/);
+  assert.match(tpl.html, /TempPass123!/);
+});
+
+check("normal course email is unchanged when earlyAccess is not set", () => {
+  const tpl = emailTpl.paystackCourseAccessReadyEmail({
+    firstName: "Ada",
+    courseTitle: "Any Course",
+    courseUrl: "https://www.digitalskillx.com/courses/abc",
+    loginUrl: "https://www.digitalskillx.com/login",
+    isNewAccount: false,
+    supportEmail: "support@digitalskillx.com",
+  });
+  assert.equal(tpl.subject, "Your course access is ready");
+  assert.match(tpl.html, /course access is now ready/i);
+});
+
 check("new account email includes login password credentials", () => {
   const tpl = emailTpl.paystackCourseAccessReadyEmail({
     firstName: "Ada",

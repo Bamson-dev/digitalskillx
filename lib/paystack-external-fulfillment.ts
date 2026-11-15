@@ -161,6 +161,7 @@ async function sendAccessEmail(params: {
   }
 
   return sendPaystackCourseAccessEmail({
+    courseId: params.courseId,
     email: params.email,
     firstName: params.firstName,
     courseTitle: params.courseTitle,
