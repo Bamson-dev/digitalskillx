@@ -136,6 +136,7 @@ export async function runManualTrackPurchase(
         title: input.productName || product.title,
         expectedAmountNgn: input.amount,
         currency: "NGN",
+        successRedirectUrl: product.successRedirectUrl,
       },
     });
     if (tracking.errors.length > 0) {
