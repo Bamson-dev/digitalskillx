@@ -36,13 +36,17 @@ export const BUILD_SOFTWARE_WITH_AI_PRODUCT: PaystackExternalProduct = {
     "How To Build Software With AI And Get Paid For It",
   ],
   defaultCourseId: "9818cf69-4158-40b5-8926-54a3be38f306",
-  expectedAmountKobo: 1_499_900,
-  expectedAmountNgn: 14_999,
+  // Price confirmed from live config: Paystack page "Build And Monetize Your Software With AI"
+  // (slug aiapp) is NGN 49,999 and DigitalSkillX course 9818cf69 is priced NGN 49,999.
+  // Slug "ai-app" is a separate NGN 14,999 page ("Build, Launch & Monetize Mobile Apps With AI").
+  // A 14,999 payment under that slug fails the amount check and is never enrolled here.
+  expectedAmountKobo: 4_999_900,
+  expectedAmountNgn: 49_999,
   currency: "NGN",
-  // Live Paystack shop link used in ads / webinars.
-  paymentPageUrl: "https://paystack.shop/pay/ai-app",
-  paymentPageSlug: "ai-app",
-  paymentPageSlugAliases: ["ai-app", "aiapp"],
+  // Live Paystack shop link for this product.
+  paymentPageUrl: "https://paystack.shop/pay/aiapp",
+  paymentPageSlug: "aiapp",
+  paymentPageSlugAliases: ["aiapp", "ai-app"],
   successRedirectUrl: "https://aimoneycode.com.ng/access-page-program/",
   allowAmountOnlyFallback: true,
 };
@@ -280,9 +284,11 @@ export function identifyPaystackExternalProduct(input: {
     metadataString(meta, "page_slug") ??
     metadataString(meta, "slug");
 
-  // Resolve every specific identity signal before considering weak generic tags.
-  // Conflicting product keys, page slugs, payment-page metadata or titles fail closed.
-  const specificCandidates = amountMatches.filter((product) => {
+  // Resolve every specific identity signal across the WHOLE catalog before considering
+  // the amount or weak generic tags. Conflicting signals fail closed. Evidence that names
+  // a product whose price was not paid also fails closed, so a payment can never be
+  // enrolled in a different product that happens to cost the paid amount.
+  const hasSpecificEvidence = (product: PaystackExternalProduct): boolean => {
     const explicitKey = (metadataString(meta, "product_key") ?? metadataString(meta, "product"))?.toLowerCase();
     if (explicitKey === product.key) return true;
 
@@ -296,10 +302,13 @@ export function identifyPaystackExternalProduct(input: {
       titleAliasMatch(evidenceHaystack, product) ||
       metadataMatchesProduct(meta, product)
     );
-  });
+  };
 
-  if (specificCandidates.length > 1) return null;
-  if (specificCandidates.length === 1) return specificCandidates[0];
+  const namedProducts = PAYSTACK_EXTERNAL_PRODUCTS.filter(hasSpecificEvidence);
+  if (namedProducts.length > 1) return null;
+  if (namedProducts.length === 1) {
+    return amountMatches.includes(namedProducts[0]) ? namedProducts[0] : null;
+  }
 
   // Preserve the weak generic DigitalSkillX marker for ai-app only, and only
   // when no specific product/page evidence identifies another catalog item.
