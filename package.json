@@ -42,6 +42,8 @@
     "test:paystack-external": "node --import ./scripts/certification/register-ts-ext.mjs scripts/certification/test-paystack-external-enrollment.mjs",
     "test:leadthur-handoff": "node --import ./scripts/certification/register-ts-ext.mjs scripts/certification/test-leadthur-handoff.mjs && node --import ./scripts/certification/register-ts-ext.mjs scripts/certification/test-ai-ads-masterclass.mjs",
     "test:ai-ads-masterclass": "node --import ./scripts/certification/register-ts-ext.mjs scripts/certification/test-ai-ads-masterclass.mjs",
+    "test:ai-ads-journey": "node --import ./scripts/certification/register-ts-ext.mjs scripts/ai-ads/test-ai-ads-journey.mjs",
+    "test:ai-ads-wordpress": "php scripts/ai-ads/test-wp-snippets.php && node scripts/ai-ads/test-checkout-links.mjs",
     "deploy:prod": "node scripts/deploy-vercel-production.mjs",
     "test:stress": "node scripts/certification/run-stress.mjs",
     "test:integrity": "node scripts/certification/run-paystack-cert.mjs"
