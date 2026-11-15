@@ -163,10 +163,26 @@ export async function sendPaystackCourseAccessEmail(params: {
   loginUrl: string;
   isNewAccount: boolean;
   password?: string;
+  courseId?: string;
 }) {
   const settings = await getPlatformSettingsAdmin();
   const sender = await getEmailSenderConfig();
+  let earlyAccess = false;
+  if (params.courseId) {
+    try {
+      const admin = await createAdminClientAsync();
+      const { data: courseRow } = await admin
+        .from("courses")
+        .select("is_coming_soon")
+        .eq("id", params.courseId)
+        .maybeSingle();
+      earlyAccess = Boolean(courseRow?.is_coming_soon);
+    } catch {
+      earlyAccess = false;
+    }
+  }
   const tpl = paystackCourseAccessReadyEmail({
+    earlyAccess,
     firstName: studentFirstName(params.firstName),
     courseTitle: params.courseTitle,
     courseUrl: params.courseUrl,
