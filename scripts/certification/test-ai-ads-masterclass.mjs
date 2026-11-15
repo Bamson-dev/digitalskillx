@@ -100,8 +100,9 @@ await check("A1. masterclass product identity matches the live course and Paysta
 await check("A2. existing Build Software With AI product is unchanged", () => {
   assert.equal(APP.key, "build-software-with-ai");
   assert.equal(APP.defaultCourseId, "9818cf69-4158-40b5-8926-54a3be38f306");
-  assert.equal(APP.expectedAmountKobo, 1_499_900);
-  assert.equal(APP.paymentPageSlug, "ai-app");
+  assert.equal(APP.expectedAmountKobo, 4_999_900);
+  assert.equal(APP.expectedAmountNgn, 49_999);
+  assert.equal(APP.paymentPageSlug, "aiapp");
   assert.equal(APP.allowAmountOnlyFallback, true);
   assert.equal(APP.metaPixelId, undefined);
 });
@@ -125,12 +126,22 @@ await check("A5. identification by page slug, product key, referrer URL and titl
   assert.equal(identify({ page: { name: "AI Ads Automation Masterclass" } }), MC.key);
 });
 
-await check("A6. same-price payments never cross-enrol", () => {
-  assert.equal(identify({ page: { slug: "ai-app" } }), APP.key);
-  assert.equal(identify({ metadata: { product_key: APP.key } }), APP.key);
-  assert.equal(identify({ metadata: { product: "digitalskillx" } }), APP.key);
-  assert.equal(identify({}), APP.key, "bare payload keeps the legacy ai-app fallback");
+const APP_KOBO = 4_999_900;
+await check("A6. the two products never cross-enrol (different prices, different evidence)", () => {
+  assert.equal(identify({ amount: APP_KOBO, page: { slug: "aiapp" } }), APP.key);
+  assert.equal(identify({ amount: APP_KOBO, metadata: { product_key: APP.key } }), APP.key);
+  assert.equal(identify({ amount: APP_KOBO, metadata: { product: "digitalskillx" } }), APP.key);
+  assert.equal(identify({ amount: APP_KOBO }), APP.key, "bare 49,999 payload keeps the legacy ai-app fallback");
   assert.notEqual(identify({ page: { slug: "ai-ads-masterclass" } }), APP.key);
+});
+
+await check("A6b. price discrepancy regression: 14,999 never enrols in the 49,999 course, 49,999 never enrols in the masterclass", () => {
+  assert.equal(identify({ amount: 1_499_900, page: { slug: "ai-app" } }), null, "Mobile Apps page at 14,999 is not this course");
+  assert.equal(identify({ amount: 1_499_900, page: { slug: "aiapp" } }), null);
+  assert.equal(identify({ amount: 1_499_900, metadata: { product_key: APP.key } }), null);
+  assert.equal(identify({ amount: 1_499_900 }), null, "bare 14,999 matches no product");
+  assert.equal(identify({ amount: APP_KOBO, page: { slug: "ai-ads-masterclass" } }), null);
+  assert.equal(identify({ amount: APP_KOBO, metadata: { product_key: MC.key } }), null);
 });
 
 await check("A7. wrong amount, wrong currency, failed status and foreign metadata are rejected", () => {
