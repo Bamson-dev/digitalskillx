@@ -1,29 +1,39 @@
 import "server-only";
-import { createHash } from "node:crypto";
 import { runtimeEnv } from "@/lib/runtime-env";
 import { secureLog } from "@/lib/secure-log";
 import type { PaystackExternalProduct } from "@/lib/paystack-external-products";
+import {
+  buildMetaPurchaseEvent,
+  metaCapiTokenEnvName,
+  resolveMetaPixelId,
+} from "@/lib/purchase-tracking-payload";
 
 export type PurchaseTrackingContext = {
   reference: string;
   customerEmail: string;
-  product: Pick<PaystackExternalProduct, "key" | "title" | "expectedAmountNgn" | "currency">;
+  product: Pick<
+    PaystackExternalProduct,
+    "key" | "title" | "expectedAmountNgn" | "currency" | "metaPixelId" | "successRedirectUrl"
+  >;
 };
 
 function stapeServerUrl(): string | undefined {
   return runtimeEnv("STAPE_SERVER_URL")?.replace(/\/$/, "");
 }
 
-function metaPixelId(): string | undefined {
-  return runtimeEnv("META_PIXEL_ID");
+/** Product pixel when the product has one, otherwise the env default (ai-app). */
+function metaPixelId(ctx: PurchaseTrackingContext): string | undefined {
+  return resolveMetaPixelId(ctx.product, runtimeEnv("META_PIXEL_ID"));
 }
 
-function metaCapiToken(): string | undefined {
+/** A pixel-specific token wins. The generic token only serves the default pixel. */
+function metaCapiToken(ctx: PurchaseTrackingContext): string | undefined {
+  const pixelId = metaPixelId(ctx);
+  if (pixelId) {
+    const specific = runtimeEnv(metaCapiTokenEnvName(pixelId));
+    if (specific) return specific;
+  }
   return runtimeEnv("META_CAPI_TOKEN");
-}
-
-function sha256HexEmail(email: string): string {
-  return createHash("sha256").update(email.trim().toLowerCase()).digest("hex");
 }
 
 async function sendStapeGa4Purchase(ctx: PurchaseTrackingContext): Promise<void> {
@@ -81,35 +91,17 @@ async function sendStapeGa4Purchase(ctx: PurchaseTrackingContext): Promise<void>
 }
 
 async function sendMetaCapiPurchase(ctx: PurchaseTrackingContext): Promise<void> {
-  const pixelId = metaPixelId();
-  const token = metaCapiToken();
+  const pixelId = metaPixelId(ctx);
+  const token = metaCapiToken(ctx);
   if (!pixelId || !token) {
     secureLog("warn", "purchase-tracking", "meta_capi_skipped", {
-      reason: "META_PIXEL_ID or META_CAPI_TOKEN missing",
+      reason: "Meta pixel ID or CAPI token missing",
+      productKey: ctx.product.key,
     });
     return;
   }
 
-  const payload = {
-    data: [
-      {
-        event_name: "Purchase",
-        event_time: Math.floor(Date.now() / 1000),
-        event_id: `purchase_${ctx.reference}`,
-        action_source: "website",
-        user_data: {
-          em: [sha256HexEmail(ctx.customerEmail)],
-        },
-        custom_data: {
-          value: ctx.product.expectedAmountNgn,
-          currency: ctx.product.currency,
-          content_name: ctx.product.title,
-          content_ids: [ctx.product.key],
-          content_type: "product",
-        },
-      },
-    ],
-  };
+  const payload = buildMetaPurchaseEvent(ctx, Math.floor(Date.now() / 1000));
 
   const url = new URL(`https://graph.facebook.com/v19.0/${encodeURIComponent(pixelId)}/events`);
   url.searchParams.set("access_token", token);
@@ -157,7 +149,7 @@ export async function trackExternalPurchase(
 
   try {
     await sendMetaCapiPurchase(ctx);
-    if (!metaPixelId() || !metaCapiToken()) {
+    if (!metaPixelId(ctx) || !metaCapiToken(ctx)) {
       outcome.meta = "skipped";
     } else {
       secureLog("info", "purchase-tracking", "meta_capi_purchase_sent", { reference: ctx.reference });

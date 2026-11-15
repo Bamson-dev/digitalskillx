@@ -1,0 +1,112 @@
+AI Ads Automation Masterclass: quiz answer notes
+Attach this file to the host lesson of each quiz. The LMS shows the correct option after a pass but has no explanation field.
+
+Quiz 1: Objectives and conversion tracking
+
+Q1. You sell a ₦14,999 online course and your payment confirmation page can send a Purchase event. Which optimisation event is the best starting choice?
+Correct answer: Purchase, or an earlier event if you cannot get enough Purchase events
+Why: Meta learns from the event you choose. Choose the one closest to the real result you want, and step back to an earlier event only when volume is too low.
+
+Q2. At which level do you choose the image, video and text a person sees?
+Correct answer: Ad
+Why: The ad level holds the creative, copy and destination.
+
+Q3. Why test your tracking events before spending real budget?
+Correct answer: To confirm each event fires once, with the right value and currency, so Meta learns from correct data
+Why: Wrong or duplicated events teach the system the wrong thing.
+
+Q4. A campaign optimised for link clicks brings many visits and no buyers. What is the most likely reason?
+Correct answer: The system found people likely to click, not people likely to buy
+Why: The system optimises toward the event you chose.
+
+Q5. The browser pixel and a server event both report the same purchase. What lets Meta count it once?
+Correct answer: The same event ID on both
+Why: A shared event ID is the deduplication key.
+
+Quiz 2: Research, angles, copy and creatives
+
+Q1. You generated 30 hooks with AI. What is the best next step?
+Correct answer: Select a few using written criteria, then check claims and policy
+Why: AI generates options. You choose and verify.
+
+Q2. An AI draft says 'Guaranteed to double your sales.' What should you do?
+Correct answer: Remove it, because you cannot prove it and it can break advertising rules
+Why: Do not promise results you cannot prove.
+
+Q3. Which proof can you use in an ad?
+Correct answer: A real customer message you have permission to use
+Why: Use only proof you actually have.
+
+Q4. Your AI generated product image shows a distorted label. What do you do?
+Correct answer: Fix it, regenerate it, or use a real photo
+Why: Check every AI image before it goes live.
+
+Q5. Your audience does not yet know they have the problem. What should the opening do?
+Correct answer: Describe a situation they recognise from their own day
+Why: Unaware audiences respond to recognition, not product detail.
+
+Quiz 3: Landing pages and tracking
+
+Q1. What does the Test Events tool let you do?
+Correct answer: See events from your browser arriving in real time
+Why: It is the fastest way to confirm an event reaches Meta.
+
+Q2. What value should a Purchase event carry?
+Correct answer: The real amount paid, with currency NGN
+Why: Value and currency should match the actual payment.
+
+Q3. Your thank-you page fires Purchase again each time it is refreshed. What is the risk?
+Correct answer: Purchases are counted more than once, which distorts your numbers
+Why: Fire the event once per payment reference.
+
+Q4. If you send customer email to Meta through server events, how must it be sent?
+Correct answer: Normalised and hashed, never plain text
+Why: Hash customer identifiers before sending.
+
+Q5. Your page takes about nine seconds to load on mobile data. What is the likely effect?
+Correct answer: Many visitors leave before the page loads
+Why: Compress images and simplify the page.
+
+Quiz 4: Budgets, tests and metrics
+
+Q1. Click through rate is best described as:
+Correct answer: Clicks divided by impressions
+Why: It shows how often people who saw the ad clicked.
+
+Q2. CPM measures:
+Correct answer: Cost per 1,000 impressions
+Why: CPM is the cost of 1,000 impressions.
+
+Q3. CPC is high and CTR is low. Where should you look first?
+Correct answer: The hook, creative or audience
+Why: Low CTR points to the ad itself or who sees it.
+
+Q4. Spend is ₦30,000 and you recorded 10 sales at ₦14,999 each. What is the cost per purchase?
+Correct answer: ₦3,000
+Why: ₦30,000 divided by 10 equals ₦3,000.
+
+Q5. With the same figures, what is the return on ad spend before other costs?
+Correct answer: About 5
+Why: Revenue ₦149,990 divided by spend ₦30,000 is about 5.0. This ignores product and other costs.
+
+Quiz 5: Diagnosis, scaling and compliance
+
+Q1. Which set of signals best supports a decision to scale?
+Correct answer: Several stable days, positive unit economics and verified tracking
+Why: Scale on evidence, not on one result.
+
+Q2. Which approach is safer when increasing budget?
+Correct answer: Gradual increases with a stop rule
+Why: Large jumps can disturb delivery. Increase in steps and record each one.
+
+Q3. An ad is rejected. What is the best first step?
+Correct answer: Read the reason, compare it with the current policy, then edit or appeal
+Why: Understand the reason before acting.
+
+Q4. Which item must you never paste into an AI assistant?
+Correct answer: Access tokens, passwords or private customer data
+Why: Keep secrets and private data out of AI tools.
+
+Q5. You duplicate an ad set to test a new audience. What is one risk?
+Correct answer: Audience overlap and a split budget
+Why: Overlapping audiences can compete and split spend.

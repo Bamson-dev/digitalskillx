@@ -29,17 +29,17 @@ const PRODUCT = products.BUILD_SOFTWARE_WITH_AI_PRODUCT;
 const validVerified = {
   status: "success",
   reference: "T_aiapp_001",
-  amount: 1_499_900,
+  amount: 4_999_900,
   currency: "NGN",
   metadata: { product_key: "build-software-with-ai" },
   customer: { email: "buyer@example.com", first_name: "Ada", last_name: "Lovelace" },
 };
 
-check("product config matches ₦14,999 NGN", () => {
-  assert.equal(PRODUCT.expectedAmountKobo, 1_499_900);
-  assert.equal(PRODUCT.expectedAmountNgn, 14_999);
+check("product config matches ₦49,999 NGN", () => {
+  assert.equal(PRODUCT.expectedAmountKobo, 4_999_900);
+  assert.equal(PRODUCT.expectedAmountNgn, 49_999);
   assert.equal(PRODUCT.currency, "NGN");
-  assert.equal(PRODUCT.paymentPageSlug, "ai-app");
+  assert.equal(PRODUCT.paymentPageSlug, "aiapp");
 });
 
 check("valid charge.success product identification", () => {
@@ -47,7 +47,7 @@ check("valid charge.success product identification", () => {
     verified: validVerified,
     webhookData: {
       reference: "T_aiapp_001",
-      amount: 1_499_900,
+      amount: 4_999_900,
       currency: "NGN",
       customer: validVerified.customer,
       metadata: { payment_page: "aiapp" },
@@ -115,7 +115,7 @@ check("metadata product_key accepted", () => {
 check("amount+currency uniquely identifies the AI Payment Page product", () => {
   const match = products.identifyPaystackExternalProduct({
     verified: { ...validVerified, metadata: {} },
-    webhookData: { amount: 1_499_900, currency: "NGN" },
+    webhookData: { amount: 4_999_900, currency: "NGN" },
   });
   assert.equal(match?.key, "build-software-with-ai");
 });
@@ -126,7 +126,7 @@ check("amount+currency with Leadthur metadata is rejected", () => {
       ...validVerified,
       metadata: { product: "leadthur", source: "leadthur_checkout" },
     },
-    webhookData: { amount: 1_499_900, currency: "NGN", metadata: { product: "leadthur" } },
+    webhookData: { amount: 4_999_900, currency: "NGN", metadata: { product: "leadthur" } },
   });
   assert.equal(match, null);
 });
@@ -135,7 +135,7 @@ check("page slug aiapp identifies product", () => {
   const match = products.identifyPaystackExternalProduct({
     verified: { ...validVerified, metadata: {} },
     webhookData: {
-      amount: 1_499_900,
+      amount: 4_999_900,
       currency: "NGN",
       page: { slug: "aiapp" },
     },
@@ -147,7 +147,7 @@ check("page slug ai-app identifies product", () => {
   const match = products.identifyPaystackExternalProduct({
     verified: { ...validVerified, metadata: {} },
     webhookData: {
-      amount: 1_499_900,
+      amount: 4_999_900,
       currency: "NGN",
       page: { slug: "ai-app" },
     },
@@ -159,7 +159,7 @@ check("paystack.shop referrer identifies product", () => {
   const match = products.identifyPaystackExternalProduct({
     verified: { ...validVerified, metadata: {} },
     webhookData: {
-      amount: 1_499_900,
+      amount: 4_999_900,
       currency: "NGN",
       metadata: { referrer: "https://paystack.shop/pay/aiapp" },
     },
@@ -171,7 +171,7 @@ check("paystack.shop ai-app referrer identifies product", () => {
   const match = products.identifyPaystackExternalProduct({
     verified: { ...validVerified, metadata: {} },
     webhookData: {
-      amount: 1_499_900,
+      amount: 4_999_900,
       currency: "NGN",
       metadata: { referrer: "https://paystack.shop/pay/ai-app" },
     },
