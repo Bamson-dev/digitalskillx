@@ -149,6 +149,15 @@ await check("A8. course ID override is per product and optional", () => {
   delete process.env.PAYSTACK_AIADS_COURSE_ID;
 });
 
+await check("A9. conflicting product key and payment page evidence fail closed", () => {
+  assert.equal(identify({ metadata: { product_key: APP.key }, page: { slug: MC.paymentPageSlug } }), null);
+  assert.equal(identify({ metadata: { payment_page: APP.paymentPageSlug }, page: { slug: MC.paymentPageSlug } }), null);
+});
+
+await check("A10. a specific masterclass slug overrides a weak generic DigitalSkillX tag", () => {
+  assert.equal(identify({ metadata: { product: "digitalskillx" }, page: { slug: MC.paymentPageSlug } }), MC.key);
+});
+
 // --------------------------------------------------------------- handoff
 await check("B1. valid signed masterclass handoff is accepted", () => {
   const request = signed(payload());
