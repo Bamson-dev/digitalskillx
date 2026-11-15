@@ -103,11 +103,6 @@ function metadataString(meta: Record<string, unknown> | undefined, key: string):
 function metadataMatchesProduct(meta: Record<string, unknown> | undefined, product: PaystackExternalProduct) {
   const productKey = metadataString(meta, "product_key") ?? metadataString(meta, "product");
   if (productKey && productKey.toLowerCase() === product.key) return true;
-  // Generic "digitalskillx" tag only identifies a product that allows the amount fallback.
-  if (productKey && productKey.toLowerCase() === "digitalskillx" && product.allowAmountOnlyFallback) {
-    return true;
-  }
-
   const paymentPage =
     metadataString(meta, "payment_page") ??
     metadataString(meta, "payment_page_slug") ??
@@ -269,7 +264,6 @@ export function identifyPaystackExternalProduct(input: {
     ...(input.verified.metadata ?? {}),
   } as Record<string, unknown>;
 
-  // Specific evidence first: an exact product key, slug or title beats any generic tag.
   const evidenceHaystack: string[] = [];
   collectStrings(meta, evidenceHaystack);
   collectStrings(input.webhookData ?? {}, evidenceHaystack);
@@ -286,41 +280,52 @@ export function identifyPaystackExternalProduct(input: {
     metadataString(meta, "page_slug") ??
     metadataString(meta, "slug");
 
-  for (const product of amountMatches) {
-    if (metadataClaimsForeignProduct(meta, product)) continue;
-
+  // Resolve every specific identity signal before considering weak generic tags.
+  // Conflicting product keys, page slugs, payment-page metadata or titles fail closed.
+  const specificCandidates = amountMatches.filter((product) => {
     const explicitKey = (metadataString(meta, "product_key") ?? metadataString(meta, "product"))?.toLowerCase();
-    if (explicitKey === product.key) return product;
+    if (explicitKey === product.key) return true;
 
     if (pageSlug) {
       const normalized = pageSlug.toLowerCase();
-      if (productSlugs(product).some((slug) => normalized === slug || normalized.includes(slug))) {
-        return product;
-      }
+      if (productSlugs(product).some((slug) => normalized === slug || normalized.includes(slug))) return true;
     }
 
-    if (hasPaymentPageIdentity(evidenceHaystack, product)) return product;
-    if (titleAliasMatch(evidenceHaystack, product)) return product;
-  }
+    return (
+      hasPaymentPageIdentity(evidenceHaystack, product) ||
+      titleAliasMatch(evidenceHaystack, product) ||
+      metadataMatchesProduct(meta, product)
+    );
+  });
 
-  // Remaining weaker evidence (payment_page metadata, custom fields, generic tag).
-  for (const product of amountMatches) {
-    if (metadataClaimsForeignProduct(meta, product)) continue;
-    if (metadataMatchesProduct(meta, product)) return product;
+  if (specificCandidates.length > 1) return null;
+  if (specificCandidates.length === 1) return specificCandidates[0];
+
+  // Preserve the weak generic DigitalSkillX marker for ai-app only, and only
+  // when no specific product/page evidence identifies another catalog item.
+  const genericProduct = (metadataString(meta, "product_key") ?? metadataString(meta, "product"))?.toLowerCase();
+  const customFields = meta.custom_fields;
+  const genericCustomField = Array.isArray(customFields) && customFields.some((field) => {
+    if (!field || typeof field !== "object") return false;
+    const row = field as { variable_name?: string; value?: string };
+    return String(row.variable_name ?? "").toLowerCase().includes("product") &&
+      String(row.value ?? "").toLowerCase() === "digitalskillx";
+  });
+  if (genericProduct === "digitalskillx" || genericCustomField) {
+    const genericCandidates = amountMatches.filter((product) =>
+      product.allowAmountOnlyFallback && !metadataClaimsForeignProduct(meta, product),
+    );
+    return genericCandidates.length === 1 ? genericCandidates[0] : null;
   }
 
   // Amount-only fallback for bare Payment Page payloads. Only products that opt in.
   const fallbackCandidates = amountMatches.filter((product) => product.allowAmountOnlyFallback);
-  if (fallbackCandidates.length === 1) {
-    const product = fallbackCandidates[0];
-    if (!metadataClaimsForeignProduct(meta, product)) {
-      return product;
-    }
+  if (fallbackCandidates.length === 1 && !metadataClaimsForeignProduct(meta, fallbackCandidates[0])) {
+    return fallbackCandidates[0];
   }
 
   return null;
 }
-
 export function configuredExternalCourseId(product: PaystackExternalProduct): string {
   if (product.key === BUILD_SOFTWARE_WITH_AI_PRODUCT.key) {
     const override = process.env.PAYSTACK_AIAPP_COURSE_ID?.trim();
