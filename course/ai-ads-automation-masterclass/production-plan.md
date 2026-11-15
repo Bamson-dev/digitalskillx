@@ -28,7 +28,7 @@ C. Content that needs your approval
 - Any lesson that teaches the Naked Offer Framework. It belongs to a third party. Get permission or replace it with your own method before including it.
 - The wording of every earnings, results and testimonial statement. The prepared copy makes none. Do not add any without your own real data.
 - Whether to publish with existing students enrolled, and what they receive (see section 4).
-- Quiz pass mark (70%) and certificate rules.
+- Quiz pass mark (70%) and the certificate workflow (manual issue after the final project is graded is recommended).
 - Final project marking turnaround.
 
 D. Content that needs external accounts or tools
@@ -41,26 +41,29 @@ D. Content that needs external accounts or tools
 - Events Manager access for Module 10 demonstrations.
 - Video hosting if you do not upload directly (YouTube unlisted or Vimeo).
 
-3. LMS upload procedure
+3. LMS upload procedure (corrected after the source review, see lms-capability-matrix.md)
 
-Do this in the admin area on the existing course. Keep the course in Draft throughout.
-1. Sign in as an admin. Open Courses, then the AI Ads Automation Masterclass course (ID 4e2a16b5-bbfb-4a00-939c-87c7eb5f2afb).
-2. Confirm the price shows ₦14,999 and visibility stays Draft. Do not click Publish.
-3. Add Module 1 using the exact module titles in curriculum.md. Create all 16 modules first, in order.
-4. Inside each module add lessons in the order shown. For each lesson set the title and type. Use Video for recorded lessons. Paste the lesson objective and outline into the lesson description or text area.
-5. For video lessons, upload the file or paste the YouTube or Vimeo link. Set the duration from the lessons.csv Minutes column if the form asks for it.
-6. Open the course resources panel. Upload the eight PDFs and the tracker spreadsheet. Attach each to the lessons listed in the Resources column. Use a File download lesson type where a lesson is only a download.
-7. Add the five quizzes after Modules 4, 8, 10, 13 and 15. Copy questions from assessments.md. Set the pass mark to 70. Mark the correct answers.
-8. Add assignments to the lessons marked Required in assessments.md. Choose text, link or file submission. Use the assignment wording from the lesson.
-9. Set completion rules: lesson completion 100%, certificate on, and drip off (or on a fixed weekly schedule if you want paced release).
-10. Preview the whole course as a student account that is not an admin. Check every video plays, every download opens, every quiz scores correctly and every assignment submits.
-11. Keep Draft. Report the checklist in section 6 before publishing.
+Do this in the admin area on the existing course. Keep the course in Draft throughout. Do the two lesson pilot first (pilot/pilot-lessons-1.1-1.2.md).
+1. Host each video on YouTube as Unlisted (verify the channel first so lessons over 15 minutes upload) or on Vimeo. The LMS cannot store video files. Copy the video link.
+2. Sign in as an admin. Open Courses, then the AI Ads Automation Masterclass course (ID 4e2a16b5-bbfb-4a00-939c-87c7eb5f2afb).
+3. Confirm the price shows ₦14,999 and visibility stays Draft. Do not click Publish.
+4. Add the 16 modules with the exact titles in curriculum.md, in order.
+5. Inside each module add lessons in order. Set the title, type Video, paste the video link in Content URL, and set the duration in minutes to the real recorded length. Put the objective in the text field if you want it visible. Leave Required watch % at 0, because it only works for direct file video.
+6. Attach files to each lesson in the lesson Attachments panel, using the Resources column in lessons.csv. Click Upload to server, not Save lesson. Allowed types: pdf, doc, docx, xls, xlsx, ppt, pptx, txt, zip, up to 25 MB each. Also upload the eight PDFs and the tracker to the course resources panel.
+7. Attach quiz-answer-notes.txt and the transcript to the lessons that host quizzes and to any lesson where you want a transcript.
+8. Create the five quizzes from the lesson page, Manage quiz, on lessons 4.2, 8.3, 10.3, 13.2 and 15.3. Copy questions from assessments.md. Use multiple choice single answer only. Set the pass score to 70, retake rule Unlimited, show answers On pass, randomise on.
+9. Create the assignments in Admin, Assignments, choosing the course and the module. Allow text and link. Keep every assignment in Draft until the course is live. Publishing an assignment emails enrolled students.
+10. Set Required completion % to 100. Turn the course Certificate setting off if you want to issue certificates by hand after the final project is graded. Keep Drip off.
+11. Use Preview as student to check the course page and each lesson.
+12. Test with one test student (decision D3 in the decision report), then remove nothing from production without approval.
+13. Keep Draft. Complete the checklist in section 7 before publishing.
 
 4. Publication notes
 
 - The checkout cannot fulfil buyers until the course is Published. Publish only when the course is complete and tested.
-- Publishing emails and notifies enrolled students unless Coming soon is on. Coming soon blocks enrolment, so it cannot be used while selling. Before publishing, check whether any students are already enrolled and decide whether their notification is acceptable.
-- Test a payment end to end only in a way you approve. This plan did not make any payment.
+- Publishing emails and notifies students across the whole platform who have any enrolment or paid transaction, unless Coming soon is on. Coming soon blocks in app checkout but not the sales page Paystack flow. Decide the notification before publishing (decision D4 in production-decision-report.md).
+- The existing storefront description in the admin conflicts with this course (9 modules, AI ad agent, "without touching Ads Manager"). Replace it with the text in section 5 only with your approval.
+- No payment was made and no student was enrolled in this work.
 
 5. Storefront copy
 
@@ -101,12 +104,12 @@ Prerequisites
 
 7. Steps required before publication
 1. Confirm the open decisions in section 2C.
-2. Record and edit the 41 lessons.
+2. Run the two lesson pilot, then record and edit the 41 lessons. Re-measure the minutes.
 3. Upload and attach everything following section 3.
 4. Build and test the five quizzes and required assignments.
 5. Preview as a student, including the downloads.
 6. Upload the cover image and storefront copy.
-7. Check whether any students are enrolled and decide on the notification.
+7. Count the students who would receive the publish email (any enrolment or paid transaction on the platform) and decide on the notification.
 8. Re-read the sales page for claims about results and remove any you cannot support.
 9. Ask for explicit approval to publish, then publish.
 10. After publishing, make one approved test purchase to confirm access and email, and confirm the Meta Purchase event.

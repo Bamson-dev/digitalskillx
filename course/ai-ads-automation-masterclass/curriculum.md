@@ -66,7 +66,7 @@ Outline:
   5. Reading the placement report later
 Practical demonstration: Screen recording: browse the Ads Manager placement options and the Meta Ad Library for local businesses
 Student assignment: List the three formats you will test first and write one sentence on why each suits your customer.
-Required resources: Format selection table (in Campaign Planning Worksheet)
+Required resources: Campaign Planning Worksheet (Format selection section)
 External tools or accounts: Meta Ad Library (free, no ad account needed)
 
 Module 3: Setting up Meta Business Suite and Ads Manager
@@ -83,7 +83,7 @@ Outline:
   5. Two factor authentication
 Practical demonstration: Screen recording on a fresh test setup, with personal details hidden
 Student assignment: Screenshot your ad account overview page (hide sensitive details) showing the account is active with a payment method added.
-Required resources: Account setup checklist (in Campaign Launch Checklist)
+Required resources: Campaign Launch Checklist (Accounts section)
 External tools or accounts: A Facebook profile, a Page, an Instagram account, a payment method that Meta accepts for your account
 
 Lesson 3.2: Business verification, access and policy basics
@@ -97,7 +97,7 @@ Outline:
   5. What to do if an ad is rejected
 Practical demonstration: Screen recording: open the Advertising Standards page and the Account Quality page
 Student assignment: Read the current policy page for your category and write three things your ads must not say.
-Required resources: Policy checklist (in Campaign Launch Checklist)
+Required resources: Campaign Launch Checklist (Policy section)
 External tools or accounts: None
 
 Module 4: Campaign objectives and conversion tracking
@@ -114,7 +114,7 @@ Outline:
   5. Choosing between website, WhatsApp and lead form destinations
 Practical demonstration: Screen recording: walk through the objective screen and the optimisation options for each
 Student assignment: Write your goal, your chosen objective, your conversion event and the destination, with one sentence of reasoning.
-Required resources: Objective selection table (in Campaign Planning Worksheet)
+Required resources: Campaign Planning Worksheet (Objective selection guide section)
 External tools or accounts: Ads Manager access
 
 Lesson 4.2: Conversion tracking basics: what Meta needs to learn
@@ -206,7 +206,7 @@ Outline:
   5. Keeping the discarded angles for later
 Practical demonstration: Screen recording: score ten angles in the tracker sheet with AI help and rank them
 Student assignment: Submit your scoring table and the three angles you chose with one sentence each on why.
-Required resources: Performance Tracker (angle sheet); Prompt Library (section C)
+Required resources: Performance Tracker (Angle scoring sheet); Prompt Library (section C)
 External tools or accounts: Spreadsheet app
 
 Module 7: Writing headlines, hooks and ad copy with AI
@@ -329,7 +329,7 @@ Outline:
   5. Privacy policy and contact details
 Practical demonstration: Screen recording: build a page section by section and add the button
 Student assignment: Publish your page and submit the link plus a screenshot of a successful test on a phone.
-Required resources: Landing Page Section Guide; Campaign Launch Checklist
+Required resources: Landing Page Section Guide (in Campaign Planning Worksheet); Campaign Launch Checklist
 External tools or accounts: A domain and hosting or a page builder account, a Paystack or lead form tool
 
 Lesson 9.3: WhatsApp as a destination: when it fits and how to manage it
@@ -360,7 +360,7 @@ Outline:
   5. Keep your tracking IDs private where needed
 Practical demonstration: Screen recording: install on a test page and fire PageView
 Student assignment: Submit a screenshot of your pixel receiving a PageView from your page.
-Required resources: Tracking map; Campaign Launch Checklist
+Required resources: Tracking map (in Campaign Planning Worksheet); Campaign Launch Checklist
 External tools or accounts: Events Manager access, a page you can edit
 
 Lesson 10.2: Conversions API and event matching in plain language
@@ -374,7 +374,7 @@ Outline:
   5. When to use a partner integration or developer help
 Practical demonstration: Slides and one screen recording of Events Manager diagnostics
 Student assignment: Decide whether you need server events now, and list who will set them up.
-Required resources: Tracking map
+Required resources: Tracking map (in Campaign Planning Worksheet)
 External tools or accounts: A developer or integration partner if you choose server events
 
 Lesson 10.3: Testing and debugging your tracking
@@ -388,7 +388,7 @@ Outline:
   5. Writing a pass or fail test log
 Practical demonstration: Screen recording: go through the funnel and check every event in the Test Events view
 Student assignment: Submit your tracking test log showing each event, its value and pass or fail.
-Required resources: Campaign Launch Checklist (tracking section)
+Required resources: Campaign Launch Checklist (Tracking section)
 External tools or accounts: Events Manager access
 
 Quiz 3: Landing pages and tracking (after Module 10, pass mark 70%)
@@ -452,7 +452,7 @@ Outline:
   5. Illustrative Naira examples labelled as examples, not forecasts
 Practical demonstration: Spreadsheet walk through with a hypothetical ₦14,999 product and invented costs
 Student assignment: Calculate your break even cost per customer and your test budget, and show your working.
-Required resources: Performance Tracker (break even sheet)
+Required resources: Performance Tracker (Break even sheet)
 External tools or accounts: Spreadsheet app
 
 Lesson 12.2: Designing a clean test
@@ -466,7 +466,7 @@ Outline:
   5. Documenting a test in the tracker
 Practical demonstration: Screen recording: set up a three ad test in Ads Manager and record it in the tracker
 Student assignment: Write your test plan: question, variable, ads, budget, duration and decision rule.
-Required resources: Performance Tracker (test log); Campaign Planning Worksheet
+Required resources: Performance Tracker (Test log sheet); Campaign Planning Worksheet
 External tools or accounts: Ads Manager access
 
 Lesson 12.3: Decision rules: when to wait, change or stop
@@ -498,7 +498,7 @@ Outline:
   6. No metric alone tells the whole story
 Practical demonstration: Slides plus an Ads Manager column walk through on a sample account view
 Student assignment: Build a custom column set and explain in one line what each column tells you.
-Required resources: Performance Tracker (metrics sheet)
+Required resources: Performance Tracker (Metric guide sheet)
 External tools or accounts: Ads Manager access
 
 Lesson 13.2: Your tracker and weekly review with AI
@@ -545,7 +545,7 @@ Outline:
   5. Writing the retest plan
 Practical demonstration: Screen recording: diagnose two invented sample datasets supplied in the tracker
 Student assignment: Submit a diagnosis and fix plan for the two sample datasets.
-Required resources: Performance Tracker (sample data sheet); Campaign Optimisation Checklist
+Required resources: Performance Tracker (Sample data sheet); Campaign Optimisation Checklist
 External tools or accounts: Spreadsheet app, AI assistant
 
 Module 15: Scaling campaigns responsibly
@@ -562,7 +562,7 @@ Outline:
   5. Do not scale a tracking problem
 Practical demonstration: Slides with a readiness checklist
 Student assignment: Complete the scaling readiness checklist for your campaign and state yes or not yet with reasons.
-Required resources: Campaign Optimisation Checklist (scaling section)
+Required resources: Campaign Optimisation Checklist (Scaling section)
 External tools or accounts: None
 
 Lesson 15.2: Scaling methods and their risks
@@ -590,7 +590,7 @@ Outline:
   5. Keep proof of claims in a file
 Practical demonstration: Screen recording: open Account Quality and walk through the review options
 Student assignment: Write a response plan for a rejected ad and list the proof you keep for your claims.
-Required resources: Campaign Launch Checklist (policy section)
+Required resources: Campaign Launch Checklist (Policy section)
 External tools or accounts: Ads Manager access
 
 Quiz 5: Diagnosis, scaling and compliance (after Module 15, pass mark 70%)
