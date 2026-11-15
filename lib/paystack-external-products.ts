@@ -16,6 +16,13 @@ export type PaystackExternalProduct = {
   /** Alternate shop slugs that fulfill the same course. */
   paymentPageSlugAliases: readonly string[];
   successRedirectUrl: string;
+  /**
+   * When true, a bare charge payload (no slug, no metadata) whose amount matches
+   * this product is accepted. Only one product per amount may enable this.
+   */
+  allowAmountOnlyFallback: boolean;
+  /** Meta Pixel / CAPI dataset for this product. Falls back to env META_PIXEL_ID. */
+  metaPixelId?: string;
 };
 
 export const BUILD_SOFTWARE_WITH_AI_PRODUCT: PaystackExternalProduct = {
@@ -37,10 +44,29 @@ export const BUILD_SOFTWARE_WITH_AI_PRODUCT: PaystackExternalProduct = {
   paymentPageSlug: "ai-app",
   paymentPageSlugAliases: ["ai-app", "aiapp"],
   successRedirectUrl: "https://aimoneycode.com.ng/access-page-program/",
+  allowAmountOnlyFallback: true,
+};
+
+export const AI_ADS_AUTOMATION_MASTERCLASS_PRODUCT: PaystackExternalProduct = {
+  key: "ai-ads-automation-masterclass",
+  title: "AI Ads Automation Masterclass",
+  titleAliases: ["AI Ads Automation Masterclass"],
+  defaultCourseId: "4e2a16b5-bbfb-4a00-939c-87c7eb5f2afb",
+  expectedAmountKobo: 1_499_900,
+  expectedAmountNgn: 14_999,
+  currency: "NGN",
+  paymentPageUrl: "https://paystack.shop/pay/ai-ads-masterclass",
+  paymentPageSlug: "ai-ads-masterclass",
+  paymentPageSlugAliases: ["ai-ads-masterclass"],
+  successRedirectUrl: "https://aimoneycode.com.ng/ai-ad/thank-you/",
+  // Same price as ai-app. Needs slug, metadata or title evidence. Never amount alone.
+  allowAmountOnlyFallback: false,
+  metaPixelId: "1043090941844015",
 };
 
 export const PAYSTACK_EXTERNAL_PRODUCTS: readonly PaystackExternalProduct[] = [
   BUILD_SOFTWARE_WITH_AI_PRODUCT,
+  AI_ADS_AUTOMATION_MASTERCLASS_PRODUCT,
 ];
 
 export type PaystackChargePayload = {
@@ -77,7 +103,10 @@ function metadataString(meta: Record<string, unknown> | undefined, key: string):
 function metadataMatchesProduct(meta: Record<string, unknown> | undefined, product: PaystackExternalProduct) {
   const productKey = metadataString(meta, "product_key") ?? metadataString(meta, "product");
   if (productKey && productKey.toLowerCase() === product.key) return true;
-  if (productKey && productKey.toLowerCase() === "digitalskillx") return true;
+  // Generic "digitalskillx" tag only identifies a product that allows the amount fallback.
+  if (productKey && productKey.toLowerCase() === "digitalskillx" && product.allowAmountOnlyFallback) {
+    return true;
+  }
 
   const paymentPage =
     metadataString(meta, "payment_page") ??
@@ -216,8 +245,10 @@ function titleAliasMatch(values: string[], product: PaystackExternalProduct): bo
  * Identify a Payment Page / shop charge for DigitalSkillX enrollment.
  *
  * Paystack shop webhooks often omit `page.slug` and useful metadata. When the
- * paid amount+currency uniquely matches one catalog product (and metadata does
- * not claim a foreign product), accept that product so buyers get access+email.
+ * paid amount+currency matches a product that allows the amount fallback (and
+ * metadata does not claim a foreign product), accept that product so buyers get
+ * access+email. Products that share an amount with another product must carry
+ * slug, metadata or title evidence.
  */
 export function identifyPaystackExternalProduct(input: {
   verified: Pick<VerifiedTransaction, "amount" | "currency" | "metadata" | "status"> & {
@@ -238,16 +269,29 @@ export function identifyPaystackExternalProduct(input: {
     ...(input.verified.metadata ?? {}),
   } as Record<string, unknown>;
 
+  // Specific evidence first: an exact product key, slug or title beats any generic tag.
+  const evidenceHaystack: string[] = [];
+  collectStrings(meta, evidenceHaystack);
+  collectStrings(input.webhookData ?? {}, evidenceHaystack);
+  collectStrings(
+    {
+      page: input.verified.page ?? input.webhookData?.page ?? null,
+      plan: input.verified.plan ?? input.webhookData?.plan ?? null,
+    },
+    evidenceHaystack,
+  );
+  const pageSlug =
+    input.webhookData?.page?.slug ??
+    input.verified.page?.slug ??
+    metadataString(meta, "page_slug") ??
+    metadataString(meta, "slug");
+
   for (const product of amountMatches) {
     if (metadataClaimsForeignProduct(meta, product)) continue;
 
-    if (metadataMatchesProduct(meta, product)) return product;
+    const explicitKey = (metadataString(meta, "product_key") ?? metadataString(meta, "product"))?.toLowerCase();
+    if (explicitKey === product.key) return product;
 
-    const pageSlug =
-      input.webhookData?.page?.slug ??
-      input.verified.page?.slug ??
-      metadataString(meta, "page_slug") ??
-      metadataString(meta, "slug");
     if (pageSlug) {
       const normalized = pageSlug.toLowerCase();
       if (productSlugs(product).some((slug) => normalized === slug || normalized.includes(slug))) {
@@ -255,23 +299,20 @@ export function identifyPaystackExternalProduct(input: {
       }
     }
 
-    const haystack: string[] = [];
-    collectStrings(meta, haystack);
-    collectStrings(input.webhookData ?? {}, haystack);
-    collectStrings(
-      {
-        page: input.verified.page ?? input.webhookData?.page ?? null,
-        plan: input.verified.plan ?? input.webhookData?.plan ?? null,
-      },
-      haystack,
-    );
-    if (hasPaymentPageIdentity(haystack, product)) return product;
-    if (titleAliasMatch(haystack, product)) return product;
+    if (hasPaymentPageIdentity(evidenceHaystack, product)) return product;
+    if (titleAliasMatch(evidenceHaystack, product)) return product;
   }
 
-  // Unique amount+currency fallback for Payment Pages that send bare charge payloads.
-  if (amountMatches.length === 1) {
-    const product = amountMatches[0];
+  // Remaining weaker evidence (payment_page metadata, custom fields, generic tag).
+  for (const product of amountMatches) {
+    if (metadataClaimsForeignProduct(meta, product)) continue;
+    if (metadataMatchesProduct(meta, product)) return product;
+  }
+
+  // Amount-only fallback for bare Payment Page payloads. Only products that opt in.
+  const fallbackCandidates = amountMatches.filter((product) => product.allowAmountOnlyFallback);
+  if (fallbackCandidates.length === 1) {
+    const product = fallbackCandidates[0];
     if (!metadataClaimsForeignProduct(meta, product)) {
       return product;
     }
@@ -283,6 +324,10 @@ export function identifyPaystackExternalProduct(input: {
 export function configuredExternalCourseId(product: PaystackExternalProduct): string {
   if (product.key === BUILD_SOFTWARE_WITH_AI_PRODUCT.key) {
     const override = process.env.PAYSTACK_AIAPP_COURSE_ID?.trim();
+    if (override) return override;
+  }
+  if (product.key === AI_ADS_AUTOMATION_MASTERCLASS_PRODUCT.key) {
+    const override = process.env.PAYSTACK_AIADS_COURSE_ID?.trim();
     if (override) return override;
   }
   return product.defaultCourseId;
