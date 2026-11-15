@@ -125,7 +125,9 @@ function aimad_render_thankyou() {
     $s = $ref ? aimad_status($ref) : array('state' => 'noref', 'data' => array());
     $state = $s['state'];
     $d = $s['data'];
-    $paid = ($state === 'paid' && !empty($d['product']['courseUrl']));
+    $paid = ($state === 'paid' && !empty($d['product']['courseUrl']) && !empty($d['product']['key']) && isset($d['product']['valueNgn']));
+    // A "paid" answer without product details is not proof we can show. Keep it pending.
+    if ($state === 'paid' && !$paid) { $state = 'pending'; }
     $course = $paid ? $d['product']['courseUrl'] : '';
     $email_sent = $paid && !empty($d['emailSent']);
 
