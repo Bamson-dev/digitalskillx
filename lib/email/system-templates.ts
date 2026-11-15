@@ -267,6 +267,8 @@ export type PaystackCourseAccessEmailParams = {
   /** When set, email includes platform login credentials (preferred over magic links). */
   email?: string;
   password?: string;
+  /** Presale or early access: lessons are not all available yet. Changes the wording only. */
+  earlyAccess?: boolean;
 };
 
 export function paystackCourseAccessReadyEmail(p: PaystackCourseAccessEmailParams) {
@@ -291,9 +293,19 @@ export function paystackCourseAccessReadyEmail(p: PaystackCourseAccessEmailParam
     <p style="margin:0 0 16px;font-size:15px;line-height:1.7;color:#475569;">
       Your payment for <strong>${escapeHtml(p.courseTitle)}</strong> was successful.
     </p>
-    <p style="margin:0 0 16px;font-size:15px;line-height:1.7;color:#475569;">
-      Your course access is now ready — you are a student on the DigitalSkillX platform.
+    ${
+      p.earlyAccess
+        ? `<p style="margin:0 0 16px;font-size:15px;line-height:1.7;color:#475569;">
+      Your enrolment is confirmed and your account is ready.
     </p>
+    <div style="margin:0 0 20px;padding:16px 18px;background:#fffbeb;border:1px solid #fde68a;border-radius:12px;">
+      <p style="margin:0 0 8px;font-size:14px;font-weight:700;color:#92400e;">This course is in early access</p>
+      <p style="margin:0;font-size:14px;line-height:1.7;color:#475569;">Lessons are released in stages, so some lessons cannot be opened yet. The course page shows what is available now and the release dates. Reply to this email if you have a question.</p>
+    </div>`
+        : `<p style="margin:0 0 16px;font-size:15px;line-height:1.7;color:#475569;">
+      Your course access is now ready — you are a student on the DigitalSkillX platform.
+    </p>`
+    }
     <div style="margin:0 0 20px;padding:16px 18px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;">
       <p style="margin:0 0 8px;font-size:14px;font-weight:700;color:#111827;">Course</p>
       <p style="margin:0;font-size:15px;line-height:1.6;color:#334155;">${escapeHtml(p.courseTitle)}</p>
@@ -306,14 +318,21 @@ export function paystackCourseAccessReadyEmail(p: PaystackCourseAccessEmailParam
 
   return {
     subject: p.password
-      ? "Your DigitalSkillX login and course access"
-      : "Your course access is ready",
+      ? p.earlyAccess
+        ? "Your DigitalSkillX login and early access enrolment"
+        : "Your DigitalSkillX login and course access"
+      : p.earlyAccess
+        ? "Your early access enrolment is confirmed"
+        : "Your course access is ready",
     html: emailLayout({
       brandColor: p.brandColor,
-      title: "Your course access is ready",
+      title: p.earlyAccess ? "Your early access enrolment is confirmed" : "Your course access is ready",
       bodyHtml,
-      // loginUrl includes ?next=/courses/... so Start learning resumes after sign-in.
-      cta: { label: p.password ? "Log in and start learning" : "Start learning", url: p.loginUrl },
+      // loginUrl includes ?next=/courses/... so the course opens after sign-in.
+      cta: {
+        label: p.earlyAccess ? "Log in and view your course" : p.password ? "Log in and start learning" : "Start learning",
+        url: p.loginUrl,
+      },
       supportEmail: p.supportEmail,
     }),
   };
