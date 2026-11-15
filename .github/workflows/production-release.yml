@@ -39,7 +39,7 @@ jobs:
 
       - name: Fetch pinned LeadPilot source for cross-repo contract tests
         env:
-          LEADPILOT_SHA: 8c7121dc116675be840e2bf6cfdf07773cd06730
+          LEADPILOT_SHA: 0158aed8124ec82218d1411d8fe2cf2ef4f451d0
         run: |
           dir="$RUNNER_TEMP/leadpilot"
           git init --quiet "$dir"
