@@ -4,13 +4,18 @@ import { secureLog } from "@/lib/secure-log";
 import type { PaystackExternalProduct } from "@/lib/paystack-external-products";
 import {
   buildMetaPurchaseEvent,
+  metaCapiEventsUrl,
   metaCapiTokenEnvName,
+  metaTestEventCodeEnvName,
+  normalizeMetaTestEventCode,
   resolveMetaPixelId,
 } from "@/lib/purchase-tracking-payload";
 
 export type PurchaseTrackingContext = {
   reference: string;
   customerEmail: string;
+  clientIpAddress?: string | null;
+  clientUserAgent?: string | null;
   product: Pick<
     PaystackExternalProduct,
     "key" | "title" | "expectedAmountNgn" | "currency" | "metaPixelId" | "successRedirectUrl"
@@ -34,6 +39,13 @@ function metaCapiToken(ctx: PurchaseTrackingContext): string | undefined {
     if (specific) return specific;
   }
   return runtimeEnv("META_CAPI_TOKEN");
+}
+
+/** Test code from server env only. Set it only while checking Events Manager, then remove it. */
+function metaTestEventCode(ctx: PurchaseTrackingContext): string | undefined {
+  const pixelId = metaPixelId(ctx);
+  const specific = pixelId ? runtimeEnv(metaTestEventCodeEnvName(pixelId)) : undefined;
+  return normalizeMetaTestEventCode(specific ?? runtimeEnv("META_TEST_EVENT_CODE"));
 }
 
 async function sendStapeGa4Purchase(ctx: PurchaseTrackingContext): Promise<void> {
@@ -101,9 +113,17 @@ async function sendMetaCapiPurchase(ctx: PurchaseTrackingContext): Promise<void>
     return;
   }
 
-  const payload = buildMetaPurchaseEvent(ctx, Math.floor(Date.now() / 1000));
+  const testCode = metaTestEventCode(ctx);
+  if (testCode) {
+    secureLog("warn", "purchase-tracking", "meta_capi_test_mode", {
+      reference: ctx.reference,
+      reason: "Test event code is set. Events appear in Test Events only.",
+    });
+  }
+  const payload = buildMetaPurchaseEvent(ctx, Math.floor(Date.now() / 1000), testCode);
 
-  const url = new URL(`https://graph.facebook.com/v19.0/${encodeURIComponent(pixelId)}/events`);
+  // Meta's documented form. The URL is never logged, and error text is redacted below.
+  const url = new URL(metaCapiEventsUrl(pixelId));
   url.searchParams.set("access_token", token);
 
   const response = await fetch(url.toString(), {
@@ -114,7 +134,7 @@ async function sendMetaCapiPurchase(ctx: PurchaseTrackingContext): Promise<void>
 
   if (!response.ok) {
     const detail = await response.text().catch(() => "");
-    throw new Error(`Meta CAPI failed (${response.status}): ${detail.slice(0, 200)}`);
+    throw new Error(`Meta CAPI failed (${response.status}): ${detail.replaceAll(token, "[redacted]").slice(0, 200)}`);
   }
 }
 
@@ -124,7 +144,7 @@ export type PurchaseTrackingOutcome = {
   errors: string[];
 };
 
-/** Fire Stape GA4 + Meta CAPI purchase events. Fail-open — never throws. */
+/** Fire Stape GA4 + Meta CAPI (graph.facebook.com) purchase events. Fail-open — never throws. */
 export async function trackExternalPurchase(
   ctx: PurchaseTrackingContext,
 ): Promise<PurchaseTrackingOutcome> {

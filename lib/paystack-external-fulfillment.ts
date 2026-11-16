@@ -221,6 +221,7 @@ export async function fulfillPaystackExternalCharge(params: {
 
   let product: PaystackExternalProduct | null = null;
   let buyerEmail = "";
+  let verifiedClientIp: string | null = null;
   let buyerName: string | null = null;
   let paystackSource: ExternalPaystackData["source"] = "paystack_payment_page";
 
@@ -318,6 +319,8 @@ export async function fulfillPaystackExternalCharge(params: {
         status: verified.status === "failed" ? 200 : 409,
       };
     }
+
+    verifiedClientIp = (verified as { ip_address?: string | null }).ip_address ?? null;
 
     product = identifyPaystackExternalProduct({
       verified,
@@ -630,14 +633,24 @@ export async function fulfillPaystackExternalCharge(params: {
     if (emailResult.sent) {
       secureLog("info", "paystack/external", "email_sent", { reference });
       if (!params.skipPurchaseTracking && !externalMeta?.purchase_tracking_sent_at) {
-        await trackExternalPurchase({
+        const tracking = await trackExternalPurchase({
           reference,
           customerEmail: buyerEmail,
+          clientIpAddress: verifiedClientIp,
           product,
         });
-        await patchTransactionPaystackData(admin, reference, {
-          purchase_tracking_sent_at: new Date().toISOString(),
-        });
+        // Record "sent" only when Meta accepted the event. A skipped (no token) or failed send
+        // stays unmarked, so the next delivery of this payment retries it.
+        if (tracking.meta === "sent") {
+          await patchTransactionPaystackData(admin, reference, {
+            purchase_tracking_sent_at: new Date().toISOString(),
+          });
+        } else {
+          secureLog("warn", "paystack/external", "purchase_tracking_not_recorded", {
+            reference,
+            meta: tracking.meta,
+          });
+        }
       }
     } else {
       secureLog("warn", "paystack/external", "email_failed", {
