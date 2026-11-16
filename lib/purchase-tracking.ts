@@ -98,7 +98,7 @@ async function sendStapeGa4Purchase(ctx: PurchaseTrackingContext): Promise<void>
 
   if (!response.ok) {
     const detail = await response.text().catch(() => "");
-    throw new Error(`Stape collect failed (${response.status}): ${detail.replaceAll(token, "[redacted]").slice(0, 200)}`);
+    throw new Error(`Stape collect failed (${response.status}): ${detail.slice(0, 200)}`);
   }
 }
 
@@ -134,7 +134,7 @@ async function sendMetaCapiPurchase(ctx: PurchaseTrackingContext): Promise<void>
 
   if (!response.ok) {
     const detail = await response.text().catch(() => "");
-    throw new Error(`Meta CAPI failed (${response.status}): ${detail.slice(0, 200)}`);
+    throw new Error(`Meta CAPI failed (${response.status}): ${detail.replaceAll(token, "[redacted]").slice(0, 200)}`);
   }
 }
 
