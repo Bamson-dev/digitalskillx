@@ -43,7 +43,15 @@ export async function resolve(specifier, context, nextResolve) {
       // fall through
     }
   }
-  return nextResolve(specifier, context);
+  try {
+    return await nextResolve(specifier, context);
+  } catch (error) {
+    // Next ships CommonJS entry points such as next/headers without an exports map.
+    if (specifier.startsWith("next/") && !/\.[cm]?js$/.test(specifier)) {
+      return nextResolve(`${specifier}.js`, context);
+    }
+    throw error;
+  }
 }
 
 export async function load(url, context, nextLoad) {

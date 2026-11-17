@@ -300,10 +300,11 @@ await check("C5. CAPI token env name is pixel specific and never a literal secre
 await check("C6. Purchase is sent only after verified fulfilment and a successful access email", () => {
   const source = read("lib/paystack-external-fulfillment.ts");
   const emailOk = source.indexOf("if (emailResult.sent) {");
-  const track = source.indexOf("await trackExternalPurchase({");
+  const track = source.lastIndexOf("await trackPurchaseOnce({");
   const verifyGate = source.indexOf('verified.status !== "success"');
   assert.ok(verifyGate > -1 && emailOk > verifyGate && track > emailOk, "tracking must follow verification and email");
-  assert.match(source, /!externalMeta\?\.purchase_tracking_sent_at/, "send once per transaction");
+  assert.match(source, /externalMeta\?\.purchase_tracking_sent_at\) return/, "send once per transaction");
+  assert.match(source, /deps\.trackPurchase\(/, "tracking runs only through the claim holder helper");
 });
 
 await check("C7. Stape GA4 and Meta CAPI both remain wired", () => {

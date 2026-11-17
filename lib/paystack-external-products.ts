@@ -240,22 +240,21 @@ function titleAliasMatch(values: string[], product: PaystackExternalProduct): bo
   });
 }
 
-/**
- * Identify a Payment Page / shop charge for DigitalSkillX enrollment.
- *
- * Paystack shop webhooks often omit `page.slug` and useful metadata. When the
- * paid amount+currency matches a product that allows the amount fallback (and
- * metadata does not claim a foreign product), accept that product so buyers get
- * access+email. Products that share an amount with another product must carry
- * slug, metadata or title evidence.
- */
-export function identifyPaystackExternalProduct(input: {
+type IdentityInput = {
   verified: Pick<VerifiedTransaction, "amount" | "currency" | "metadata" | "status"> & {
     page?: { slug?: string; name?: string } | null;
     plan?: { name?: string; plan_code?: string } | null;
   };
   webhookData?: PaystackChargePayload | null;
-}): PaystackExternalProduct | null {
+};
+
+type ResolvedIdentity = {
+  meta: Record<string, unknown>;
+  amountMatches: PaystackExternalProduct[];
+  namedProducts: PaystackExternalProduct[];
+};
+
+function resolveIdentity(input: IdentityInput): ResolvedIdentity | null {
   if (input.verified.status !== "success") return null;
 
   const amountMatches = PAYSTACK_EXTERNAL_PRODUCTS.filter((product) =>
@@ -305,6 +304,23 @@ export function identifyPaystackExternalProduct(input: {
   };
 
   const namedProducts = PAYSTACK_EXTERNAL_PRODUCTS.filter(hasSpecificEvidence);
+  return { meta, amountMatches, namedProducts };
+}
+
+/**
+ * Identify a Payment Page / shop charge for DigitalSkillX enrollment.
+ *
+ * Paystack shop webhooks often omit `page.slug` and useful metadata. When the
+ * paid amount+currency matches a product that allows the amount fallback (and
+ * metadata does not claim a foreign product), accept that product so buyers get
+ * access+email. Products that share an amount with another product must carry
+ * slug, metadata or title evidence.
+ */
+export function identifyPaystackExternalProduct(input: IdentityInput): PaystackExternalProduct | null {
+  const identity = resolveIdentity(input);
+  if (!identity) return null;
+  const { meta, amountMatches, namedProducts } = identity;
+
   if (namedProducts.length > 1) return null;
   if (namedProducts.length === 1) {
     return amountMatches.includes(namedProducts[0]) ? namedProducts[0] : null;
@@ -335,6 +351,21 @@ export function identifyPaystackExternalProduct(input: {
 
   return null;
 }
+/**
+ * Catalog products whose price was paid when NO product evidence exists at all
+ * (no slug, page URL, metadata or title). Such a payment is real money that cannot be
+ * mapped to a product from the payload. It is recorded for operator attribution and is
+ * never fulfilled from the amount alone. Payments whose evidence names a product (even
+ * a product with a different price) return an empty list so they stay unhandled.
+ */
+export function unattributedAmountCandidates(input: IdentityInput): PaystackExternalProduct[] {
+  const identity = resolveIdentity(input);
+  if (!identity) return [];
+  if (identity.namedProducts.length > 0) return [];
+  if (identifyPaystackExternalProduct(input)) return [];
+  return identity.amountMatches;
+}
+
 export function configuredExternalCourseId(product: PaystackExternalProduct): string {
   if (product.key === BUILD_SOFTWARE_WITH_AI_PRODUCT.key) {
     const override = process.env.PAYSTACK_AIAPP_COURSE_ID?.trim();
@@ -358,7 +389,9 @@ export type ExternalFulfillmentStatus =
   | "enrolled"
   | "email_sent"
   | "email_failed"
-  | "fulfillment_failed";
+  | "fulfillment_failed"
+  | "awaiting_course_publish"
+  | "attribution_required";
 
 export type ExternalPaystackData = {
   source: "paystack_payment_page" | "leadthur-paystack-router";

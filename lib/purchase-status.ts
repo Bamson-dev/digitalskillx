@@ -26,7 +26,9 @@ export type PurchaseFulfillment =
   | "enrolled"
   | "email_sent"
   | "email_failed"
-  | "fulfillment_failed";
+  | "fulfillment_failed"
+  | "awaiting_course_publish"
+  | "attribution_required";
 
 export type PurchaseStatusResponse = {
   /** paid: verified and enrolled. pending: not confirmed yet. failed: Paystack reported failure. */

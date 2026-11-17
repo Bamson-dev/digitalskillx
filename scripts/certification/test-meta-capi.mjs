@@ -180,9 +180,9 @@ await check("M10. network error never throws out of trackExternalPurchase", asyn
 await check("M11. fulfilment records purchase tracking only when Meta accepted the event", () => {
   const src = read("lib/paystack-external-fulfillment.ts");
   assert.match(src, /tracking\.meta === "sent"/);
-  assert.match(src, /!externalMeta\?\.purchase_tracking_sent_at/, "once per transaction");
+  assert.match(src, /externalMeta\?\.purchase_tracking_sent_at\) return/, "once per transaction");
   const gate = src.indexOf("if (emailResult.sent) {");
-  const track = src.indexOf("await trackExternalPurchase({");
+  const track = src.lastIndexOf("await trackPurchaseOnce({");
   const verify = src.indexOf('verified.status !== "success"');
   assert.ok(verify > -1 && gate > verify && track > gate, "tracking only after verified payment and access email");
 });

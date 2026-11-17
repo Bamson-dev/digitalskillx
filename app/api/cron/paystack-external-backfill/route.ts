@@ -1,7 +1,10 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { verifyCronSecret } from "@/lib/cron-auth";
 import { bootstrapRuntimeSecrets } from "@/lib/bootstrap-runtime-secrets";
-import { backfillRecentAiAppPayments } from "@/lib/paystack-external-refulfill";
+import {
+  backfillRecentAiAppPayments,
+  reconcileHeldExternalPayments,
+} from "@/lib/paystack-external-refulfill";
 import { secureLog } from "@/lib/secure-log";
 
 export const dynamic = "force-dynamic";
@@ -33,6 +36,9 @@ export async function GET(request: NextRequest) {
     forceEmail,
   });
 
+  // Recorded payments that waited for a course to be published or for an interrupted run.
+  const reconciled = await reconcileHeldExternalPayments({ limit });
+
   if (!result.ok) {
     secureLog("error", "cron/paystack-external-backfill", "failed", {
       error: result.error,
@@ -59,5 +65,13 @@ export async function GET(request: NextRequest) {
     succeeded: emailRepaired.length,
     failed: failed.length,
     results: result.results,
+    reconciled: reconciled.ok
+      ? {
+          fulfilled: reconciled.results.filter((row) => row.ok === true).length,
+          failed: reconciled.results.filter((row) => row.ok !== true).length,
+          stillDraft: reconciled.stillDraft,
+          unattributed: reconciled.unattributed,
+        }
+      : { error: reconciled.error },
   });
 }
