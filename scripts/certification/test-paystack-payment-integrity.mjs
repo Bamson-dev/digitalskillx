@@ -622,6 +622,30 @@ await test("a held Draft payment that Paystack no longer verifies is not fulfill
   assert.equal(h.admin.tables.transactions[0].status, "pending");
 });
 
+await test("purchase status never reports paid for a held payment and exposes its state", async () => {
+  const { computePurchaseStatus } = await import(ts("lib/purchase-status.ts"));
+  for (const held of ["awaiting_course_publish", "attribution_required"]) {
+    const result = computePurchaseStatus({
+      transaction: {
+        status: "pending",
+        course_id: MASTER.defaultCourseId,
+        paystack_data: {
+          source: "paystack_payment_page",
+          product_key: held === "attribution_required" ? MASTER.key : MASTER.key,
+          fulfillment_status: held,
+        },
+      },
+      enrolled: false,
+      siteBaseUrl: "https://example.test",
+    });
+    assert.equal(result.status, "pending");
+    assert.equal(result.enrolled, false);
+    assert.equal(result.emailSent, false);
+    assert.equal(result.fulfillment, held);
+    assert.equal(result.product, undefined, "no course link before enrolment");
+  }
+});
+
 // ---------------------------------------------------------------------------
 console.log(`\n${passed} payment integrity tests passed`);
 if (process.exitCode) process.exit(process.exitCode);
