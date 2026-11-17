@@ -6,6 +6,7 @@ import {
 import { requireAdminApiAuth } from "@/lib/admin-api-auth";
 import {
   backfillRecentAiAppPayments,
+  reconcileHeldExternalPayments,
   refulfillPaystackExternalByReference,
 } from "@/lib/paystack-external-refulfill";
 import { runtimeEnv } from "@/lib/runtime-env";
@@ -48,7 +49,12 @@ function keepAlive<T>(promise: Promise<T>) {
 }
 
 /**
- * POST { "reference": "...", "verified"?: {...}, "forceEmail"?: true, "async"?: true }
+ * POST { "reference": "...", "productKey"?: "...", "forceEmail"?: true, "async"?: true }
+ *   Always re-verifies the reference with Paystack. A request body can never supply the
+ *   payment data. "productKey" attributes a payment whose payload named no product. The
+ *   verified amount and currency must still equal that product's price.
+ * POST { "reconcile": true, "limit": 10 }
+ *   Fulfils recorded payments that waited for a course to be published.
  * POST { "backfill": true, "perPage": 50, "limit": 10, "forceEmail"?: true, "async"?: true }
  *
  * GET ?reference=... — check fulfillment status for a Paystack reference
@@ -118,8 +124,21 @@ export async function POST(request: NextRequest) {
   }
 
   const body = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
-  // Default async when a verified override is provided — Contabo→Paystack/Resend can exceed Traefik's ~60s.
-  const useAsync = body.async === true || (body.async !== false && body.verified != null);
+  const useAsync = body.async === true;
+
+  if (body.reconcile === true) {
+    const limit = typeof body.limit === "number" ? body.limit : 10;
+    const work = reconcileHeldExternalPayments({ limit });
+    if (useAsync) {
+      keepAlive(work);
+      return NextResponse.json({ accepted: true, mode: "reconcile", limit }, { status: 202 });
+    }
+    const result = await work;
+    if (!result.ok) {
+      return NextResponse.json({ ok: false, error: result.error }, { status: result.status });
+    }
+    return NextResponse.json(result);
+  }
 
   if (body.backfill === true) {
     const perPage = typeof body.perPage === "number" ? body.perPage : 50;
@@ -146,9 +165,10 @@ export async function POST(request: NextRequest) {
   }
 
   const reference = typeof body.reference === "string" ? body.reference : "";
+  const productKey = typeof body.productKey === "string" ? body.productKey.trim() : "";
   const work = refulfillPaystackExternalByReference(reference, {
-    verifiedOverride: body.verified,
     forceEmail: body.forceEmail === true,
+    attributedProductKey: productKey || undefined,
   });
 
   if (useAsync) {
