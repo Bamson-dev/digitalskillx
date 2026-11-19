@@ -6,12 +6,14 @@ import type { SendEmailParams, SendEmailResult } from "@/lib/email/types";
 import type { EmailSenderConfig } from "@/lib/platform-settings";
 import { secureLogError } from "@/lib/secure-log";
 import { ErrorCode } from "@/lib/error-codes";
+import { runtimeEnv } from "@/lib/runtime-env";
 
 type Reply = { code: number; lines: string[] };
 type SmtpSocket = Socket | TLSSocket;
 
 function env(name: string): string {
-  return (process.env as Record<string, string | undefined>)[name]?.trim() ?? "";
+  const value = runtimeEnv(name) ?? (process.env as Record<string, string | undefined>)[name];
+  return value?.trim() ?? "";
 }
 
 function validateAddress(address: string): void {
