@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 /**
- * Offline Resend-only email provider regression — no live API calls, no secrets printed.
+ * Offline Zoho ZeptoMail provider regression.
+ * No live SMTP connections or secrets are used.
  */
 import assert from "node:assert/strict";
 import { readFileSync, existsSync } from "node:fs";
@@ -15,77 +16,79 @@ function ok(label) {
 }
 
 {
-  const pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
-  assert.ok(pkg.dependencies?.resend, "resend dependency missing");
-  ok("official resend package present");
-}
-
-{
   const index = readFileSync(join(root, "lib/email/index.ts"), "utf8");
-  assert.match(index, /sendViaResend/);
-  assert.ok(!/nodemailer/.test(index));
-  assert.match(index, /sendViaZeptoMail/, "legacy transactional fallback remains available");
-  assert.match(index, /if \(params\.idempotencyKey\) return primary/, "idempotent outbox sends stay on Resend retries");
-  assert.ok(!/resolveSmtpConfig|createTransport/.test(index));
-  ok("sendEmail preserves ZeptoMail fallback while idempotent outbox sends retry Resend only");
+  assert.match(index, /sendViaZeptoMail/);
+  assert.doesNotMatch(index, /sendViaResend/);
+  assert.match(index, /sendMarketingEmail/);
+  assert.match(index, /Marketing email is not enabled/);
+  ok("transactional sender routes through Zoho; marketing mail is isolated");
 }
 
 {
   const provider = readFileSync(join(root, "lib/email/provider.ts"), "utf8");
-  assert.match(provider, /EmailProviderId = "resend"/);
-  assert.match(provider, /RESEND_API_KEY/);
-  assert.match(provider, /courses@digitalskillx\.com/);
-  assert.match(provider, /DigitalSkillX/);
-  assert.ok(!/"zeptomail"/.test(provider));
-  ok("provider module is Resend-only with courses@ defaults");
+  assert.match(provider, /EmailProviderId = "zeptomail"/);
+  assert.match(provider, /resolveZeptoMailSmtpPassword/);
+  assert.match(provider, /marketingEmailConfigured/);
+  assert.match(provider, /return false/);
+  ok("provider selection and marketing guard use ZeptoMail");
 }
 
 {
-  const resend = readFileSync(join(root, "lib/email/providers/resend.ts"), "utf8");
-  assert.match(resend, /from ['"]resend['"]/);
-  assert.match(resend, /new Resend/);
-  assert.match(resend, /resend\.emails\.send/);
-  assert.ok(!/from ['"]nodemailer['"]/.test(resend));
-  assert.ok(!/createTransport/.test(resend));
-  assert.ok(!/NEXT_PUBLIC_RESEND/.test(resend));
-  assert.match(resend, /server-only/);
-  ok("Resend provider uses API SDK only (no SMTP, no NEXT_PUBLIC)");
+  const smtp = readFileSync(join(root, "lib/email/providers/zeptomail.ts"), "utf8");
+  assert.match(smtp, /smtp\.zeptomail\.com/);
+  assert.match(smtp, /ZEPTOMAIL_SMTP_HOST/);
+  assert.match(smtp, /ZEPTOMAIL_SMTP_PORT/);
+  assert.match(smtp, /ZEPTOMAIL_SMTP_USER/);
+  assert.match(smtp, /ZEPTOMAIL_SMTP_PASSWORD/);
+  assert.match(smtp, /AUTH LOGIN/);
+  assert.match(smtp, /STARTTLS/);
+  assert.match(smtp, /rejectUnauthorized: true/);
+  assert.match(smtp, /Content-Type: /);
+  assert.match(smtp, /Content-Disposition: attachment/);
+  ok("SMTP transport uses authenticated TLS and MIME attachments");
 }
 
 {
-  const envEmail = readFileSync(join(root, "lib/env-email.ts"), "utf8");
-  assert.match(envEmail, /emailDeliveryConfigured/);
-  assert.match(envEmail, /resolveResendApiKey/);
-  assert.ok(!/smtp\.zeptomail|resolveSmtpConfig/.test(envEmail));
-  ok("env-email checks Resend configuration only");
+  const email = readFileSync(join(root, "lib/env-email.ts"), "utf8");
+  assert.match(email, /resolveZeptoMailSmtpPassword/);
+  assert.doesNotMatch(email, /resolveResendApiKey/);
+  ok("email readiness checks the Zoho SMTP secret");
 }
 
 {
   const start = readFileSync(join(root, "scripts/start.mjs"), "utf8");
-  assert.match(start, /RESEND_API_KEY/);
+  for (const key of [
+    "ZEPTOMAIL_SMTP_HOST",
+    "ZEPTOMAIL_SMTP_PORT",
+    "ZEPTOMAIL_SMTP_USER",
+    "ZEPTOMAIL_SMTP_PASSWORD",
+    "ZEPTOMAIL_FROM_EMAIL",
+    "ZEPTOMAIL_FROM_NAME",
+  ]) {
+    assert.match(start, new RegExp(key));
+  }
   assert.match(start, /EMAIL_PROVIDER/);
-  assert.match(start, /RESEND_FROM_EMAIL/);
-  ok("Coolify start wrapper carries Resend env keys");
+  assert.match(start, /ZEPTOMAIL_SMTP_PASSWORD=\$\{secretStatus/);
+  ok("Coolify start wrapper carries Zoho runtime settings without printing secrets");
 }
 
 {
-  const src = [
-    readFileSync(join(root, "lib/email/index.ts"), "utf8"),
-    readFileSync(join(root, "lib/email/provider.ts"), "utf8"),
-    readFileSync(join(root, "lib/email/providers/resend.ts"), "utf8"),
-  ].join("\n");
-  assert.ok(!/re_[A-Za-z0-9]{32,}/.test(src), "hardcoded Resend API key detected");
-  assert.ok(!/NEXT_PUBLIC_RESEND_API_KEY\s*=/.test(src));
-  ok("no hardcoded live API keys in email provider sources");
-}
-
-{
-  // Outbox still funnels through sendEmail
   const outbox = readFileSync(join(root, "lib/bulk-import-email-outbox.ts"), "utf8");
-  assert.match(outbox, /sendStudentWelcomeEmail|sendSystemEmail|drainBulkImportEmailOutbox/);
+  assert.match(outbox, /zeptoConfigured/);
+  assert.doesNotMatch(outbox, /resendConfigured/);
   assert.ok(existsSync(join(root, "app/api/cron/email-outbox/route.ts")));
-  ok("bulk import outbox + email-outbox cron still present");
+  ok("bulk import transactional outbox uses Zoho readiness and retains its cron route");
 }
 
-console.log(`\nResend-only email provider offline: ${passed}/8 passed`);
-if (passed !== 8) process.exit(1);
+{
+  const marketing = [
+    readFileSync(join(root, "lib/email-campaigns/live-drain.ts"), "utf8"),
+    readFileSync(join(root, "lib/webinar-followup/live-drain.ts"), "utf8"),
+  ].join("\n");
+  assert.doesNotMatch(marketing, /sendEmail\(/);
+  assert.match(marketing, /sendMarketingEmail/);
+  ok("marketing campaign workers do not send through transactional SMTP");
+}
+
+console.log(`\nZoho ZeptoMail provider regression: ${passed}/7 passed`);
+if (passed !== 7) process.exit(1);
