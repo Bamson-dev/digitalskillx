@@ -4,7 +4,7 @@ import { logAudit } from "@/lib/audit";
 import { scheduleBulkWorkerContinuation } from "@/lib/bulk-import-continue";
 import { enrollIfEmptyAndDrain, runLiveAimoneycodeDrain } from "@/lib/email-campaigns/live-drain";
 import { loadCampaignSnapshot } from "@/lib/email-campaigns/store";
-import { resendConfigured } from "@/lib/email/providers/resend";
+import { MARKETING_EMAIL_BLOCKED_MESSAGE } from "@/lib/email/marketing-policy";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -22,9 +22,7 @@ function kickIfMore(moreDue: boolean) {
 export async function POST(request: NextRequest) {
   const auth = await requireAdminApiAuth();
   if ("error" in auth) return auth.error;
-  if (!resendConfigured()) {
-    return NextResponse.json({ error: "Resend is not configured." }, { status: 503 });
-  }
+  return NextResponse.json({ error: MARKETING_EMAIL_BLOCKED_MESSAGE }, { status: 409 });
 
   const body = (await request.json().catch(() => ({}))) as { action?: string };
   const action = body.action === "start" ? "start" : "drain";
