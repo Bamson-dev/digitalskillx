@@ -15,7 +15,7 @@ function env(name: string): string {
 }
 
 function validateAddress(address: string): void {
-  if (address.length > 254 || /[\r\n<> ]/.test(address) || !/^[^@]+@[^@]+\.[^@]+$/.test(address)) {
+  if (address.length > 254 || /[\r\n<>,; "]/.test(address) || !/^[^@]+@[^@]+\.[^@]+$/.test(address)) {
     throw new Error("A valid email address is required.");
   }
 }
@@ -153,7 +153,7 @@ export function makeZeptoMailMimeMessage(
       const safeFilename = filename.replace(/[^\x20-\x7e]/g, "_");
       parts.push(
         "--" + mixedBoundary,
-        mimeType + '; name="' + safeFilename + '"',
+        "Content-Type: " + mimeType + '; name="' + safeFilename + '"',
         'Content-Disposition: attachment; filename="' + safeFilename + '"',
         "Content-Transfer-Encoding: base64",
         "",
