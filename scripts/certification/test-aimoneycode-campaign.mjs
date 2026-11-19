@@ -585,8 +585,9 @@ const campaignFixture = {
   const outbox = readFileSync(join(root, "lib/bulk-import-email-outbox.ts"), "utf8");
   const system = readFileSync(join(root, "lib/email/index.ts"), "utf8");
   assert.match(outbox, /drainBulkImportEmailOutboxUntilBudget/);
-  assert.match(system, /sendViaResend/);
-  ok("existing transactional and bulk-import email paths remain in place");
+  assert.match(system, /sendViaZeptoMail/);
+  assert.match(system, /sendMarketingEmail/);
+  ok("transactional messages use Zoho and campaign email stays on the marketing provider path");
 }
 
 assert.equal(AIMONEYCODE_TOTAL_STEPS, 30);
