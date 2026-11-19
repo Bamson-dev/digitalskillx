@@ -443,7 +443,7 @@ export async function drainBulkImportEmailOutboxUntilBudget(
   admin: SupabaseClient<Database>,
   opts?: { jobId?: string; batchSize?: number; budgetMs?: number },
 ) {
-  if (!resendConfigured()) {
+  if (!zeptoConfigured()) {
     return {
       sent: 0,
       failed: 0,
@@ -531,7 +531,7 @@ export async function getOutboxDiagnosticsForJob(
     .maybeSingle();
 
   return {
-    resendReady: resendConfigured(),
+    resendReady: zeptoConfigured(),
     lastError: (sample as { last_error?: string | null } | null)?.last_error ?? null,
   };
 }
