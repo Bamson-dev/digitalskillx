@@ -3,7 +3,7 @@ import Link from "next/link";
 import { requireAdmin } from "@/lib/auth";
 import { getAdminSupabase } from "@/lib/admin-supabase";
 import { listWebinarCampaigns } from "@/lib/webinar-followup/store";
-import { resendConfigured } from "@/lib/email/providers/resend";
+
 
 export const metadata: Metadata = { title: "Webinar Follow-Up" };
 export const dynamic = "force-dynamic";
@@ -12,7 +12,7 @@ export default async function WebinarFollowUpIndexPage() {
   await requireAdmin();
   const admin = await getAdminSupabase();
   const { migrationRequired, campaigns } = await listWebinarCampaigns(admin);
-  const resendReady = resendConfigured();
+  const resendReady = false;
 
   return (
     <div className="space-y-6">
@@ -26,7 +26,7 @@ export default async function WebinarFollowUpIndexPage() {
 
       {!resendReady ? (
         <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-          Resend is not configured. Campaign sends will fail until the email provider is ready.
+          Zoho CPaaS sends transactional emails only. Promotional sequences stay paused until Zoho Campaigns is connected.
         </p>
       ) : null}
 
