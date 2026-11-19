@@ -1,15 +1,12 @@
 import "server-only";
-import { resolveResendApiKey } from "@/lib/email/provider";
+import { resolveZeptoMailSmtpPassword } from "@/lib/email/provider";
 
-/**
- * True when Resend can send (RESEND_API_KEY present in Coolify/runtime).
- * ZeptoMail SMTP is not used for delivery.
- */
+/** True when Zoho ZeptoMail SMTP credentials are available in the server runtime. */
 export async function emailDeliveryConfigured() {
-  return Boolean(resolveResendApiKey());
+  return Boolean(resolveZeptoMailSmtpPassword());
 }
 
-/** @deprecated Use emailDeliveryConfigured — Resend-only. */
+/** @deprecated Use emailDeliveryConfigured. */
 export async function emailSmtpConfigured() {
   return emailDeliveryConfigured();
 }
