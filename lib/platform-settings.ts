@@ -2,6 +2,7 @@ import "server-only";
 import { createAdminClientAsync } from "@/lib/supabase/admin";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
+import { runtimeEnv } from "@/lib/runtime-env";
 import {
   PLATFORM_SETTINGS_DEFAULTS,
   type PlatformSettingsValues,
@@ -27,7 +28,7 @@ function mergeSettings(row: SettingsRow | null): PlatformSettingsValues {
     default_timezone: row.default_timezone || PLATFORM_SETTINGS_DEFAULTS.default_timezone,
     email_sender_name:
       row.email_sender_name ??
-      process.env.RESEND_FROM_NAME ??
+      runtimeEnv("ZEPTOMAIL_FROM_NAME") ??
       process.env.ZEPTOMAIL_FROM_NAME ??
       PLATFORM_SETTINGS_DEFAULTS.email_sender_name,
     email_reply_to: row.email_reply_to,
@@ -69,15 +70,15 @@ export type EmailSenderConfig = {
   replyTo?: string;
 };
 
-/** Resolved sender identity: DB settings override Resend env defaults. */
+/** Resolved Zoho CPaaS sender identity: database display-name/reply-to settings override runtime defaults. */
 export async function getEmailSenderConfig(): Promise<EmailSenderConfig> {
   const config: EmailSenderConfig = {
     fromName:
-      process.env.RESEND_FROM_NAME?.trim() ||
+      (runtimeEnv("ZEPTOMAIL_FROM_NAME") ?? process.env.ZEPTOMAIL_FROM_NAME)?.trim() ||
       PLATFORM_SETTINGS_DEFAULTS.platform_name ||
       "DigitalSkillX",
     fromAddress:
-      process.env.RESEND_FROM_EMAIL?.trim() ||
+      (runtimeEnv("ZEPTOMAIL_FROM_EMAIL") ?? process.env.ZEPTOMAIL_FROM_EMAIL)?.trim() ||
       "courses@digitalskillx.com",
   };
 
