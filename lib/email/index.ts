@@ -2,6 +2,7 @@ import "server-only";
 import { getEmailSenderConfig } from "@/lib/platform-settings";
 import { sendViaZeptoMail, zeptoConfigured } from "@/lib/email/providers/zeptomail";
 import { isSyntheticTestRecipient } from "@/lib/email/synthetic-recipient";
+import { MARKETING_EMAIL_BLOCKED_MESSAGE } from "@/lib/email/marketing-policy";
 import type { SendEmailParams, SendEmailResult } from "@/lib/email/types";
 
 export type { SendEmailParams, SendEmailResult } from "@/lib/email/types";
@@ -12,6 +13,9 @@ function hasSyntheticRecipient(to: string | string[]) {
 
 /** Send one transactional email through the configured Zoho CPaaS agent. */
 export async function sendEmail(params: SendEmailParams): Promise<SendEmailResult> {
+  if (params.purpose === "marketing") {
+    return { error: new Error(MARKETING_EMAIL_BLOCKED_MESSAGE) };
+  }
   if (hasSyntheticRecipient(params.to)) {
     return { skipped: true, error: new Error("Skipped synthetic test recipient") };
   }
