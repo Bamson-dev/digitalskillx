@@ -1,15 +1,12 @@
 import "server-only";
-import { resolveResendApiKey } from "@/lib/email/provider";
+import { zeptoConfigured } from "@/lib/email/providers/zeptomail";
 
-/**
- * True when Resend can send (RESEND_API_KEY present in Coolify/runtime).
- * ZeptoMail SMTP is not used for delivery.
- */
+/** True when the Zoho CPaaS agent Send API key is available in the server runtime. */
 export async function emailDeliveryConfigured() {
-  return Boolean(resolveResendApiKey());
+  return zeptoConfigured();
 }
 
-/** @deprecated Use emailDeliveryConfigured — Resend-only. */
+/** @deprecated Retained for older callers; checks Zoho transactional email configuration. */
 export async function emailSmtpConfigured() {
   return emailDeliveryConfigured();
 }
