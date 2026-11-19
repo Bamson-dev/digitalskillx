@@ -2,6 +2,8 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 import { sendEmail } from "@/lib/email";
+import { MARKETING_EMAILS_ENABLED } from "@/lib/email/marketing-policy";
+import { AIMONEYCODE_CAMPAIGN_SLUG } from "@/lib/email-campaigns/constants";
 import { drainAimoneycodeCampaignUntilBudget, type CampaignRecord, type DrainResult } from "@/lib/email-campaigns/processor";
 import {
   createSupabaseCampaignStore,
@@ -24,6 +26,7 @@ export function campaignSendMail() {
   }) =>
     sendEmail({
       to: mail.to,
+      purpose: "marketing",
       subject: mail.subject,
       html: mail.html,
       headers: mail.headers,
@@ -35,6 +38,26 @@ export async function runLiveAimoneycodeDrain(
   admin: Admin,
   opts?: { budgetMs?: number; campaignId?: string },
 ): Promise<DrainResult & { counts: CampaignCounts | null }> {
+  if (!MARKETING_EMAILS_ENABLED) {
+    const store = createSupabaseCampaignStore(admin);
+    const campaign = await store.getCampaignBySlug(AIMONEYCODE_CAMPAIGN_SLUG);
+    const counts = opts?.campaignId ? await loadCampaignCounts(admin, opts.campaignId) : null;
+    return {
+      campaignStatus: campaign?.status ?? "missing",
+      examined: 0,
+      queued: 0,
+      sent: 0,
+      failed: 0,
+      skipped: 0,
+      unsubscribed: 0,
+      completed: 0,
+      ticks: 0,
+      moreDue: false,
+      reason: "marketing_provider_unavailable" as const,
+      counts,
+    };
+  }
+
   const drain = await drainAimoneycodeCampaignUntilBudget({
     store: createSupabaseCampaignStore(admin),
     sendEmail: campaignSendMail(),
