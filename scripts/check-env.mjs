@@ -58,10 +58,13 @@ const required = [
 
 const optional = [
   { key: "NEXT_PUBLIC_SITE_URL", label: "Public site URL", fallback: "https://digitalskillx.com" },
-  { key: "EMAIL_PROVIDER", label: "Email provider", fallback: "resend" },
-  { key: "RESEND_API_KEY", label: "Resend API key" },
-  { key: "RESEND_FROM_EMAIL", label: "Email sender address", fallback: "courses@digitalskillx.com" },
-  { key: "RESEND_FROM_NAME", label: "Email sender name", fallback: "DigitalSkillX" },
+  { key: "EMAIL_PROVIDER", label: "Email provider", fallback: "zeptomail" },
+  { key: "ZEPTOMAIL_SMTP_HOST", label: "Zoho ZeptoMail SMTP host", fallback: "smtp.zeptomail.com" },
+  { key: "ZEPTOMAIL_SMTP_PORT", label: "Zoho ZeptoMail SMTP port", fallback: "587" },
+  { key: "ZEPTOMAIL_SMTP_USER", label: "Zoho ZeptoMail SMTP username", fallback: "emailapikey" },
+  { key: "ZEPTOMAIL_SMTP_PASSWORD", label: "Zoho ZeptoMail SMTP password" },
+  { key: "ZEPTOMAIL_FROM_EMAIL", label: "Zoho verified sender address", fallback: "courses@digitalskillx.com" },
+  { key: "ZEPTOMAIL_FROM_NAME", label: "Zoho sender name", fallback: "DigitalSkillX" },
   { key: "YOUTUBE_API_KEY", label: "YouTube import" },
   { key: "DEEPSEEK_API_KEY", label: "DeepSeek AI assistant" },
   { key: "DEEPSEEK_MODEL", label: "DeepSeek model", fallback: "deepseek-chat" },
