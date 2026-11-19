@@ -9,7 +9,7 @@ import { siteUrl as orgSiteUrl } from "@/lib/org";
 import { bulkImportStage } from "@/lib/bulk-import-telemetry";
 import { isMissingColumnError } from "@/lib/schema-guard";
 import { isSyntheticTestRecipient } from "@/lib/email/synthetic-recipient";
-import { resendConfigured } from "@/lib/email/providers/resend";
+import { zeptoConfigured } from "@/lib/email/providers/zeptomail";
 import { buildCourseResolver } from "@/lib/course-resolver";
 import type { Database } from "@/types/database";
 
@@ -253,9 +253,9 @@ export async function drainBulkImportEmailOutbox(
   admin: SupabaseClient<Database>,
   limit = 20,
   options?: { jobId?: string; reclaimMinutes?: number },
-): Promise<{ sent: number; failed: number; claimed: number; resendReady: boolean }> {
+): Promise<{ sent: number; failed: number; claimed: number; emailProviderReady: boolean }> {
   const started = Date.now();
-  const resendReady = resendConfigured();
+  const emailProviderReady = zeptoConfigured();
   await reclaimStaleOutboxSending(admin, options?.reclaimMinutes ?? 2, options?.jobId);
   const claimed = await claimOutboxRows(admin, limit, options?.jobId);
 
@@ -429,13 +429,13 @@ export async function drainBulkImportEmailOutbox(
     sent,
     failed,
     claimed: claimed.length,
-    resendReady,
+    emailProviderReady,
     jobId: options?.jobId,
     durationMs: Date.now() - started,
     rowCount: claimed.length,
   });
 
-  return { sent, failed, claimed: claimed.length, resendReady };
+  return { sent, failed, claimed: claimed.length, emailProviderReady };
 }
 
 /** Drain many batches within a time budget (admin UI / cron). */
@@ -443,14 +443,14 @@ export async function drainBulkImportEmailOutboxUntilBudget(
   admin: SupabaseClient<Database>,
   opts?: { jobId?: string; batchSize?: number; budgetMs?: number },
 ) {
-  if (!resendConfigured()) {
+  if (!zeptoConfigured()) {
     return {
       sent: 0,
       failed: 0,
       batches: 0,
-      resendReady: false as const,
+      emailProviderReady: false as const,
       error:
-        "Resend is not configured. Add RESEND_API_KEY to the server runtime environment, then redeploy.",
+        "Zoho CPaaS is not configured. Add the agent Send API key to the server runtime environment, then redeploy.",
     };
   }
 
@@ -478,7 +478,7 @@ export async function drainBulkImportEmailOutboxUntilBudget(
     if (batch.claimed === 0) break;
   }
 
-  return { sent, failed, batches, resendReady: true as const };
+  return { sent, failed, batches, emailProviderReady: true as const };
 }
 
 export async function countGlobalPendingOutbox(admin: SupabaseClient<Database>) {
@@ -531,7 +531,7 @@ export async function getOutboxDiagnosticsForJob(
     .maybeSingle();
 
   return {
-    resendReady: resendConfigured(),
+    emailProviderReady: zeptoConfigured(),
     lastError: (sample as { last_error?: string | null } | null)?.last_error ?? null,
   };
 }
