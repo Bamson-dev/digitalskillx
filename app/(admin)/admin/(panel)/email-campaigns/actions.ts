@@ -209,7 +209,7 @@ export async function setAimoneycodeCampaignStatus(
     if (status !== "draft" && status !== "active" && status !== "paused") {
       return { error: "Invalid campaign status." };
     }
-    if (status === "active" && !resendConfigured()) {
+    if (status === "active" && !marketingEmailConfigured()) {
       return { error: "Marketing email provider is not connected. This sequence cannot be activated until a marketing email service is configured." };
     }
 
