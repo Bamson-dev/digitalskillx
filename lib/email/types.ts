@@ -1,5 +1,6 @@
 export type SendEmailParams = {
   to: string | string[];
+  purpose?: "transactional" | "marketing";
   subject: string;
   html: string;
   replyTo?: string;
