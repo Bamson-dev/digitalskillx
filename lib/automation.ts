@@ -166,7 +166,7 @@ async function executeAction(
     }
     case "notify_admin": {
       const adminAddr =
-        process.env.RESEND_FROM_EMAIL?.trim() ||
+        process.env.ZEPTOMAIL_FROM_EMAIL?.trim() ||
         process.env.ADMIN_EMAIL?.trim() ||
         "courses@digitalskillx.com";
       if (adminAddr) {

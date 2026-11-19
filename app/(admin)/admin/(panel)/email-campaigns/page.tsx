@@ -5,7 +5,7 @@ import { EmailCampaignPanel } from "@/components/admin/email-campaign-panel";
 import { loadCampaignSnapshot } from "@/lib/email-campaigns/store";
 import { loadAimoneycodeSequence } from "@/lib/email-campaigns/sequence";
 import { ctaUrlForStep } from "@/lib/email-campaigns/constants";
-import { resendConfigured } from "@/lib/email/providers/resend";
+import { marketingEmailConfigured } from "@/lib/email/provider";
 
 export const metadata: Metadata = { title: "Email campaigns" };
 export const maxDuration = 120;
@@ -80,7 +80,7 @@ export default async function AdminEmailCampaignsPage() {
         counts={snapshot.counts}
         emails={emails}
         adminEmail={adminProfile.email}
-        resendReady={resendConfigured()}
+        resendReady={marketingEmailConfigured()}
       />
     </div>
   );

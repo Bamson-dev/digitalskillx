@@ -4,7 +4,7 @@ import { logAudit } from "@/lib/audit";
 import { scheduleBulkWorkerContinuation } from "@/lib/bulk-import-continue";
 import { enrollIfEmptyAndDrain, runLiveAimoneycodeDrain } from "@/lib/email-campaigns/live-drain";
 import { loadCampaignSnapshot } from "@/lib/email-campaigns/store";
-import { resendConfigured } from "@/lib/email/providers/resend";
+import { marketingEmailConfigured } from "@/lib/email/provider";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -22,8 +22,8 @@ function kickIfMore(moreDue: boolean) {
 export async function POST(request: NextRequest) {
   const auth = await requireAdminApiAuth();
   if ("error" in auth) return auth.error;
-  if (!resendConfigured()) {
-    return NextResponse.json({ error: "Resend is not configured." }, { status: 503 });
+  if (!marketingEmailConfigured()) {
+    return NextResponse.json({ error: "Marketing email provider is not connected. Connect Zoho Campaigns or another marketing email service before sending." }, { status: 503 });
   }
 
   const body = (await request.json().catch(() => ({}))) as { action?: string };

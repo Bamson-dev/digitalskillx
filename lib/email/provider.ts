@@ -1,42 +1,75 @@
 import "server-only";
 import { runtimeEnv } from "@/lib/runtime-env";
 
-/** Resend is the only active email provider. */
-export type EmailProviderId = "resend";
+export type EmailProviderId = "zeptomail";
 
-/**
- * Active provider is always Resend.
- * EMAIL_PROVIDER may still be set to "resend" in Coolify for clarity;
- * any other value is ignored (Resend-only production path).
- */
+/** Transactional email is routed to ZeptoMail regardless of legacy Resend variables. */
 export function resolveEmailProvider(): EmailProviderId {
   const raw = (runtimeEnv("EMAIL_PROVIDER") ?? process.env.EMAIL_PROVIDER ?? "")
     .trim()
     .toLowerCase();
-  if (raw && raw !== "resend") {
-    // Soft warning only — never fall back to ZeptoMail/SMTP.
+  if (raw && raw !== "zeptomail" && raw !== "zoho") {
     console.warn(
-      `[email] EMAIL_PROVIDER="${raw}" is not supported; DigitalSkillX uses Resend only.`,
+      '[email] Ignoring legacy EMAIL_PROVIDER="' + raw + '". DigitalSkillX transactional email uses ZeptoMail.',
     );
   }
-  return "resend";
+  return "zeptomail";
 }
 
-export function resolveResendApiKey(): string | null {
-  const key = (runtimeEnv("RESEND_API_KEY") ?? process.env.RESEND_API_KEY ?? "").trim();
-  return key || null;
+export function resolveZeptoMailSmtpHost(): string {
+  return (runtimeEnv("ZEPTOMAIL_SMTP_HOST") ?? process.env.ZEPTOMAIL_SMTP_HOST ?? "").trim() || "smtp.zeptomail.com";
 }
 
-export function resolveResendFromEmail(): string {
+export function resolveZeptoMailSmtpPort(): number {
+  const raw = (runtimeEnv("ZEPTOMAIL_SMTP_PORT") ?? process.env.ZEPTOMAIL_SMTP_PORT ?? "").trim();
+  const parsed = raw ? Number(raw) : 587;
+  return Number.isInteger(parsed) && parsed > 0 && parsed <= 65535 ? parsed : 587;
+}
+
+export function resolveZeptoMailSmtpUser(): string {
+  return (runtimeEnv("ZEPTOMAIL_SMTP_USER") ?? process.env.ZEPTOMAIL_SMTP_USER ?? "").trim() || "emailapikey";
+}
+
+export function resolveZeptoMailSmtpPassword(): string | null {
+  const value = (runtimeEnv("ZEPTOMAIL_SMTP_PASSWORD") ?? process.env.ZEPTOMAIL_SMTP_PASSWORD ?? "").trim();
+  return value || null;
+}
+
+export function resolveZeptoMailFromEmail(): string {
   return (
-    (runtimeEnv("RESEND_FROM_EMAIL") ?? process.env.RESEND_FROM_EMAIL ?? "").trim() ||
+    (runtimeEnv("ZEPTOMAIL_FROM_EMAIL") ?? process.env.ZEPTOMAIL_FROM_EMAIL ?? "").trim() ||
     "courses@digitalskillx.com"
   );
 }
 
-export function resolveResendFromName(): string {
+export function resolveZeptoMailFromName(): string {
   return (
-    (runtimeEnv("RESEND_FROM_NAME") ?? process.env.RESEND_FROM_NAME ?? "").trim() ||
+    (runtimeEnv("ZEPTOMAIL_FROM_NAME") ?? process.env.ZEPTOMAIL_FROM_NAME ?? "").trim() ||
     "DigitalSkillX"
   );
+}
+
+/** Marketing sequences remain disabled until a marketing-specific provider is connected. */
+export function marketingEmailConfigured(): boolean {
+  return false;
+}
+
+/**
+ * Legacy Resend helpers retained only so old, unused provider modules still compile.
+ * Transactional sendEmail() never reads these values.
+ * @deprecated Use the ZeptoMail SMTP resolvers above.
+ */
+export function resolveResendApiKey(): string | null {
+  const value = (runtimeEnv("RESEND_API_KEY") ?? process.env.RESEND_API_KEY ?? "").trim();
+  return value || null;
+}
+
+export function resolveResendFromEmail(): string {
+  return (runtimeEnv("RESEND_FROM_EMAIL") ?? process.env.RESEND_FROM_EMAIL ?? "").trim() ||
+    "courses@digitalskillx.com";
+}
+
+export function resolveResendFromName(): string {
+  return (runtimeEnv("RESEND_FROM_NAME") ?? process.env.RESEND_FROM_NAME ?? "").trim() ||
+    "DigitalSkillX";
 }

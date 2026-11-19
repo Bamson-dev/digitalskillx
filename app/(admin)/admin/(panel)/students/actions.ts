@@ -244,7 +244,7 @@ export async function createStudent(
             ? emailResult.reason
             : "Email not configured";
       return {
-        message: `Student ${fullName} created.${courseNote} Welcome email failed: ${reason}. Confirm RESEND_API_KEY is set in Coolify.`,
+        message: `Student ${fullName} created.${courseNote} Welcome email failed: ${reason}. Confirm ZEPTOMAIL_SMTP_PASSWORD and the other ZEPTOMAIL_SMTP_* settings are set in Coolify.`,
       };
     }
     return { message: `Student ${fullName} created.${courseNote} Welcome email sent.` };

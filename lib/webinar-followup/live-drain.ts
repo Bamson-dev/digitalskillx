@@ -2,7 +2,7 @@ import "server-only";
 import { runBackgroundTask } from "@/lib/background-tasks";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
-import { sendEmail } from "@/lib/email";
+import { sendMarketingEmail } from "@/lib/email";
 import { keepWebinarFollowupSending, nudgeWebinarFollowupIfNeeded } from "@/lib/bulk-import-continue";
 import { WEBINAR_FOLLOWUP_DRAIN_BUDGET_MS, WEBINAR_FOLLOWUP_DRAIN_LIMIT } from "./constants";
 import { drainWebinarFollowupUntilBudget, type DrainResult } from "./processor";
@@ -43,7 +43,7 @@ export function webinarFollowupSendMail() {
     headers?: Record<string, string>;
     idempotencyKey?: string;
   }) =>
-    sendEmail({
+    sendMarketingEmail({
       to: mail.to,
       subject: mail.subject,
       html: mail.html,

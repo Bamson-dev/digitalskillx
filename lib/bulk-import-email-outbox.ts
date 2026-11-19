@@ -9,7 +9,7 @@ import { siteUrl as orgSiteUrl } from "@/lib/org";
 import { bulkImportStage } from "@/lib/bulk-import-telemetry";
 import { isMissingColumnError } from "@/lib/schema-guard";
 import { isSyntheticTestRecipient } from "@/lib/email/synthetic-recipient";
-import { resendConfigured } from "@/lib/email/providers/resend";
+import { zeptoConfigured } from "@/lib/email/providers/zeptomail";
 import { buildCourseResolver } from "@/lib/course-resolver";
 import type { Database } from "@/types/database";
 
@@ -255,7 +255,7 @@ export async function drainBulkImportEmailOutbox(
   options?: { jobId?: string; reclaimMinutes?: number },
 ): Promise<{ sent: number; failed: number; claimed: number; resendReady: boolean }> {
   const started = Date.now();
-  const resendReady = resendConfigured();
+  const resendReady = zeptoConfigured();
   await reclaimStaleOutboxSending(admin, options?.reclaimMinutes ?? 2, options?.jobId);
   const claimed = await claimOutboxRows(admin, limit, options?.jobId);
 
@@ -443,14 +443,14 @@ export async function drainBulkImportEmailOutboxUntilBudget(
   admin: SupabaseClient<Database>,
   opts?: { jobId?: string; batchSize?: number; budgetMs?: number },
 ) {
-  if (!resendConfigured()) {
+  if (!zeptoConfigured()) {
     return {
       sent: 0,
       failed: 0,
       batches: 0,
       resendReady: false as const,
       error:
-        "Resend is not configured. Add RESEND_API_KEY to the server runtime environment, then redeploy.",
+        "Zoho ZeptoMail SMTP is not configured. Check the ZEPTOMAIL_SMTP_* runtime settings in Coolify and redeploy.",
     };
   }
 
@@ -531,7 +531,7 @@ export async function getOutboxDiagnosticsForJob(
     .maybeSingle();
 
   return {
-    resendReady: resendConfigured(),
+    resendReady: zeptoConfigured(),
     lastError: (sample as { last_error?: string | null } | null)?.last_error ?? null,
   };
 }
