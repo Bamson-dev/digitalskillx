@@ -1033,7 +1033,7 @@ export async function getBulkImportJobSummary(
   const errorMessage = publicJobErrorMessage(jobRow.error_message);
   const emailError =
     !outboxDiagnostics.resendReady
-      ? "Resend is not configured. Add RESEND_API_KEY in Vercel → Environment Variables, then redeploy."
+      ? "Zoho ZeptoMail SMTP is not configured. Check the ZEPTOMAIL_SMTP_* runtime settings in Coolify."
       : outboxDiagnostics.lastError;
 
   if (!options?.lite) {
