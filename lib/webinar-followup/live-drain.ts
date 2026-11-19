@@ -3,6 +3,7 @@ import { runBackgroundTask } from "@/lib/background-tasks";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 import { sendEmail } from "@/lib/email";
+import { MARKETING_EMAILS_ENABLED } from "@/lib/email/marketing-policy";
 import { keepWebinarFollowupSending, nudgeWebinarFollowupIfNeeded } from "@/lib/bulk-import-continue";
 import { WEBINAR_FOLLOWUP_DRAIN_BUDGET_MS, WEBINAR_FOLLOWUP_DRAIN_LIMIT } from "./constants";
 import { drainWebinarFollowupUntilBudget, type DrainResult } from "./processor";
@@ -45,6 +46,7 @@ export function webinarFollowupSendMail() {
   }) =>
     sendEmail({
       to: mail.to,
+      purpose: "marketing",
       subject: mail.subject,
       html: mail.html,
       headers: mail.headers,
@@ -57,6 +59,24 @@ export async function runLiveWebinarFollowupDrain(
   opts?: { budgetMs?: number; campaignId?: string },
 ): Promise<DrainResult & { counts: CampaignCounts | null; sequenceSynced?: boolean }> {
   const store = createSupabaseWfuStore(admin);
+  if (!MARKETING_EMAILS_ENABLED) {
+    const counts = opts?.campaignId ? await loadCampaignCounts(admin, opts.campaignId) : null;
+    return {
+      campaignsExamined: 0,
+      examined: 0,
+      queued: 0,
+      sent: 0,
+      failed: 0,
+      skipped: 0,
+      unsubscribed: 0,
+      completed: 0,
+      ticks: 0,
+      moreDue: false,
+      reason: "marketing_provider_unavailable",
+      counts,
+      sequenceSynced: false,
+    };
+  }
   let sequenceSynced = false;
   if (opts?.campaignId) {
     sequenceSynced = await ensureSequenceFromSource(admin, opts.campaignId);
