@@ -145,7 +145,7 @@ function EmailSettingsForm({ settings }: { settings: PlatformSettingsValues }) {
     <Card>
       <CardHeader
         title="Email settings"
-        description="Display name and reply-to for Resend. From address is RESEND_FROM_EMAIL in Coolify (courses@digitalskillx.com)."
+        description="Display name and reply-to for Zoho CPaaS. Sender address: ZEPTOMAIL_FROM_EMAIL in Coolify (courses@digitalskillx.com)."
       />
       <form action={action} className="space-y-4">
         <div>
@@ -261,11 +261,11 @@ function IntegrationSettingsForm({
           </p>
         </div>
         <div className="rounded-lg border border-border bg-muted/30 px-3 py-3 text-sm">
-          <p className="font-medium text-foreground">Transactional email (Resend)</p>
+          <p className="font-medium text-foreground">Transactional email (Zoho CPaaS)</p>
           <p className="mt-1 text-xs text-muted">
             {emailConfigured
-              ? "Resend API key is available in the server runtime. Sender: courses@digitalskillx.com via Coolify (RESEND_FROM_EMAIL / RESEND_FROM_NAME)."
-              : "Set RESEND_API_KEY, RESEND_FROM_EMAIL, RESEND_FROM_NAME, and EMAIL_PROVIDER=resend in Coolify, then redeploy. SMTP/ZeptoMail is not used."}
+              ? "Zoho CPaaS agent Send API key is available in the server runtime. Sender: courses@digitalskillx.com."
+              : "Set ZEPTOMAIL_API_KEY, ZEPTOMAIL_FROM_EMAIL, ZEPTOMAIL_FROM_NAME, and EMAIL_PROVIDER=zeptomail in Coolify, then redeploy."}
           </p>
         </div>
         <AdminSaveButton label={label}>{label}</AdminSaveButton>
