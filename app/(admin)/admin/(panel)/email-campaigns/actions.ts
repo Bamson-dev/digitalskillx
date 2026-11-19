@@ -21,7 +21,7 @@ import {
   previewStudents,
   setCampaignStatus,
 } from "@/lib/email-campaigns/store";
-import { resendConfigured } from "@/lib/email/providers/resend";
+import { MARKETING_EMAIL_BLOCKED_MESSAGE } from "@/lib/email/marketing-policy";
 
 export type CampaignActionState = {
   error?: string;
@@ -67,9 +67,7 @@ export async function startSendingToAllStudents(
 ): Promise<CampaignActionState> {
   try {
     const { admin, campaign, snapshot } = await requireCampaign();
-    if (!resendConfigured()) {
-      return { error: "Resend is not configured. Set RESEND_API_KEY before sending." };
-    }
+    return { error: MARKETING_EMAIL_BLOCKED_MESSAGE };
 
     const result = await enrollIfEmptyAndDrain({
       admin,
@@ -209,9 +207,7 @@ export async function setAimoneycodeCampaignStatus(
     if (status !== "draft" && status !== "active" && status !== "paused") {
       return { error: "Invalid campaign status." };
     }
-    if (status === "active" && !resendConfigured()) {
-      return { error: "Resend is not configured. Set RESEND_API_KEY before activating." };
-    }
+    if (status === "active") return { error: MARKETING_EMAIL_BLOCKED_MESSAGE };
 
     await setCampaignStatus(admin, campaign.id, status);
     await logAudit({
@@ -244,6 +240,7 @@ export async function testSendAimoneycodeEmail(
   formData: FormData,
 ): Promise<CampaignActionState> {
   try {
+    return { error: MARKETING_EMAIL_BLOCKED_MESSAGE };
     const adminProfile = await requireAdmin();
     await requireCampaign();
     const step = Number(formData.get("step") ?? 0);
