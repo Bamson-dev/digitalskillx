@@ -53,3 +53,23 @@ export function resolveZeptoMailFromName(): string {
 export function marketingEmailConfigured(): boolean {
   return false;
 }
+
+/**
+ * Legacy Resend helpers retained only so old, unused provider modules still compile.
+ * Transactional sendEmail() never reads these values.
+ * @deprecated Use the ZeptoMail SMTP resolvers above.
+ */
+export function resolveResendApiKey(): string | null {
+  const value = (runtimeEnv("RESEND_API_KEY") ?? process.env.RESEND_API_KEY ?? "").trim();
+  return value || null;
+}
+
+export function resolveResendFromEmail(): string {
+  return (runtimeEnv("RESEND_FROM_EMAIL") ?? process.env.RESEND_FROM_EMAIL ?? "").trim() ||
+    "courses@digitalskillx.com";
+}
+
+export function resolveResendFromName(): string {
+  return (runtimeEnv("RESEND_FROM_NAME") ?? process.env.RESEND_FROM_NAME ?? "").trim() ||
+    "DigitalSkillX";
+}
