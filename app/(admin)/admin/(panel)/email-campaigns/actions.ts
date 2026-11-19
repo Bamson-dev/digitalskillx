@@ -6,7 +6,7 @@ import { getAdminSupabase } from "@/lib/admin-supabase";
 import { logAudit } from "@/lib/audit";
 import { scheduleBulkWorkerContinuation } from "@/lib/bulk-import-continue";
 import { siteUrl } from "@/lib/org";
-import { sendEmail } from "@/lib/email";
+import { sendMarketingEmail } from "@/lib/email";
 import { AIMONEYCODE_CAMPAIGN_SLUG, AIMONEYCODE_TOTAL_STEPS, isValidEmail } from "@/lib/email-campaigns/constants";
 import { isSyntheticTestRecipient } from "@/lib/email/synthetic-recipient";
 import { getAimoneycodeEmail } from "@/lib/email-campaigns/sequence";
@@ -21,7 +21,7 @@ import {
   previewStudents,
   setCampaignStatus,
 } from "@/lib/email-campaigns/store";
-import { resendConfigured } from "@/lib/email/providers/resend";
+import { marketingEmailConfigured } from "@/lib/email/provider";
 
 export type CampaignActionState = {
   error?: string;
@@ -67,8 +67,8 @@ export async function startSendingToAllStudents(
 ): Promise<CampaignActionState> {
   try {
     const { admin, campaign, snapshot } = await requireCampaign();
-    if (!resendConfigured()) {
-      return { error: "Resend is not configured. Set RESEND_API_KEY before sending." };
+    if (!marketingEmailConfigured()) {
+      return { error: "Marketing email provider is not connected. Connect Zoho Campaigns or another marketing email service before sending this sequence." };
     }
 
     const result = await enrollIfEmptyAndDrain({
@@ -210,7 +210,7 @@ export async function setAimoneycodeCampaignStatus(
       return { error: "Invalid campaign status." };
     }
     if (status === "active" && !resendConfigured()) {
-      return { error: "Resend is not configured. Set RESEND_API_KEY before activating." };
+      return { error: "Marketing email provider is not connected. This sequence cannot be activated until a marketing email service is configured." };
     }
 
     await setCampaignStatus(admin, campaign.id, status);
@@ -267,7 +267,7 @@ export async function testSendAimoneycodeEmail(
       unsubscribeUrl: unsub,
     });
 
-    const result = await sendEmail({
+    const result = await sendMarketingEmail({
       to,
       subject: `[TEST] ${rendered.subject}`,
       html: rendered.html,
