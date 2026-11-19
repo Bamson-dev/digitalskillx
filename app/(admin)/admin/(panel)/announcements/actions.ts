@@ -2,7 +2,7 @@
 
 import { getAdminSupabase } from "@/lib/admin-supabase";
 import { requireAdmin } from "@/lib/auth";
-import { sendEmail } from "@/lib/email";
+import { sendMarketingEmail } from "@/lib/email";
 import { emailTemplates } from "@/lib/email/templates";
 import { notifyMany } from "@/lib/notifications";
 import { logAudit } from "@/lib/audit";
@@ -48,10 +48,12 @@ export async function sendAnnouncement(
     const tpl = emailTemplates.announcement({ subject, body });
     const emailResults = await Promise.allSettled(
       recipients.map((recipient) =>
-        sendEmail({ to: recipient.email, subject: tpl.subject, html: tpl.html }),
+        sendMarketingEmail({ to: recipient.email, subject: tpl.subject, html: tpl.html }),
       ),
     );
-    const emailsSent = emailResults.filter((result) => result.status === "fulfilled").length;
+    const emailsSent = emailResults.filter(
+      (result) => result.status === "fulfilled" && "messageId" in result.value,
+    ).length;
 
     const preview = stripHtmlPreview(body);
     const linkUrl =
@@ -84,7 +86,7 @@ export async function sendAnnouncement(
         : `${courseIds.length} course${courseIds.length === 1 ? "" : "s"}`;
 
     return {
-      message: `Announcement delivered to ${recipients.length} student(s) (${audienceLabel}). ${emailsSent} email(s) sent. Students will also see it on their dashboard.`,
+      message: `Announcement delivered to ${recipients.length} student(s) (${audienceLabel}). ${emailsSent} email(s) sent. Students will also see it on their dashboard. Bulk email is paused until a marketing email provider is connected.`,
     };
   } catch (err) {
     return { error: err instanceof Error ? err.message : "Could not send announcement." };
