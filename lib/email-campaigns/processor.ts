@@ -98,7 +98,7 @@ export type ProcessorResult = {
   skipped: number;
   unsubscribed: number;
   completed: number;
-  reason?: "draft" | "paused" | "missing" | "no_due";
+  reason?: "draft" | "paused" | "missing" | "no_due" | "marketing_provider_unavailable";
 };
 
 function errorMessage(error: unknown): string {
