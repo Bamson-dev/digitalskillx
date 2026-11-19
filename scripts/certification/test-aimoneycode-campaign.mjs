@@ -568,6 +568,8 @@ const campaignFixture = {
   const cron = readFileSync(join(root, "app/api/cron/email-campaigns/route.ts"), "utf8");
   const storeSrc = readFileSync(join(root, "lib/email-campaigns/store.ts"), "utf8");
   assert.match(cron, /runLiveAimoneycodeDrain/);
+  assert.match(cron, /marketingEmailConfigured/);
+  assert.match(cron, /status: 503/);
   assert.match(storeSrc, /\["pending", "sending"\]/);
   ok("campaign worker drains on www, never via protected vercel.app, and outbox cron stays daily");
 }
