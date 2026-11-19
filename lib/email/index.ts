@@ -30,7 +30,6 @@ export async function sendEmail(params: SendEmailParams): Promise<SendEmailResul
  */
 export async function sendMarketingEmail(_params: SendEmailParams): Promise<SendEmailResult> {
   return {
-    skipped: true,
     error: new Error(
       "Marketing email is not enabled. ZeptoMail supports transactional email only; connect Zoho Campaigns for promotional sequences and bulk campaigns.",
     ),
