@@ -18,6 +18,9 @@ const RUNTIME_KEYS = [
   "DEEPSEEK_MODEL",
   "PAYSTACK_SECRET_KEY",
   "PAYSTACK_USD_ENABLED",
+  "ZEPTOMAIL_API_URL",
+  "ZEPTOMAIL_API_KEY",
+  "ZEPTOMAIL_TOKEN",
   "ZEPTOMAIL_SMTP_HOST",
   "ZEPTOMAIL_SMTP_PORT",
   "ZEPTOMAIL_SMTP_USER",
@@ -25,9 +28,6 @@ const RUNTIME_KEYS = [
   "ZEPTOMAIL_FROM_EMAIL",
   "ZEPTOMAIL_FROM_NAME",
   "EMAIL_PROVIDER",
-  "RESEND_API_KEY",
-  "RESEND_FROM_EMAIL",
-  "RESEND_FROM_NAME",
 ];
 
 function readEnv(name) {
@@ -181,10 +181,9 @@ async function main() {
   console.log(`  YOUTUBE_API_KEY=${youtubeStatus}`);
   console.log(`  DEEPSEEK_API_KEY=${secretStatus("DEEPSEEK_API_KEY")}`);
   console.log(`  PAYSTACK_SECRET_KEY=${secretStatus("PAYSTACK_SECRET_KEY")}`);
-  console.log(`  EMAIL_PROVIDER=${readEnv("EMAIL_PROVIDER") || "(resend)"}`);
-  console.log(`  RESEND_API_KEY=${secretStatus("RESEND_API_KEY")}`);
-  console.log(`  RESEND_FROM_EMAIL=${readEnv("RESEND_FROM_EMAIL") ? "set" : "missing"}`);
-  console.log(`  RESEND_FROM_NAME=${readEnv("RESEND_FROM_NAME") ? "set" : "missing"}`);
+  console.log(`  EMAIL_PROVIDER=${readEnv("EMAIL_PROVIDER") || "zeptomail"}`);
+  console.log(`  ZEPTOMAIL_API_KEY=${secretStatus("ZEPTOMAIL_API_KEY") === "ok" || secretStatus("ZEPTOMAIL_TOKEN") === "ok" || secretStatus("ZEPTOMAIL_SMTP_PASSWORD") === "ok" ? "ok" : "missing"}`);
+  console.log(`  ZEPTOMAIL_FROM_EMAIL=${readEnv("ZEPTOMAIL_FROM_EMAIL") ? "set" : "missing"}`);
 
   const nextBin = join(root, "node_modules", "next", "dist", "bin", "next");
   const fallbackBin = join(root, "node_modules", ".bin", "next");
