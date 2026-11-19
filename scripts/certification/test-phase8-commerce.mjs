@@ -123,16 +123,13 @@ async function main() {
   assert.match(triggers, /72|cooldown|checkout_abandon_reminders/);
   console.log("PASS: abandonment cron + idempotent email");
 
-  // Zoho ZeptoMail is the primary transactional sender; marketing mail stays separate.
+  // All transactional application email must use Resend only.
   const emailIdx = read("lib/email/index.ts");
-  assert.match(emailIdx, /sendViaZeptoMail/);
-  assert.doesNotMatch(emailIdx, /sendViaResend/);
-  assert.match(emailIdx, /sendMarketingEmail/);
+  assert.match(emailIdx, /sendViaResend/);
+  assert.doesNotMatch(emailIdx, /sendViaZeptoMail|zeptoConfigured/);
   assert.doesNotMatch(emailIdx, /from ["']nodemailer["']|require\(["']nodemailer["']\)/);
   assert.doesNotMatch(emailIdx, /createTransport\s*\(/);
-  const provider = read("lib/email/provider.ts");
-  assert.match(provider, /EmailProviderId = "zeptomail"/);
-  console.log("PASS: Zoho ZeptoMail transactional sender; marketing path remains separate");
+  console.log("PASS: transactional email uses Resend only");
 
   // No affiliate
   const sidebar = read("components/admin/admin-sidebar.tsx");

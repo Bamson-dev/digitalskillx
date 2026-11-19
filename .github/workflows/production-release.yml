@@ -64,10 +64,10 @@ jobs:
         continue-on-error: true
         run: npm run test:course-publish-outbox
 
-      - name: Zoho email provider regressions
-        id: email_provider
+      - name: Resend email provider regression
+        id: resend_email
         continue-on-error: true
-        run: npm run test:email-provider
+        run: npm run test:resend-email
 
       - name: Security regression scan
         id: security_scan
@@ -117,7 +117,7 @@ jobs:
         env:
           CONTENT_FACTORY: ${{ steps.content_factory.outcome }}
           COURSE_PUBLISH_OUTBOX: ${{ steps.course_publish_outbox.outcome }}
-          EMAIL_PROVIDER: ${{ steps.email_provider.outcome }}
+          RESEND_EMAIL: ${{ steps.resend_email.outcome }}
           SECURITY_SCAN: ${{ steps.security_scan.outcome }}
           PLATFORM_HARDENING: ${{ steps.platform_hardening.outcome }}
           PAYSTACK_EXTERNAL: ${{ steps.paystack_external.outcome }}
@@ -126,7 +126,7 @@ jobs:
           UNIT_SUITE: ${{ steps.unit_suite.outcome }}
         run: |
           failed=0
-          for check in CONTENT_FACTORY COURSE_PUBLISH_OUTBOX EMAIL_PROVIDER SECURITY_SCAN PLATFORM_HARDENING PAYSTACK_EXTERNAL LEADTHUR DOCKER_IMAGE UNIT_SUITE; do
+          for check in CONTENT_FACTORY COURSE_PUBLISH_OUTBOX RESEND_EMAIL SECURITY_SCAN PLATFORM_HARDENING PAYSTACK_EXTERNAL LEADTHUR DOCKER_IMAGE UNIT_SUITE; do
             outcome="${!check}"
             if [ "$outcome" != success ]; then
               echo "$check did not pass (outcome: ${outcome:-missing})" >&2

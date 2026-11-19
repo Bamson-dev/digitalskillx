@@ -220,7 +220,7 @@ export function EmailCampaignPanel({
             <dd className="font-semibold capitalize">{status}</dd>
           </div>
           <div>
-            <dt className="text-muted">Marketing email provider</dt>
+            <dt className="text-muted">Resend</dt>
             <dd className="font-semibold">{resendReady ? "Configured" : "Not configured"}</dd>
           </div>
           <div>

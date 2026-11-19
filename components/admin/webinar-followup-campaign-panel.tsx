@@ -150,7 +150,7 @@ export function WebinarFollowupCampaignPanel(props: {
       return;
     }
     if (!props.resendReady) {
-      setDrainError("A marketing email provider is not connected. Connect Zoho Campaigns or another marketing email service before sending.");
+      setDrainError("Resend is not configured, so campaign emails cannot go out.");
       return;
     }
     if (draining.current) return;

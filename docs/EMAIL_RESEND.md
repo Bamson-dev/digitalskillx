@@ -1,37 +1,26 @@
-# DigitalSkillX transactional email: Zoho ZeptoMail
+# Resend email (DigitalSkillX — Resend only)
 
-Transactional application email now uses the Zoho ZeptoMail SMTP transport.
+Transactional email is delivered **only** through the Resend HTTP API.
 
 ```
-Transactional email triggers → lib/email sendEmail → Zoho ZeptoMail SMTP → recipient
+Email triggers → lib/email sendEmail → Resend API → recipient
 ```
 
-The application uses the configured SMTP credentials from Coolify. It does not fall back to Resend.
+There is **no** SMTP path and **no** ZeptoMail delivery path.
 
-## Coolify runtime settings
+## Coolify environment (server only)
 
-| Variable | Default / purpose |
-|---|---|
-| `EMAIL_PROVIDER` | `zeptomail` |
-| `ZEPTOMAIL_SMTP_HOST` | `smtp.zeptomail.com` |
-| `ZEPTOMAIL_SMTP_PORT` | `587` (STARTTLS) or `465` (implicit TLS) |
-| `ZEPTOMAIL_SMTP_USER` | `emailapikey` |
-| `ZEPTOMAIL_SMTP_PASSWORD` | Agent SMTP password, secret |
-| `ZEPTOMAIL_FROM_EMAIL` | Verified sender address, for example `courses@digitalskillx.com` |
-| `ZEPTOMAIL_FROM_NAME` | `DigitalSkillX` |
+| Variable | Value |
+|----------|--------|
+| `EMAIL_PROVIDER` | `resend` |
+| `RESEND_API_KEY` | Resend API key (`re_…`) — never `NEXT_PUBLIC_` |
+| `RESEND_FROM_EMAIL` | `courses@digitalskillx.com` |
+| `RESEND_FROM_NAME` | `DigitalSkillX` |
 
-Keep credentials in Coolify's encrypted runtime environment. Never add them to source control, client variables, or build arguments.
+Configure these in Coolify Runtime for the production app that runs Next.js / cron workers.
 
-The SMTP transport requires a valid TLS certificate. It refuses plaintext SMTP and does not disable certificate verification.
+## Outbox
 
-## Transactional email coverage
+`bulk_import_email_outbox`, `drainBulkImportEmailOutbox`, and `/api/cron/email-outbox` are unchanged and call `sendEmail()` → Resend.
 
-The shared `sendEmail()` function routes account, password/access, purchase, enrollment, welcome, and other one-to-one application messages through Zoho. The bulk-import welcome-email outbox uses the same transport and keeps its existing retry flow.
-
-## Marketing email
-
-Zoho ZeptoMail is reserved for transactional email. It is not used for promotional sequences, newsletters, bulk announcements, AI Money Code campaigns, or webinar follow-up campaigns. Those campaign senders remain disabled until a marketing email service such as Zoho Campaigns is connected.
-
-## Verification
-
-Use the admin test path for an individual transactional message and confirm the accepted message appears in the Zoho CPaaS email logs. A successful SMTP submission confirms acceptance by the SMTP server, not inbox placement.
+## No database migration required

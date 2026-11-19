@@ -67,6 +67,12 @@ function courseNamesForIds(courses: CourseLookup[], courseIds: string[]) {
   return courseIds.map((id) => byId.get(id)).filter((t): t is string => Boolean(t));
 }
 
+/** Next.js redirects are control-flow signals, not ordinary action failures. */
+function isNextRedirectError(error: unknown): boolean {
+  if (typeof error !== "object" || error === null || !("digest" in error)) return false;
+  return typeof error.digest === "string" && error.digest.startsWith("NEXT_REDIRECT;");
+}
+
 /** Create a single student account, enroll in selected courses, and send welcome email. */
 export async function createStudent(
   _prev: StudentActionState,
@@ -244,11 +250,12 @@ export async function createStudent(
             ? emailResult.reason
             : "Email not configured";
       return {
-        message: `Student ${fullName} created.${courseNote} Welcome email failed: ${reason}. Confirm ZEPTOMAIL_SMTP_PASSWORD and the other ZEPTOMAIL_SMTP_* settings are set in Coolify.`,
+        message: `Student ${fullName} created.${courseNote} Welcome email failed: ${reason}. Confirm RESEND_API_KEY is set in Coolify.`,
       };
     }
     return { message: `Student ${fullName} created.${courseNote} Welcome email sent.` };
   } catch (err) {
+    if (isNextRedirectError(err)) throw err;
     return { error: err instanceof Error ? err.message : "Could not create student." };
   }
 }
@@ -335,6 +342,7 @@ export async function updateStudentProfile(
     revalidatePath("/admin/students");
     return { message: "Student profile updated." };
   } catch (err) {
+    if (isNextRedirectError(err)) throw err;
     return { error: err instanceof Error ? err.message : "Could not update profile." };
   }
 }

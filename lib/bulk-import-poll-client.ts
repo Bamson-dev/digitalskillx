@@ -258,7 +258,7 @@ export async function pollBulkImportJob(
               : ""
           }.${
             statusJson.resendReady === false
-              ? " Zoho ZeptoMail SMTP is not configured in the server runtime — check the ZEPTOMAIL_SMTP_* settings and redeploy."
+              ? " Resend is not configured in the server runtime — add RESEND_API_KEY and redeploy."
               : statusJson.emailError
                 ? ` Last error: ${statusJson.emailError.slice(0, 120)}`
                 : ""
