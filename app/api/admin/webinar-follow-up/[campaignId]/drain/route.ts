@@ -3,7 +3,7 @@ import { runBackgroundTask } from "@/lib/background-tasks";
 import { requireAdminApiAuth } from "@/lib/admin-api-auth";
 import { logAudit } from "@/lib/audit";
 import { keepWebinarFollowupSending } from "@/lib/bulk-import-continue";
-import { resendConfigured } from "@/lib/email/providers/resend";
+import { MARKETING_EMAIL_BLOCKED_MESSAGE } from "@/lib/email/marketing-policy";
 import { WEBINAR_FOLLOWUP_DRAIN_BUDGET_MS } from "@/lib/webinar-followup/constants";
 import { kickWebinarFollowupDrain } from "@/lib/webinar-followup/live-drain";
 import { loadCampaignSnapshot } from "@/lib/webinar-followup/store";
@@ -22,9 +22,7 @@ export async function POST(
 ) {
   const auth = await requireAdminApiAuth({ lite: true });
   if ("error" in auth) return auth.error;
-  if (!resendConfigured()) {
-    return NextResponse.json({ error: "Resend is not configured." }, { status: 503 });
-  }
+  return NextResponse.json({ error: MARKETING_EMAIL_BLOCKED_MESSAGE }, { status: 409 });
 
   const snapshot = await loadCampaignSnapshot(auth.admin, params.campaignId);
   if (!snapshot.campaign) {
