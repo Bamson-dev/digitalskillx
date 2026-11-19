@@ -3,7 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireAdmin } from "@/lib/auth";
 import { getAdminSupabase } from "@/lib/admin-supabase";
-import { resendConfigured } from "@/lib/email/providers/resend";
+import { marketingEmailConfigured } from "@/lib/email/provider";
 import { WebinarFollowupCampaignPanel } from "@/components/admin/webinar-followup-campaign-panel";
 import {
   listContactsPage,
@@ -87,7 +87,7 @@ export default async function WebinarFollowUpCampaignPage({
         sends={sends}
         sendsByStep={sendsByStep}
         adminEmail={adminProfile.email ?? ""}
-        resendReady={resendConfigured()}
+        resendReady={marketingEmailConfigured()}
         migrationRequired={snapshot.migrationRequired}
       />
     </div>
