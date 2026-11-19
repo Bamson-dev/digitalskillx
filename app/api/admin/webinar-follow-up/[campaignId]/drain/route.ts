@@ -3,7 +3,7 @@ import { runBackgroundTask } from "@/lib/background-tasks";
 import { requireAdminApiAuth } from "@/lib/admin-api-auth";
 import { logAudit } from "@/lib/audit";
 import { keepWebinarFollowupSending } from "@/lib/bulk-import-continue";
-import { resendConfigured } from "@/lib/email/providers/resend";
+import { marketingEmailConfigured } from "@/lib/email/provider";
 import { WEBINAR_FOLLOWUP_DRAIN_BUDGET_MS } from "@/lib/webinar-followup/constants";
 import { kickWebinarFollowupDrain } from "@/lib/webinar-followup/live-drain";
 import { loadCampaignSnapshot } from "@/lib/webinar-followup/store";
@@ -22,8 +22,8 @@ export async function POST(
 ) {
   const auth = await requireAdminApiAuth({ lite: true });
   if ("error" in auth) return auth.error;
-  if (!resendConfigured()) {
-    return NextResponse.json({ error: "Resend is not configured." }, { status: 503 });
+  if (!marketingEmailConfigured()) {
+    return NextResponse.json({ error: "Marketing email provider is not connected. Connect Zoho Campaigns or another marketing email service before sending." }, { status: 503 });
   }
 
   const snapshot = await loadCampaignSnapshot(auth.admin, params.campaignId);
