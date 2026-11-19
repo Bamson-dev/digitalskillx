@@ -5,6 +5,7 @@ import { requireAdmin } from "@/lib/auth";
 import { getAdminSupabase } from "@/lib/admin-supabase";
 import { logAudit } from "@/lib/audit";
 import { sendEmail } from "@/lib/email";
+import { MARKETING_EMAIL_BLOCKED_MESSAGE } from "@/lib/email/marketing-policy";
 import { isSyntheticTestRecipient } from "@/lib/email/synthetic-recipient";
 import { listUnsubscribeHeader, unsubscribeUrl } from "@/lib/email-campaigns/unsubscribe";
 import {
@@ -41,6 +42,8 @@ export async function setWebinarCampaignStatusAction(
     if (!["draft", "active", "paused", "archived"].includes(status)) {
       return { error: "Invalid status." };
     }
+
+    if (status === "active") return { error: MARKETING_EMAIL_BLOCKED_MESSAGE };
 
     const steps = await listSequenceSteps(admin, campaignId);
     const activeSteps = steps.filter((s) => s.status === "active");
@@ -126,6 +129,7 @@ export async function testSendWebinarFollowupEmail(
   formData: FormData,
 ): Promise<WfuActionState> {
   try {
+    return { error: MARKETING_EMAIL_BLOCKED_MESSAGE };
     const adminProfile = await requireAdmin();
     const admin = await getAdminSupabase();
     const campaignId = String(formData.get("campaign_id") ?? "").trim();
