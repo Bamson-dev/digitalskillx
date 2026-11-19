@@ -15,6 +15,7 @@ const PLACEHOLDERS = [
   "your-anon-publishable-key",
   "your-service-role-secret-key",
   "your-zeptomail-smtp-password",
+  "your-zeptomail-api-key",
   "your-youtube-data-api-key",
   "sk-ant-your-key",
   "generate-a-long-random-string",
@@ -58,10 +59,10 @@ const required = [
 
 const optional = [
   { key: "NEXT_PUBLIC_SITE_URL", label: "Public site URL", fallback: "https://digitalskillx.com" },
-  { key: "EMAIL_PROVIDER", label: "Email provider", fallback: "resend" },
-  { key: "RESEND_API_KEY", label: "Resend API key" },
-  { key: "RESEND_FROM_EMAIL", label: "Email sender address", fallback: "courses@digitalskillx.com" },
-  { key: "RESEND_FROM_NAME", label: "Email sender name", fallback: "DigitalSkillX" },
+  { key: "EMAIL_PROVIDER", label: "Email provider", fallback: "zeptomail" },
+  { key: "ZEPTOMAIL_API_KEY", label: "Zoho CPaaS agent Send API key" },
+  { key: "ZEPTOMAIL_FROM_EMAIL", label: "Transactional sender address", fallback: "courses@digitalskillx.com" },
+  { key: "ZEPTOMAIL_FROM_NAME", label: "Transactional sender name", fallback: "DigitalSkillX" },
   { key: "YOUTUBE_API_KEY", label: "YouTube import" },
   { key: "DEEPSEEK_API_KEY", label: "DeepSeek AI assistant" },
   { key: "DEEPSEEK_MODEL", label: "DeepSeek model", fallback: "deepseek-chat" },
