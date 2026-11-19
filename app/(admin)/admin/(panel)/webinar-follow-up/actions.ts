@@ -4,8 +4,7 @@ import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/auth";
 import { getAdminSupabase } from "@/lib/admin-supabase";
 import { logAudit } from "@/lib/audit";
-import { sendMarketingEmail } from "@/lib/email";
-import { marketingEmailConfigured } from "@/lib/email/provider";
+import { sendEmail } from "@/lib/email";
 import { isSyntheticTestRecipient } from "@/lib/email/synthetic-recipient";
 import { listUnsubscribeHeader, unsubscribeUrl } from "@/lib/email-campaigns/unsubscribe";
 import {
@@ -41,12 +40,6 @@ export async function setWebinarCampaignStatusAction(
     if (!campaignId) return { error: "Missing campaign." };
     if (!["draft", "active", "paused", "archived"].includes(status)) {
       return { error: "Invalid status." };
-    }
-
-    if (status === "active" && !marketingEmailConfigured()) {
-      return {
-        error: "Marketing email provider is not connected. Connect Zoho Campaigns or another marketing email service before activating this sequence.",
-      };
     }
 
     const steps = await listSequenceSteps(admin, campaignId);
@@ -171,7 +164,7 @@ export async function testSendWebinarFollowupEmail(
       unsubscribeUrl: unsub,
     });
 
-    const result = await sendMarketingEmail({
+    const result = await sendEmail({
       to,
       subject: `[TEST] ${rendered.subject}`,
       html: rendered.html,

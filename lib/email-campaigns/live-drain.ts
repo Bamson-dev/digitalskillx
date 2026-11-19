@@ -1,7 +1,7 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
-import { sendMarketingEmail } from "@/lib/email";
+import { sendEmail } from "@/lib/email";
 import { drainAimoneycodeCampaignUntilBudget, type CampaignRecord, type DrainResult } from "@/lib/email-campaigns/processor";
 import {
   createSupabaseCampaignStore,
@@ -22,7 +22,7 @@ export function campaignSendMail() {
     headers?: Record<string, string>;
     idempotencyKey?: string;
   }) =>
-    sendMarketingEmail({
+    sendEmail({
       to: mail.to,
       subject: mail.subject,
       html: mail.html,

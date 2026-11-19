@@ -1,6 +1,6 @@
 import "server-only";
 import { getEmailSenderConfig } from "@/lib/platform-settings";
-import { sendViaZeptoMail } from "@/lib/email/providers/zeptomail";
+import { sendViaResend } from "@/lib/email/providers/resend";
 import { isSyntheticTestRecipient } from "@/lib/email/synthetic-recipient";
 import type { SendEmailParams, SendEmailResult } from "@/lib/email/types";
 
@@ -11,27 +11,14 @@ function hasSyntheticRecipient(to: string | string[]) {
 }
 
 /**
- * Send a transactional application email through Zoho ZeptoMail.
- * There is intentionally no Resend fallback. A provider error must remain visible
- * to the caller so the existing outbox can retry without silently switching vendors.
+ * Send every transactional application email through Resend.
+ * There is no ZeptoMail fallback. Delivery failures remain visible to callers
+ * and durable outbox jobs retry through Resend using their idempotency keys.
  */
 export async function sendEmail(params: SendEmailParams): Promise<SendEmailResult> {
   if (hasSyntheticRecipient(params.to)) {
     return { skipped: true, error: new Error("Skipped synthetic test recipient") };
   }
   const sender = await getEmailSenderConfig();
-  return sendViaZeptoMail(params, sender);
-}
-
-/**
- * Promotional sequences and bulk marketing require a dedicated marketing provider.
- * ZeptoMail is reserved for transactional messages, so do not send campaign content
- * through this transport.
- */
-export async function sendMarketingEmail(_params: SendEmailParams): Promise<SendEmailResult> {
-  return {
-    error: new Error(
-      "Marketing email is not enabled. ZeptoMail supports transactional email only; connect Zoho Campaigns for promotional sequences and bulk campaigns.",
-    ),
-  };
+  return sendViaResend(params, sender);
 }

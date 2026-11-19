@@ -1,6 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { verifyCronSecret } from "@/lib/cron-auth";
-import { marketingEmailConfigured } from "@/lib/email/provider";
 import { bootstrapRuntimeSecrets } from "@/lib/bootstrap-runtime-secrets";
 import { createAdminClientAsync } from "@/lib/supabase/admin";
 import {
@@ -28,12 +27,6 @@ export async function POST(request: NextRequest) {
   const auth = verifyCronSecret(request);
   if (!auth.ok) {
     return NextResponse.json({ error: auth.error }, { status: auth.status });
-  }
-  if (!marketingEmailConfigured()) {
-    return NextResponse.json(
-      { error: "Marketing email provider is not connected. This transactional Zoho sender does not process promotional sequences." },
-      { status: 503 },
-    );
   }
 
   await bootstrapRuntimeSecrets();
