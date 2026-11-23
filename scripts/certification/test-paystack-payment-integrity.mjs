@@ -53,6 +53,8 @@ function createFakeAdmin(seed) {
         if (f.type === "is") return v === f.value || (f.value === null && v === undefined);
         if (f.type === "in") return f.value.includes(v);
         if (f.type === "ilike") return String(v ?? "").toLowerCase() === String(f.value).toLowerCase();
+        if (f.type === "not_is") return !(v === f.value || (f.value === null && v === undefined));
+        if (f.type === "gte") return String(v ?? "") >= String(f.value);
         return true;
       });
 
@@ -107,6 +109,8 @@ function createFakeAdmin(seed) {
       is(column, value) { state.filters.push({ type: "is", column, value }); return api; },
       in(column, value) { state.filters.push({ type: "in", column, value }); return api; },
       ilike(column, value) { state.filters.push({ type: "ilike", column, value }); return api; },
+      not(column, op, value) { if (op === "is") state.filters.push({ type: "not_is", column, value }); return api; },
+      gte(column, value) { state.filters.push({ type: "gte", column, value }); return api; },
       order(column) { state.order = column; return api; },
       limit(n) { state.max = n; return api; },
       async maybeSingle() {
@@ -697,6 +701,57 @@ await test("two courses with the product title are not silently treated as no co
   assert.equal(r.ok, false);
   assert.equal(r.permanent, false);
   noSideEffects(h);
+});
+
+await test("reconcile sends a Purchase owed by a recovery run exactly once", async () => {
+  const h = harness();
+  // Recovery fulfilled the buyer but skipped tracking (old behaviour).
+  const recovered = await fulfillPaystackExternalCharge({
+    reference: "ref_owed_purchase",
+    verifiedOverride: verifiedFor("ref_owed_purchase"),
+    skipPurchaseTracking: true,
+    admin: h.admin,
+    deps: h.deps,
+  });
+  assert.equal(recovered.ok, true);
+  assert.equal(h.calls.track, 0);
+  assert.equal(h.calls.email, 1);
+
+  const reconcile = async (reference, options) => {
+    const r = await fulfillPaystackExternalCharge({
+      reference,
+      verifiedOverride: verifiedFor(reference),
+      attributedProductKey: options.attributedProductKey,
+      skipPurchaseTracking: options.trackPurchase !== true,
+      admin: h.admin,
+      deps: h.deps,
+    });
+    return r.ok ? { ok: true, reference } : { ok: false, error: r.error };
+  };
+  await reconcileHeldExternalPayments({ admin: h.admin, reconcile });
+  assert.equal(h.calls.track, 1, "the owed Purchase is sent");
+  assert.equal(h.calls.email, 1, "no second access email");
+  assert.equal(h.calls.enroll, 1, "no second enrolment");
+  assert.ok(h.admin.tables.transactions[0].paystack_data.purchase_tracking_sent_at);
+
+  await reconcileHeldExternalPayments({ admin: h.admin, reconcile });
+  assert.equal(h.calls.track, 1, "never sent twice");
+});
+
+await test("reconcile does not replay Purchase for payments older than 7 days", async () => {
+  const h = harness();
+  await fulfillPaystackExternalCharge({
+    reference: "ref_old_sale",
+    verifiedOverride: verifiedFor("ref_old_sale"),
+    skipPurchaseTracking: true,
+    admin: h.admin,
+    deps: h.deps,
+  });
+  h.admin.tables.transactions[0].created_at = new Date(Date.now() - 8 * 86_400_000).toISOString();
+  let calls = 0;
+  await reconcileHeldExternalPayments({ admin: h.admin, reconcile: async () => { calls += 1; return { ok: true }; } });
+  assert.equal(calls, 0);
+  assert.equal(h.calls.track, 0);
 });
 
 // ---------------------------------------------------------------------------
