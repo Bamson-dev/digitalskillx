@@ -305,6 +305,7 @@ export async function reconcileHeldExternalPayments(params?: {
   const results: Array<Record<string, unknown>> = [];
   let stillDraft = 0;
   let unattributed = 0;
+  let lookupFailed = 0;
   for (const row of rows ?? []) {
     if (results.length >= limit) break;
     const meta = readExternalPaystackData(row.paystack_data);
@@ -313,11 +314,24 @@ export async function reconcileHeldExternalPayments(params?: {
       unattributed += 1;
       continue;
     }
-    const { data: course } = await admin
+    const courseLookup = await admin
       .from("courses")
       .select("visibility")
       .eq("id", row.course_id ?? configuredExternalCourseId(product))
       .maybeSingle();
+    if (courseLookup.error) {
+      // A failed query is not a Draft course. Log the real error and retry next run.
+      lookupFailed += 1;
+      secureLog("error", "paystack/reconcile", "course_lookup_failed", {
+        reference: row.reference,
+        courseId: row.course_id ?? configuredExternalCourseId(product),
+        error: courseLookup.error.message,
+        code: courseLookup.error.code ?? null,
+        details: courseLookup.error.details ?? null,
+      });
+      continue;
+    }
+    const course = courseLookup.data;
     if (course?.visibility !== "published") {
       stillDraft += 1;
       continue;
@@ -331,6 +345,7 @@ export async function reconcileHeldExternalPayments(params?: {
     failed: results.filter((r) => r.ok !== true).length,
     stillDraft,
     unattributed,
+    lookupFailed,
   });
-  return { ok: true as const, results, stillDraft, unattributed };
+  return { ok: true as const, results, stillDraft, unattributed, lookupFailed };
 }

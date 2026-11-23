@@ -85,29 +85,64 @@ type VerifiedTransactionCustomer = {
   email?: string;
 };
 
-async function resolveCourseForProduct(admin: Admin, productKey: string, courseId: string) {
-  const { data: course } = await admin
-    .from("courses")
-    .select("id, title, visibility")
-    .eq("id", courseId)
-    .maybeSingle();
-  if (course) return course;
+type CourseRow = { id: string; title: string; visibility: string };
+type CourseLookupError = { message: string; code?: string; details?: string; hint?: string };
 
-  const product =
-    productKey === BUILD_SOFTWARE_WITH_AI_PRODUCT.key
-      ? BUILD_SOFTWARE_WITH_AI_PRODUCT
-      : PAYSTACK_EXTERNAL_PRODUCTS.find((row) => row.key === productKey);
-  if (!product) return null;
+function describeLookupError(error: unknown): CourseLookupError {
+  const e = (error ?? {}) as { message?: string; code?: string; details?: string; hint?: string; name?: string };
+  return {
+    message: e.message || e.name || String(error),
+    code: e.code,
+    details: e.details,
+    hint: e.hint,
+  };
+}
 
-  for (const alias of product.titleAliases) {
-    const { data: byTitle } = await admin
+/**
+ * Finds the course for a product. A query failure is reported as an error, never as
+ * "course not found", so a transient database failure stays retryable.
+ */
+async function resolveCourseForProduct(
+  admin: Admin,
+  productKey: string,
+  courseId: string,
+): Promise<{ course: CourseRow | null; error: CourseLookupError | null }> {
+  try {
+    const byId = await admin
       .from("courses")
       .select("id, title, visibility")
-      .ilike("title", alias)
+      .eq("id", courseId)
       .maybeSingle();
-    if (byTitle) return byTitle;
+    if (byId.error) return { course: null, error: describeLookupError(byId.error) };
+    if (byId.data) return { course: byId.data as CourseRow, error: null };
+
+    const product =
+      productKey === BUILD_SOFTWARE_WITH_AI_PRODUCT.key
+        ? BUILD_SOFTWARE_WITH_AI_PRODUCT
+        : PAYSTACK_EXTERNAL_PRODUCTS.find((row) => row.key === productKey);
+    if (!product) return { course: null, error: null };
+
+    for (const alias of product.titleAliases) {
+      // limit(2) instead of maybeSingle: two courses with the same title must not read as "none".
+      const byTitle = await admin
+        .from("courses")
+        .select("id, title, visibility")
+        .ilike("title", alias)
+        .limit(2);
+      if (byTitle.error) return { course: null, error: describeLookupError(byTitle.error) };
+      const rows = (byTitle.data ?? []) as CourseRow[];
+      if (rows.length === 1) return { course: rows[0], error: null };
+      if (rows.length > 1) {
+        return {
+          course: null,
+          error: { message: `Course title "${alias}" matches more than one course.`, code: "ambiguous_title" },
+        };
+      }
+    }
+    return { course: null, error: null };
+  } catch (err) {
+    return { course: null, error: describeLookupError(err) };
   }
-  return null;
 }
 
 async function patchTransactionPaystackData(
@@ -488,11 +523,28 @@ export async function fulfillPaystackExternalCharge(params: {
         }
         // Paid, verified, but the payload names no product. Keep the money traceable and
         // wait for operator attribution. Never guess from the amount.
-        const holdCourse = await resolveCourseForProduct(
+        const holdLookup = await resolveCourseForProduct(
           admin,
           candidates[0].key,
           configuredExternalCourseId(candidates[0]),
         );
+        if (holdLookup.error) {
+          secureLog("error", logSource, "course_lookup_failed", {
+            reference,
+            productKey: candidates[0].key,
+            error: holdLookup.error.message,
+            code: holdLookup.error.code ?? null,
+          });
+          return {
+            handled: true,
+            ok: false,
+            reference,
+            error: "Course lookup failed. The payment is safe and will be retried.",
+            permanent: false,
+            status: 503,
+          };
+        }
+        const holdCourse = holdLookup.course;
         if (!holdCourse) return { handled: false };
         const held = await recordHeldPayment(admin, {
           reference,
@@ -555,7 +607,27 @@ export async function fulfillPaystackExternalCharge(params: {
   }
 
   const courseId = configuredExternalCourseId(product);
-  const course = await resolveCourseForProduct(admin, product.key, courseId);
+  const lookup = await resolveCourseForProduct(admin, product.key, courseId);
+  if (lookup.error) {
+    secureLog("error", "paystack/external", "course_lookup_failed", {
+      reference,
+      courseId,
+      productKey: product.key,
+      error: lookup.error.message,
+      code: lookup.error.code ?? null,
+      details: lookup.error.details ?? null,
+      hint: lookup.error.hint ?? null,
+    });
+    return {
+      handled: true,
+      ok: false,
+      reference,
+      error: "Course lookup failed. The payment is safe and will be retried.",
+      permanent: false,
+      status: 503,
+    };
+  }
+  const course = lookup.course;
   if (!course) {
     secureLog("error", "paystack/external", "fulfillment_failed", {
       reference,

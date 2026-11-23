@@ -32,6 +32,8 @@ function createFakeAdmin(seed) {
   };
   let idCounter = 0;
   const stats = { insertConflicts: 0 };
+  // Per-table fault injection: when set, every query on that table returns this error.
+  const faults = {};
 
   const pick = (row, column) => {
     if (column.includes("->>")) {
@@ -56,6 +58,7 @@ function createFakeAdmin(seed) {
 
     async function exec() {
       await new Promise((r) => setImmediate(r));
+      if (faults[table]) return { data: null, error: faults[table] };
       const rows = tables[table];
       if (state.op === "insert") {
         const incoming = { ...state.payload };
@@ -121,6 +124,7 @@ function createFakeAdmin(seed) {
     auth: { admin: { updateUserById: async () => ({ error: null }) } },
     tables,
     stats,
+    faults,
   };
 }
 
@@ -644,6 +648,55 @@ await test("purchase status never reports paid for a held payment and exposes it
     assert.equal(result.fulfillment, held);
     assert.equal(result.product, undefined, "no course link before enrolment");
   }
+});
+
+await test("a failed course query is retryable and never reported as course not found", async () => {
+  const h = harness();
+  h.admin.faults.courses = { message: "This operation was aborted", code: "" };
+  const failed = await charge(h, "ref_course_query_down");
+  assert.equal(failed.ok, false);
+  assert.equal(failed.permanent, false, "query failure must stay retryable");
+  assert.equal(failed.status, 503);
+  assert.ok(!/not found/i.test(failed.error), "must not claim the course is missing");
+  noSideEffects(h);
+
+  delete h.admin.faults.courses;
+  const retried = await charge(h, "ref_course_query_down");
+  assert.equal(retried.ok, true, "the retry fulfils once the query works");
+  assert.equal(h.calls.enroll, 1);
+  assert.equal(h.calls.email, 1);
+  assert.equal(h.calls.track, 1);
+  const again = await charge(h, "ref_course_query_down");
+  assert.equal(again.ok, true);
+  assert.equal(h.calls.enroll, 1, "no duplicate enrolment");
+  assert.equal(h.calls.track, 1, "no duplicate Purchase");
+});
+
+await test("reconcile counts a failed course query as a lookup failure, not as Draft", async () => {
+  const h = harness({ masterVisibility: "draft" });
+  await handoffCharge(h, "ref_recon_lookup_1");
+  h.admin.tables.courses.find((c) => c.id === MASTER.defaultCourseId).visibility = "published";
+  h.admin.faults.courses = { message: "This operation was aborted" };
+  let reconcileCalls = 0;
+  const reconcile = async () => { reconcileCalls += 1; return { ok: true }; };
+  const out = await reconcileHeldExternalPayments({ admin: h.admin, reconcile });
+  assert.equal(out.stillDraft, 0, "a published course must not be reported as Draft");
+  assert.equal(out.lookupFailed, 1);
+  assert.equal(reconcileCalls, 0);
+  noSideEffects(h);
+});
+
+await test("two courses with the product title are not silently treated as no course", async () => {
+  const h = harness();
+  h.admin.tables.courses = h.admin.tables.courses.filter((c) => c.id !== MASTER.defaultCourseId);
+  h.admin.tables.courses.push(
+    { id: "dup-a", title: MASTER.title, visibility: "published" },
+    { id: "dup-b", title: MASTER.title, visibility: "published" },
+  );
+  const r = await charge(h, "ref_dup_title");
+  assert.equal(r.ok, false);
+  assert.equal(r.permanent, false);
+  noSideEffects(h);
 });
 
 // ---------------------------------------------------------------------------
