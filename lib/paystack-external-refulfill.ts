@@ -68,6 +68,11 @@ export async function refulfillPaystackExternalByReference(
     forceEmail?: boolean;
     /** Operator or system product attribution. Paystack still verifies price and status. */
     attributedProductKey?: string;
+    /**
+     * Send the Meta Purchase if it was never recorded. Deduped by purchase_tracking_sent_at
+     * and by event_id purchase_<reference>. Off for manual operator re-runs.
+     */
+    trackPurchase?: boolean;
   },
 ) {
   const reference = referenceRaw.trim();
@@ -110,7 +115,7 @@ export async function refulfillPaystackExternalByReference(
     verifiedOverride: verified,
     forceEmail: options?.forceEmail === true,
     attributedProductKey: options?.attributedProductKey,
-    skipPurchaseTracking: true,
+    skipPurchaseTracking: options?.trackPurchase !== true,
     admin,
   });
 
@@ -276,6 +281,7 @@ export async function backfillRecentAiAppPayments(params?: {
   };
 }
 
+const PURCHASE_OWED_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 const HELD_STATUSES = ["awaiting_course_publish", "payment_verified", "fulfillment_failed"];
 
 /**
@@ -336,8 +342,38 @@ export async function reconcileHeldExternalPayments(params?: {
       stillDraft += 1;
       continue;
     }
-    const outcome = await reconcile(row.reference, { attributedProductKey: product.key });
+    const outcome = await reconcile(row.reference, {
+      attributedProductKey: product.key,
+      trackPurchase: true,
+    });
     results.push({ reference: row.reference, ...outcome });
+  }
+
+  // Paid and enrolled through a recovery run that skipped the Meta Purchase. Send it once.
+  // Only recent payments, so old sales are never replayed into Meta.
+  const owedSince = new Date(Date.now() - PURCHASE_OWED_WINDOW_MS).toISOString();
+  const owed = await admin
+    .from("transactions")
+    .select("reference, paystack_data")
+    .eq("status", "success")
+    .is("paystack_data->>purchase_tracking_sent_at", null)
+    .not("paystack_data->>access_email_sent_at", "is", null)
+    .gte("created_at", owedSince)
+    .order("created_at", { ascending: true })
+    .limit(limit);
+  let purchaseSent = 0;
+  if (owed.error) {
+    secureLog("error", "paystack/reconcile", "owed_purchase_query_failed", { error: owed.error.message });
+  }
+  for (const row of owed.data ?? []) {
+    const meta = readExternalPaystackData(row.paystack_data);
+    const product = meta ? resolveExternalProductByKey(meta.product_key) : null;
+    if (!meta || !product) continue;
+    const outcome = await reconcile(row.reference, {
+      attributedProductKey: product.key,
+      trackPurchase: true,
+    });
+    if (outcome.ok === true) purchaseSent += 1;
   }
 
   secureLog("info", "paystack/reconcile", "done", {
@@ -346,6 +382,8 @@ export async function reconcileHeldExternalPayments(params?: {
     stillDraft,
     unattributed,
     lookupFailed,
+    purchaseOwedChecked: (owed.data ?? []).length,
+    purchaseOwedOk: purchaseSent,
   });
   return { ok: true as const, results, stillDraft, unattributed, lookupFailed };
 }
