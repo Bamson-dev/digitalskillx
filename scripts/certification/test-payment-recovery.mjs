@@ -606,5 +606,31 @@ await test("feature switch, config defaults and naira formatting", async () => {
   assert.equal(h.db.t("payment_recovery_attempts")[0].status, "processing");
 });
 
+await test("Payment Page failures and abandons are pulled into recovery, other amounts and paid are not", async () => {
+  const { registerPulledRows } = await import(ts("lib/payment-recovery/page-pull-core.ts"));
+  const h = harness({ verify: () => ok("failed") });
+  const row = (ref, amount, status, email = "page.buyer@example.com") => ({
+    reference: ref, status, amount, currency: "NGN",
+    customer: { email, first_name: "Page", last_name: "Buyer" },
+    metadata: {}, page: { slug: "ai-ads-masterclass", name: "AI Ads Automation Masterclass" },
+  });
+  const s = await registerPulledRows(h.db, h.deps, [
+    row("T_FAIL_1", 1_499_900, "failed"),
+    row("T_FAIL_1", 1_499_900, "failed"), // duplicate listing across runs
+    row("T_OTHER", 777_700, "abandoned", "other@example.com"), // not a catalog price
+    { reference: "T_NOEMAIL", amount: 1_499_900, currency: "NGN", customer: {}, page: { slug: "ai-ads-masterclass" } },
+  ]);
+  assert.equal(h.db.t("payment_recovery_attempts").filter((a) => a.reference === "T_FAIL_1").length, 1, "idempotent by reference");
+  assert.equal(h.db.t("payment_recovery_groups").length, 1, "one order, one group");
+  assert.equal(h.db.t("payment_recovery_groups")[0].amount_kobo, 1_499_900, "price from the catalog, not the payload");
+  assert.ok(s.skipped >= 2);
+  h.advance(10 * MIN);
+  await h.cycle();
+  h.advance(11 * MIN);
+  await h.cycle();
+  assert.equal(h.calls.emails.length, 1, "pulled failed Payment Page attempt gets the first recovery email");
+  assert.equal(h.calls.emails[0].to, "page.buyer@example.com");
+});
+
 console.log(`\n${passed} payment recovery tests passed`);
 if (process.exitCode) process.exit(process.exitCode);
