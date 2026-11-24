@@ -1,108 +1,115 @@
-# Payment recovery (failed and abandoned Paystack checkouts)
+# Payment recovery
 
-Scope: DigitalSkillX native course checkout (`/api/payments/initialize`). The customer gives
-name, email and (optional) phone on DigitalSkillX before Paystack opens. Paystack Payment Page
-products (paystack.shop, e.g. the AI Ads WordPress buttons) are not covered: Paystack collects
-their email, so there is nothing to capture before checkout. They keep their own reconcile job.
+DigitalSkillX records incomplete Paystack orders, verifies their real payment status and sends recovery emails with a fresh Paystack checkout link and WhatsApp support.
+
+## Coverage
+
+The recovery system captures:
+
+- Native course checkout before redirecting to Paystack.
+- Commerce offer and course bundle checkout.
+- NGN learning-path certificate checkout.
+- Known Paystack Payment Page products, including the configured DigitalSkillX Payment Page catalog.
+
+Payment Page transactions are collected from Paystack because those buyers may never visit the DigitalSkillX checkout page. The scheduled importer checks failed and abandoned transactions from the last six hours, up to 25 pages of 100 rows per status per run. It matches known catalog products and ignores successful, unknown or mismatched transactions. The unique transaction reference makes repeated scans idempotent.
+
+USD learning-path certificate checkout is not captured by this recovery flow.
 
 ## How it works
 
-1. `POST /api/payments/initialize` inserts the pending `transactions` row (unchanged) and then
-   records the attempt in `payment_recovery_groups` / `payment_recovery_attempts`. Price and
-   product come from the `courses` row. Capture runs even while the feature switch is off.
-2. One group = one order = one lowercased email + one course while open. Every Paystack
-   reference for that order (checkout, retries) is an attempt in the group.
-3. Cron `/api/cron/payment-recovery` (every 5 minutes):
-   - Verifies due attempts with `GET /transaction/verify/:reference`.
-     - `success` + exact amount/currency: runs the existing `completePaidCheckout` (same enrolment
-       and success email as normal checkout), then closes the group.
-     - `failed`: attempt failed, first email 10 minutes later.
-     - `abandoned` or not found: abandoned only once the checkout is 30 minutes old, first email then.
-     - `ongoing` / `pending` / `processing` / `queued`: stays pending, re-checked (5 min, then 30 min, then 6 h).
-     - Paystack unreachable: no status change, backoff 5 min to 6 h.
-     - `reversed`: marked reversed, no emails, never treated as paid.
-   - Sends due emails: the seven-email sequence (see below), then stops. Before every send it
-     re-checks: paid on any attempt or enrolled already, active payment in the last 2 h,
-     suppression/opt-out, valid email.
-4. Paystack does not send `charge.failed` or `charge.abandoned` webhooks (only `charge.success`
-   for payments). Failures are found by reconciliation. `charge.success` webhooks close the
-   group immediately through `recoveryOnPaymentSucceeded`.
-5. Retry link `GET /api/payment-recovery/retry?t=<token>` shows the order. `POST` (button)
-   creates a fresh reference and transaction row, initialises Paystack with the current course
-   price, and redirects. GET never creates a transaction, so email link scanners are harmless.
-6. Bank transfer: each order has a unique `DSX-REC-XXXXXX` narration reference. Only an admin can
-   confirm, after seeing the credit. Exact amount required, otherwise "investigating". Confirmation
-   runs the existing `fulfillPurchase` once (unique on the bank reference).
-7. Resend webhook `/api/webhooks/resend` (Svix-signed) records delivered, delayed, bounced,
-   complained, failed and suppressed. Hard bounces, complaints and Resend suppressions stop all
-   recovery email to that address.
+1. The checkout route stores the customer's email, product identity and server-calculated amount before sending the buyer to Paystack. It never trusts a price supplied by the browser.
+2. One open recovery group represents one email and product. Every payment reference becomes an attempt under that group. A successful payment, an existing enrollment or a verified suppression stops further reminders.
+3. Coolify calls `/api/cron/payment-recovery` every five minutes. The route:
+   - Imports eligible failed and abandoned Paystack Payment Page records.
+   - Verifies pending references directly with Paystack.
+   - Treats `success` as paid only when the amount and currency match the saved checkout.
+   - Sends the first recovery email about 10 minutes after a confirmed failure, or after the 30-minute abandonment window and verification.
+   - Leaves pending, ongoing, processing and unreachable transactions unresolved. It does not email while payment remains active.
+   - Closes a group after verified payment and cancels the remaining sequence.
+4. Paystack `charge.success` webhooks remain the immediate success signal. Payment Page purchases continue through the existing external fulfilment and access-email flow. Recovery reconciliation provides a second check for Payment Page attempts already imported.
+5. Every recovery email includes a new Paystack retry link. Opening the link only displays the order. The buyer must press the button before the system creates a fresh transaction reference. The retry keeps the original server-calculated order amount.
+6. The sequence sends at most seven emails over five days. Each message has an idempotency key. Emails only send between 08:30 and 20:00 Africa/Lagos, with at least two hours between sends. Payment, opt-out, bounce, complaint and suppression stop the sequence.
+7. The Resend webhook records delivery, delay, bounce, complaint, failure and suppression events.
 
-Meta: native checkout has no server-side Purchase event today, so recovery adds none. A Paystack
-retry ends on the same success page as normal checkout. Bank transfers send no Purchase event.
+## Customer payment options
 
-## Setup checklist
+Recovery emails currently show two options:
 
-1. Apply `supabase/migrations/0058_payment_recovery.sql` (additive). Rollback:
-   `supabase/migrations/rollback/0058_payment_recovery_down.sql`.
-2. Coolify scheduled task (same pattern as existing tasks):
-   `curl -fsS -m 300 -H "Authorization: Bearer $CRON_SECRET" http://localhost:3000/api/cron/payment-recovery`
-   schedule `*/5 * * * *`.
-3. Resend dashboard > Webhooks > add `https://www.digitalskillx.com/api/webhooks/resend` with events
-   `email.sent`, `email.delivered`, `email.delivery_delayed`, `email.bounced`, `email.complained`,
-   `email.failed`, `email.suppressed`. Copy its signing secret into Coolify as `RESEND_WEBHOOK_SECRET`.
-4. Paystack webhook stays `https://backend.leadthur.com/webhooks/paystack` (LeadPilot router), which
-   forwards to DigitalSkillX. No change needed.
-5. Set `PAYMENT_RECOVERY_ENABLED=true` in Coolify and redeploy. The old
-   `/api/cron/checkout-abandon` reminder switches itself off when this is on.
+- Complete payment through a fresh Paystack checkout. Paystack displays the payment methods available for that transaction.
+- Contact DigitalSkillX through WhatsApp at 09023986992.
 
-## Environment variables (new)
+Direct transfer to the supplied Wema account is disabled until the bank account name is confirmed. The email and admin page do not expose the account number or an unverified account name. The admin transfer-confirmation code remains in place but the customer-facing transfer option and its confirmation controls stay hidden while `bankTransferEnabled` is false.
+
+## Production setup
+
+The source code alone does not activate scheduled emails. Complete these steps in the production environment.
+
+1. Check and apply database migrations from the DigitalSkillX application container. Run:
+   ```bash
+   npm run db:migrate -- --status
+   npm run db:migrate -- --dry-run
+   npm run db:migrate
+   ```
+   The runner uses `DATABASE_URL` and tracks applied versions. It applies the payment recovery schema and product-type migration without editing older migration files. Confirm migrations 0058, 0059 and 0060 show as applied before enabling the feature.
+2. Create this Coolify scheduled task. The repository task plan records it as required but not yet confirmed in Coolify:
+   - Schedule: `*/5 * * * *`
+   - Command:
+   ```bash
+   curl -fsS -m 300 -H "Authorization: Bearer $CRON_SECRET" http://localhost:3000/api/cron/payment-recovery
+   ```
+   Do not create a duplicate Vercel schedule for the same route.
+3. Add these runtime variables in Coolify:
+   - `PAYMENT_RECOVERY_ENABLED=true`
+   - `RESEND_WEBHOOK_SECRET=<secret from Resend>`
+   Keep the existing `CRON_SECRET`, `RESEND_API_KEY` and `RESEND_FROM_EMAIL` values configured.
+4. In Resend, create a webhook at `https://www.digitalskillx.com/api/webhooks/resend` and subscribe to `email.sent`, `email.delivered`, `email.delivery_delayed`, `email.bounced`, `email.complained`, `email.failed` and `email.suppressed`. Store the signing secret as `RESEND_WEBHOOK_SECRET` in Coolify.
+5. Keep the existing Paystack webhook routing through Leadthur. It must continue forwarding verified `charge.success` events to DigitalSkillX.
+6. After deployment and setup, call `/api/cron/payment-recovery` once with the cron authorization header. Confirm its response reports `enabled: true` and that `pagePull` and reconciliation complete without a database error.
+
+The existing `/api/cron/checkout-abandon` route skips its old reminder behaviour when payment recovery is enabled. This avoids sending duplicate abandoned-checkout emails.
+
+## Environment variables
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `PAYMENT_RECOVERY_ENABLED` | `false` | Master switch for verification jobs and emails |
-| `RESEND_WEBHOOK_SECRET` | none | Svix signing secret from Resend |
-| `PAYMENT_RECOVERY_FIRST_FAILED_DELAY_MINUTES` | `10` | Delay after a confirmed failure |
-| `PAYMENT_RECOVERY_ABANDONED_DELAY_MINUTES` | `30` | Inactivity before abandoned |
-| `PAYMENT_RECOVERY_MIN_GAP_MINUTES` | `120` | Minimum gap between two emails (stops bursts after downtime) |
-| `PAYMENT_RECOVERY_WINDOW_START_MINUTES` / `_END_MINUTES` | `510` / `1200` | Sending window, minutes after midnight Africa/Lagos (08:30 to 20:00) |
-| `PAYMENT_RECOVERY_VERIFY_INTERVAL_MINUTES` | `5` | Base re-verify interval |
-| `PAYMENT_RECOVERY_BATCH_LIMIT` | `40` | Attempts and emails per run |
+| `PAYMENT_RECOVERY_ENABLED` | `false` | Master switch for verification and email sends |
+| `RESEND_WEBHOOK_SECRET` | unset | Verifies signed Resend delivery events |
+| `PAYMENT_RECOVERY_FIRST_FAILED_DELAY_MINUTES` | `10` | Delay after confirmed failure |
+| `PAYMENT_RECOVERY_ABANDONED_DELAY_MINUTES` | `30` | Inactivity before abandonment |
+| `PAYMENT_RECOVERY_MIN_GAP_MINUTES` | `120` | Minimum spacing between emails |
+| `PAYMENT_RECOVERY_WINDOW_START_MINUTES` | `510` | Start of email window, Lagos time |
+| `PAYMENT_RECOVERY_WINDOW_END_MINUTES` | `1200` | End of email window, Lagos time |
+| `PAYMENT_RECOVERY_VERIFY_INTERVAL_MINUTES` | `5` | Base re-verification interval |
+| `PAYMENT_RECOVERY_BATCH_LIMIT` | `40` | Maximum attempts and emails per run |
 
-Reused: `CRON_SECRET`, Paystack secret (existing loader), Resend key and sender (existing `sendEmail`).
+## Admin pages
 
-## Admin
+- `/admin/payment-recovery`: overview, filters, table, analytics and CSV export.
+- `/admin/payment-recovery/[id]`: references, verification history, email events, notes and timeline.
+- `/admin/payment-recovery/historical`: review older eligible orders and queue a limited batch. Queued orders are verified again before any email.
 
-- `/admin/payment-recovery`: overview, filters, table, analytics, CSV export.
-- `/admin/payment-recovery/[id]`: references, verification history, emails, delivery events,
-  bank confirmation, notes, timeline.
-- `/admin/payment-recovery/historical`: review older pending/failed course checkouts, queue a
-  limited batch (type QUEUE). Queued orders are re-verified before any email.
-
-All actions use `requireAdmin()` and write `audit_logs`.
+Admin actions require `requireAdmin()` and write to `audit_logs`.
 
 ## Reporting definitions
 
-- Order = one group (email + course). Repeated attempts do not inflate counts.
-- Completion rate = paid orders / all orders.
-- Recovery rate = recovered orders / orders that failed or were abandoned.
-- Recovered = paid (Paystack verified or admin-confirmed transfer) after at least one recovery email.
-- Recovery revenue = verified amount of recovered orders only.
+- Order: one open recovery group for an email and product.
+- Completion rate: paid orders divided by all orders.
+- Recovery rate: orders paid after a recovery email divided by orders that failed or were abandoned.
+- Recovered order: paid by verified Paystack transaction or admin-confirmed bank transfer after at least one recovery email.
+- Recovery revenue: verified amount from recovered orders only.
 
-## Seven-email sequence (migration 0059)
+## Seven-email sequence
 
-One incomplete order gets at most seven emails over five days. Hours count from the first email.
+Hours count from the first recovery email.
 
 | # | Step | After first email | Subject |
 | --- | --- | --- | --- |
-| 1 | `initial` | 0 (10 min after confirmed failure, 30 min after abandon) | Your {product} payment is not complete |
-| 2 | `followup_3h` | 3 h | Would you like to try your payment again? |
-| 3 | `help_12h` | 12 h | You can still complete your {product} purchase |
-| 4 | `reminder_24h` | 24 h | Still interested in {product}? |
-| 5 | `reminder_48h` | 48 h | Need help completing your payment? |
-| 6 | `reminder_72h` | 72 h | Your {product} order is still incomplete |
-| 7 | `final_120h` | 120 h | Last reminder about your {product} checkout |
+| 1 | `initial` | 0 | Your {product} payment is not complete |
+| 2 | `followup_3h` | 3 hours | Would you like to try your payment again? |
+| 3 | `help_12h` | 12 hours | You can still complete your {product} purchase |
+| 4 | `reminder_24h` | 24 hours | Still interested in {product}? |
+| 5 | `reminder_48h` | 48 hours | Need help completing your payment? |
+| 6 | `reminder_72h` | 72 hours | Your {product} order is still incomplete |
+| 7 | `final_120h` | 120 hours | Last reminder about your {product} checkout |
 
-Rules: sends only between 08:30 and 20:00 Africa/Lagos (later times move to the next 08:30), at least
-2 hours between emails, one email per order per run, idempotency key per step, retries never restart
-the sequence, payment/opt-out/bounce/complaint/suppression stops it. Groups that already received the old
-`final_48h` email are treated as at step 5 and continue from step 6.
+The first email follows the confirmed failure or abandonment delay. Recovery stops after the final email, payment, opt-out, bounce, complaint or suppression. Retries do not restart the sequence.
