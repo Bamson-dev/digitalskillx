@@ -7,6 +7,7 @@ import { getPaystackSecretKey } from "@/lib/env-paystack";
 import { generateReference, initializeTransaction } from "@/lib/paystack";
 import { completePaidCheckout, resolveOrCreateStudentForPurchase } from "@/lib/guest-checkout";
 import { fulfillPurchase } from "@/lib/purchase";
+import { fulfillPaystackExternalCharge } from "@/lib/paystack-external-fulfillment";
 import { sendEmail } from "@/lib/email";
 import { siteUrl } from "@/lib/org";
 import { readRecoveryConfig } from "./config";
@@ -128,6 +129,19 @@ export async function buildRecoveryDeps(admin?: DbClient): Promise<{ db: Db; dep
     completePaidCheckout: async (reference) => {
       const r = await completePaidCheckout(reference);
       return r.ok ? { ok: true } : { ok: false, error: "error" in r ? String(r.error) : "fulfilment_failed" };
+    },
+    completeExternalPayment: async (reference, group) => {
+      const context = (group.product_context ?? {}) as Record<string, unknown>;
+      const productKey = typeof context.external_product_key === "string" ? context.external_product_key : "";
+      if (!productKey) return { ok: false, error: "External Payment Page product attribution is missing." };
+      const result = await fulfillPaystackExternalCharge({
+        reference,
+        attributedProductKey: productKey,
+        admin: client,
+      });
+      if (!result.handled) return { ok: false, error: "External Paystack transaction was not recognised." };
+      if (!result.ok) return { ok: false, error: result.error };
+      return { ok: true };
     },
     isAlreadyPaid: (group) => isAlreadyPaid(client, group),
     sendEmail: async (p) => {
