@@ -85,7 +85,12 @@ async function runSlot(slot) {
         signal: activeController.signal,
       });
       const payload = await response.json().catch(() => null);
-      if (!response.ok || payload?.enabled !== true) {
+      if (
+        !response.ok ||
+        payload?.enabled !== true ||
+        payload?.reconcile?.ok === false ||
+        payload?.messages?.ok === false
+      ) {
         throw new Error("recovery endpoint did not complete successfully (HTTP " + response.status + ")");
       }
       const registered = Number(payload.pagePull?.registered ?? 0);
@@ -93,7 +98,8 @@ async function runSlot(slot) {
       const verified = Number(payload.reconcile?.checked ?? 0);
       const sent = Number(payload.messages?.sent ?? 0);
       log("cycle completed; imported=" + registered + ", skipped=" + skipped +
-        ", verified=" + verified + ", emails_sent=" + sent);
+        ", verified=" + verified + ", emails_sent=" + sent +
+        ", page_pull_error=" + (payload.pagePull?.error ? "yes" : "no"));
     } finally {
       clearTimeout(timeout);
       activeController = undefined;
