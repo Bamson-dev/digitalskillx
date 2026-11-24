@@ -142,7 +142,7 @@ function harness({ verify, product, enabled = true, env } = {}) {
   const opts = { env };
   const clock = { now: Date.parse("2026-11-24T10:00:00Z") };
   const db = createDb(clock);
-  const calls = { fulfil: [], emails: [], bankFulfil: 0, init: [], pendingTx: [] };
+  const calls = { fulfil: [], externalFulfil: [], emails: [], bankFulfil: 0, init: [], pendingTx: [] };
   const paid = new Set(); // email:course paid outside the group
   let refN = 0;
   const deps = {
@@ -699,6 +699,35 @@ await test("abandoned Payment Page rows retain their original timestamp and are 
   await h.cycle();
   assert.equal(h.calls.emails.length, 1, "verified abandoned Payment Page attempt over 30 minutes old is recovered in this cycle");
   assert.equal(h.calls.emails[0].to, "abandoned.page@example.com");
+});
+
+await test("successful Paystack Payment Page verification uses external fulfillment and closes its recovery group", async () => {
+  const h = harness({ verify: () => ok("success") });
+  h.deps.completeExternalPayment = async (reference, group) => {
+    h.calls.externalFulfil.push({ reference, productKey: group.product_context.external_product_key });
+    return { ok: true };
+  };
+  const created = await engine.registerCheckoutAttempt(h.db, h.deps, {
+    reference: "T_PAGE_SUCCESS",
+    email: "page.success@example.com",
+    courseId: COURSE,
+    productType: "course",
+    productId: COURSE,
+    productTitle: "AI Ads Automation Masterclass",
+    amountKobo: PRICE,
+    productContext: { external_product_key: "ai-ads-automation-masterclass" },
+    source: "payment_page",
+    verifyImmediately: true,
+  });
+  assert.equal(created.ok, true);
+  await h.cycle();
+  assert.deepEqual(h.calls.externalFulfil, [{
+    reference: "T_PAGE_SUCCESS",
+    productKey: "ai-ads-automation-masterclass",
+  }]);
+  assert.equal(h.calls.fulfil.length, 0, "must not use local checkout fulfilment for an external Payment Page reference");
+  assert.equal(h.group().payment_status, "successful");
+  assert.equal(h.group().is_open, false);
 });
 
 await test("native bundle and certificate checkout routes capture recovery context", async () => {
