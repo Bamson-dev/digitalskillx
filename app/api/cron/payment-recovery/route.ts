@@ -28,6 +28,7 @@ export async function GET(request: NextRequest) {
     const pagePull = await pullPaymentPageAttempts(db, deps, admin);
     const result = await runRecoveryCycle(db, deps);
     secureLog("info", "cron/payment-recovery", "done", {
+      pagePull,
       reconcile: result.reconcile,
       messages: result.messages,
     } as unknown as Record<string, unknown>);
