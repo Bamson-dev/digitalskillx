@@ -1,4 +1,18 @@
 -- Generalise recovery groups to all DigitalSkillX payable products.
+-- Distinguish gateway Payment Page attempts so a later success can use the
+-- external product fulfilment path if webhook delivery is delayed.
+alter table public.payment_recovery_groups
+  drop constraint if exists payment_recovery_groups_source_check;
+alter table public.payment_recovery_groups
+  add constraint payment_recovery_groups_source_check
+  check (source in ('checkout','historical','payment_page'));
+
+alter table public.payment_recovery_attempts
+  drop constraint if exists payment_recovery_attempts_source_check;
+alter table public.payment_recovery_attempts
+  add constraint payment_recovery_attempts_source_check
+  check (source in ('checkout','retry','historical','payment_page'));
+
 -- Existing course groups are backfilled without changing their identifiers or references.
 
 alter table public.payment_recovery_groups
