@@ -28,7 +28,6 @@ await test("existing Resend webhook is enabled and required events are added wit
     endpoint,
     status: "disabled",
     events: ["email.sent", "email.received"],
-    signing_secret: signingSecret,
   };
 
   const fetchImpl = async (url, init = {}) => {
@@ -36,7 +35,7 @@ await test("existing Resend webhook is enabled and required events are added wit
     const method = init.method || "GET";
     calls.push({ path: parsed.pathname, method, body: init.body ? JSON.parse(init.body) : null });
     if (parsed.pathname === "/webhooks" && method === "GET") {
-      return response({ data: [{ id: details.id, endpoint }], has_more: false });
+      return response({ data: [{ id: details.id, endpoint, signing_secret: signingSecret }], has_more: false });
     }
     if (parsed.pathname === "/webhooks/" + details.id && method === "GET") {
       return response(details);
