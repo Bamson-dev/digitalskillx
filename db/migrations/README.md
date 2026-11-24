@@ -19,3 +19,11 @@ Commands:
 - `npm run db:migrate` apply pending migrations
 - `npm run db:migrate -- --status` list applied and pending files
 - `npm run db:migrate -- --dry-run` print what would run
+
+
+## Migration 0054 (course publish email outbox)
+
+The baseline on the new PostgreSQL host recorded 0001 to 0057 as applied, but 0054 had never run on the
+restored database, so `program_course_publish_email_outbox` was missing and `cron-email-outbox` failed daily.
+It was applied by hand on 2026-11-24 (the file is idempotent). The tracker row is correct: the objects exist.
+Re-running 0054 is safe, and `npm run db:migrate` never runs a recorded version twice.

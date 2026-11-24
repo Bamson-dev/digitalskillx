@@ -4,7 +4,16 @@
  */
 import { RECOVERY_BUSINESS, formatNaira, whatsappLink } from "./config";
 
-export type RecoveryStep = "initial" | "reminder_24h" | "final_48h" | "manual";
+export type RecoveryStep =
+  | "initial"
+  | "followup_3h"
+  | "help_12h"
+  | "reminder_24h"
+  | "reminder_48h"
+  | "reminder_72h"
+  | "final_120h"
+  | "manual"
+  | "final_48h"; // legacy value from the old three-email sequence
 
 export type RecoveryEmailInput = {
   step: RecoveryStep;
@@ -15,6 +24,8 @@ export type RecoveryEmailInput = {
   retryUrl: string;
   optOutUrl: string;
   reason: "failed" | "abandoned";
+  /** Real course description from the database. Never invented. */
+  productSummary?: string | null;
 };
 
 const BRAND = "#dc2626";
@@ -35,23 +46,56 @@ export function firstNameFrom(fullName: string | null | undefined) {
 }
 
 export function recoverySubject(step: RecoveryStep, productTitle: string) {
-  if (step === "reminder_24h") return `Your ${productTitle} Is Still Waiting for You`;
-  if (step === "final_48h") return `A Quick Reminder About Your ${productTitle} Order`;
-  return `Your ${productTitle} Payment Is Not Complete`;
+  switch (step) {
+    case "followup_3h":
+      return "Would you like to try your payment again?";
+    case "help_12h":
+      return `You can still complete your ${productTitle} purchase`;
+    case "reminder_24h":
+      return `Still interested in ${productTitle}?`;
+    case "reminder_48h":
+      return "Need help completing your payment?";
+    case "reminder_72h":
+      return `Your ${productTitle} order is still incomplete`;
+    case "final_120h":
+    case "final_48h":
+      return `Last reminder about your ${productTitle} checkout`;
+    default:
+      return `Your ${productTitle} payment is not complete`;
+  }
 }
 
+function summaryBlock(input: RecoveryEmailInput) {
+  const raw = (input.productSummary ?? "").replace(/\s+/g, " ").trim();
+  if (!raw) return "";
+  const text = raw.length > 320 ? `${raw.slice(0, 317).trimEnd()}...` : raw;
+  return `<p style="margin:12px 0;padding:12px 14px;background:#f8fafc;border-radius:8px;font-size:14px;line-height:1.7;color:#334155">${esc(text)}</p>`;
+}
+
+/** Plain, direct copy. One different purpose per email. No invented claims, prices or deadlines. */
 function intro(input: RecoveryEmailInput, product: string, amount: string) {
-  if (input.step === "reminder_24h") {
-    return `Your order for <strong>${product}</strong> (${amount}) is still not complete. We are holding it for you, and you can finish payment any time using one of the options below.`;
+  switch (input.step) {
+    case "followup_3h":
+      return `Your payment for <strong>${product}</strong> (${amount}) has not gone through yet. Cards sometimes fail because of bank limits or network problems, and that is easy to fix. You can try again with the button below, or ask us for help on WhatsApp if you get stuck.`;
+    case "help_12h":
+      return `You can still complete your <strong>${product}</strong> purchase (${amount}). If your card or Paystack gives you trouble, pay by bank transfer instead. The account details are in Option 2 below. Copy them and use your payment reference as the narration.`;
+    case "reminder_24h":
+      return `A day ago you started an order for <strong>${product}</strong>. Here is what it is, so you can decide:${summaryBlock(input)}Your order (${amount}) is still open. Pay online or by bank transfer using the options below.`;
+    case "reminder_48h":
+      return `If something stopped you from paying for <strong>${product}</strong>, tell us. The usual problems are: the card is declined, the bank blocks the online payment, or the transfer does not show. All three have a fix. Message us on WhatsApp and we will help you through it, or use the options below.`;
+    case "reminder_72h":
+      return `Your <strong>${product}</strong> order (${amount}) is still incomplete. Nothing has been charged. When you are ready, finish with the card button or a bank transfer below.`;
+    case "final_120h":
+    case "final_48h":
+      return `This is the last automated reminder about your <strong>${product}</strong> order (${amount}). We will not send more reminders for this order. If you still want the course, you can pay with any option below, or message us on WhatsApp and we will help.`;
+    default: {
+      const what =
+        input.reason === "failed"
+          ? "but the payment did not go through"
+          : "but we could not confirm a successful payment";
+      return `You recently tried to buy <strong>${product}</strong> on DigitalSkillX, ${what}. Your order is still waiting for payment. You can finish it with any option below.`;
+    }
   }
-  if (input.step === "final_48h") {
-    return `This is our last reminder about your <strong>${product}</strong> order (${amount}). If you still want it, you can complete payment using any of the options below. After this, we will not send more reminders about this order.`;
-  }
-  const what =
-    input.reason === "failed"
-      ? "but the payment did not go through"
-      : "but we could not confirm a successful payment";
-  return `You recently tried to buy <strong>${product}</strong> on DigitalSkillX, ${what}. Your order is still waiting for payment, and you can complete it using any of the options below.`;
 }
 
 function button(href: string, label: string, color: string) {

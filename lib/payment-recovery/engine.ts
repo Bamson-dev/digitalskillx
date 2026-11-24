@@ -6,7 +6,7 @@
  * reference for that order is an attempt in the group. A verified payment on any
  * attempt, or a confirmed bank transfer, closes the whole group and stops all email.
  */
-import type { RecoveryConfig } from "./config";
+import { RECOVERY_SEQUENCE, clampToSendWindow, type RecoveryConfig } from "./config";
 import {
   classifyVerification,
   pendingRecheckMs,
@@ -359,7 +359,7 @@ async function afterTerminal(db: Db, deps: RecoveryDeps, groupId: string, kind: 
           ? now + deps.config.failedDelayMs
           : Math.max(Date.parse(group.first_attempt_at) + deps.config.abandonedDelayMs, now);
       patch.recovery_status = "scheduled";
-      patch.next_message_at = iso(due);
+      patch.next_message_at = iso(clampToSendWindow(due, deps.config.sendWindow));
     }
   }
   await updateGroup(db, groupId, patch, now);
@@ -469,26 +469,30 @@ export async function reconcileAttempts(db: Db, deps: RecoveryDeps, limit?: numb
 /* Email sequence                                                            */
 /* ------------------------------------------------------------------------ */
 
-function nextStep(group: Group, cfg: RecoveryConfig): RecoveryStep | null {
-  if (!group.initial_sent_at) return "initial";
-  if (group.last_email_step === "initial" || group.last_email_step === "manual") {
-    if (cfg.reminder24hEnabled) return "reminder_24h";
-    if (cfg.reminder48hEnabled) return "final_48h";
-    return null;
-  }
-  if (group.last_email_step === "reminder_24h") return cfg.reminder48hEnabled ? "final_48h" : null;
-  return null;
+function sequenceIndex(step: string | null | undefined) {
+  if (!step || step === "manual") return step === "manual" ? 0 : -1;
+  if (step === "final_48h") return 4; // legacy three-email sequence
+  return RECOVERY_SEQUENCE.findIndex((s) => s.step === step);
 }
 
+/** Next email in the seven-email sequence, or null after the last one. */
+function nextStep(group: Group, _cfg: RecoveryConfig): RecoveryStep | null {
+  if (!group.initial_sent_at) return "initial";
+  const idx = sequenceIndex(group.last_email_step);
+  const next = RECOVERY_SEQUENCE[Math.max(idx, 0) + 1];
+  return next ? next.step : null;
+}
+
+/**
+ * When the email after `step` is due: offset from the first email, never sooner
+ * than minGap after now, and always inside the Lagos sending window.
+ */
 function scheduleAfter(step: RecoveryStep, initialSentMs: number, sentMs: number, cfg: RecoveryConfig) {
-  if (step === "initial" || step === "manual") {
-    if (cfg.reminder24hEnabled) return initialSentMs + cfg.reminder24hAfterMs;
-    if (cfg.reminder48hEnabled) return initialSentMs + cfg.reminder48hAfterMs;
-    return null;
-  }
-  if (step === "reminder_24h") return cfg.reminder48hEnabled ? initialSentMs + cfg.reminder48hAfterMs : null;
-  return null;
-  void sentMs;
+  const idx = Math.max(sequenceIndex(step), 0);
+  const nextOffset = cfg.sequenceOffsetsMs[idx + 1];
+  if (nextOffset === undefined) return null;
+  const due = Math.max(initialSentMs + nextOffset, sentMs + cfg.minGapMs);
+  return clampToSendWindow(due, cfg.sendWindow);
 }
 
 async function isSuppressed(db: Db, email: string) {
@@ -555,6 +559,13 @@ async function claimMessage(db: Db, groupId: string, step: RecoveryStep, manualS
   return (cas.data?.length ?? 0) === 1 ? { id: existing.id as string, retry: existing.retry_count + 1 } : null;
 }
 
+async function loadProductSummary(db: Db, courseId: string | null) {
+  if (!courseId) return null;
+  const { data } = await db.from("courses").select("description").eq("id", courseId).maybeSingle();
+  const text = (data?.description as string | null | undefined) ?? null;
+  return text && text.trim() ? text : null;
+}
+
 async function deliver(
   db: Db,
   deps: RecoveryDeps,
@@ -577,6 +588,7 @@ async function deliver(
     retryUrl: links.retryUrl,
     optOutUrl: links.optOutUrl,
     reason: group.failed_at ? "failed" : "abandoned",
+    productSummary: await loadProductSummary(db, group.course_id),
   });
   const result = await deps.sendEmail({
     to: group.customer_email,
@@ -599,14 +611,14 @@ async function deliver(
       const at = scheduleAfter(step, initialMs, now, deps.config);
       return at === null ? null : iso(Math.max(at, now));
     })();
-    const finished = step === "final_48h" || (step !== "manual" && next === null);
+    const finished = step === "final_120h" || (step !== "manual" && next === null);
     await updateGroup(
       db,
       group.id,
       {
         emails_sent: group.emails_sent + 1,
         last_email_at: iso(now),
-        last_email_step: step,
+        last_email_step: step === "manual" && group.last_email_step ? group.last_email_step : step,
         last_email_status: "sent",
         initial_sent_at: group.initial_sent_at ?? iso(now),
         recovery_status: finished ? "completed" : "in_progress",
@@ -688,6 +700,13 @@ export async function processDueMessages(db: Db, deps: RecoveryDeps, limit?: num
         now,
       );
       summary.suppressed += 1;
+      continue;
+    }
+
+    const windowAt = clampToSendWindow(now, deps.config.sendWindow);
+    if (windowAt > now) {
+      await updateGroup(db, group.id, { next_message_at: iso(windowAt) }, now);
+      summary.postponed += 1;
       continue;
     }
 
