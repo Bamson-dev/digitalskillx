@@ -30,6 +30,7 @@ import {
   FileDown,
   Radio,
   Crosshair,
+  LifeBuoy,
 } from "lucide-react";
 import { signOutAdmin } from "@/app/(admin)/admin/actions";
 import { cn } from "@/lib/utils";
@@ -58,6 +59,7 @@ const teachingNav: NavItem[] = [
 const insightsNav: NavItem[] = [
   { href: "/admin/analytics", label: "Analytics", icon: BarChart3 },
   { href: "/admin/sales", label: "Sales", icon: ShoppingBag },
+  { href: "/admin/payment-recovery", label: "Payment recovery", icon: LifeBuoy },
   { href: "/admin/manual-track", label: "Manual track", icon: Crosshair },
   { href: "/admin/offers", label: "Offers", icon: Percent },
   { href: "/admin/digital-products", label: "Digital products", icon: Tag },

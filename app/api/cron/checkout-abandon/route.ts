@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { verifyCronSecret } from "@/lib/cron-auth";
+import { readRecoveryConfig } from "@/lib/payment-recovery/config";
 import { bootstrapRuntimeSecrets } from "@/lib/bootstrap-runtime-secrets";
 import { createAdminClientAsync } from "@/lib/supabase/admin";
 import { readPendingCheckoutDetails } from "@/lib/guest-checkout";
@@ -28,6 +29,10 @@ export async function GET(request: NextRequest) {
   }
 
   await bootstrapRuntimeSecrets();
+  if (readRecoveryConfig().enabled) {
+    // Payment recovery owns abandoned-checkout email now. Avoid a second, unverified reminder.
+    return NextResponse.json({ skipped: "payment_recovery_enabled", processed: 0 });
+  }
   const admin = await createAdminClientAsync();
 
   const now = Date.now();

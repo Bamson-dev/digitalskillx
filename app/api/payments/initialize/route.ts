@@ -16,6 +16,7 @@ import { CHECKOUT_REF_COOKIE, checkoutRefCookieOptions, hashCheckoutBinding } fr
 import { runAutomations } from "@/lib/automation";
 import { secureLog } from "@/lib/secure-log";
 import type { Json } from "@/types/database";
+import { captureCheckoutAttempt } from "@/lib/payment-recovery/hooks";
 
 function jsonError(message: string, status: number) {
   return NextResponse.json({ error: message }, { status });
@@ -40,6 +41,7 @@ export async function POST(request: NextRequest) {
       currency?: CurrencyCode;
       email?: string;
       fullName?: string;
+      phone?: string;
       completedLessonNumbers?: string[];
       attribution?: Record<string, string>;
     };
@@ -348,6 +350,20 @@ export async function POST(request: NextRequest) {
       }
       return jsonError(txError.message, 500);
     }
+    // Payment recovery: record who tried to pay before sending them to Paystack.
+    // Best-effort, never blocks checkout. Price and product come from the course row above.
+    const checkoutPhone =
+      typeof body.phone === "string" ? body.phone.replace(/[^\d+]/g, "").slice(0, 20) || null : null;
+    await captureCheckoutAttempt(admin, {
+      reference,
+      email: checkoutEmail,
+      fullName: checkoutName,
+      phone: checkoutPhone,
+      studentId: studentIdForEnrollment,
+      courseId: course.id,
+      productTitle: course.title,
+      amountKobo: chargeAmount,
+    });
 
     const metadata: Record<string, string> = {
       course_id: course.id,

@@ -40,6 +40,7 @@
     "test:e2e": "playwright test",
     "test:paystack": "node scripts/certification/run-paystack-cert.mjs",
     "test:paystack-external": "node --import ./scripts/certification/register-ts-ext.mjs scripts/certification/test-paystack-external-enrollment.mjs && npm run test:payment-integrity",
+    "test:payment-recovery": "node --import ./scripts/certification/register-ts-ext.mjs scripts/certification/test-payment-recovery.mjs",
     "test:payment-integrity": "node --import ./scripts/certification/register-ts-ext.mjs scripts/certification/test-paystack-payment-integrity.mjs",
     "test:leadthur-handoff": "node --import ./scripts/certification/register-ts-ext.mjs scripts/certification/test-leadthur-handoff.mjs && node --import ./scripts/certification/register-ts-ext.mjs scripts/certification/test-ai-ads-masterclass.mjs",
     "test:ai-ads-masterclass": "node --import ./scripts/certification/register-ts-ext.mjs scripts/certification/test-ai-ads-masterclass.mjs",

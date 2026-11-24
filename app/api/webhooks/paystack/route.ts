@@ -1,3 +1,4 @@
+import { recoveryOnChargeHint, recoveryOnPaymentSucceeded } from "@/lib/payment-recovery/hooks";
 import { NextResponse, type NextRequest } from "next/server";
 import * as Sentry from "@sentry/nextjs";
 import { bootstrapRuntimeSecrets } from "@/lib/bootstrap-runtime-secrets";
@@ -58,6 +59,8 @@ export async function POST(request: NextRequest) {
 
   if (event.event === "charge.failed" || event.event === "charge.abandoned") {
     if (reference) {
+      // Hint only: payment recovery re-verifies with Paystack before acting.
+      await recoveryOnChargeHint(admin, reference);
       await admin
         .from("transactions")
         .update({ status: "failed" })
@@ -138,6 +141,7 @@ export async function POST(request: NextRequest) {
         console.error("[webhooks/paystack] enrollment repair", reference, err);
       }
     }
+    await recoveryOnPaymentSucceeded(admin, reference);
     return NextResponse.json({ received: true, alreadyFulfilled: true });
   }
 
@@ -180,5 +184,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: result.error }, { status: statusCode });
   }
 
+  // Close any open payment recovery for this order and stop its reminders.
+  await recoveryOnPaymentSucceeded(admin, reference, {
+    email: pendingCheckout.checkout_email ?? null,
+    courseId: txBefore?.course_id ?? null,
+    amountKobo: typeof event.data?.amount === "number" ? event.data.amount : 0,
+  });
   return NextResponse.json({ received: true });
 }
