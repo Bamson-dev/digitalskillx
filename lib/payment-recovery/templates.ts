@@ -112,7 +112,6 @@ const P = 'style="margin:0 0 12px;font-size:15px;line-height:1.7;color:#334155"'
 export function renderRecoveryEmail(input: RecoveryEmailInput) {
   const product = esc(input.productTitle);
   const amount = formatNaira(input.amountKobo);
-  const ref = esc(input.bankReference);
   const wa = whatsappLink({
     productTitle: input.productTitle,
     amountKobo: input.amountKobo,
