@@ -21,6 +21,10 @@ type PaystackListResponse = {
   message?: string;
   data?: PulledRow[];
   meta?: {
+    pageCount?: number;
+    page?: number;
+    perPage?: number;
+    total?: number;
     pagination?: {
       pageCount?: number;
       currentPage?: number;
@@ -67,7 +71,7 @@ async function listStatus(
     pages += 1;
     rows.push(...json.data);
 
-    const pageCount = Number(json.meta?.pagination?.pageCount ?? 0);
+    const pageCount = Number(json.meta?.pageCount ?? json.meta?.pagination?.pageCount ?? 0);
     if (pageCount > 0) {
       if (page >= pageCount) break;
       if (page === MAX_PAGES_PER_STATUS) truncated = true;
