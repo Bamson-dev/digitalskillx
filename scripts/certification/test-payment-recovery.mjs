@@ -617,6 +617,7 @@ await test("Payment Page failures and abandons are pulled into recovery, other a
   const s = await registerPulledRows(h.db, h.deps, [
     row("T_FAIL_1", 1_499_900, "failed"),
     row("T_FAIL_1", 1_499_900, "failed"), // duplicate listing across runs
+    row("T_PAID", 1_499_900, "success", "paid@example.com"), // never register a successful transaction
     row("T_OTHER", 777_700, "abandoned", "other@example.com"), // not a catalog price
     { reference: "T_NOEMAIL", amount: 1_499_900, currency: "NGN", customer: {}, page: { slug: "ai-ads-masterclass" } },
   ]);
