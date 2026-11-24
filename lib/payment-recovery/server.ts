@@ -8,6 +8,7 @@ import { generateReference, initializeTransaction } from "@/lib/paystack";
 import { completePaidCheckout, resolveOrCreateStudentForPurchase } from "@/lib/guest-checkout";
 import { fulfillPurchase } from "@/lib/purchase";
 import { fulfillPaystackExternalCharge } from "@/lib/paystack-external-fulfillment";
+import { pathCertificateOfferable } from "@/lib/content-factory/library-shared";
 import { sendEmail } from "@/lib/email";
 import { siteUrl } from "@/lib/org";
 import { readRecoveryConfig } from "./config";
@@ -195,6 +196,8 @@ export async function buildRecoveryDeps(admin?: DbClient): Promise<{ db: Db; dep
           const { data: digital } = await client.from("digital_products")
             .select("is_active").eq("id", data.target_id).maybeSingle();
           if (!digital?.is_active) return null;
+        } else {
+          return null;
         }
         return { title: data.title, available: true };
       }
@@ -209,11 +212,14 @@ export async function buildRecoveryDeps(admin?: DbClient): Promise<{ db: Db; dep
       if (group.product_type === "certificate") {
         const { data } = await client
           .from("learning_paths")
-          .select("title, status, certificate_enabled")
+          .select("title, status, certificate_enabled, certificate_price_ngn, certificate_pricing_mode, certificate_recommended_price_ngn")
           .eq("id", group.product_id)
           .maybeSingle();
         return data
-          ? { title: `${data.title} Certificate`, available: data.status === "published" && data.certificate_enabled === true }
+          ? {
+              title: `${data.title} Certificate`,
+              available: pathCertificateOfferable(data),
+            }
           : null;
       }
       return null;
