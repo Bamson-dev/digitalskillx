@@ -217,7 +217,8 @@ export async function registerCheckoutAttempt(
         .from("payment_recovery_groups")
         .select("*")
         .eq("customer_email", email)
-        .eq("course_id", input.courseId)
+        .eq("product_type", productType)
+        .eq("product_id", productId)
         .eq("is_open", true)
         .maybeSingle();
       group = (again.data as Group | null) ?? null;
