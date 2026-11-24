@@ -53,7 +53,6 @@ function writeRuntimeEnvFile() {
     const value = readEnv(key);
     if (value) payload[key] = value;
   }
-
   const target = runtimeTargets()[0];
   writeFileSync(target, JSON.stringify(payload), { mode: 0o600 });
   chmodSync(target, 0o600);
@@ -87,13 +86,13 @@ async function enrichSecretsFromDatabase() {
         if (!readEnv(envKey) && typeof dbValue === "string" && dbValue.trim()) {
           if (dbValue.includes("PASTE_") && dbValue.includes("_HERE")) continue;
           process.env[envKey] = dbValue.trim();
-          console.log(\`[digitalskillx] Loaded \${envKey} from platform_secrets\`);
+          console.log("[digitalskillx] Loaded " + envKey + " from platform_secrets");
         }
       }
     }
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    console.warn(\`[digitalskillx] Could not enrich secrets from database: \${message}\`);
+    console.warn("[digitalskillx] Could not enrich secrets from database: " + message);
   } finally {
     await client?.end().catch(() => undefined);
   }
@@ -105,7 +104,6 @@ function runDatabaseMigrations() {
     console.warn("[digitalskillx] Database migrations skipped: DATABASE_URL is missing");
     return false;
   }
-
   console.log("[digitalskillx] Applying pending database migrations before application startup");
   const result = spawnSync(process.execPath, [join(root, "scripts/db-migrate.mjs")], {
     cwd: root,
@@ -118,7 +116,8 @@ function runDatabaseMigrations() {
     return false;
   }
   if (result.status !== 0) {
-    console.error(\`[digitalskillx] Database migration runner failed (exit \${result.status ?? "unknown"}); payment recovery remains disabled\`);
+    console.error("[digitalskillx] Database migration runner failed (exit " +
+      (result.status ?? "unknown") + "); payment recovery remains disabled");
     return false;
   }
   console.log("[digitalskillx] Database migrations are up to date");
@@ -132,6 +131,7 @@ function isTruthy(value) {
 /** Enable recovery only after migrations and all payment/email integrations are ready. */
 async function configurePaymentRecovery(migrationsReady) {
   process.env.PAYMENT_RECOVERY_ENABLED = "false";
+  delete process.env.RESEND_WEBHOOK_SECRET;
 
   if (isTruthy(readEnv("PAYMENT_RECOVERY_FORCE_DISABLED"))) {
     console.log("[digitalskillx] Payment recovery is paused by PAYMENT_RECOVERY_FORCE_DISABLED");
@@ -148,7 +148,7 @@ async function configurePaymentRecovery(migrationsReady) {
     return !value || (key === "CRON_SECRET" && value === "generate-a-long-random-string");
   });
   if (missing.length) {
-    console.warn(\`[digitalskillx] Payment recovery is disabled; missing runtime values: \${missing.join(", ")}\`);
+    console.warn("[digitalskillx] Payment recovery is disabled; missing runtime values: " + missing.join(", "));
     return false;
   }
 
@@ -163,11 +163,12 @@ async function configurePaymentRecovery(migrationsReady) {
     });
     process.env.RESEND_WEBHOOK_SECRET = webhook.signingSecret;
     process.env.PAYMENT_RECOVERY_ENABLED = "true";
-    console.log(\`[digitalskillx] Resend recovery webhook ready (\${webhook.created ? "created" : "existing and reconciled"}); payment recovery enabled\`);
+    console.log("[digitalskillx] Resend recovery webhook ready (" +
+      (webhook.created ? "created" : "existing and reconciled") + "); payment recovery enabled");
     return true;
   } catch (err) {
     const message = err instanceof Error ? err.message : "unknown setup error";
-    console.warn(\`[digitalskillx] Payment recovery remains disabled; Resend webhook setup failed: \${message}\`);
+    console.warn("[digitalskillx] Payment recovery remains disabled; Resend webhook setup failed: " + message);
     return false;
   }
 }
@@ -176,7 +177,8 @@ async function main() {
   const rawNodeEnv = process.env.NODE_ENV ?? "";
   if (!allowedNodeEnv.has(rawNodeEnv)) {
     console.warn(
-      \`[digitalskillx] Non-standard NODE_ENV="\${rawNodeEnv || "(empty)"}" — forcing production for Next.js\`,
+      "[digitalskillx] Non-standard NODE_ENV=\"" + (rawNodeEnv || "(empty)") +
+        "\"; forcing production for Next.js",
     );
     process.env.NODE_ENV = "production";
   }
@@ -192,17 +194,17 @@ async function main() {
   writeRuntimeEnvFile();
 
   console.log("[digitalskillx] Startup env check:");
-  console.log(\`  cwd=\${process.cwd()}\`);
-  console.log(\`  appRoot=\${root}\`);
-  console.log(\`  NODE_ENV=\${process.env.NODE_ENV}\`);
-  console.log(\`  DATABASE_URL=\${secretStatus("DATABASE_URL")}\`);
-  console.log(\`  YOUTUBE_API_KEY=\${secretStatus("YOUTUBE_API_KEY")}\`);
-  console.log(\`  DEEPSEEK_API_KEY=\${secretStatus("DEEPSEEK_API_KEY")}\`);
-  console.log(\`  PAYSTACK_SECRET_KEY=\${secretStatus("PAYSTACK_SECRET_KEY")}\`);
-  console.log(\`  EMAIL_PROVIDER=\${readEnv("EMAIL_PROVIDER") || "(resend)"}\`);
-  console.log(\`  RESEND_API_KEY=\${secretStatus("RESEND_API_KEY")}\`);
-  console.log(\`  RESEND_FROM_EMAIL=\${readEnv("RESEND_FROM_EMAIL") ? "set" : "missing"}\`);
-  console.log(\`  PAYMENT_RECOVERY_ENABLED=\${readEnv("PAYMENT_RECOVERY_ENABLED")}\`);
+  console.log("  cwd=" + process.cwd());
+  console.log("  appRoot=" + root);
+  console.log("  NODE_ENV=" + process.env.NODE_ENV);
+  console.log("  DATABASE_URL=" + secretStatus("DATABASE_URL"));
+  console.log("  YOUTUBE_API_KEY=" + secretStatus("YOUTUBE_API_KEY"));
+  console.log("  DEEPSEEK_API_KEY=" + secretStatus("DEEPSEEK_API_KEY"));
+  console.log("  PAYSTACK_SECRET_KEY=" + secretStatus("PAYSTACK_SECRET_KEY"));
+  console.log("  EMAIL_PROVIDER=" + (readEnv("EMAIL_PROVIDER") || "(resend)"));
+  console.log("  RESEND_API_KEY=" + secretStatus("RESEND_API_KEY"));
+  console.log("  RESEND_FROM_EMAIL=" + (readEnv("RESEND_FROM_EMAIL") ? "set" : "missing"));
+  console.log("  PAYMENT_RECOVERY_ENABLED=" + readEnv("PAYMENT_RECOVERY_ENABLED"));
 
   const nextBin = join(root, "node_modules", "next", "dist", "bin", "next");
   const fallbackBin = join(root, "node_modules", ".bin", "next");
@@ -227,16 +229,24 @@ async function main() {
   const stopChild = (child, signal = "SIGTERM") => {
     if (child && child.exitCode === null && child.signalCode === null) child.kill(signal);
   };
-
-  app.on("exit", (code, signal) => {
-    stopChild(scheduler);
+  const finish = (code, signal) => {
     if (signal) process.kill(process.pid, signal);
     else process.exit(code ?? 1);
+  };
+
+  app.on("exit", (code, signal) => {
+    if (scheduler && scheduler.exitCode === null && scheduler.signalCode === null) {
+      stopChild(scheduler);
+      scheduler.once("exit", () => finish(code, signal));
+      setTimeout(() => finish(code, signal), 5_000).unref();
+      return;
+    }
+    finish(code, signal);
   });
 
   if (scheduler) {
     scheduler.on("exit", (code) => {
-      if (!app.killed && app.exitCode === null && app.signalCode === null && code !== 0) {
+      if (app.exitCode === null && app.signalCode === null && code !== 0) {
         console.error("[digitalskillx] Payment recovery scheduler exited; recovery will pause until the container restarts");
       }
     });
