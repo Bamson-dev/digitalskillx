@@ -188,6 +188,11 @@ async function configurePaymentRecovery(migrationsReady) {
     return false;
   }
 
+  if (!readEnv("PAYSTACK_SECRET_KEY").startsWith("sk_live_")) {
+    console.warn("[digitalskillx] Payment recovery is disabled because PAYSTACK_SECRET_KEY is not a live Paystack key");
+    return false;
+  }
+
   if (!readEnv("RESEND_FROM_EMAIL")) {
     process.env.RESEND_FROM_EMAIL = readEnv("ZEPTOMAIL_FROM_EMAIL") || "courses@digitalskillx.com";
   }
