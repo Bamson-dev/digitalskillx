@@ -240,11 +240,11 @@ await test("2. confirmed failed payment: email ~10 min later with product, price
   assert.match(e.html, /₦14,999/);
   assert.match(e.html, /COMPLETE MY PAYMENT/);
   assert.match(e.html, /\/api\/payment-recovery\/retry\?t=[0-9a-f]{48}/);
-  assert.match(e.html, /Wema Bank/);
-  assert.match(e.html, /Autoquicky Limited/);
-  assert.match(e.html, /0125912341/);
-  assert.match(e.html, new RegExp(h.group().bank_reference));
+  assert.doesNotMatch(e.html, /Wema Bank|Autoquicky Limited|0125912341/);
+  assert.doesNotMatch(e.html, /OPTION 2: PAY THROUGH BANK TRANSFER/);
+  assert.match(e.html, /NEED HELP\? CONTACT US ON WHATSAPP/);
   assert.match(e.html, /https:\/\/wa\.me\/2349023986992\?text=/);
+  assert.match(e.html, /COMPLETE MY PAYMENT/);
   const wa = decodeURIComponent(e.html.match(/wa\.me\/2349023986992\?text=([^"&]+)/)[1]);
   assert.match(wa, /AI Ads Automation Masterclass for ₦14,999/);
   assert.match(e.html, /Hello Ada,/);
@@ -742,6 +742,16 @@ await test("Payment Page importer preserves gateway source, product attribution 
   assert.match(pagePull, /REQUEST_TIMEOUT_MS/);
   assert.match(migration, /payment_recovery_attempts_source_check/);
   assert.match(migration, /'payment_page'/);
+});
+
+await test("bank transfer remains disabled until the receiving account name is confirmed", async () => {
+  const config = src("lib/payment-recovery/config.ts");
+  const template = src("lib/payment-recovery/templates.ts");
+  const detail = src("app/(admin)/admin/(panel)/payment-recovery/[id]/page.tsx");
+  assert.match(config, /bankTransferEnabled: false/);
+  assert.doesNotMatch(template, /RECOVERY_BUSINESS\.accountName/);
+  assert.doesNotMatch(template, /0125912341/);
+  assert.match(detail, /RECOVERY_BUSINESS\.bankTransferEnabled/);
 });
 
 await test("native bundle and certificate checkout routes capture recovery context", async () => {
