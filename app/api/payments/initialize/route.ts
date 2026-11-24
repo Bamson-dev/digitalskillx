@@ -97,6 +97,7 @@ export async function POST(request: NextRequest) {
           learningPathId: body.learningPathId,
           email: body.email,
           fullName: body.fullName,
+          phone: body.phone,
           completedLessonNumbers: Array.isArray(body.completedLessonNumbers)
             ? body.completedLessonNumbers.map(String)
             : undefined,
