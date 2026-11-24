@@ -6,6 +6,7 @@ import { createAdminClientAsync } from "@/lib/supabase/admin";
 import { getPaystackSecretKey } from "@/lib/env-paystack";
 import { generateReference, initializeTransaction } from "@/lib/paystack";
 import { completePaidCheckout, resolveOrCreateStudentForPurchase } from "@/lib/guest-checkout";
+import { fulfillPurchase } from "@/lib/purchase";
 import { sendEmail } from "@/lib/email";
 import { siteUrl } from "@/lib/org";
 import { readRecoveryConfig } from "./config";
@@ -324,6 +325,17 @@ export async function buildRecoveryDeps(admin?: DbClient): Promise<{ db: Db; dep
           .eq("status", "pending");
         if (paidError) return { ok: false, error: paidError.message };
 
+        if ((group.product_type === "course" || group.product_type === "legacy") && group.course_id) {
+          await fulfillPurchase({
+            studentId,
+            courseId: group.course_id,
+            reference: group.bank_reference,
+            buyerEmail: group.customer_email,
+            buyerName: group.customer_name ?? undefined,
+            skipCustomerEmails: false,
+          });
+          return { ok: true };
+        }
         const result = await completePaidCheckout(group.bank_reference);
         if (!result.ok) return { ok: false, error: "error" in result ? String(result.error) : "Fulfilment failed." };
         return { ok: true };
