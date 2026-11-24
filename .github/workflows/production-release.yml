@@ -84,6 +84,11 @@ jobs:
         continue-on-error: true
         run: npm run test:paystack-external
 
+      - name: Payment recovery regressions
+        id: payment_recovery
+        continue-on-error: true
+        run: npm run test:payment-recovery
+
       - name: Leadthur handoff regressions
         id: leadthur
         continue-on-error: true
@@ -121,12 +126,13 @@ jobs:
           SECURITY_SCAN: ${{ steps.security_scan.outcome }}
           PLATFORM_HARDENING: ${{ steps.platform_hardening.outcome }}
           PAYSTACK_EXTERNAL: ${{ steps.paystack_external.outcome }}
+          PAYMENT_RECOVERY: ${{ steps.payment_recovery.outcome }}
           LEADTHUR: ${{ steps.leadthur.outcome }}
           DOCKER_IMAGE: ${{ steps.docker_image.outcome }}
           UNIT_SUITE: ${{ steps.unit_suite.outcome }}
         run: |
           failed=0
-          for check in CONTENT_FACTORY COURSE_PUBLISH_OUTBOX RESEND_EMAIL SECURITY_SCAN PLATFORM_HARDENING PAYSTACK_EXTERNAL LEADTHUR DOCKER_IMAGE UNIT_SUITE; do
+          for check in CONTENT_FACTORY COURSE_PUBLISH_OUTBOX RESEND_EMAIL SECURITY_SCAN PLATFORM_HARDENING PAYSTACK_EXTERNAL PAYMENT_RECOVERY LEADTHUR DOCKER_IMAGE UNIT_SUITE; do
             outcome="${!check}"
             if [ "$outcome" != success ]; then
               echo "$check did not pass (outcome: ${outcome:-missing})" >&2

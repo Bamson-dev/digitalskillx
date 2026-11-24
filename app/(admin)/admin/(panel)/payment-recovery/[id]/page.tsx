@@ -66,20 +66,17 @@ export default async function RecoveryDetailPage({
           </a>
         </Card>
         <Card>
-          <CardHeader title="Bank transfer instructions" />
-          <dl className="space-y-1 text-sm">
-            <div><dt className="text-muted">Bank</dt><dd>{RECOVERY_BUSINESS.bankName}</dd></div>
-            <div><dt className="text-muted">Account</dt><dd>{RECOVERY_BUSINESS.accountName} · {RECOVERY_BUSINESS.accountNumber}</dd></div>
-            <div><dt className="text-muted">Expected amount</dt><dd className="font-semibold">{formatNaira(g.amount_kobo)}</dd></div>
-            <div><dt className="text-muted">Narration reference</dt><dd className="font-mono font-semibold">{g.bank_reference}</dd></div>
-          </dl>
+          <CardHeader title="Bank transfer setup" />
+          <p className="text-sm text-muted">
+            Customer bank transfer is disabled until the Wema account name is confirmed. Paystack checkout and WhatsApp support remain available.
+          </p>
         </Card>
         <Card>
           <CardHeader title="Actions" />
           <div className="flex flex-wrap gap-2">
             <form action={verifyNowAction}>{hidden}<button className={btn}>Re-verify with Paystack</button></form>
             {open && !paid ? <form action={resendEmailAction}>{hidden}<button className={btn}>Resend recovery email</button></form> : null}
-            {open && !paid && g.payment_status !== "bank_transfer_pending" ? (
+            {open && !paid && RECOVERY_BUSINESS.bankTransferEnabled && g.payment_status !== "bank_transfer_pending" ? (
               <form action={markClaimedAction}>{hidden}<button className={btn}>Customer says they transferred</button></form>
             ) : null}
           </div>

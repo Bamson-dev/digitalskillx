@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 /**
  * Payment recovery: failed and abandoned Paystack checkout recovery.
- * Runs the real engine against an in-memory Supabase fake with the same unique
- * constraints as supabase/migrations/0058_payment_recovery.sql.
+ * Runs the real engine against an in-memory query fake with the current
+ * recovery-group product identity and uniqueness rules.
  * Run: npm run test:payment-recovery
  */
 import assert from "node:assert/strict";
@@ -31,7 +31,7 @@ const HOUR = 60 * MIN;
 /* ------------------------------------------------------------------------ */
 const UNIQUE = {
   payment_recovery_groups: [
-    (r) => (r.is_open ? `open:${r.customer_email.toLowerCase()}:${r.course_id}` : null),
+    (r) => (r.is_open ? `open:${r.customer_email.toLowerCase()}:${r.product_type ?? "course"}:${r.product_id ?? r.course_id}` : null),
     (r) => `bank:${r.bank_reference}`,
     (r) => `tok:${r.retry_token}`,
   ],
@@ -142,7 +142,7 @@ function harness({ verify, product, enabled = true, env } = {}) {
   const opts = { env };
   const clock = { now: Date.parse("2026-11-24T10:00:00Z") };
   const db = createDb(clock);
-  const calls = { fulfil: [], emails: [], bankFulfil: 0, init: [], pendingTx: [] };
+  const calls = { fulfil: [], externalFulfil: [], emails: [], bankFulfil: 0, init: [], pendingTx: [] };
   const paid = new Set(); // email:course paid outside the group
   let refN = 0;
   const deps = {
@@ -221,7 +221,7 @@ await test("1. successful payment: fulfils once, no recovery email", async () =>
   assert.equal(h.calls.emails.length, 0, "no recovery email");
 });
 
-await test("2. confirmed failed payment: email ~10 min later with product, price, retry, Wema, WhatsApp", async () => {
+await test("2. confirmed failed payment: email ~10 min later with product, price, Paystack retry and WhatsApp", async () => {
   const h = harness({ verify: () => ok("failed", { gatewayResponse: "Declined" }) });
   await h.start("ref_fail");
   h.advance(10 * MIN);
@@ -240,11 +240,11 @@ await test("2. confirmed failed payment: email ~10 min later with product, price
   assert.match(e.html, /₦14,999/);
   assert.match(e.html, /COMPLETE MY PAYMENT/);
   assert.match(e.html, /\/api\/payment-recovery\/retry\?t=[0-9a-f]{48}/);
-  assert.match(e.html, /Wema Bank/);
-  assert.match(e.html, /Autoquicky Limited/);
-  assert.match(e.html, /0125912341/);
-  assert.match(e.html, new RegExp(h.group().bank_reference));
+  assert.doesNotMatch(e.html, /Wema Bank|Autoquicky Limited|0125912341/);
+  assert.doesNotMatch(e.html, /OPTION 2: PAY THROUGH BANK TRANSFER/);
+  assert.match(e.html, /NEED HELP\? CONTACT US ON WHATSAPP/);
   assert.match(e.html, /https:\/\/wa\.me\/2349023986992\?text=/);
+  assert.match(e.html, /COMPLETE MY PAYMENT/);
   const wa = decodeURIComponent(e.html.match(/wa\.me\/2349023986992\?text=([^"&]+)/)[1]);
   assert.match(wa, /AI Ads Automation Masterclass for ₦14,999/);
   assert.match(e.html, /Hello Ada,/);
@@ -272,6 +272,58 @@ await test("3. abandoned checkout: only after the inactivity period and a Paysta
   const refs = h.db.t("payment_recovery_attempts").map((a) => a.reference);
   assert.deepEqual(refs, ["ref_ab", "dsx_retry_1"], "old reference kept, new one added");
   assert.equal(h.db.t("payment_recovery_attempts")[1].group_id, h.group().id);
+});
+
+await test("3b. certificate and bundle attempts can retry without treating the first course price as the order price", async () => {
+  const h = harness({
+    verify: () => ok("failed"),
+    product: { title: "Learning Path Certificate", priceKobo: 5_000_000, available: true },
+  });
+  h.deps.loadProduct = async (group) => ({
+    title: group.product_title,
+    priceKobo: group.product_id === "path-123" ? 750_000 : 2_500_000,
+    available: true,
+  });
+  const captured = await engine.registerCheckoutAttempt(h.db, h.deps, {
+    reference: "ref_certificate",
+    email: "certificate@example.com",
+    fullName: "Cert Buyer",
+    courseId: null,
+    productType: "certificate",
+    productId: "path-123",
+    productTitle: "Learning Path Certificate",
+    amountKobo: 750_000,
+    productContext: {
+      learning_path_id: "path-123",
+      learning_path_slug: "growth-path",
+      callback_path: "/learn/growth-path?payment=success",
+    },
+  });
+  assert.equal(captured.ok, true);
+  assert.equal(h.group().product_type, "certificate");
+  assert.equal(h.group().product_id, "path-123");
+  assert.equal(h.group().course_id, null);
+  const retry = await engine.createRetryCheckout(h.db, h.deps, h.group().retry_token);
+  assert.equal(retry.kind, "redirect", "certificate retry must not require a course_id");
+  assert.equal(h.calls.init[0].amountKobo, 750_000, "retry reloads the current server-side certificate price");
+  assert.equal(h.calls.init[0].group.product_type, "certificate");
+  assert.equal(h.calls.pendingTx.length, 1);
+
+  const bundle = await engine.registerCheckoutAttempt(h.db, h.deps, {
+    reference: "ref_bundle",
+    email: "bundle@example.com",
+    courseId: "course-primary",
+    productType: "bundle",
+    productId: "bundle-123",
+    productTitle: "Complete Bundle",
+    amountKobo: 2_500_000,
+    productContext: { bundle_id: "bundle-123", course_ids: ["course-primary", "course-secondary"] },
+  });
+  assert.equal(bundle.ok, true);
+  const bundleRetry = await engine.createRetryCheckout(h.db, h.deps, h.db.t("payment_recovery_groups").find((g) => g.product_id === "bundle-123").retry_token);
+  assert.equal(bundleRetry.kind, "redirect");
+  assert.equal(h.calls.init[1].amountKobo, 2_500_000, "bundle amount is not replaced by a single course price");
+  assert.equal(h.calls.init[1].group.product_type, "bundle");
 });
 
 await test("4. pending transaction: never failed, never abandoned, keeps reconciling", async () => {
@@ -528,7 +580,7 @@ await test("seven emails over five days, simulated clock, Lagos quiet hours", as
     if (i) assert.ok(at - sentAt[i - 1] >= 2 * HOUR, "minimum spacing");
   });
   assert.match(h.calls.emails[0].html, /COMPLETE MY PAYMENT/);
-  assert.match(h.calls.emails[0].html, /0125912341/);
+  assert.doesNotMatch(h.calls.emails[0].html, /0125912341|Autoquicky Limited|Wema Bank/);
   assert.match(h.calls.emails[6].html, /last automated reminder/);
   assert.equal(h.group().payment_status, "expired");
   assert.equal(h.group().is_open, false);
@@ -604,6 +656,114 @@ await test("feature switch, config defaults and naira formatting", async () => {
   await h.cycle();
   assert.equal(h.calls.fulfil.length, 0);
   assert.equal(h.db.t("payment_recovery_attempts")[0].status, "processing");
+});
+
+await test("Payment Page failures and abandons are pulled into recovery, other amounts and paid are not", async () => {
+  const { registerPulledRows } = await import(ts("lib/payment-recovery/page-pull-core.ts"));
+  const h = harness({ verify: () => ok("failed") });
+  const row = (ref, amount, status, email = "page.buyer@example.com") => ({
+    reference: ref, status, amount, currency: "NGN",
+    customer: { email, first_name: "Page", last_name: "Buyer" },
+    metadata: {}, page: { slug: "ai-ads-masterclass", name: "AI Ads Automation Masterclass" },
+  });
+  const s = await registerPulledRows(h.db, h.deps, [
+    row("T_FAIL_1", 1_499_900, "failed"),
+    row("T_FAIL_1", 1_499_900, "failed"), // duplicate listing across runs
+    row("T_PAID", 1_499_900, "success", "paid@example.com"), // never register a successful transaction
+    row("T_OTHER", 777_700, "abandoned", "other@example.com"), // not a catalog price
+    { reference: "T_NOEMAIL", amount: 1_499_900, currency: "NGN", customer: {}, page: { slug: "ai-ads-masterclass" } },
+  ]);
+  assert.equal(h.db.t("payment_recovery_attempts").filter((a) => a.reference === "T_FAIL_1").length, 1, "idempotent by reference");
+  assert.equal(h.db.t("payment_recovery_groups").length, 1, "one order, one group");
+  assert.equal(h.db.t("payment_recovery_groups")[0].amount_kobo, 1_499_900, "price from the catalog, not the payload");
+  assert.ok(s.skipped >= 2);
+  h.advance(10 * MIN);
+  await h.cycle();
+  h.advance(11 * MIN);
+  await h.cycle();
+  assert.equal(h.calls.emails.length, 1, "pulled failed Payment Page attempt gets the first recovery email");
+  assert.equal(h.calls.emails[0].to, "page.buyer@example.com");
+});
+
+await test("abandoned Payment Page rows retain their original timestamp and are eligible after 30 minutes", async () => {
+  const { registerPulledRows } = await import(ts("lib/payment-recovery/page-pull-core.ts"));
+  const h = harness({ verify: () => ok("abandoned") });
+  const createdAt = new Date(h.now() - 45 * MIN).toISOString();
+  const result = await registerPulledRows(h.db, h.deps, [{
+    reference: "T_ABANDONED_PAGE",
+    status: "abandoned",
+    created_at: createdAt,
+    amount: 1_499_900,
+    currency: "NGN",
+    customer: { email: "abandoned.page@example.com", first_name: "Abandoned", last_name: "Buyer" },
+    metadata: {},
+    page: { slug: "ai-ads-masterclass", name: "AI Ads Automation Masterclass" },
+  }]);
+  assert.equal(result.registered, 1);
+  assert.equal(h.db.t("payment_recovery_attempts")[0].created_at, createdAt);
+  await h.cycle();
+  assert.equal(h.calls.emails.length, 1, "verified abandoned Payment Page attempt over 30 minutes old is recovered in this cycle");
+  assert.equal(h.calls.emails[0].to, "abandoned.page@example.com");
+});
+
+await test("successful Paystack Payment Page verification uses external fulfillment and closes its recovery group", async () => {
+  const h = harness({ verify: () => ok("success") });
+  h.deps.completeExternalPayment = async (reference, group) => {
+    h.calls.externalFulfil.push({ reference, productKey: group.product_context.external_product_key });
+    return { ok: true };
+  };
+  const created = await engine.registerCheckoutAttempt(h.db, h.deps, {
+    reference: "T_PAGE_SUCCESS",
+    email: "page.success@example.com",
+    courseId: COURSE,
+    productType: "course",
+    productId: COURSE,
+    productTitle: "AI Ads Automation Masterclass",
+    amountKobo: PRICE,
+    productContext: { external_product_key: "ai-ads-automation-masterclass" },
+    source: "payment_page",
+    verifyImmediately: true,
+  });
+  assert.equal(created.ok, true);
+  await h.cycle();
+  assert.deepEqual(h.calls.externalFulfil, [{
+    reference: "T_PAGE_SUCCESS",
+    productKey: "ai-ads-automation-masterclass",
+  }]);
+  assert.equal(h.calls.fulfil.length, 0, "must not use local checkout fulfilment for an external Payment Page reference");
+  assert.equal(h.group().payment_status, "successful");
+  assert.equal(h.group().is_open, false);
+});
+
+await test("Payment Page importer preserves gateway source, product attribution and pagination support", async () => {
+  const pageCore = src("lib/payment-recovery/page-pull-core.ts");
+  const pagePull = src("lib/payment-recovery/page-pull.ts");
+  const migration = src("db/migrations/0060_payment_recovery_product_types.sql");
+  assert.match(pageCore, /source: "payment_page"/);
+  assert.match(pageCore, /external_product_key: product\.key/);
+  assert.match(pageCore, /attemptCreatedAt: row\.created_at/);
+  assert.match(pagePull, /meta\?\.pageCount/);
+  assert.match(pagePull, /MAX_PAGES_PER_STATUS/);
+  assert.match(pagePull, /REQUEST_TIMEOUT_MS/);
+  assert.match(migration, /payment_recovery_attempts_source_check/);
+  assert.match(migration, /'payment_page'/);
+});
+
+await test("bank transfer remains disabled until the receiving account name is confirmed", async () => {
+  const config = src("lib/payment-recovery/config.ts");
+  const template = src("lib/payment-recovery/templates.ts");
+  const detail = src("app/(admin)/admin/(panel)/payment-recovery/[id]/page.tsx");
+  assert.match(config, /bankTransferEnabled: false/);
+  assert.doesNotMatch(template, /RECOVERY_BUSINESS\.accountName/);
+  assert.doesNotMatch(template, /0125912341/);
+  assert.match(detail, /RECOVERY_BUSINESS\.bankTransferEnabled/);
+});
+
+await test("native bundle and certificate checkout routes capture recovery context", async () => {
+  assert.match(src("lib/commerce-checkout-initialize.ts"), /captureCheckoutAttempt\(/);
+  assert.match(src("lib/commerce-checkout-initialize.ts"), /productType: offerId \? "offer" : "bundle"/);
+  assert.match(src("lib/learn-certificate-checkout.ts"), /productType: "certificate"/);
+  assert.match(src("lib/learn-certificate-checkout.ts"), /currency === "NGN"/);
 });
 
 console.log(`\n${passed} payment recovery tests passed`);

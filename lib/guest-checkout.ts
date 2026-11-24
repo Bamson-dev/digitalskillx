@@ -262,6 +262,34 @@ export async function completePaidCheckout(reference: string) {
   };
 
   if (tx.status === "success") {
+    const learningPathId = tx.learning_path_id || readLearningPathIdFromPaystackData(tx.paystack_data);
+    if (learningPathId && !tx.course_id && !tx.bundle_id && !tx.digital_product_id) {
+      if (!tx.student_id) {
+        return { ok: false as const, error: "Certificate payment has no linked student account.", status: 422 as const };
+      }
+      const pending = readPendingCheckoutDetails(tx.paystack_data);
+      const pathResult = await fulfillLearningPathCertificatePurchase({
+        admin,
+        studentId: tx.student_id,
+        reference,
+        learningPathId,
+        buyerName: pending.checkout_full_name ?? undefined,
+      });
+      if (!pathResult.fulfilled) {
+        return { ok: false as const, error: "Certificate fulfilment is not complete yet.", status: 500 as const };
+      }
+      const email = await repairEnrollmentIfNeeded(tx.student_id);
+      return {
+        ok: true as const,
+        alreadyFulfilled: pathResult.alreadyFulfilled,
+        courseId: null,
+        learningPathId,
+        certificateId: pathResult.certificateId,
+        certificateNumber: pathResult.certificateNumber,
+        buyerEmail: email,
+        isNewAccount: false,
+      };
+    }
     const email = await repairEnrollmentIfNeeded(tx.student_id);
     return {
       ok: true as const,

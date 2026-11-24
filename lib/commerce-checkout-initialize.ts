@@ -8,6 +8,7 @@ import { isValidStudentEmail, findProfileByEmail, syncStudentCourseAccess } from
 import { CHECKOUT_REF_COOKIE, checkoutRefCookieOptions, hashCheckoutBinding } from "@/lib/checkout-binding";
 import { resolveLiveOfferForCheckout } from "@/lib/commerce-offers";
 import { bundleProvidesNewValue } from "@/lib/commerce-ownership";
+import { captureCheckoutAttempt } from "@/lib/payment-recovery/hooks";
 import type { Json } from "@/types/database";
 
 type InitArgs = {
@@ -20,6 +21,7 @@ type InitArgs = {
     couponCode?: string;
     email?: string;
     fullName?: string;
+    phone?: string;
     attribution?: Record<string, string>;
   };
 };
@@ -66,6 +68,8 @@ export async function initializeCommerceCheckout(args: InitArgs): Promise<NextRe
   let bundleId: string | null = null;
   let digitalProductId: string | null = null;
   let offerId: string | null = null;
+  let offerTargetType: "course" | "bundle" | "digital_product" | null = null;
+  let offerTargetId: string | null = null;
   let courseIds: string[] = [];
   let title = "DigitalSkillX purchase";
   let callbackPath = "/dashboard";
@@ -84,6 +88,8 @@ export async function initializeCommerceCheckout(args: InitArgs): Promise<NextRe
     bundleId = resolved.bundleId;
     digitalProductId = resolved.digitalProductId;
     offerId = resolved.offer.id;
+    offerTargetType = resolved.offer.target_type;
+    offerTargetId = resolved.offer.target_id;
     courseIds = resolved.courseIds;
     title = resolved.offer.title;
     commerceKind = "offer";
@@ -207,6 +213,33 @@ export async function initializeCommerceCheckout(args: InitArgs): Promise<NextRe
   if (bundleId) metadata.bundle_id = bundleId;
   if (digitalProductId) metadata.digital_product_id = digitalProductId;
   if (userId) metadata.student_id = userId;
+
+  // Capture every paid commerce checkout before Paystack redirect. The order price and
+  // target identity come from the server-resolved offer/bundle above, never from the browser.
+  await captureCheckoutAttempt(admin as unknown as import("@/lib/db/client").DbClient, {
+    reference,
+    email: checkoutEmail,
+    fullName: checkoutName,
+    phone: typeof body.phone === "string" ? body.phone : null,
+    studentId: userId,
+    courseId: primaryCourseId,
+    productType: offerId ? "offer" : "bundle",
+    productId: offerId ?? bundleId,
+    productTitle: title,
+    amountKobo: chargeAmount,
+    currency: "NGN",
+    productContext: {
+      offer_id: offerId,
+      bundle_id: bundleId,
+      digital_product_id: digitalProductId,
+      target_type: offerTargetType ?? (bundleId ? "bundle" : null),
+      target_id: offerTargetId ?? bundleId,
+      course_ids: courseIds,
+      callback_path: callbackPath,
+      metadata,
+      paystack_data: paystackDataBase,
+    },
+  });
 
   let init;
   try {

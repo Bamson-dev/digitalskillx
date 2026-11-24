@@ -1,6 +1,5 @@
 import "server-only";
-import type { SupabaseClient } from "@supabase/supabase-js";
-import type { Database } from "@/types/database";
+import type { DbClient } from "@/lib/db/client";
 import { secureLog } from "@/lib/secure-log";
 import { buildRecoveryDeps } from "./server";
 import { markPaidByReference, nudgeVerification, registerCheckoutAttempt } from "./engine";
@@ -13,14 +12,18 @@ import { markPaidByReference, nudgeVerification, registerCheckoutAttempt } from 
  */
 
 export async function captureCheckoutAttempt(
-  admin: SupabaseClient<Database>,
+  admin: DbClient,
   input: {
     reference: string;
     email: string;
     fullName?: string | null;
     phone?: string | null;
     studentId?: string | null;
-    courseId: string;
+    courseId?: string | null;
+    productType?: "course" | "offer" | "bundle" | "certificate" | "digital_product" | "legacy";
+    productId?: string | null;
+    productContext?: Record<string, unknown>;
+    currency?: string;
     productTitle: string;
     amountKobo: number;
   },
@@ -49,7 +52,7 @@ export async function captureCheckoutAttempt(
 }
 
 export async function recoveryOnPaymentSucceeded(
-  admin: SupabaseClient<Database>,
+  admin: DbClient,
   reference: string,
   fallback?: { email: string | null; courseId: string | null; amountKobo: number },
 ) {
@@ -64,7 +67,7 @@ export async function recoveryOnPaymentSucceeded(
   }
 }
 
-export async function recoveryOnChargeHint(admin: SupabaseClient<Database>, reference: string) {
+export async function recoveryOnChargeHint(admin: DbClient, reference: string) {
   try {
     const { db, deps } = await buildRecoveryDeps(admin);
     await nudgeVerification(db, deps, reference);

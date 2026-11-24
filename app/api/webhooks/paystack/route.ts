@@ -9,6 +9,8 @@ import { fulfillPaystackExternalCharge } from "@/lib/paystack-external-fulfillme
 import {
   type PaystackChargePayload,
   readExternalPaystackData,
+  identifyPaystackExternalProduct,
+  configuredExternalCourseId,
 } from "@/lib/paystack-external-products";
 import { isLeadthurHandoffRequest } from "@/lib/leadthur-handoff";
 import { handleLeadthurHandoffRequest } from "@/lib/leadthur-handoff-handler";
@@ -118,6 +120,25 @@ export async function POST(request: NextRequest) {
           return NextResponse.json({ received: true, error: external.error });
         }
         return NextResponse.json({ error: external.error }, { status: external.status });
+      }
+      // A Payment Page buyer may complete a second transaction after an earlier
+      // failed/abandoned attempt. Close the matching recovery group by reference or
+      // by the verified customer+catalog product, so no reminder follows a new payment.
+      const identityRow = verifiedLive ?? webhookFallback;
+      const externalProduct = identityRow
+        ? identifyPaystackExternalProduct({ verified: identityRow, webhookData: event.data })
+        : null;
+      const buyerEmail = String(identityRow?.customer?.email ?? event.data?.customer?.email ?? "")
+        .trim()
+        .toLowerCase();
+      if (externalProduct && buyerEmail) {
+        await recoveryOnPaymentSucceeded(admin, reference, {
+          email: buyerEmail,
+          courseId: configuredExternalCourseId(externalProduct),
+          amountKobo: Number(identityRow?.amount ?? event.data?.amount ?? 0),
+        });
+      } else {
+        await recoveryOnPaymentSucceeded(admin, reference);
       }
       return NextResponse.json({
         received: true,

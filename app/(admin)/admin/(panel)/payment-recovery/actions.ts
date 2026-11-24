@@ -15,6 +15,7 @@ import {
   verifyGroupNow,
 } from "@/lib/payment-recovery/engine";
 import { historicalCandidates } from "@/lib/payment-recovery/admin-data";
+import { RECOVERY_BUSINESS } from "@/lib/payment-recovery/config";
 
 function idFrom(formData: FormData) {
   const id = String(formData.get("group_id") ?? "");
@@ -54,6 +55,7 @@ export async function resendEmailAction(formData: FormData) {
 export async function markClaimedAction(formData: FormData) {
   const admin = await requireAdmin();
   const id = idFrom(formData);
+  if (!RECOVERY_BUSINESS.bankTransferEnabled) back(id, "Customer bank transfer is disabled until the receiving account is confirmed.", false);
   const note = String(formData.get("note") ?? "").slice(0, 500);
   const { db, deps } = await buildRecoveryDeps();
   const r = await markBankTransferClaimed(db, deps, id, admin.id, note);
@@ -64,6 +66,7 @@ export async function markClaimedAction(formData: FormData) {
 export async function confirmTransferAction(formData: FormData) {
   const admin = await requireAdmin();
   const id = idFrom(formData);
+  if (!RECOVERY_BUSINESS.bankTransferEnabled) back(id, "Customer bank transfer is disabled until the receiving account is confirmed.", false);
   const received = nairaToKoboStrict(String(formData.get("received_naira") ?? ""));
   const bankRef = String(formData.get("bank_transaction_ref") ?? "").slice(0, 120);
   const notes = String(formData.get("notes") ?? "").slice(0, 1000);
@@ -90,6 +93,7 @@ export async function confirmTransferAction(formData: FormData) {
 export async function rejectTransferAction(formData: FormData) {
   const admin = await requireAdmin();
   const id = idFrom(formData);
+  if (!RECOVERY_BUSINESS.bankTransferEnabled) back(id, "Customer bank transfer is disabled until the receiving account is confirmed.", false);
   const notes = String(formData.get("notes") ?? "").trim().slice(0, 1000);
   if (!notes) back(id, "Add a reason for rejecting the transfer claim.", false);
   const { db, deps } = await buildRecoveryDeps();

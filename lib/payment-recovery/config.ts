@@ -5,9 +5,7 @@
 
 export const RECOVERY_BUSINESS = {
   name: "DigitalSkillX",
-  bankName: "Wema Bank",
-  accountName: "Autoquicky Limited",
-  accountNumber: "0125912341",
+  bankTransferEnabled: false,
   whatsappLocal: "09023986992",
   whatsappIntl: "2349023986992",
   timezone: "Africa/Lagos",
@@ -113,7 +111,7 @@ export function formatNaira(amountKobo: number) {
 }
 
 export function whatsappLink(params: { productTitle: string; amountKobo: number; bankReference?: string | null }) {
-  const ref = params.bankReference ? ` My payment reference is ${params.bankReference}.` : "";
+  const ref = params.bankReference ? ` My DigitalSkillX order reference is ${params.bankReference}.` : "";
   const text =
     `Hello DigitalSkillX, I tried purchasing ${params.productTitle} for ${formatNaira(params.amountKobo)}, ` +
     `but my payment did not go through.${ref} Please help me complete my purchase.`;

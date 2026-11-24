@@ -78,22 +78,22 @@ function intro(input: RecoveryEmailInput, product: string, amount: string) {
     case "followup_3h":
       return `Your payment for <strong>${product}</strong> (${amount}) has not gone through yet. Cards sometimes fail because of bank limits or network problems, and that is easy to fix. You can try again with the button below, or ask us for help on WhatsApp if you get stuck.`;
     case "help_12h":
-      return `You can still complete your <strong>${product}</strong> purchase (${amount}). If your card or Paystack gives you trouble, pay by bank transfer instead. The account details are in Option 2 below. Copy them and use your payment reference as the narration.`;
+      return `You can still complete your <strong>${product}</strong> purchase (${amount}). If your card or Paystack gives you trouble, reply to this email or message us on WhatsApp. We will help you complete your order.`;
     case "reminder_24h":
-      return `A day ago you started an order for <strong>${product}</strong>. Here is what it is, so you can decide:${summaryBlock(input)}Your order (${amount}) is still open. Pay online or by bank transfer using the options below.`;
+      return `A day ago you started an order for <strong>${product}</strong>. Here is what it is, so you can decide:${summaryBlock(input)}Your order (${amount}) is still open. You can complete payment through the secure Paystack link below.`;
     case "reminder_48h":
-      return `If something stopped you from paying for <strong>${product}</strong>, tell us. The usual problems are: the card is declined, the bank blocks the online payment, or the transfer does not show. All three have a fix. Message us on WhatsApp and we will help you through it, or use the options below.`;
+      return `If something stopped you from paying for <strong>${product}</strong>, tell us. Your card may have been declined or Paystack may have had a temporary issue. Message us on WhatsApp and we will help you complete the payment.`;
     case "reminder_72h":
-      return `Your <strong>${product}</strong> order (${amount}) is still incomplete. Nothing has been charged. When you are ready, finish with the card button or a bank transfer below.`;
+      return `Your <strong>${product}</strong> order (${amount}) is still incomplete. Nothing has been charged. When you are ready, use the secure Paystack link below to complete payment.`;
     case "final_120h":
     case "final_48h":
-      return `This is the last automated reminder about your <strong>${product}</strong> order (${amount}). We will not send more reminders for this order. If you still want the course, you can pay with any option below, or message us on WhatsApp and we will help.`;
+      return `This is the last automated reminder about your <strong>${product}</strong> order (${amount}). We will not send more reminders for this order. If you still want the course, use the secure Paystack link below or message us on WhatsApp for help.`;
     default: {
       const what =
         input.reason === "failed"
           ? "but the payment did not go through"
           : "but we could not confirm a successful payment";
-      return `You recently tried to buy <strong>${product}</strong> on DigitalSkillX, ${what}. Your order is still waiting for payment. You can finish it with any option below.`;
+      return `You recently tried to buy <strong>${product}</strong> on DigitalSkillX, ${what}. Your order is still waiting for payment. Use the secure Paystack link below to try again, or message us on WhatsApp for help.`;
     }
   }
 }
@@ -112,7 +112,6 @@ const P = 'style="margin:0 0 12px;font-size:15px;line-height:1.7;color:#334155"'
 export function renderRecoveryEmail(input: RecoveryEmailInput) {
   const product = esc(input.productTitle);
   const amount = formatNaira(input.amountKobo);
-  const ref = esc(input.bankReference);
   const wa = whatsappLink({
     productTitle: input.productTitle,
     amountKobo: input.amountKobo,
@@ -120,19 +119,6 @@ export function renderRecoveryEmail(input: RecoveryEmailInput) {
   });
   const greeting = input.firstName ? `Hello ${esc(input.firstName)},` : "Hello,";
   const subject = recoverySubject(input.step, input.productTitle);
-
-  const bankRows = [
-    ["Bank", RECOVERY_BUSINESS.bankName],
-    ["Account name", RECOVERY_BUSINESS.accountName],
-    ["Account number", RECOVERY_BUSINESS.accountNumber],
-    ["Amount", amount],
-    ["Payment reference", input.bankReference],
-  ]
-    .map(
-      ([k, v]) =>
-        `<tr><td style="padding:6px 12px 6px 0;font-size:14px;color:#64748b;white-space:nowrap">${k}</td><td style="padding:6px 0;font-size:16px;font-weight:bold;color:#0f172a;font-family:'Courier New',Courier,monospace">${esc(v)}</td></tr>`,
-    )
-    .join("");
 
   const html = `<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><meta charset="utf-8"><title>${esc(subject)}</title></head>
 <body style="margin:0;background:#f1f5f9;font-family:Arial,Helvetica,sans-serif;color:#0f172a">
@@ -146,18 +132,11 @@ export function renderRecoveryEmail(input: RecoveryEmailInput) {
 <tr><td style="padding:0 14px 12px;font-size:14px;color:#64748b">Amount</td><td style="padding:0 14px 12px;font-size:15px;font-weight:bold;color:#0f172a;text-align:right">${amount}</td></tr>
 </table>
 ${section(
-  "OPTION 1: PAY ONLINE",
+  "PAY ONLINE",
   `<p ${P}>Click the button below. It opens a new, secure Paystack checkout for ${product} at ${amount}. You can pay with card, bank transfer or USSD on Paystack.</p>${button(input.retryUrl, "COMPLETE MY PAYMENT", BRAND)}`,
 )}
 ${section(
-  "OPTION 2: PAY THROUGH BANK TRANSFER",
-  `<p ${P}>Transfer the exact amount to this account:</p>
-<table role="presentation" style="border-collapse:collapse;margin:0 0 12px">${bankRows}</table>
-<p ${P}>Please write <strong>${ref}</strong> in your transfer narration (description), so we can match your payment.</p>
-<p ${P}>After you transfer, send us a message on WhatsApp so we can confirm it quickly. Course access starts after we confirm the money in our account. A screenshot alone does not confirm payment.</p>`,
-)}
-${section(
-  "OPTION 3: GET HELP ON WHATSAPP",
+  "NEED HELP? CONTACT US ON WHATSAPP",
   `<p ${P}>If anything is not clear, or your card keeps failing, chat with us on WhatsApp (${RECOVERY_BUSINESS.whatsappLocal}). We will help you finish your purchase.</p>${button(wa, "CHAT WITH US ON WHATSAPP", "#16a34a")}`,
 )}
 <p style="margin:24px 0 0;font-size:15px;line-height:1.7;color:#334155">Thank you for choosing DigitalSkillX.<br/>The DigitalSkillX Team</p>
