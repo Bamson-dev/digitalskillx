@@ -48,11 +48,17 @@ export async function registerPulledRows(db: Db, deps: RecoveryDeps, rows: Pulle
       fullName: name || null,
       phone: row.customer?.phone ?? null,
       courseId: configuredExternalCourseId(product),
+      productType: "course",
+      productId: configuredExternalCourseId(product),
+      productContext: {
+        external_product_key: product.key,
+        external_payment_page_slug: row.page?.slug ?? null,
+      },
       attemptCreatedAt: row.created_at ?? null,
       verifyImmediately: true,
       productTitle: product.title,
       amountKobo: product.expectedAmountKobo,
-      source: "checkout",
+      source: "payment_page",
     });
     if (r.ok) summary.registered += 1;
     else summary.skipped += 1;
