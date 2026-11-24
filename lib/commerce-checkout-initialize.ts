@@ -216,7 +216,7 @@ export async function initializeCommerceCheckout(args: InitArgs): Promise<NextRe
 
   // Capture every paid commerce checkout before Paystack redirect. The order price and
   // target identity come from the server-resolved offer/bundle above, never from the browser.
-  await captureCheckoutAttempt(admin, {
+  await captureCheckoutAttempt(admin as unknown as import("@/lib/db/client").DbClient, {
     reference,
     email: checkoutEmail,
     fullName: checkoutName,
