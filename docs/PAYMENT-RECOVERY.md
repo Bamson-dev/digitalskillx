@@ -27,7 +27,7 @@ USD learning-path certificate checkout is not captured by this recovery flow.
    - Leaves pending, ongoing, processing and unreachable transactions unresolved. It does not email while payment remains active.
    - Closes a group after verified payment and cancels the remaining sequence.
 4. Paystack `charge.success` webhooks remain the immediate success signal. Payment Page purchases continue through the existing external fulfilment and access-email flow. Recovery reconciliation provides a second check for Payment Page attempts already imported.
-5. Every recovery email includes a new Paystack retry link. Opening the link only displays the order. The buyer must press the button before the system creates a fresh transaction reference. The retry keeps the original server-calculated order amount.
+5. Every recovery email includes a new Paystack retry link. Opening the link only displays the order. The buyer must press the button before the system creates a fresh transaction reference. Before retry, the server reloads the current price from the course, bundle, offer, digital product or certificate record. The browser and stored recovery amount never determine the Paystack charge.
 6. The sequence sends at most seven emails over five days. Each message has an idempotency key. Emails only send between 08:30 and 20:00 Africa/Lagos, with at least two hours between sends. Payment, opt-out, bounce, complaint and suppression stop the sequence.
 7. The Resend webhook records delivery, delay, bounce, complaint, failure and suppression events.
 
@@ -50,7 +50,7 @@ The source code alone does not activate scheduled emails. Complete these steps i
    npm run db:migrate -- --dry-run
    npm run db:migrate
    ```
-   The runner uses `DATABASE_URL` and tracks applied versions. It applies the payment recovery schema and product-type migration without editing older migration files. Confirm migrations 0058, 0059 and 0060 show as applied before enabling the feature.
+   The runner uses `DATABASE_URL` and tracks applied versions. It applies the payment recovery schema and product-type migration without editing older migration files. Confirm migrations 0058_payment_recovery.sql, 0059_recovery_seven_email_sequence.sql and 0060_payment_recovery_product_types.sql show as applied before enabling the feature.
 2. Create this Coolify scheduled task. The repository task plan records it as required but not yet confirmed in Coolify:
    - Schedule: `*/5 * * * *`
    - Command:
