@@ -19,7 +19,7 @@ USD learning-path certificate checkout is not captured by this recovery flow.
 
 1. The checkout route stores the customer's email, product identity and server-calculated amount before sending the buyer to Paystack. It never trusts a price supplied by the browser.
 2. One open recovery group represents one email and product. Every payment reference becomes an attempt under that group. A successful payment, an existing enrollment or a verified suppression stops further reminders.
-3. Coolify calls `/api/cron/payment-recovery` every five minutes. The route:
+3. The production container starts the recovery scheduler after the local application health check passes. It calls `/api/cron/payment-recovery` every five minutes. A PostgreSQL advisory lock allows only one application replica to run a cycle at a time.
    - Imports eligible failed and abandoned Paystack Payment Page records.
    - Verifies pending references directly with Paystack.
    - Treats `success` as paid only when the amount and currency match the saved checkout.
@@ -40,40 +40,48 @@ Recovery emails currently show two options:
 
 Direct transfer to the supplied Wema account is disabled until the bank account name is confirmed. The email and admin page do not expose the account number or an unverified account name. The admin transfer-confirmation code remains in place but the customer-facing transfer option and its confirmation controls stay hidden while `bankTransferEnabled` is false.
 
-## Production setup
+## Automatic production setup
 
-The source code alone does not activate scheduled emails. Complete these steps in the production environment.
+For the Docker/Coolify production container, setup runs during every container start. You do not need to create a separate Coolify cron task or manually add the Resend webhook.
 
-1. Check and apply database migrations from the DigitalSkillX application container. Run:
-   ```bash
-   npm run db:migrate -- --status
-   npm run db:migrate -- --dry-run
-   npm run db:migrate
-   ```
-   The runner uses `DATABASE_URL` and tracks applied versions. It applies the payment recovery schema and product-type migration without editing older migration files. Confirm migrations 0058_payment_recovery.sql, 0059_recovery_seven_email_sequence.sql and 0060_payment_recovery_product_types.sql show as applied before enabling the feature.
-2. Create this Coolify scheduled task. The repository task plan records it as required but not yet confirmed in Coolify:
-   - Schedule: `*/5 * * * *`
-   - Command:
-   ```bash
-   curl -fsS -m 300 -H "Authorization: Bearer $CRON_SECRET" http://localhost:3000/api/cron/payment-recovery
-   ```
-   Do not create a duplicate Vercel schedule for the same route.
-3. Add these runtime variables in Coolify:
-   - `PAYMENT_RECOVERY_ENABLED=true`
-   - `RESEND_WEBHOOK_SECRET=<secret from Resend>`
-   Keep the existing `CRON_SECRET`, `RESEND_API_KEY` and `RESEND_FROM_EMAIL` values configured.
-4. In Resend, create a webhook at `https://www.digitalskillx.com/api/webhooks/resend` and subscribe to `email.sent`, `email.delivered`, `email.delivery_delayed`, `email.bounced`, `email.complained`, `email.failed` and `email.suppressed`. Store the signing secret as `RESEND_WEBHOOK_SECRET` in Coolify.
-5. Keep the existing Paystack webhook routing through Leadthur. It must continue forwarding verified `charge.success` events to DigitalSkillX.
-6. After deployment and setup, call `/api/cron/payment-recovery` once with the cron authorization header. Confirm its response reports `enabled: true` and that `pagePull` and reconciliation complete without a database error.
+1. `scripts/start.mjs` runs the repository's tracked migration runner using `DATABASE_URL`. The runner applies pending migrations and verifies checksums for migrations it has already applied.
+2. Startup loads the Paystack secret from the runtime environment or the existing `platform_secrets` database row. It checks that `DATABASE_URL`, `CRON_SECRET`, `PAYSTACK_SECRET_KEY` and `RESEND_API_KEY` are available.
+3. Startup checks Resend for the exact endpoint `https://www.digitalskillx.com/api/webhooks/resend`. It creates the endpoint when missing. If it already exists, it enables it and adds any missing recovery event subscriptions without removing other subscriptions. It retrieves the current signing secret from Resend and writes it to the app's private runtime environment file. It does not store the secret in the repository or database.
+4. After Next.js responds successfully to its local health check, the container starts the recovery scheduler. The scheduler runs the recovery route every five minutes and uses a PostgreSQL advisory lock to avoid duplicate cycles across application replicas.
+5. The startup wrapper enables `PAYMENT_RECOVERY_ENABLED` only after migrations and required integrations pass. If a setup step fails, the website still starts, but recovery remains disabled. Check the container logs for the missing environment value or integration error.
+6. To pause recovery without removing its setup, set `PAYMENT_RECOVERY_FORCE_DISABLED=true` in the container environment and restart it. Leave it `false` for normal operation.
 
-The existing `/api/cron/checkout-abandon` route skips its old reminder behaviour when payment recovery is enabled. This avoids sending duplicate abandoned-checkout emails.
+The existing Paystack webhook through Leadthur must continue forwarding verified `charge.success` events to DigitalSkillX. This automation does not replace or reconfigure that integration.
+
+### Required production values
+
+These values must already exist in Coolify or the existing platform secret store:
+
+- `DATABASE_URL`: PostgreSQL connection used by the migration runner and scheduler.
+- `CRON_SECRET`: bearer secret used by the recovery route and existing cron jobs.
+- `PAYSTACK_SECRET_KEY`: may come from the runtime environment or `platform_secrets`.
+- `RESEND_API_KEY`: allows startup to manage the Resend webhook and send recovery mail.
+
+`RESEND_FROM_EMAIL` is used when set. Otherwise startup falls back to `ZEPTOMAIL_FROM_EMAIL`, then `courses@digitalskillx.com`.
+
+You do not need to set `PAYMENT_RECOVERY_ENABLED` or `RESEND_WEBHOOK_SECRET` manually. Startup manages both. Do not remove or rotate `CRON_SECRET`, Paystack or Resend credentials while deploying.
+
+### After redeployment
+
+Once you merge the startup automation and trigger the redeployment from Coolify, check the application container logs for:
+
+- `Database migrations are up to date`
+- `Resend recovery webhook ready`
+- `PAYMENT_RECOVERY_ENABLED=true`
+- `payment-recovery scheduler: active`
+
+The scheduler waits for the local health check, runs a cycle and then continues on a five-minute cadence. Confirm at least one successful cycle in the logs. The cron route also returns `enabled: true` when called with the configured `CRON_SECRET`.
 
 ## Environment variables
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `PAYMENT_RECOVERY_ENABLED` | `false` | Master switch for verification and email sends |
-| `RESEND_WEBHOOK_SECRET` | unset | Verifies signed Resend delivery events |
+| `PAYMENT_RECOVERY_FORCE_DISABLED` | `false` | Set to `true` to pause recovery |
 | `PAYMENT_RECOVERY_FIRST_FAILED_DELAY_MINUTES` | `10` | Delay after confirmed failure |
 | `PAYMENT_RECOVERY_ABANDONED_DELAY_MINUTES` | `30` | Inactivity before abandonment |
 | `PAYMENT_RECOVERY_MIN_GAP_MINUTES` | `120` | Minimum spacing between emails |
@@ -81,6 +89,8 @@ The existing `/api/cron/checkout-abandon` route skips its old reminder behaviour
 | `PAYMENT_RECOVERY_WINDOW_END_MINUTES` | `1200` | End of email window, Lagos time |
 | `PAYMENT_RECOVERY_VERIFY_INTERVAL_MINUTES` | `5` | Base re-verification interval |
 | `PAYMENT_RECOVERY_BATCH_LIMIT` | `40` | Maximum attempts and emails per run |
+| `PAYMENT_RECOVERY_ENABLED` | Managed at startup | Enables only after migration and integration checks pass |
+| `RESEND_WEBHOOK_SECRET` | Managed at startup | Retrieved from Resend and kept in the private runtime environment |
 
 ## Admin pages
 
