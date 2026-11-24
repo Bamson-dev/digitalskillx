@@ -18,6 +18,8 @@ const PLACEHOLDERS = [
   "your-youtube-data-api-key",
   "sk-ant-your-key",
   "generate-a-long-random-string",
+  "YOUR-DATABASE-HOST",
+  "YOUR-DATABASE-PASSWORD",
 ];
 
 function isRealValue(val) {
@@ -54,6 +56,7 @@ const required = [
   { key: "NEXT_PUBLIC_SUPABASE_URL", label: "Supabase URL (auth + DB)" },
   { key: "NEXT_PUBLIC_SUPABASE_ANON_KEY", label: "Supabase anon key (auth + DB)" },
   { key: "SUPABASE_SERVICE_ROLE_KEY", label: "Supabase service role (admin actions)" },
+  { key: "DATABASE_URL", label: "PostgreSQL 16 application database (migrations + app data)" },
 ];
 
 const optional = [
