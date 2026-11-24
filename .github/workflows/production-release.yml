@@ -5,6 +5,7 @@ on:
     branches: [main]
   push:
     branches: [main, codex/contabo-migration]
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -89,6 +90,11 @@ jobs:
         continue-on-error: true
         run: npm run test:payment-recovery
 
+      - name: Payment recovery startup setup regressions
+        id: payment_recovery_setup
+        continue-on-error: true
+        run: npm run test:payment-recovery-setup
+
       - name: Leadthur handoff regressions
         id: leadthur
         continue-on-error: true
@@ -127,12 +133,13 @@ jobs:
           PLATFORM_HARDENING: ${{ steps.platform_hardening.outcome }}
           PAYSTACK_EXTERNAL: ${{ steps.paystack_external.outcome }}
           PAYMENT_RECOVERY: ${{ steps.payment_recovery.outcome }}
+          PAYMENT_RECOVERY_SETUP: ${{ steps.payment_recovery_setup.outcome }}
           LEADTHUR: ${{ steps.leadthur.outcome }}
           DOCKER_IMAGE: ${{ steps.docker_image.outcome }}
           UNIT_SUITE: ${{ steps.unit_suite.outcome }}
         run: |
           failed=0
-          for check in CONTENT_FACTORY COURSE_PUBLISH_OUTBOX RESEND_EMAIL SECURITY_SCAN PLATFORM_HARDENING PAYSTACK_EXTERNAL PAYMENT_RECOVERY LEADTHUR DOCKER_IMAGE UNIT_SUITE; do
+          for check in CONTENT_FACTORY COURSE_PUBLISH_OUTBOX RESEND_EMAIL SECURITY_SCAN PLATFORM_HARDENING PAYSTACK_EXTERNAL PAYMENT_RECOVERY PAYMENT_RECOVERY_SETUP LEADTHUR DOCKER_IMAGE UNIT_SUITE; do
             outcome="${!check}"
             if [ "$outcome" != success ]; then
               echo "$check did not pass (outcome: ${outcome:-missing})" >&2
@@ -144,7 +151,7 @@ jobs:
   deploy:
     name: deploy-production
     needs: verify
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 35
     concurrency:
