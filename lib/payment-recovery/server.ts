@@ -1,7 +1,7 @@
 import "server-only";
 import crypto from "crypto";
 import type { DbClient } from "@/lib/db/client";
-import type { Database, Json } from "@/types/database";
+import type { Json } from "@/types/database";
 import { createAdminClientAsync } from "@/lib/supabase/admin";
 import { getPaystackSecretKey } from "@/lib/env-paystack";
 import { generateReference, initializeTransaction } from "@/lib/paystack";
@@ -321,7 +321,7 @@ export async function buildRecoveryDeps(admin?: DbClient): Promise<{ db: Db; dep
           .from("transactions")
           .update({ student_id: studentId, status: "success", paystack_data: transferData })
           .eq("reference", group.bank_reference)
-          .neq("status", "success");
+          .eq("status", "pending");
         if (paidError) return { ok: false, error: paidError.message };
 
         const result = await completePaidCheckout(group.bank_reference);
