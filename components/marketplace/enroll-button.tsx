@@ -99,12 +99,13 @@ function CheckoutDetailsModal({
 }: {
   isFree: boolean;
   onClose: () => void;
-  onSubmit: (details: { email: string; fullName: string }) => void;
+  onSubmit: (details: { email: string; fullName: string; phone?: string }) => void;
   loading: boolean;
   error: string | null;
 }) {
   const [email, setEmail] = useState("");
   const [fullName, setFullName] = useState("");
+  const [phone, setPhone] = useState("");
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4">
@@ -133,7 +134,7 @@ function CheckoutDetailsModal({
           className="mt-4 space-y-3"
           onSubmit={(e) => {
             e.preventDefault();
-            onSubmit({ email: email.trim(), fullName: fullName.trim() });
+            onSubmit({ email: email.trim(), fullName: fullName.trim(), phone: phone.trim() || undefined });
           }}
         >
           <input
@@ -156,6 +157,18 @@ function CheckoutDetailsModal({
             autoComplete="email"
             className="h-11 w-full rounded-lg border border-neutral-200 px-3 text-sm outline-none ring-brand focus:ring-2"
           />
+          {!isFree ? (
+            <input
+              type="tel"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              placeholder="WhatsApp / phone number (optional)"
+              autoComplete="tel"
+              inputMode="tel"
+              maxLength={20}
+              className="h-11 w-full rounded-lg border border-neutral-200 px-3 text-sm outline-none ring-brand focus:ring-2"
+            />
+          ) : null}
           {error ? <p className="text-sm text-brand">{error}</p> : null}
           <button
             type="submit"
@@ -210,7 +223,7 @@ export function EnrollButton({
     return <UsdCheckoutSwitch className={className} size={size} />;
   }
 
-  async function startCheckout(guest?: { email: string; fullName: string }) {
+  async function startCheckout(guest?: { email: string; fullName: string; phone?: string }) {
     setLoading(true);
     setError(null);
     let redirecting = false;
@@ -224,6 +237,7 @@ export function EnrollButton({
         currency: "NGN";
         email?: string;
         fullName?: string;
+        phone?: string;
         attribution?: Record<string, string>;
       } = {
         courseId,
@@ -232,6 +246,7 @@ export function EnrollButton({
       if (guest) {
         payload.email = guest.email;
         payload.fullName = guest.fullName;
+        if (guest.phone) payload.phone = guest.phone;
       }
       if (Object.keys(attrStrings).length) {
         payload.attribution = attrStrings;
