@@ -24,6 +24,8 @@ import {
   learnCertificateUsdFromNgn,
   learnCertificateUsdToCents,
 } from "@/lib/learn-certificate-pricing";
+import { captureCheckoutAttempt } from "@/lib/payment-recovery/hooks";
+import type { DbClient } from "@/lib/db/client";
 
 function jsonError(message: string, status: number) {
   return NextResponse.json({ error: message }, { status });
@@ -229,6 +231,30 @@ export async function initializeLearningPathCertificateCheckout(params: {
     buyer_full_name: checkoutName,
   };
   if (params.userId) metadata.student_id = params.userId;
+
+  // The recovery sequence and bank-transfer instructions are NGN-only.
+  // Capture NGN certificates through the same recovery system as course orders.
+  if (currency === "NGN") {
+    await captureCheckoutAttempt(params.admin as unknown as DbClient, {
+      reference,
+      email: checkoutEmail,
+      fullName: checkoutName,
+      studentId: params.userId,
+      courseId: null,
+      productType: "certificate",
+      productId: path.id,
+      productTitle: `${path.title} Certificate`,
+      amountKobo: chargeAmount,
+      currency: "NGN",
+      productContext: {
+        learning_path_id: path.id,
+        learning_path_slug: path.slug,
+        callback_path: `/learn/${path.slug}?payment=success`,
+        metadata,
+        paystack_data: paystackData,
+      },
+    });
+  }
 
   let init;
   try {
