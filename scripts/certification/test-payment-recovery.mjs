@@ -279,6 +279,11 @@ await test("3b. certificate and bundle attempts can retry without treating the f
     verify: () => ok("failed"),
     product: { title: "Learning Path Certificate", priceKobo: 5_000_000, available: true },
   });
+  h.deps.loadProduct = async (group) => ({
+    title: group.product_title,
+    priceKobo: group.product_id === "path-123" ? 750_000 : 2_500_000,
+    available: true,
+  });
   const captured = await engine.registerCheckoutAttempt(h.db, h.deps, {
     reference: "ref_certificate",
     email: "certificate@example.com",
@@ -300,7 +305,7 @@ await test("3b. certificate and bundle attempts can retry without treating the f
   assert.equal(h.group().course_id, null);
   const retry = await engine.createRetryCheckout(h.db, h.deps, h.group().retry_token);
   assert.equal(retry.kind, "redirect", "certificate retry must not require a course_id");
-  assert.equal(h.calls.init[0].amountKobo, 750_000, "retry keeps the trusted checkout quote");
+  assert.equal(h.calls.init[0].amountKobo, 750_000, "retry reloads the current server-side certificate price");
   assert.equal(h.calls.init[0].group.product_type, "certificate");
   assert.equal(h.calls.pendingTx.length, 1);
 
