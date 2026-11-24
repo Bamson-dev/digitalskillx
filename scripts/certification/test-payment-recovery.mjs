@@ -730,6 +730,20 @@ await test("successful Paystack Payment Page verification uses external fulfillm
   assert.equal(h.group().is_open, false);
 });
 
+await test("Payment Page importer preserves gateway source, product attribution and pagination support", async () => {
+  const pageCore = src("lib/payment-recovery/page-pull-core.ts");
+  const pagePull = src("lib/payment-recovery/page-pull.ts");
+  const migration = src("db/migrations/0060_payment_recovery_product_types.sql");
+  assert.match(pageCore, /source: "payment_page"/);
+  assert.match(pageCore, /external_product_key: product\.key/);
+  assert.match(pageCore, /attemptCreatedAt: row\.created_at/);
+  assert.match(pagePull, /meta\?\.pageCount/);
+  assert.match(pagePull, /MAX_PAGES_PER_STATUS/);
+  assert.match(pagePull, /REQUEST_TIMEOUT_MS/);
+  assert.match(migration, /payment_recovery_attempts_source_check/);
+  assert.match(migration, /'payment_page'/);
+});
+
 await test("native bundle and certificate checkout routes capture recovery context", async () => {
   assert.match(src("lib/commerce-checkout-initialize.ts"), /captureCheckoutAttempt\(/);
   assert.match(src("lib/commerce-checkout-initialize.ts"), /productType: offerId \? "offer" : "bundle"/);
