@@ -30,9 +30,9 @@ export async function GET(_request: NextRequest, { params }: Ctx) {
   const job = await getContentFactoryJob(auth.admin, params.id);
   if (!job) return NextResponse.json({ error: "Job not found." }, { status: 404 });
 
-  let path = null;
-  let curriculum = null;
-  let creator = null;
+  let path: any = null;
+  let curriculum: any = null;
+  let creator: any = null;
   let creatorSources: unknown[] = [];
   let creatorQualityScore: number | null = null;
   if (job.learning_path_id) {

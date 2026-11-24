@@ -1,5 +1,5 @@
 import "server-only";
-import type { SupabaseClient } from "@supabase/supabase-js";
+import type { DbClient } from "@/lib/db/client";
 import { hashEnrollmentLinkToken } from "@/lib/enrollment-links/token";
 import type {
   Database,
@@ -66,7 +66,7 @@ function deriveExpired(link: EnrollmentLink): boolean {
  * Does not expose token hashes or internal IDs beyond link id for authenticated redeem.
  */
 export async function loadAndValidateEnrollmentLink(
-  admin: SupabaseClient<Database>,
+  admin: DbClient,
   plaintextToken: string,
 ): Promise<{ link: EnrollmentLink; courseIds: string[] }> {
   const tokenHash = hashEnrollmentLinkToken(plaintextToken);
@@ -117,7 +117,7 @@ export async function loadAndValidateEnrollmentLink(
 }
 
 export async function buildPublicLinkView(
-  admin: SupabaseClient<Database>,
+  admin: DbClient,
   link: EnrollmentLink,
   courseIds: string[],
 ): Promise<PublicLinkView> {
@@ -141,7 +141,7 @@ export async function buildPublicLinkView(
     lessonCounts.set(courseId, count ?? 0);
   }
 
-  const byId = new Map((courseRows ?? []).map((c) => [c.id, c]));
+  const byId = new Map<any, any>((courseRows ?? []).map((c) => [c.id, c]));
   const courses = courseIds
     .map((id) => byId.get(id))
     .filter(Boolean)
@@ -167,7 +167,7 @@ export async function buildPublicLinkView(
 
 /** IMPORTED_STUDENTS: email must appear in bulk_import_rows (not every registered profile). */
 export async function isImportedStudentEligible(
-  admin: SupabaseClient<Database>,
+  admin: DbClient,
   email: string,
 ): Promise<boolean> {
   const normalized = email.trim().toLowerCase();

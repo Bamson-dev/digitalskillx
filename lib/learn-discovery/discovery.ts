@@ -1,5 +1,5 @@
 import "server-only";
-import type { SupabaseClient } from "@supabase/supabase-js";
+import type { DbClient } from "@/lib/db/client";
 import type { Database } from "@/types/database";
 import {
   LIBRARY_PAGE_SIZE,
@@ -37,7 +37,7 @@ function needsMemoryCategory(category: LibraryCategoryId) {
 }
 
 export async function listDiscoverableLearningLibrary(
-  client: SupabaseClient<Database>,
+  client: DbClient,
   rawParams: {
     q?: string | null;
     category?: string | null;
@@ -174,14 +174,14 @@ export async function listDiscoverableLearningLibrary(
   }
 
   const creatorIds = [
-    ...new Set(paths.map((row) => row.creator_profile_id).filter((id): id is string => Boolean(id))),
+    ...new Set<any>(paths.map((row) => row.creator_profile_id).filter((id): id is string => Boolean(id))),
   ];
   if (creatorIds.length) {
     const { data: creators } = await client
       .from("creator_profiles")
       .select("id, display_name")
       .in("id", creatorIds);
-    const names = new Map((creators ?? []).map((row) => [row.id, row.display_name]));
+    const names = new Map<any, any>((creators ?? []).map((row) => [row.id, row.display_name]));
     paths = paths.map((row) => ({
       ...row,
       creator_name: row.creator_profile_id ? names.get(row.creator_profile_id) ?? null : null,

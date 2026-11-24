@@ -1,5 +1,5 @@
 import "server-only";
-import type { SupabaseClient } from "@supabase/supabase-js";
+import type { DbClient } from "@/lib/db/client";
 import {
   buildCourseResolver,
   ensureImportedStudentProfile,
@@ -125,7 +125,7 @@ async function withTransientRetry<T>(
 }
 
 export async function createBulkImportJob(params: {
-  admin: SupabaseClient<Database>;
+  admin: DbClient;
   adminUserId: string;
   csvText: string;
   defaultCourseId: string | null;
@@ -232,7 +232,7 @@ export async function createBulkImportJob(params: {
 }
 
 async function insertJobRows(
-  admin: SupabaseClient<Database>,
+  admin: DbClient,
   jobId: string,
   dataRows: Array<{ rowNumber: number; fullName: string; email: string; courseRef: string }>,
 ) {
@@ -256,7 +256,7 @@ async function insertJobRows(
 }
 
 async function batchFindProfilesByEmails(
-  admin: SupabaseClient<Database>,
+  admin: DbClient,
   emails: string[],
 ) {
   const map = new Map<
@@ -279,7 +279,7 @@ async function batchFindProfilesByEmails(
 }
 
 async function loadExistingEnrollmentKeys(
-  admin: SupabaseClient<Database>,
+  admin: DbClient,
   studentIds: string[],
   courseIds: string[],
 ) {
@@ -302,7 +302,7 @@ async function loadExistingEnrollmentKeys(
 }
 
 async function fastBulkEnroll(
-  admin: SupabaseClient<Database>,
+  admin: DbClient,
   params: {
     studentId: string;
     courseId: string;
@@ -343,7 +343,7 @@ async function fastBulkEnroll(
 }
 
 async function countRowsByStatus(
-  admin: SupabaseClient<Database>,
+  admin: DbClient,
   jobId: string,
   status: BulkImportRowStatus,
 ) {
@@ -358,7 +358,7 @@ async function countRowsByStatus(
 
 /** Recount job counters from row statuses — race-safe under concurrent workers. */
 async function recountAndPersistJobCounters(
-  admin: SupabaseClient<Database>,
+  admin: DbClient,
   jobId: string,
 ) {
   const [pending, processing, created, enrolled, skipped, failed] = await Promise.all([
@@ -390,7 +390,7 @@ async function recountAndPersistJobCounters(
 }
 
 export async function reclaimStaleBulkImportClaims(
-  admin: SupabaseClient<Database>,
+  admin: DbClient,
   olderThanMinutes = 15,
 ) {
   const { data, error } = await admin.rpc("reclaim_stale_bulk_import_rows" as never, {
@@ -414,7 +414,7 @@ export async function reclaimStaleBulkImportClaims(
  * Process one chunk. When asWorker=true, skips admin ownership check (cron / service role).
  */
 export async function processBulkImportChunk(params: {
-  admin: SupabaseClient<Database>;
+  admin: DbClient;
   adminUserId: string;
   jobId: string;
   chunkSize?: number;
@@ -663,7 +663,7 @@ export async function processBulkImportChunk(params: {
                   counters.failed += 1;
                   continue;
                 }
-                studentId = recovered;
+                studentId = recovered as string;
                 await ensureImportedStudentProfile(params.admin, {
                   studentId,
                   email,
@@ -841,7 +841,7 @@ export async function processBulkImportChunk(params: {
   });
 }
 
-export async function maybeFinalizeJobPhase(admin: SupabaseClient<Database>, jobId: string) {
+export async function maybeFinalizeJobPhase(admin: DbClient, jobId: string) {
   try {
     const pendingEmails = await countPendingOutboxForJob(admin, jobId);
     if (pendingEmails.total === 0) {
@@ -881,7 +881,7 @@ export async function maybeFinalizeJobPhase(admin: SupabaseClient<Database>, job
 
 /** Run multiple chunks until budget exhausted or job rows done. */
 export async function processBulkImportUntilBudget(params: {
-  admin: SupabaseClient<Database>;
+  admin: DbClient;
   adminUserId: string;
   jobId: string;
   budgetMs?: number;
@@ -953,7 +953,7 @@ export async function processBulkImportUntilBudget(params: {
 
 /** Cron: pick oldest active jobs and process within budget. */
 export async function processPendingBulkImportJobs(
-  admin: SupabaseClient<Database>,
+  admin: DbClient,
   opts?: { maxJobs?: number; budgetMs?: number; origin?: string },
 ) {
   await reclaimStaleBulkImportClaims(admin, 12);
@@ -965,7 +965,7 @@ export async function processPendingBulkImportJobs(
     .limit(opts?.maxJobs ?? 3);
   if (error) throw new Error(error.message);
 
-  const results = [];
+  const results: any[] = [];
   for (const job of jobs ?? []) {
     const summary = await processBulkImportUntilBudget({
       admin,
@@ -981,7 +981,7 @@ export async function processPendingBulkImportJobs(
 }
 
 async function markRow(
-  admin: SupabaseClient<Database>,
+  admin: DbClient,
   rowId: string,
   status: BulkImportRowStatus,
   reason: string | null,
@@ -999,7 +999,7 @@ async function markRow(
 }
 
 export async function getBulkImportJobSummary(
-  admin: SupabaseClient<Database>,
+  admin: DbClient,
   jobId: string,
   options?: { lite?: boolean },
 ): Promise<BulkImportJobSummary> {
@@ -1132,7 +1132,7 @@ export async function getBulkImportJobSummary(
 }
 
 export async function retryFailedBulkImportRows(
-  admin: SupabaseClient<Database>,
+  admin: DbClient,
   jobId: string,
   adminUserId: string,
 ) {
@@ -1165,7 +1165,7 @@ export async function retryFailedBulkImportRows(
 }
 
 export async function exportFailedBulkImportRowsCsv(
-  admin: SupabaseClient<Database>,
+  admin: DbClient,
   jobId: string,
   adminUserId: string,
 ) {

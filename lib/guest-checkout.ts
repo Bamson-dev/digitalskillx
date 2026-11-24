@@ -1,6 +1,6 @@
 import "server-only";
-import { createClient as createSupabaseClient } from "@supabase/supabase-js";
-import type { SupabaseClient } from "@supabase/supabase-js";
+import { createAuthOnlyClient } from "@/lib/db/client";
+import type { DbClient } from "@/lib/db/client";
 import { createAdminClientAsync } from "@/lib/supabase/admin";
 import { isMissingColumnError } from "@/lib/schema-guard";
 import {
@@ -63,7 +63,7 @@ function buyerNameFromVerified(verified: VerifiedTransaction) {
 }
 
 export async function resolveOrCreateStudentForPurchase(
-  admin: SupabaseClient<Database>,
+  admin: DbClient,
   params: { email: string; fullName?: string | null },
 ) {
   const email = params.email.trim().toLowerCase();
@@ -138,7 +138,7 @@ export async function resolveOrCreateStudentForPurchase(
 }
 
 async function syncProfileEmailIfMissing(
-  admin: SupabaseClient<Database>,
+  admin: DbClient,
   studentId: string,
   email: string,
   fullName?: string | null,
@@ -161,14 +161,7 @@ async function syncProfileEmailIfMissing(
 }
 
 async function signInCheckoutUser(email: string, password: string): Promise<CheckoutSession | null> {
-  const { getServerSupabaseUrl } = await import("@/lib/supabase/url");
-  const supabaseUrl = getServerSupabaseUrl();
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  if (!supabaseUrl || !supabaseAnonKey) return null;
-
-  const authClient = createSupabaseClient<Database>(supabaseUrl, supabaseAnonKey, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
+  const authClient = createAuthOnlyClient();
 
   const { data, error } = await authClient.auth.signInWithPassword({
     email: email.trim().toLowerCase(),
@@ -350,7 +343,7 @@ export async function completePaidCheckout(reference: string) {
     };
   }
 
-  let studentId = tx.student_id;
+  let studentId: string = tx.student_id as string;
   let isNewAccount = false;
   let password: string | undefined;
 

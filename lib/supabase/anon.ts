@@ -1,20 +1,6 @@
-import { createClient } from "@supabase/supabase-js";
-import type { Database } from "@/types/database";
-import { createServerSupabaseFetch } from "@/lib/supabase/fetch-bridge";
-import { getServerSupabaseUrl } from "@/lib/supabase/url";
+import { createAnonDbClient, type DbClient } from "@/lib/db/client";
 
-/** Cookie-less anon client for public ISR pages. RLS still applies. */
-export function createAnonClient() {
-  const supabaseUrl = getServerSupabaseUrl();
-  if (!supabaseUrl || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
-    throw new Error("Supabase URL / anon key is not configured");
-  }
-  return createClient<Database>(
-    supabaseUrl,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      auth: { persistSession: false, autoRefreshToken: false },
-      global: { fetch: createServerSupabaseFetch({ retries: 2, timeoutMs: 12_000 }) },
-    },
-  );
+/** Cookie-less client for public ISR pages. Row level security applies as the anon role. */
+export function createAnonClient(): DbClient {
+  return createAnonDbClient();
 }

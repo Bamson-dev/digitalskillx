@@ -3,7 +3,7 @@
  * Ensures Supabase storage buckets exist and tests a public-assets upload via service role.
  * Usage: node scripts/test-storage-buckets.mjs [baseUrl]
  */
-import { createClient } from "@supabase/supabase-js";
+import { createServiceClient } from "../lib/db/client.ts";
 import { existsSync, readFileSync } from "node:fs";
 import { join, resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -33,11 +33,9 @@ function loadEnvFile(name) {
 }
 
 const env = { ...loadEnvFile(".env.local"), ...loadEnvFile(".env.test"), ...process.env };
-const url = env.NEXT_PUBLIC_SUPABASE_URL;
-const serviceRole = env.SUPABASE_SERVICE_ROLE_KEY;
-
-if (!url || !serviceRole) {
-  console.error("Set NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in .env.local");
+if (env.DATABASE_URL && !process.env.DATABASE_URL) process.env.DATABASE_URL = env.DATABASE_URL;
+if (!process.env.DATABASE_URL) {
+  console.error("Set DATABASE_URL (environment or .env.local)");
   process.exit(1);
 }
 
@@ -47,9 +45,7 @@ const REQUIRED = [
 ];
 
 async function main() {
-  const admin = createClient(url, serviceRole, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  });
+  const admin = createServiceClient();
 
   const { data: buckets, error: listError } = await admin.storage.listBuckets();
   if (listError) throw new Error(`listBuckets: ${listError.message}`);

@@ -100,8 +100,8 @@ export async function getStudentCertificates(studentId: string): Promise<Student
   }>;
   if (!certs.length) return [];
 
-  const courseIds = [...new Set(certs.map((row) => row.course_id).filter((id): id is string => Boolean(id)))];
-  const pathIds = [...new Set(certs.map((row) => row.learning_path_id).filter((id): id is string => Boolean(id)))];
+  const courseIds = [...new Set<any>(certs.map((row) => row.course_id).filter((id): id is string => Boolean(id)))];
+  const pathIds = [...new Set<any>(certs.map((row) => row.learning_path_id).filter((id): id is string => Boolean(id)))];
   const [{ data: courses }, { data: paths }] = await Promise.all([
     courseIds.length
       ? admin.from("courses").select("id, title").in("id", courseIds)
@@ -110,8 +110,8 @@ export async function getStudentCertificates(studentId: string): Promise<Student
       ? admin.from("learning_paths").select("id, title").in("id", pathIds)
       : Promise.resolve({ data: [] as { id: string; title: string }[] }),
   ]);
-  const titleById = new Map((courses ?? []).map((course) => [course.id, course.title]));
-  const pathTitleById = new Map((paths ?? []).map((row) => [row.id, row.title]));
+  const titleById = new Map<any, any>((courses ?? []).map((course) => [course.id, course.title]));
+  const pathTitleById = new Map<any, any>((paths ?? []).map((row) => [row.id, row.title]));
 
   return certs.map((row) => ({
     id: row.id,

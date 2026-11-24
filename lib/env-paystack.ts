@@ -1,11 +1,10 @@
 import "server-only";
-import type { SupabaseClient } from "@supabase/supabase-js";
+import type { DbClient } from "@/lib/db/client";
 import { bootstrapRuntimeSecrets } from "@/lib/bootstrap-runtime-secrets";
 import {
   getCachedIntegrationSecret,
   setCachedIntegrationSecret,
 } from "@/lib/integration-secrets-cache";
-import { getServiceRoleKeySync } from "@/lib/env-service-role";
 import { createAdminClientAsync } from "@/lib/supabase/admin";
 import { runtimeEnv } from "@/lib/runtime-env";
 import type { Database } from "@/types/database";
@@ -19,7 +18,7 @@ function normalizeKey(raw: string | null | undefined): string | undefined {
 }
 
 async function readFromAdminSession(
-  supabase: SupabaseClient<Database>,
+  supabase: DbClient,
 ): Promise<string | undefined> {
   const { data, error } = await supabase
     .from("platform_secrets")
@@ -32,33 +31,6 @@ async function readFromAdminSession(
 }
 
 async function readFromDbViaServiceRole(): Promise<string | undefined> {
-  const serviceRole = getServiceRoleKeySync();
-  const { getServerSupabaseUrl } = await import("@/lib/supabase/url");
-  const supabaseUrl = getServerSupabaseUrl();
-  if (serviceRole && supabaseUrl) {
-    try {
-      const url = `${supabaseUrl}/rest/v1/platform_secrets?id=eq.default&select=paystack_secret_key`;
-      const res = await fetch(url, {
-        headers: {
-          apikey: serviceRole,
-          Authorization: `Bearer ${serviceRole}`,
-        },
-        cache: "no-store",
-        signal: AbortSignal.timeout(5_000),
-      });
-      if (res.ok) {
-        const rows = (await res.json()) as { paystack_secret_key?: string | null }[];
-        const key = normalizeKey(rows?.[0]?.paystack_secret_key);
-        if (key) {
-          setCachedIntegrationSecret(ENV_NAME, key);
-          return key;
-        }
-      }
-    } catch {
-      // fall through
-    }
-  }
-
   try {
     const admin = await createAdminClientAsync();
     const { data, error } = await admin
@@ -77,7 +49,7 @@ async function readFromDbViaServiceRole(): Promise<string | undefined> {
 
 /** Server checkout: memory/runtime env first, then DB via service role. Admin session last. */
 async function resolvePaystackSecretKey(
-  supabase?: SupabaseClient<Database>,
+  supabase?: DbClient,
 ): Promise<string | undefined> {
   await bootstrapRuntimeSecrets();
 
@@ -104,12 +76,12 @@ async function resolvePaystackSecretKey(
   return undefined;
 }
 
-export async function paystackSecretKeyConfigured(supabase?: SupabaseClient<Database>) {
+export async function paystackSecretKeyConfigured(supabase?: DbClient) {
   return Boolean(await resolvePaystackSecretKey(supabase));
 }
 
 export async function getPaystackSecretKey(
-  supabase?: SupabaseClient<Database>,
+  supabase?: DbClient,
 ): Promise<string> {
   const key = await resolvePaystackSecretKey(supabase);
   if (key) return key;

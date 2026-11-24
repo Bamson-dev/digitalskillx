@@ -2,15 +2,15 @@ import { NextResponse, type NextRequest } from "next/server";
 import { verifyCronSecret } from "@/lib/cron-auth";
 import { createAdminClientAsync } from "@/lib/supabase/admin";
 import { runtimeEnv } from "@/lib/runtime-env";
-import { readServiceRoleFromEnv } from "@/lib/platform-secrets-bootstrap";
+import { readDatabaseUrlFromEnv } from "@/lib/platform-secrets-bootstrap";
 import { ensureAdminProfile } from "@/lib/ensure-admin-profile";
 import { configuredAdminEmail } from "@/lib/admin-email";
 
 export const dynamic = "force-dynamic";
 
 /**
- * One-shot production setup (Vercel):
- * 1. Requires SUPABASE_SERVICE_ROLE_KEY in Vercel env (cannot bootstrap from placeholder DB keys).
+ * One-shot production setup:
+ * 1. Requires DATABASE_URL in the runtime environment.
  * 2. Saves env secrets into platform_secrets.
  * 3. Syncs admin password from ADMIN_PASSWORD.
  *
@@ -22,19 +22,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
 
-  const serviceRole = readServiceRoleFromEnv();
-  if (!serviceRole) {
+  if (!readDatabaseUrlFromEnv()) {
     return NextResponse.json(
-      {
-        error: "SUPABASE_SERVICE_ROLE_KEY is not in Vercel environment variables.",
-        fix: [
-          "Open Supabase Dashboard for the PRODUCTION project (same as NEXT_PUBLIC_SUPABASE_URL on Vercel).",
-          "Project Settings → API → copy service_role key.",
-          "Vercel → digitalskillx → Settings → Environment Variables → Production → add SUPABASE_SERVICE_ROLE_KEY.",
-          "Redeploy, then call this endpoint again.",
-        ],
-        health: "https://www.digitalskillx.com/api/health",
-      },
+      { error: "DATABASE_URL is not set in the runtime environment.", health: "/api/health" },
       { status: 503 },
     );
   }
@@ -43,7 +33,7 @@ export async function POST(request: NextRequest) {
   const password = process.env.ADMIN_PASSWORD;
   if (!email || !password) {
     return NextResponse.json(
-      { error: "Set ADMIN_EMAIL and ADMIN_PASSWORD in Vercel Environment Variables (Production)." },
+      { error: "Set ADMIN_EMAIL and ADMIN_PASSWORD in the runtime environment." },
       { status: 503 },
     );
   }
@@ -53,7 +43,6 @@ export async function POST(request: NextRequest) {
 
     const patch = {
       id: "default" as const,
-      supabase_service_role_key: serviceRole,
       paystack_secret_key: runtimeEnv("PAYSTACK_SECRET_KEY") ?? null,
       zeptomail_smtp_password: runtimeEnv("ZEPTOMAIL_SMTP_PASSWORD") ?? null,
       youtube_api_key: runtimeEnv("YOUTUBE_API_KEY") ?? null,

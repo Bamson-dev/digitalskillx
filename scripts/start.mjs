@@ -12,7 +12,6 @@ const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const allowedNodeEnv = new Set(["production", "development", "test"]);
 
 const RUNTIME_KEYS = [
-  "SUPABASE_SERVICE_ROLE_KEY",
   "YOUTUBE_API_KEY",
   "DEEPSEEK_API_KEY",
   "DEEPSEEK_MODEL",
@@ -57,105 +56,42 @@ function writeRuntimeEnvFile() {
   process.env.DIGITALSKILLX_RUNTIME_ENV_FILE = target;
 }
 
-/** Load missing integration keys from platform_secrets when service role is available at boot. */
+/** Load missing integration keys from platform_secrets straight from PostgreSQL at boot. */
 async function enrichSecretsFromDatabase() {
-  const supabaseUrl = readEnv("NEXT_PUBLIC_SUPABASE_URL");
-  const anonKey = readEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY");
-  const serviceRole =
-    readEnv("SUPABASE_SERVICE_ROLE_KEY") ||
-    readEnv("SUPABASE_SERVICE_KEY") ||
-    readEnv("SERVICE_ROLE_KEY");
-
-  if (serviceRole && supabaseUrl) {
-    try {
-      const url = `${supabaseUrl.replace(/\/$/, "")}/rest/v1/platform_secrets?id=eq.default&select=youtube_api_key,deepseek_api_key,paystack_secret_key,supabase_service_role_key,zeptomail_smtp_password`;
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 3_000);
-      const res = await fetch(url, {
-        headers: {
-          apikey: serviceRole,
-          Authorization: `Bearer ${serviceRole}`,
-        },
-        signal: controller.signal,
-      });
-      clearTimeout(timer);
-
-      if (res.ok) {
-        const rows = await res.json();
-        const row = rows?.[0];
-        if (row) {
-          const dbFallbacks = {
-            YOUTUBE_API_KEY: row.youtube_api_key,
-            DEEPSEEK_API_KEY: row.deepseek_api_key,
-            PAYSTACK_SECRET_KEY: row.paystack_secret_key,
-            SUPABASE_SERVICE_ROLE_KEY: row.supabase_service_role_key,
-            ZEPTOMAIL_SMTP_PASSWORD: row.zeptomail_smtp_password,
-          };
-
-          for (const [envKey, dbValue] of Object.entries(dbFallbacks)) {
-            if (!readEnv(envKey) && typeof dbValue === "string" && dbValue.trim()) {
-              if (dbValue.includes("PASTE_") && dbValue.includes("_HERE")) continue;
-              process.env[envKey] = dbValue.trim();
-              console.log(`[digitalskillx] Loaded ${envKey} from platform_secrets`);
-            }
-          }
-        }
-      }
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      console.warn(`[digitalskillx] Could not enrich secrets from database: ${message}`);
-    }
+  const databaseUrl = readEnv("DATABASE_URL");
+  if (!databaseUrl) {
+    console.log("[digitalskillx] Skipping DB secret enrichment (DATABASE_URL is not set)");
     return;
   }
-
-  const cronSecret = readEnv("CRON_SECRET");
-  if (!cronSecret || !supabaseUrl || !anonKey) {
-    console.log(
-      "[digitalskillx] Skipping DB secret enrichment (need service role in env, or CRON_SECRET + anon key for bootstrap)",
-    );
-    return;
-  }
-
+  let client;
   try {
-    const res = await fetch(`${supabaseUrl.replace(/\/$/, "")}/rest/v1/rpc/server_bootstrap_platform_secrets`, {
-      method: "POST",
-      headers: {
-        apikey: anonKey,
-        Authorization: `Bearer ${anonKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ p_cron_secret: cronSecret }),
-    });
-
-    if (!res.ok) {
-      console.warn(`[digitalskillx] CRON platform_secrets bootstrap failed: HTTP ${res.status}`);
-      return;
-    }
-
-    const row = await res.json();
-    if (!row || typeof row !== "object") {
-      console.warn("[digitalskillx] CRON platform_secrets bootstrap returned no data");
-      return;
-    }
-
-    const dbFallbacks = {
-      YOUTUBE_API_KEY: row.youtube_api_key,
-      DEEPSEEK_API_KEY: row.deepseek_api_key,
-      PAYSTACK_SECRET_KEY: row.paystack_secret_key,
-      SUPABASE_SERVICE_ROLE_KEY: row.supabase_service_role_key,
-      ZEPTOMAIL_SMTP_PASSWORD: row.zeptomail_smtp_password,
-    };
-
-    for (const [envKey, dbValue] of Object.entries(dbFallbacks)) {
-      if (!readEnv(envKey) && typeof dbValue === "string" && dbValue.trim()) {
-        if (dbValue.includes("PASTE_") && dbValue.includes("_HERE")) continue;
-        process.env[envKey] = dbValue.trim();
-        console.log(`[digitalskillx] Loaded ${envKey} from platform_secrets (CRON bootstrap)`);
+    const pg = (await import("pg")).default;
+    client = new pg.Client({ connectionString: databaseUrl, connectionTimeoutMillis: 3_000 });
+    await client.connect();
+    const res = await client.query(
+      "select youtube_api_key, deepseek_api_key, paystack_secret_key, zeptomail_smtp_password from public.platform_secrets where id = 'default' limit 1",
+    );
+    const row = res.rows[0];
+    if (row) {
+      const dbFallbacks = {
+        YOUTUBE_API_KEY: row.youtube_api_key,
+        DEEPSEEK_API_KEY: row.deepseek_api_key,
+        PAYSTACK_SECRET_KEY: row.paystack_secret_key,
+        ZEPTOMAIL_SMTP_PASSWORD: row.zeptomail_smtp_password,
+      };
+      for (const [envKey, dbValue] of Object.entries(dbFallbacks)) {
+        if (!readEnv(envKey) && typeof dbValue === "string" && dbValue.trim()) {
+          if (dbValue.includes("PASTE_") && dbValue.includes("_HERE")) continue;
+          process.env[envKey] = dbValue.trim();
+          console.log(`[digitalskillx] Loaded ${envKey} from platform_secrets`);
+        }
       }
     }
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    console.warn(`[digitalskillx] CRON platform_secrets bootstrap failed: ${message}`);
+    console.warn(`[digitalskillx] Could not enrich secrets from database: ${message}`);
+  } finally {
+    await client?.end().catch(() => undefined);
   }
 }
 
@@ -177,7 +113,7 @@ async function main() {
   console.log(`  cwd=${process.cwd()}`);
   console.log(`  appRoot=${root}`);
   console.log(`  NODE_ENV=${process.env.NODE_ENV}`);
-  console.log(`  SUPABASE_SERVICE_ROLE_KEY=${secretStatus("SUPABASE_SERVICE_ROLE_KEY")}`);
+  console.log(`  DATABASE_URL=${secretStatus("DATABASE_URL")}`);
   console.log(`  YOUTUBE_API_KEY=${youtubeStatus}`);
   console.log(`  DEEPSEEK_API_KEY=${secretStatus("DEEPSEEK_API_KEY")}`);
   console.log(`  PAYSTACK_SECRET_KEY=${secretStatus("PAYSTACK_SECRET_KEY")}`);

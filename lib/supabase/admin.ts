@@ -1,55 +1,22 @@
-import { createClient as createSupabaseClient } from "@supabase/supabase-js";
-import type { SupabaseClient } from "@supabase/supabase-js";
-import type { Database } from "@/types/database";
-import {
-  resolveServiceRoleKey,
-  getServiceRoleKeySync,
-  serviceRoleKeyMissingMessage,
-} from "@/lib/env-service-role";
-import { createServerSupabaseFetch } from "@/lib/supabase/fetch-bridge";
-import { getAdminSupabaseUrl } from "@/lib/supabase/url";
-
-function buildAdminClient(serviceRoleKey: string) {
-  const supabaseUrl = getAdminSupabaseUrl();
-  if (!supabaseUrl) {
-    throw new Error("SUPABASE_URL / NEXT_PUBLIC_SUPABASE_URL is not configured");
-  }
-
-  return createSupabaseClient<Database>(supabaseUrl, serviceRoleKey, {
-    auth: { autoRefreshToken: false, persistSession: false },
-    global: { fetch: createServerSupabaseFetch({ retries: 3, timeoutMs: 15_000 }) },
-  });
-}
+import { createServiceClient, type DbClient } from "@/lib/db/client";
+import { isDatabaseConfigured } from "@/lib/db/pool";
 
 /**
- * Privileged Supabase client using the service-role key. BYPASSES RLS.
- *
- * SERVER-ONLY. Never import this into a Client Component or expose the key.
- * Prefer createAdminClientAsync when the key may live in platform_secrets.
+ * Privileged database client. Connects as the database owner, so it BYPASSES
+ * row level security. SERVER-ONLY. Never import this into a Client Component.
  */
-export function createAdminClient() {
-  const serviceRoleKey = getServiceRoleKeySync();
-  if (!serviceRoleKey) {
-    throw new Error(serviceRoleKeyMissingMessage());
+export function createAdminClient(): DbClient {
+  if (!isDatabaseConfigured()) {
+    throw new Error("DATABASE_URL is not configured");
   }
-  return buildAdminClient(serviceRoleKey);
+  return createServiceClient();
 }
 
-/** Resolves service role from env or platform_secrets, then returns the admin client. */
-export async function createAdminClientAsync(supabase?: SupabaseClient<Database>) {
-  const syncKey = getServiceRoleKeySync();
-  if (syncKey) return buildAdminClient(syncKey);
-
-  const { bootstrapRuntimeSecrets } = await import("@/lib/bootstrap-runtime-secrets");
-  await bootstrapRuntimeSecrets();
-
-  const resolved = await resolveServiceRoleKey(supabase);
-  if (!resolved.key) {
-    throw new Error(resolved.hint ?? serviceRoleKeyMissingMessage());
-  }
-  return buildAdminClient(resolved.key);
+/** Kept for call-site compatibility; there is no key to resolve any more. */
+export async function createAdminClientAsync(_supabase?: unknown): Promise<DbClient> {
+  return createAdminClient();
 }
 
 export function isServiceRoleConfigured() {
-  return Boolean(getServiceRoleKeySync());
+  return isDatabaseConfigured();
 }

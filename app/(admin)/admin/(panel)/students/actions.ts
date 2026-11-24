@@ -462,7 +462,7 @@ export async function unenrollStudent(formData: FormData) {
         .from("profiles")
         .select("id")
         .ilike("email", profile.email.trim());
-      targetIds = [...new Set((siblings ?? []).map((s) => s.id).concat(studentId))];
+      targetIds = [...new Set<any>((siblings ?? []).map((s) => s.id).concat(studentId))];
     }
 
     const { data: deletedRows, error } = await admin

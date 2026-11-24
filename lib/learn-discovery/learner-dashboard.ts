@@ -1,5 +1,5 @@
 import "server-only";
-import type { SupabaseClient } from "@supabase/supabase-js";
+import type { DbClient } from "@/lib/db/client";
 import type { Database } from "@/types/database";
 import { summarizeLearnCompletion } from "@/lib/content-factory/library-shared";
 import { listRequiredLessonIds } from "@/lib/learn-progress";
@@ -9,7 +9,7 @@ import { listDiscoverableLearningLibrary } from "@/lib/learn-discovery/discovery
 import { loadLearnerStreak } from "@/lib/learn-discovery/streaks";
 import { loadLearnerAchievements } from "@/lib/learn-discovery/achievements";
 
-type Admin = SupabaseClient<Database>;
+type Admin = DbClient;
 
 export type LearnerPathProgressRow = {
   pathId: string;
@@ -232,7 +232,7 @@ export async function loadLearnerDashboard(admin: Admin, studentId: string): Pro
 
 export async function computeLearnerAchievementMetrics(admin: Admin, studentId: string) {
   const progressRows = await loadProgressRows(admin, studentId);
-  const pathIds = [...new Set(progressRows.map((r) => r.learning_path_id))];
+  const pathIds = [...new Set<any>(progressRows.map((r) => r.learning_path_id))];
   let coursesCompleted = 0;
   for (const pathId of pathIds) {
     const rows = progressRows.filter((r) => r.learning_path_id === pathId);

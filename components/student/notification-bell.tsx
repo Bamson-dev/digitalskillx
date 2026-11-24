@@ -3,7 +3,6 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Bell } from "lucide-react";
-import { createClient } from "@/lib/supabase/client";
 import { formatDate } from "@/lib/utils";
 
 type Notification = {
@@ -19,14 +18,11 @@ export function NotificationBell() {
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState<Notification[]>([]);
   const ref = useRef<HTMLDivElement>(null);
-  const supabase = createClient();
 
   async function load() {
-    const { data } = await supabase
-      .from("notifications")
-      .select("id, title, message, link_url, is_read, created_at")
-      .order("created_at", { ascending: false })
-      .limit(20);
+    const res = await fetch("/api/student/notifications", { credentials: "include", cache: "no-store" });
+    const body = (await res.json().catch(() => null)) as { items?: Notification[] } | null;
+    const data = body?.items;
     setItems(data ?? []);
   }
 
@@ -46,7 +42,7 @@ export function NotificationBell() {
   const unread = items.filter((i) => !i.is_read).length;
 
   async function markAllRead() {
-    await supabase.from("notifications").update({ is_read: true }).eq("is_read", false);
+    await fetch("/api/student/notifications", { method: "POST", credentials: "include" });
     setItems((prev) => prev.map((i) => ({ ...i, is_read: true })));
   }
 

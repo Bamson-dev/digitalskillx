@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
- * Regression guard: auth cookie hostname must never drift again.
- * Fails if session clients omit the pinned cookie name or prefer Kong for cookies.
+ * Regression guard for the session cookie and the sign-in paths.
+ * Session cookie is a signed JWT named dsx-session; old sb-* cookies must be cleared.
  */
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -18,50 +18,26 @@ function assert(cond, msg) {
   }
 }
 
+const jwt = read("lib/db/jwt.ts");
+assert(jwt.includes('SESSION_COOKIE_NAME = "dsx-session"'), "session cookie is pinned to dsx-session");
+assert(jwt.includes("httpOnly: true") && jwt.includes('sameSite: "lax"'), "session cookie is httpOnly and SameSite=Lax");
+
 const authCookie = read("lib/supabase/auth-cookie.ts");
-assert(
-  authCookie.includes('AUTH_STORAGE_KEY = "sb-www-auth-token"'),
-  "AUTH_STORAGE_KEY pinned to sb-www-auth-token (matches live sessions)",
-);
-assert(
-  authCookie.includes("sb-supabase-auth-token"),
-  "legacy Kong cookie key is explicitly cleared",
-);
+assert(authCookie.includes("AUTH_STORAGE_KEY = SESSION_COOKIE_NAME"), "auth cookie key follows the session cookie name");
+assert(authCookie.includes("sb-www-auth-token"), "legacy sb-www cookie from the old host is cleared");
 
-const files = [
-  "lib/supabase/client.ts",
-  "lib/supabase/server.ts",
-  "lib/supabase/middleware.ts",
-  "lib/supabase/route-handler.ts",
-];
-for (const f of files) {
-  const src = read(f);
-  assert(src.includes("authCookieOptions"), `${f} sets authCookieOptions`);
-  assert(src.includes("cookieOptions"), `${f} passes cookieOptions to create*Client`);
+for (const f of ["lib/supabase/server.ts", "lib/supabase/route-handler.ts"]) {
+  assert(read(f).includes("createRequestClient"), `${f} builds a cookie-bound request client`);
 }
-
-const url = read("lib/supabase/url.ts");
-assert(url.includes("getMiddlewareSupabaseUrl"), "middleware has loopback-preferring URL helper");
-assert(
-  url.includes("getAuthSupabaseUrl"),
-  "getAuthSupabaseUrl still exists for browser/public gateway",
-);
+const mw = read("lib/supabase/middleware.ts");
+assert(mw.includes("verifyAccessToken"), "middleware verifies the session token statelessly");
+assert(mw.includes("allowContinuity"), "middleware keeps course-continuity access during outages");
 
 const login = read("app/api/auth/login/route.ts");
-assert(
-  !login.includes("failClosed: true"),
-  "student login does not fail-closed on rate-limit store outages",
-);
+assert(!login.includes("failClosed: true"), "student login does not fail-closed on rate-limit store outages");
 
 const studentLogin = read("lib/auth/run-student-login.ts");
-assert(
-  studentLogin.includes("studentFacingLoginError"),
-  "student login maps misleading Auth errors to recovery guidance",
-);
-assert(
-  studentLogin.includes("exact email shown in your DigitalSkillX course-access message"),
-  "login error directs students to their registered course email",
-);
+assert(studentLogin.includes("studentFacingLoginError"), "student login maps auth errors to recovery guidance");
 assert(
   (studentLogin.match(/course access reconciliation failed/g) ?? []).length === 1 &&
     (studentLogin.match(/certificate reconciliation failed/g) ?? []).length === 1,
@@ -73,20 +49,8 @@ assert(
   "server-action login paths persist the verified session before redirecting",
 );
 
-const bridge = read("lib/supabase/fetch-bridge.ts");
-assert(
-  bridge.includes("Never use NEXT_PUBLIC") ||
-    !/new URL\(\s*env\.NEXT_PUBLIC_SUPABASE_URL/.test(bridge),
-  "DNS bridge must not remap www from NEXT_PUBLIC_SUPABASE_URL",
-);
-assert(bridge.includes("SUPABASE_URL"), "DNS bridge keys off SUPABASE_URL/Kong host");
-
-const mw = read("lib/supabase/middleware.ts");
-assert(mw.includes("softOpenStudentPath"), "middleware soft-opens cookied student paths");
-assert(mw.includes("getMiddlewareSupabaseUrl"), "middleware uses loopback-capable URL");
-
 if (process.exitCode) {
   console.error("\nAuth cookie alignment regressions found.");
   process.exit(1);
 }
-console.log("\nPASS — auth cookie alignment guards OK");
+console.log("\nPASS: auth cookie alignment guards OK");

@@ -177,7 +177,7 @@ export default async function LessonPage({ params }: { params: { id: string } })
   const sortedModules = [...((modules as ModuleWithLessons[]) ?? [])].sort(
     (a, b) => a.position - b.position,
   );
-  const completedIds = new Set((progress ?? []).filter((p) => p.completed).map((p) => p.lesson_id));
+  const completedIds = new Set<any>((progress ?? []).filter((p) => p.completed).map((p) => p.lesson_id));
 
   const ordered: Lesson[] = sortedModules.flatMap((m) =>
     [...(m.lessons ?? [])].sort((a, b) => a.position - b.position),
@@ -241,7 +241,7 @@ export default async function LessonPage({ params }: { params: { id: string } })
         .from("enrollments")
         .select("course_id")
         .eq("student_id", studentId);
-      const ownedIds = new Set((ownedRows ?? []).map((r) => r.course_id));
+      const ownedIds = new Set<any>((ownedRows ?? []).map((r) => r.course_id));
       const recs = await getCourseRecommendationsForDisplay(admin, {
         courseId,
         catalog: recommendable,

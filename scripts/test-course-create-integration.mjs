@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 /**
- * Verifies admin course creation via service role (same path as getAdminSupabase).
- * Loads secrets from .env.local — no passwords logged.
+ * Verifies admin course creation through the service connection (same path as createAdminClient).
+ * Run with: node --import ./scripts/certification/register-ts-ext.mjs scripts/test-course-create-integration.mjs
+ * Needs DATABASE_URL (environment or .env.local).
  */
-import { createClient } from "@supabase/supabase-js";
+import { createServiceClient, createAnonDbClient } from "../lib/db/client.ts";
 import { existsSync, readFileSync } from "node:fs";
 import { join, resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -33,18 +34,14 @@ function loadEnv() {
 }
 
 async function main() {
-  const env = loadEnv();
-  const url = env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceRole = env.SUPABASE_SERVICE_ROLE_KEY;
-  const anon = env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-  if (!url || !serviceRole || !anon) {
-    throw new Error("Missing Supabase env in .env.local");
+  try {
+    Object.assign(process.env, { DATABASE_URL: process.env.DATABASE_URL ?? loadEnv().DATABASE_URL });
+  } catch {
+    // .env.local is optional when DATABASE_URL is already exported
   }
+  if (!process.env.DATABASE_URL) throw new Error("Set DATABASE_URL");
 
-  const admin = createClient(url, serviceRole, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  });
+  const admin = createServiceClient();
 
   const { data: adminProfile, error: profileError } = await admin
     .from("profiles")
@@ -72,9 +69,7 @@ async function main() {
 
   console.log("PASS: service role created course", created.id, created.title);
 
-  const anonClient = createClient(url, anon, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  });
+  const anonClient = createAnonDbClient();
 
   const { error: rlsError } = await anonClient
     .from("courses")

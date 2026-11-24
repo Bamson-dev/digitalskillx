@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import type { EmailOtpType } from "@supabase/supabase-js";
+type EmailOtpType = "recovery" | "magiclink" | "email" | "signup";
 import {
   assertDeviceLoginAllowed,
   DEVICE_KEY_COOKIE,

@@ -3,18 +3,15 @@ import { bootstrapRuntimeSecrets } from "@/lib/bootstrap-runtime-secrets";
 import { verifyCronSecret } from "@/lib/cron-auth";
 import { requireAdminApiAuth } from "@/lib/admin-api-auth";
 import { runtimeEnv, runtimeEnvDiagnostics } from "@/lib/runtime-env";
-import { getServiceRoleKeySync } from "@/lib/env-service-role";
-import { supabaseProjectRef } from "@/lib/supabase-project-ref";
 import { configuredAdminEmail } from "@/lib/admin-email";
 import { probeDatabaseConnectionDetailed } from "@/lib/health-database-probe";
-import { getServerSupabaseUrl } from "@/lib/supabase/url";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 /**
  * Coolify/Traefik hit this every few seconds with a short timeout.
- * Public responses must stay instant — never block on Supabase/Paystack/admin auth.
+ * Public responses must stay instant — never block on the database, Paystack or admin auth.
  * Returning slow 200s (or hanging) marks the container unhealthy → "no available server".
  */
 export async function GET(request: NextRequest) {
@@ -55,20 +52,9 @@ export async function GET(request: NextRequest) {
   const databaseProbe = await probeDatabaseConnectionDetailed();
   const database = databaseProbe.status;
 
-  // Env-only extras — never open long-retry Supabase clients here (that hung
-  // Contabo detailed health for 20–60s when Kong was slow/unreachable).
+  // Env-only extras — never open long-retry database clients here.
   const youtubeKey = runtimeEnv("YOUTUBE_API_KEY")?.trim();
   const paystackEnv = Boolean(runtimeEnv("PAYSTACK_SECRET_KEY")?.trim());
-  const serviceRoleReady = Boolean(getServiceRoleKeySync());
-  const serverUrl = getServerSupabaseUrl() ?? "";
-  const serverUrlHost = (() => {
-    try {
-      return new URL(serverUrl).host;
-    } catch {
-      return serverUrl ? "configured" : "missing";
-    }
-  })();
-
   const { getContaboIntegrationStatus } = await import("@/lib/storage");
   const contabo = getContaboIntegrationStatus();
 
@@ -91,10 +77,6 @@ export async function GET(request: NextRequest) {
         : "ok"
       : "missing",
     youtubeApiKeySource: youtubeKey ? "process" : "missing",
-    supabaseServiceRole: serviceRoleReady ? "configured" : "missing",
-    supabaseProjectRef: supabaseProjectRef() ?? "unknown",
-    supabaseUrlConfigured: process.env.NEXT_PUBLIC_SUPABASE_URL ? "yes" : "no",
-    supabaseServerHost: serverUrlHost,
     adminEmail: configuredAdminEmail(),
   };
 

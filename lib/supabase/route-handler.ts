@@ -1,53 +1,34 @@
-import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
-import type { SupabaseClient } from "@supabase/supabase-js";
-import type { Database } from "@/types/database";
+import { createRequestClient, type DbClient } from "@/lib/db/client";
+import type { CookieToSet } from "@/lib/db/auth";
 import { publicAbsoluteUrl } from "@/lib/public-site-origin";
-import {
-  authCookieOptions,
-  expireLegacyAuthCookies,
-} from "@/lib/supabase/auth-cookie";
-import { getAdminSupabaseUrl, getAuthSupabaseUrl } from "@/lib/supabase/url";
-import { createServerSupabaseFetch } from "@/lib/supabase/fetch-bridge";
+import { expireLegacyAuthCookies } from "@/lib/supabase/auth-cookie";
 
-type CookieToSet = {
-  name: string;
-  value: string;
-  options?: Record<string, unknown>;
-};
+export type { CookieToSet };
 
-/** Collect Supabase session cookies during sign-in, then attach to the final redirect. */
+/** Collect session cookies during sign-in, then attach them to the final response. */
 export function createRouteHandlerClientWithPendingCookies(
   request: NextRequest,
   pending: CookieToSet[],
-): SupabaseClient<Database> {
-  // Cookie name is pinned to sb-www-auth-token. Prefer Kong + DNS bridge so
-  // setSession does not depend on public hairpin to /api/sb.
-  const supabaseUrl = getAdminSupabaseUrl() ?? getAuthSupabaseUrl();
-  if (!supabaseUrl || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
-    throw new Error("Supabase URL / anon key is not configured");
-  }
-  return createServerClient<Database>(
-    supabaseUrl,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookieOptions: authCookieOptions(),
-      cookies: {
-        getAll() {
-          return request.cookies.getAll();
-        },
-        setAll(cookiesToSet: CookieToSet[]) {
-          for (const cookie of cookiesToSet) {
-            const index = pending.findIndex((c) => c.name === cookie.name);
-            if (index >= 0) pending[index] = cookie;
-            else pending.push(cookie);
-          }
-        },
-      },
-      // Must use DNS bridge — supabase.* has no public DNS on Contabo.
-      global: { fetch: createServerSupabaseFetch({ retries: 1, timeoutMs: 20_000 }) },
+): DbClient {
+  const jar = {
+    getAll() {
+      // Cookies set earlier in this request win over the incoming ones.
+      const incoming = request.cookies.getAll().filter((c) => !pending.some((p) => p.name === c.name));
+      return [...incoming, ...pending.filter((p) => p.value !== "").map((p) => ({ name: p.name, value: p.value }))];
     },
-  );
+    setAll(cookiesToSet: CookieToSet[]) {
+      for (const cookie of cookiesToSet) {
+        const index = pending.findIndex((c) => c.name === cookie.name);
+        if (index >= 0) pending[index] = cookie;
+        else pending.push(cookie);
+      }
+    },
+  };
+  return createRequestClient(jar, () => ({
+    userAgent: request.headers.get("user-agent"),
+    ip: request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? null,
+  }));
 }
 
 export function redirectWithPendingCookies(

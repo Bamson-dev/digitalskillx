@@ -1,6 +1,6 @@
 import "server-only";
 import { revalidatePath } from "next/cache";
-import type { SupabaseClient } from "@supabase/supabase-js";
+import type { DbClient } from "@/lib/db/client";
 import type { Database, LearningPath, Json } from "@/types/database";
 import {
   LIBRARY_PAGE_SIZE,
@@ -19,14 +19,14 @@ import {
   type LearnDiscoveryParams,
 } from "@/lib/learn-discovery/discovery-shared";
 
-export async function getLearningPathById(admin: SupabaseClient<Database>, id: string) {
+export async function getLearningPathById(admin: DbClient, id: string) {
   const { data, error } = await admin.from("learning_paths").select("*").eq("id", id).maybeSingle();
   if (error) throw new Error(error.message);
   return data;
 }
 
 export async function getPublishedLearningPathBySlug(
-  client: SupabaseClient<Database>,
+  client: DbClient,
   slug: string,
 ) {
   const { data, error } = await client
@@ -39,7 +39,7 @@ export async function getPublishedLearningPathBySlug(
   return data;
 }
 
-export async function listPublishedLearningPaths(client: SupabaseClient<Database>, limit = 48) {
+export async function listPublishedLearningPaths(client: DbClient, limit = 48) {
   const { data, error } = await client
     .from("learning_paths")
     .select(
@@ -75,7 +75,7 @@ const LIBRARY_LIST_SELECT_LEGACY =
   "id, slug, title, short_description, category, difficulty, tags, artwork_public_url, quality_score, published_at, creator_profile_id";
 
 export async function listPublishedLearningLibrary(
-  client: SupabaseClient<Database>,
+  client: DbClient,
   params: { q?: string | null; category?: string | null; page?: string | null; pageSize?: number; difficulty?: string | null; duration?: string | null; certificate?: string | null; sort?: string | null },
 ): Promise<{ paths: PublishedLibraryPath[]; page: number; pageSize: number; total: number; category: LibraryCategoryId; q: string; params?: LearnDiscoveryParams }> {
   const q = sanitizeLibraryQuery(params.q);
@@ -150,13 +150,13 @@ export async function listPublishedLearningLibrary(
   if (discovery.sort !== "newest") paths = sortDiscoverablePaths(paths, discovery.sort);
   if (needsMemoryFilter) paths = paths.slice(from, to + 1);
 
-  const creatorIds = [...new Set(paths.map((row) => row.creator_profile_id).filter((id): id is string => Boolean(id)))];
+  const creatorIds = [...new Set<any>(paths.map((row) => row.creator_profile_id).filter((id): id is string => Boolean(id)))];
   if (creatorIds.length) {
     const { data: creators } = await client
       .from("creator_profiles")
       .select("id, display_name")
       .in("id", creatorIds);
-    const names = new Map((creators ?? []).map((row) => [row.id, row.display_name]));
+    const names = new Map<any, any>((creators ?? []).map((row) => [row.id, row.display_name]));
     paths = paths.map((row) => ({
       ...row,
       creator_name: row.creator_profile_id ? names.get(row.creator_profile_id) ?? null : null,
@@ -175,7 +175,7 @@ export async function listPublishedLearningLibrary(
 }
 
 export async function listRelatedPublishedLearningPaths(
-  client: SupabaseClient<Database>,
+  client: DbClient,
   seed: { id: string; category: string; title: string },
 ) {
   const { data, error } = await client
@@ -190,7 +190,7 @@ export async function listRelatedPublishedLearningPaths(
 }
 
 export async function loadLearningPathCurriculum(
-  client: SupabaseClient<Database>,
+  client: DbClient,
   learningPathId: string,
 ) {
   const [{ data: sections }, { data: lessons }, { data: sources }] = await Promise.all([
@@ -214,7 +214,7 @@ export async function loadLearningPathCurriculum(
 }
 
 export async function approveLearningPath(
-  admin: SupabaseClient<Database>,
+  admin: DbClient,
   pathId: string,
 ): Promise<LearningPath> {
   const path = await getLearningPathById(admin, pathId);
@@ -303,7 +303,7 @@ export async function approveLearningPath(
   return data;
 }
 
-export async function rejectLearningPath(admin: SupabaseClient<Database>, pathId: string, reason?: string) {
+export async function rejectLearningPath(admin: DbClient, pathId: string, reason?: string) {
   const path = await getLearningPathById(admin, pathId);
   if (!path) throw new Error("Learning path not found.");
   const warnings = Array.isArray(path.warnings) ? [...(path.warnings as Json[])] : [];

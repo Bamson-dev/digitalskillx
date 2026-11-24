@@ -38,7 +38,7 @@ export default async function CertificatesPage() {
           .from("enrollments")
           .select("course_id")
           .eq("student_id", profile.id);
-        const ownedIds = new Set((ownedRows ?? []).map((r) => r.course_id));
+        const ownedIds = new Set<any>((ownedRows ?? []).map((r) => r.course_id));
         const recs = await getCourseRecommendationsForDisplay(admin, {
           courseId: seedCourseId,
           catalog: recommendable,

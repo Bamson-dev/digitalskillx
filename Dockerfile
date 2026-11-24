@@ -1,16 +1,12 @@
-# Reproducible Node 22 build. Privileged credentials are runtime-only.
+# Reproducible Node 22 build. Privileged credentials (DATABASE_URL and friends) are runtime-only.
 FROM node:22-alpine AS build
 WORKDIR /app
 ENV NEXT_TELEMETRY_DISABLED=1 NPM_CONFIG_FUND=false NPM_CONFIG_AUDIT=false
 ENV DOCKER_BUILD=1 CI=true NODE_OPTIONS=--max-old-space-size=1536
-ARG NEXT_PUBLIC_SUPABASE_URL
-ARG NEXT_PUBLIC_SUPABASE_ANON_KEY
 ARG NEXT_PUBLIC_SITE_URL
 ARG NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY
 ARG NEXT_PUBLIC_SENTRY_DSN
-ENV NEXT_PUBLIC_SUPABASE_URL=$NEXT_PUBLIC_SUPABASE_URL \
-    NEXT_PUBLIC_SUPABASE_ANON_KEY=$NEXT_PUBLIC_SUPABASE_ANON_KEY \
-    NEXT_PUBLIC_SITE_URL=$NEXT_PUBLIC_SITE_URL \
+ENV NEXT_PUBLIC_SITE_URL=$NEXT_PUBLIC_SITE_URL \
     NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY=$NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY \
     NEXT_PUBLIC_SENTRY_DSN=$NEXT_PUBLIC_SENTRY_DSN
 COPY package.json package-lock.json ./
@@ -28,6 +24,9 @@ COPY --from=build --chown=node:node /app/public ./public
 COPY --from=build --chown=node:node /app/content ./content
 COPY --from=build --chown=node:node /app/scripts/start.mjs ./scripts/start.mjs
 COPY --from=build --chown=node:node /app/scripts/runtime-env-preload.cjs ./scripts/runtime-env-preload.cjs
+COPY --from=build --chown=node:node /app/scripts/db-migrate.mjs ./scripts/db-migrate.mjs
+COPY --from=build --chown=node:node /app/db ./db
+COPY --from=build --chown=node:node /app/supabase/migrations ./supabase/migrations
 RUN mkdir -p /app/.data/storage && chown -R node:node /app/.data
 USER node
 EXPOSE 3000

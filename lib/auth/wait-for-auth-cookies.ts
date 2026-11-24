@@ -1,4 +1,4 @@
-import type { SupabaseClient } from "@supabase/supabase-js";
+import type { DbClient } from "@/lib/db/client";
 import { AUTH_STORAGE_KEY } from "@/lib/supabase/auth-cookie";
 
 type PendingCookie = {
@@ -18,11 +18,11 @@ function hasSessionCookie(pending: PendingCookie[]) {
 }
 
 /**
- * @supabase/ssr writes auth cookies in an async onAuthStateChange handler.
+ * The auth layer writes the session cookie before it emits SIGNED_IN.
  * Route handlers must wait for that before returning a redirect.
  */
 export function waitForSignedInCookies(
-  supabase: SupabaseClient,
+  supabase: DbClient,
   pending: PendingCookie[],
 ): Promise<void> {
   return new Promise((resolve, reject) => {

@@ -1,16 +1,15 @@
+import { SESSION_COOKIE_NAME } from "@/lib/db/jwt";
+
 /**
- * Stable auth cookie name for @supabase/ssr.
- *
- * Without an explicit name, @supabase/ssr derives `sb-<first-hostname-label>-auth-token`
- * from the Supabase URL. That caused production outages when login used Kong
- * (`sb-supabase-…`) while the browser/middleware used `/api/sb` on www (`sb-www-…`).
- *
- * Keep this pinned to the live www cookie so existing student sessions survive deploy.
+ * Session cookie name. The session is a signed JWT issued by lib/db/auth.ts and
+ * checked against auth.sessions. Old Supabase-era cookies are expired on sight so
+ * a returning student never keeps two competing sessions.
  */
-export const AUTH_STORAGE_KEY = "sb-www-auth-token";
+export const AUTH_STORAGE_KEY = SESSION_COOKIE_NAME;
 
 /** Old / mismatched keys that must never keep a student "half logged in". */
 export const LEGACY_AUTH_STORAGE_KEYS = [
+  "sb-www-auth-token",
   "sb-supabase-auth-token",
   "sb-127-auth-token",
   "sb-api-auth-token",
@@ -49,7 +48,6 @@ export function expireLegacyAuthCookies(
 
   const toClear = new Set<string>();
   for (const key of LEGACY_AUTH_STORAGE_KEYS) {
-    toClear.add(key);
     for (const name of existingNames) {
       if (isChunkOrExact(name, key)) toClear.add(name);
     }

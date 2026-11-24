@@ -38,7 +38,7 @@ export default async function AnalyticsPage() {
     if (bucket) bucket.count++;
   }
 
-  const titleById = new Map((courses ?? []).map((c) => [c.id, c.title]));
+  const titleById = new Map<any, any>((courses ?? []).map((c) => [c.id, c.title]));
   const perCourse = new Map<string, { enrolled: number; completed: number }>();
   for (const e of enrollments ?? []) {
     const entry = perCourse.get(e.course_id) ?? { enrolled: 0, completed: 0 };
