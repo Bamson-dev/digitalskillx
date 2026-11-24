@@ -31,7 +31,7 @@ const HOUR = 60 * MIN;
 /* ------------------------------------------------------------------------ */
 const UNIQUE = {
   payment_recovery_groups: [
-    (r) => (r.is_open ? `open:${r.customer_email.toLowerCase()}:${r.course_id}` : null),
+    (r) => (r.is_open ? `open:${r.customer_email.toLowerCase()}:${r.product_type ?? "course"}:${r.product_id ?? r.course_id}` : null),
     (r) => `bank:${r.bank_reference}`,
     (r) => `tok:${r.retry_token}`,
   ],
@@ -678,6 +678,34 @@ await test("Payment Page failures and abandons are pulled into recovery, other a
   await h.cycle();
   assert.equal(h.calls.emails.length, 1, "pulled failed Payment Page attempt gets the first recovery email");
   assert.equal(h.calls.emails[0].to, "page.buyer@example.com");
+});
+
+await test("abandoned Payment Page rows retain their original timestamp and are eligible after 30 minutes", async () => {
+  const { registerPulledRows } = await import(ts("lib/payment-recovery/page-pull-core.ts"));
+  const h = harness({ verify: () => ok("abandoned") });
+  const createdAt = new Date(h.now() - 45 * MIN).toISOString();
+  const result = await registerPulledRows(h.db, h.deps, [{
+    reference: "T_ABANDONED_PAGE",
+    status: "abandoned",
+    created_at: createdAt,
+    amount: 1_499_900,
+    currency: "NGN",
+    customer: { email: "abandoned.page@example.com", first_name: "Abandoned", last_name: "Buyer" },
+    metadata: {},
+    page: { slug: "ai-ads-masterclass", name: "AI Ads Automation Masterclass" },
+  }]);
+  assert.equal(result.registered, 1);
+  assert.equal(h.db.t("payment_recovery_attempts")[0].created_at, createdAt);
+  await h.cycle();
+  assert.equal(h.calls.emails.length, 1, "verified abandoned Payment Page attempt over 30 minutes old is recovered in this cycle");
+  assert.equal(h.calls.emails[0].to, "abandoned.page@example.com");
+});
+
+await test("native bundle and certificate checkout routes capture recovery context", async () => {
+  assert.match(src("lib/commerce-checkout-initialize.ts"), /captureCheckoutAttempt\(/);
+  assert.match(src("lib/commerce-checkout-initialize.ts"), /productType: offerId \? "offer" : "bundle"/);
+  assert.match(src("lib/learn-certificate-checkout.ts"), /productType: "certificate"/);
+  assert.match(src("lib/learn-certificate-checkout.ts"), /currency === "NGN"/);
 });
 
 console.log(`\n${passed} payment recovery tests passed`);
