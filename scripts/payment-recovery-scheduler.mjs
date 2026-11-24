@@ -90,7 +90,7 @@ async function runSlot(slot) {
       }
       const registered = Number(payload.pagePull?.registered ?? 0);
       const skipped = Number(payload.pagePull?.skipped ?? 0);
-      const verified = Number(payload.reconcile?.verified ?? 0);
+      const verified = Number(payload.reconcile?.checked ?? 0);
       const sent = Number(payload.messages?.sent ?? 0);
       log("cycle completed; imported=" + registered + ", skipped=" + skipped +
         ", verified=" + verified + ", emails_sent=" + sent);
