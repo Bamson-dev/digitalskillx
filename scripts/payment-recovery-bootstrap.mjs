@@ -88,7 +88,7 @@ export async function ensureResendRecoveryWebhook({
   }
 
   let details = await request("/webhooks/" + encodeURIComponent(listed.id), options);
-  let signingSecret = details?.signing_secret || createdSecret;
+  let signingSecret = details?.signing_secret || createdSecret || listed?.signing_secret;
   const currentEvents = Array.isArray(details?.events) ? details.events : [];
   const mergedEvents = [...new Set([...currentEvents, ...RESEND_RECOVERY_EVENTS])];
   const needsUpdate =
@@ -102,7 +102,7 @@ export async function ensureResendRecoveryWebhook({
       body: { endpoint, events: mergedEvents, status: "enabled" },
     });
     details = await request("/webhooks/" + encodeURIComponent(listed.id), options);
-    signingSecret = details?.signing_secret || signingSecret;
+    signingSecret = details?.signing_secret || signingSecret || listed?.signing_secret;
   }
 
   if (typeof signingSecret !== "string" || !signingSecret.startsWith("whsec_")) {
