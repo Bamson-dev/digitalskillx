@@ -1,4 +1,4 @@
-import { identifyPaystackExternalProduct } from "@/lib/paystack-external-products";
+import { configuredExternalCourseId, identifyPaystackExternalProduct } from "@/lib/paystack-external-products";
 import { registerCheckoutAttempt } from "./engine";
 import type { Db, RecoveryDeps } from "./engine";
 
@@ -18,8 +18,13 @@ export async function registerPulledRows(db: Db, deps: RecoveryDeps, rows: Pulle
   const summary = { listed: 0, registered: 0, skipped: 0 };
   for (const row of rows) {
     summary.listed += 1;
-    const reference = String(row.reference ?? "");
+    const status = String(row.status ?? "").toLowerCase();
+    const reference = String(row.reference ?? "").trim();
     const email = String(row.customer?.email ?? "").trim().toLowerCase();
+    if (status !== "failed" && status !== "abandoned") {
+      summary.skipped += 1;
+      continue;
+    }
     const product = identifyPaystackExternalProduct({
       // The identity rules only accept "success". Used here purely to name the product, never as payment proof.
       verified: {
@@ -41,7 +46,7 @@ export async function registerPulledRows(db: Db, deps: RecoveryDeps, rows: Pulle
       email,
       fullName: name || null,
       phone: row.customer?.phone ?? null,
-      courseId: product.defaultCourseId,
+      courseId: configuredExternalCourseId(product),
       productTitle: product.title,
       amountKobo: product.expectedAmountKobo,
       source: "checkout",
