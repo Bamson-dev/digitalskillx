@@ -122,6 +122,7 @@ assert.match(start, /scripts\/db-migrate\.mjs/);
 assert.match(start, /ensureResendRecoveryWebhook/);
 assert.match(start, /PAYMENT_RECOVERY_FORCE_DISABLED/);
 assert.match(start, /PAYMENT_RECOVERY_ENABLED = "true"/);
+assert.match(start, /startsWith\("sk_live_"\)/);
 assert.match(start, /payment-recovery-scheduler\.mjs/);
 assert.match(scheduler, /pg_try_advisory_lock/);
 assert.match(scheduler, /SLOT_LOCK_CLASS/);
