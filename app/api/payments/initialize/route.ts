@@ -117,6 +117,7 @@ export async function POST(request: NextRequest) {
           couponCode: body.couponCode,
           email: body.email,
           fullName: body.fullName,
+          phone: body.phone,
           attribution,
         },
       });
