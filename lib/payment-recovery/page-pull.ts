@@ -65,7 +65,7 @@ async function listStatus(
     }
 
     if (!res || !json || !res.ok || !json.status || !Array.isArray(json.data)) {
-      throw new Error(`paystack_list_${status}_http_${res.status}`);
+      throw new Error(`paystack_list_${status}_http_${res?.status ?? "network"}`);
     }
 
     pages += 1;
@@ -97,6 +97,7 @@ export async function pullPaymentPageAttempts(db: Db, deps: RecoveryDeps, admin:
 
   try {
     const secret = await getPaystackSecretKey(admin);
+    if (!secret) throw new Error("paystack_secret_unavailable");
     const from = new Date(deps.now() - WINDOW_HOURS * 3_600_000).toISOString();
 
     const signalFactory = () => {
