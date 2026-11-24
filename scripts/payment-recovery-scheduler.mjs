@@ -1,13 +1,15 @@
 #!/usr/bin/env node
 /**
  * In-container scheduler for payment recovery.
- * A PostgreSQL session advisory lock elects one active runner across replicas.
+ * PostgreSQL advisory locks prevent duplicate slot execution across replicas
+ * and prevent overlapping cycles when a previous run is slow.
  */
 
 import pg from "pg";
 
 const INTERVAL_MS = 5 * 60 * 1000;
-const LOCK_CLASS = 7_265_002;
+const SLOT_LOCK_CLASS = 7_265_002;
+const RUN_LOCK_CLASS = 7_265_003;
 const LOCK_ID = 1;
 const PORT = Number(process.env.PORT || 3000);
 const CRON_SECRET = process.env.CRON_SECRET?.trim();
@@ -38,22 +40,38 @@ async function waitForLocalApp() {
   return false;
 }
 
-async function runOnce() {
+async function waitUntilNextSlot() {
+  const nextSlot = (Math.floor(Date.now() / INTERVAL_MS) + 1) * INTERVAL_MS;
+  while (!stop.requested && Date.now() < nextSlot) await sleep(500);
+}
+
+async function runSlot(slot) {
   const client = new pg.Client({
     connectionString: DATABASE_URL,
     connectionTimeoutMillis: 10_000,
     query_timeout: 10_000,
   });
-  let locked = false;
+  let slotLocked = false;
+  let runLocked = false;
   try {
     await client.connect();
-    const result = await client.query(
+    const slotResult = await client.query(
       "select pg_try_advisory_lock($1::integer, $2::integer) as locked",
-      [LOCK_CLASS, LOCK_ID],
+      [SLOT_LOCK_CLASS, slot],
     );
-    locked = result.rows[0]?.locked === true;
-    if (!locked) {
-      log("another application replica owns the scheduler lock; this run was skipped");
+    slotLocked = slotResult.rows[0]?.locked === true;
+    if (!slotLocked) {
+      log("this five-minute slot was already claimed by another application replica");
+      return;
+    }
+
+    const runResult = await client.query(
+      "select pg_try_advisory_lock($1::integer, $2::integer) as locked",
+      [RUN_LOCK_CLASS, LOCK_ID],
+    );
+    runLocked = runResult.rows[0]?.locked === true;
+    if (!runLocked) {
+      log("a previous recovery cycle is still running; this slot was skipped");
       return;
     }
 
@@ -83,10 +101,21 @@ async function runOnce() {
   } catch (error) {
     log("cycle failed: " + (error instanceof Error ? error.message : "unknown error"));
   } finally {
-    if (locked) {
+    // Keep the slot lock until the interval ends. This stops a second replica
+    // from taking the same slot after the first replica has already finished.
+    const releaseAt = (slot + 1) * INTERVAL_MS + 1_000;
+    while (slotLocked && !stop.requested && Date.now() < releaseAt) await sleep(500);
+
+    if (runLocked) {
       await client.query(
         "select pg_advisory_unlock($1::integer, $2::integer)",
-        [LOCK_CLASS, LOCK_ID],
+        [RUN_LOCK_CLASS, LOCK_ID],
+      ).catch(() => undefined);
+    }
+    if (slotLocked) {
+      await client.query(
+        "select pg_advisory_unlock($1::integer, $2::integer)",
+        [SLOT_LOCK_CLASS, slot],
       ).catch(() => undefined);
     }
     await client.end().catch(() => undefined);
@@ -106,9 +135,10 @@ async function main() {
 
   log("active; running every five minutes");
   while (!stop.requested) {
-    await runOnce();
-    const nextSlot = (Math.floor(Date.now() / INTERVAL_MS) + 1) * INTERVAL_MS;
-    while (!stop.requested && Date.now() < nextSlot) await sleep(1_000);
+    await waitUntilNextSlot();
+    if (stop.requested) break;
+    const slot = Math.floor(Date.now() / INTERVAL_MS);
+    await runSlot(slot);
   }
 }
 
