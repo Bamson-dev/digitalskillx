@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 /**
  * Payment recovery: failed and abandoned Paystack checkout recovery.
- * Runs the real engine against an in-memory Supabase fake with the same unique
- * constraints as supabase/migrations/0058_payment_recovery.sql.
+ * Runs the real engine against an in-memory query fake with the current
+ * recovery-group product identity and uniqueness rules.
  * Run: npm run test:payment-recovery
  */
 import assert from "node:assert/strict";
