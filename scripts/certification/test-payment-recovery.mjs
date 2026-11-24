@@ -274,6 +274,53 @@ await test("3. abandoned checkout: only after the inactivity period and a Paysta
   assert.equal(h.db.t("payment_recovery_attempts")[1].group_id, h.group().id);
 });
 
+await test("3b. certificate and bundle attempts can retry without treating the first course price as the order price", async () => {
+  const h = harness({
+    verify: () => ok("failed"),
+    product: { title: "Learning Path Certificate", priceKobo: 5_000_000, available: true },
+  });
+  const captured = await engine.registerCheckoutAttempt(h.db, h.deps, {
+    reference: "ref_certificate",
+    email: "certificate@example.com",
+    fullName: "Cert Buyer",
+    courseId: null,
+    productType: "certificate",
+    productId: "path-123",
+    productTitle: "Learning Path Certificate",
+    amountKobo: 750_000,
+    productContext: {
+      learning_path_id: "path-123",
+      learning_path_slug: "growth-path",
+      callback_path: "/learn/growth-path?payment=success",
+    },
+  });
+  assert.equal(captured.ok, true);
+  assert.equal(h.group().product_type, "certificate");
+  assert.equal(h.group().product_id, "path-123");
+  assert.equal(h.group().course_id, null);
+  const retry = await engine.createRetryCheckout(h.db, h.deps, h.group().retry_token);
+  assert.equal(retry.kind, "redirect", "certificate retry must not require a course_id");
+  assert.equal(h.calls.init[0].amountKobo, 750_000, "retry keeps the trusted checkout quote");
+  assert.equal(h.calls.init[0].group.product_type, "certificate");
+  assert.equal(h.calls.pendingTx.length, 1);
+
+  const bundle = await engine.registerCheckoutAttempt(h.db, h.deps, {
+    reference: "ref_bundle",
+    email: "bundle@example.com",
+    courseId: "course-primary",
+    productType: "bundle",
+    productId: "bundle-123",
+    productTitle: "Complete Bundle",
+    amountKobo: 2_500_000,
+    productContext: { bundle_id: "bundle-123", course_ids: ["course-primary", "course-secondary"] },
+  });
+  assert.equal(bundle.ok, true);
+  const bundleRetry = await engine.createRetryCheckout(h.db, h.deps, h.db.t("payment_recovery_groups").find((g) => g.product_id === "bundle-123").retry_token);
+  assert.equal(bundleRetry.kind, "redirect");
+  assert.equal(h.calls.init[1].amountKobo, 2_500_000, "bundle amount is not replaced by a single course price");
+  assert.equal(h.calls.init[1].group.product_type, "bundle");
+});
+
 await test("4. pending transaction: never failed, never abandoned, keeps reconciling", async () => {
   const h = harness({ verify: () => ok("pending") });
   await h.start("ref_pend");
