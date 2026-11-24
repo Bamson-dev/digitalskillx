@@ -250,6 +250,7 @@ export async function buildRecoveryDeps(admin?: DbClient): Promise<{ db: Db; dep
       if (error) throw new Error(error.message);
     },
     initializePaystack: async ({ reference, group, amountKobo }) => {
+      if (group.currency !== "NGN" && group.currency !== "USD") throw new Error("unsupported_currency");
       const context = (group.product_context ?? {}) as Record<string, unknown>;
       const savedMetadata = context.metadata && typeof context.metadata === "object"
         ? context.metadata as Record<string, unknown>
@@ -338,6 +339,8 @@ export async function buildRecoveryDeps(admin?: DbClient): Promise<{ db: Db; dep
           studentId = resolved.studentId;
           welcomePassword = resolved.password;
         }
+        if (!studentId) return { ok: false, error: "A student account could not be resolved for this transfer." };
+
         const { error: paidError } = await client
           .from("transactions")
           .update({ student_id: studentId, status: "success", paystack_data: transferData })
