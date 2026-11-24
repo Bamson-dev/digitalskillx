@@ -352,6 +352,7 @@ export async function buildRecoveryDeps(admin?: DbClient): Promise<{ db: Db; dep
             reference: group.bank_reference,
             buyerEmail: group.customer_email,
             buyerName: group.customer_name ?? undefined,
+            welcomePassword,
             skipCustomerEmails: false,
           });
           return { ok: true };
