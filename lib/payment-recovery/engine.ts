@@ -152,6 +152,8 @@ export async function registerCheckoutAttempt(
     productType?: "course" | "offer" | "bundle" | "certificate" | "digital_product" | "legacy";
     productId?: string | null;
     productContext?: Record<string, unknown>;
+    attemptCreatedAt?: string | null;
+    verifyImmediately?: boolean;
     productTitle: string;
     amountKobo: number;
     currency?: string;
@@ -166,6 +168,10 @@ export async function registerCheckoutAttempt(
   const productType = input.productType ?? "course";
   const productId = input.productId ?? input.courseId ?? null;
   if (!productId) return { ok: false, reason: "invalid_product" };
+  const parsedCreatedAt = input.attemptCreatedAt ? Date.parse(input.attemptCreatedAt) : now;
+  const attemptCreatedAt = Number.isFinite(parsedCreatedAt) && parsedCreatedAt <= now
+    ? iso(parsedCreatedAt)
+    : iso(now);
 
   let group: Group | null = null;
   if (input.groupId) {
@@ -202,7 +208,7 @@ export async function registerCheckoutAttempt(
           source: input.source === "historical" ? "historical" : "checkout",
           bank_reference: generateBankReference(deps.randomToken),
           retry_token: deps.randomToken(24),
-          first_attempt_at: iso(now),
+          first_attempt_at: attemptCreatedAt,
         })
         .select("*")
         .maybeSingle();
@@ -248,7 +254,8 @@ export async function registerCheckoutAttempt(
     source: input.source ?? "checkout",
     status: "awaiting_payment",
     amount_kobo: input.amountKobo,
-    next_verify_at: iso(input.source === "historical" ? now : firstVerify),
+    created_at: attemptCreatedAt,
+    next_verify_at: iso(input.source === "historical" || input.verifyImmediately ? now : firstVerify),
   });
   if (attempt.error && !isDuplicate(attempt.error)) {
     return { ok: false, groupId: group.id, reason: attempt.error.message };
