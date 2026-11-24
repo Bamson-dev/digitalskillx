@@ -25,6 +25,9 @@ export type Group = {
   customer_phone: string | null;
   student_id: string | null;
   course_id: string | null;
+  product_type: "course" | "offer" | "bundle" | "certificate" | "digital_product" | "legacy";
+  product_id: string;
+  product_context: Record<string, unknown>;
   product_title: string;
   amount_kobo: number;
   currency: string;
@@ -78,8 +81,8 @@ export type RecoveryDeps = {
     idempotencyKey: string;
     tags: Array<{ name: string; value: string }>;
   }) => Promise<SendResult>;
-  /** Current product data from trusted server-side tables. */
-  loadProduct: (courseId: string) => Promise<{ title: string; priceKobo: number; available: boolean } | null>;
+  /** Current product availability from trusted server-side tables. The original server-calculated amount is kept as the retry quote. */
+  loadProduct: (group: Group) => Promise<{ title: string; available: boolean } | null>;
   /** Inserts the pending transactions row for a retry, same shape as normal checkout. */
   createPendingTransaction: (params: { reference: string; group: Group; amountKobo: number }) => Promise<void>;
   initializePaystack: (params: {
@@ -145,7 +148,10 @@ export async function registerCheckoutAttempt(
     fullName?: string | null;
     phone?: string | null;
     studentId?: string | null;
-    courseId: string;
+    courseId?: string | null;
+    productType?: "course" | "offer" | "bundle" | "certificate" | "digital_product" | "legacy";
+    productId?: string | null;
+    productContext?: Record<string, unknown>;
     productTitle: string;
     amountKobo: number;
     currency?: string;
@@ -157,6 +163,9 @@ export async function registerCheckoutAttempt(
   const email = input.email.trim().toLowerCase();
   if (!isValidRecoveryEmail(email)) return { ok: false, reason: "invalid_email" };
   if (!(input.amountKobo > 0)) return { ok: false, reason: "invalid_amount" };
+  const productType = input.productType ?? "course";
+  const productId = input.productId ?? input.courseId ?? null;
+  if (!productId) return { ok: false, reason: "invalid_product" };
 
   let group: Group | null = null;
   if (input.groupId) {
@@ -166,7 +175,8 @@ export async function registerCheckoutAttempt(
       .from("payment_recovery_groups")
       .select("*")
       .eq("customer_email", email)
-      .eq("course_id", input.courseId)
+      .eq("product_type", productType)
+      .eq("product_id", productId)
       .eq("is_open", true)
       .maybeSingle();
     group = (found.data as Group | null) ?? null;
@@ -181,7 +191,10 @@ export async function registerCheckoutAttempt(
           customer_name: input.fullName?.trim() || null,
           customer_phone: input.phone?.trim() || null,
           student_id: input.studentId ?? null,
-          course_id: input.courseId,
+          course_id: input.courseId ?? null,
+          product_type: productType,
+          product_id: productId,
+          product_context: input.productContext ?? {},
           product_title: input.productTitle,
           amount_kobo: input.amountKobo,
           currency: input.currency ?? "NGN",
@@ -218,6 +231,7 @@ export async function registerCheckoutAttempt(
         customer_name: group.customer_name ?? (input.fullName?.trim() || null),
         customer_phone: group.customer_phone ?? (input.phone?.trim() || null),
         student_id: group.student_id ?? input.studentId ?? null,
+        product_context: input.productContext ?? group.product_context ?? {},
         product_title: input.productTitle,
         amount_kobo: input.amountKobo,
         payment_status: PAID_STATUSES.has(group.payment_status) ? group.payment_status : "awaiting_payment",
@@ -743,14 +757,14 @@ export async function createRetryCheckout(db: Db, deps: RecoveryDeps, token: str
     await markGroupPaid(db, deps, group.id, { via: "paystack", reference: null, amountKobo: group.amount_kobo });
     return { kind: "already_paid", courseId: group.course_id };
   }
-  if (!group.course_id) return { kind: "error", code: "unavailable" };
-  const product = await deps.loadProduct(group.course_id);
-  if (!product || !product.available || !(product.priceKobo > 0)) return { kind: "error", code: "unavailable" };
+  const product = await deps.loadProduct(group);
+  if (!product || !product.available || !(group.amount_kobo > 0)) return { kind: "error", code: "unavailable" };
 
   const reference = deps.newReference();
-  const fresh: Group = { ...group, product_title: product.title, amount_kobo: product.priceKobo };
+  const amountKobo = group.amount_kobo;
+  const fresh: Group = { ...group, product_title: product.title || group.product_title };
   try {
-    await deps.createPendingTransaction({ reference, group: fresh, amountKobo: product.priceKobo });
+    await deps.createPendingTransaction({ reference, group: fresh, amountKobo });
   } catch {
     return { kind: "error", code: "init_failed" };
   }
@@ -758,15 +772,18 @@ export async function createRetryCheckout(db: Db, deps: RecoveryDeps, token: str
     reference,
     email: group.customer_email,
     courseId: group.course_id,
-    productTitle: product.title,
-    amountKobo: product.priceKobo,
+    productType: group.product_type,
+    productId: group.product_id,
+    productContext: group.product_context,
+    productTitle: product.title || group.product_title,
+    amountKobo,
     currency: group.currency,
     source: "retry",
     groupId: group.id,
   });
   await event(db, group.id, "retry_started", { reference });
   try {
-    const init = await deps.initializePaystack({ reference, group: fresh, amountKobo: product.priceKobo });
+    const init = await deps.initializePaystack({ reference, group: fresh, amountKobo });
     return { kind: "redirect", url: init.authorizationUrl };
   } catch (err) {
     await db
