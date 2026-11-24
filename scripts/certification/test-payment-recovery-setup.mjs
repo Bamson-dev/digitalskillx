@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { ensureResendRecoveryWebhook, RESEND_RECOVERY_EVENTS } from "../payment-recovery-bootstrap.mjs";
@@ -109,12 +110,22 @@ const docker = readFileSync(resolve(root, "Dockerfile"), "utf8");
 const workflow = readFileSync(resolve(root, ".github/workflows/production-release.yml"), "utf8");
 const plan = JSON.parse(readFileSync(resolve(root, "ops/coolify-cron-tasks.json"), "utf8"));
 
+for (const file of [
+  "scripts/start.mjs",
+  "scripts/payment-recovery-bootstrap.mjs",
+  "scripts/payment-recovery-scheduler.mjs",
+]) {
+  const check = spawnSync(process.execPath, ["--check", resolve(root, file)], { encoding: "utf8" });
+  assert.equal(check.status, 0, file + " syntax check failed: " + (check.stderr || check.stdout));
+}
+
 assert.match(start, /scripts\/db-migrate\.mjs/);
 assert.match(start, /ensureResendRecoveryWebhook/);
 assert.match(start, /PAYMENT_RECOVERY_FORCE_DISABLED/);
 assert.match(start, /PAYMENT_RECOVERY_ENABLED = "true"/);
 assert.match(start, /payment-recovery-scheduler\.mjs/);
 assert.match(scheduler, /pg_try_advisory_lock/);
+assert.match(scheduler, /SLOT_LOCK_CLASS/);
 assert.match(scheduler, /\/api\/cron\/payment-recovery/);
 assert.match(docker, /payment-recovery-bootstrap\.mjs/);
 assert.match(docker, /payment-recovery-scheduler\.mjs/);
