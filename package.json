@@ -50,7 +50,8 @@
     "test:stress": "node scripts/certification/run-stress.mjs",
     "test:integrity": "node scripts/certification/run-paystack-cert.mjs",
     "db:migrate": "node scripts/db-migrate.mjs",
-    "test:postgres": "node --import ./scripts/certification/register-ts-ext.mjs scripts/certification/test-postgres-data-layer.mjs"
+    "test:postgres": "node --import ./scripts/certification/register-ts-ext.mjs scripts/certification/test-postgres-data-layer.mjs",
+    "test:payment-recovery-setup": "node scripts/certification/test-payment-recovery-setup.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1106.0",
