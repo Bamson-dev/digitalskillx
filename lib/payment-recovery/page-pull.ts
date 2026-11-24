@@ -42,8 +42,8 @@ async function listStatus(
 
   for (let page = 1; page <= MAX_PAGES_PER_STATUS; page += 1) {
     const timeout = signalFactory();
-    let res: Response;
-    let json: PaystackListResponse;
+    let res: Response | null = null;
+    let json: PaystackListResponse | null = null;
     try {
       const url = new URL("https://api.paystack.co/transaction");
       url.searchParams.set("status", status);
@@ -60,7 +60,7 @@ async function listStatus(
       timeout.done();
     }
 
-    if (!res.ok || !json?.status || !Array.isArray(json.data)) {
+    if (!res || !json || !res.ok || !json.status || !Array.isArray(json.data)) {
       throw new Error(`paystack_list_${status}_http_${res.status}`);
     }
 
