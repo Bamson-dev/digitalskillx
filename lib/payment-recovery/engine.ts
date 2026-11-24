@@ -72,6 +72,8 @@ export type RecoveryDeps = {
   verify: (reference: string) => Promise<VerifyOutcome>;
   /** Existing successful-payment flow (lib/guest-checkout completePaidCheckout). Idempotent. */
   completePaidCheckout: (reference: string) => Promise<{ ok: boolean; error?: string }>;
+  /** Fulfil a verified external Paystack Payment Page success using stored catalog attribution. */
+  completeExternalPayment?: (reference: string, group: Group) => Promise<{ ok: boolean; error?: string }>;
   /** True when this customer already paid for this course outside the group (other checkout, enrolment). */
   isAlreadyPaid: (group: Group) => Promise<boolean>;
   sendEmail: (params: {
@@ -157,7 +159,7 @@ export async function registerCheckoutAttempt(
     productTitle: string;
     amountKobo: number;
     currency?: string;
-    source?: "checkout" | "retry" | "historical";
+    source?: "checkout" | "retry" | "historical" | "payment_page";
     groupId?: string;
   },
 ): Promise<{ ok: boolean; groupId?: string; reason?: string }> {
@@ -205,7 +207,7 @@ export async function registerCheckoutAttempt(
           amount_kobo: input.amountKobo,
           currency: input.currency ?? "NGN",
           payment_status: "awaiting_payment",
-          source: input.source === "historical" ? "historical" : "checkout",
+          source: input.source === "historical" ? "historical" : input.source === "payment_page" ? "payment_page" : "checkout",
           bank_reference: generateBankReference(deps.randomToken),
           retry_token: deps.randomToken(24),
           first_attempt_at: attemptCreatedAt,
@@ -432,7 +434,9 @@ export async function reconcileAttempts(db: Db, deps: RecoveryDeps, limit?: numb
     });
 
     if (c.next === "successful") {
-      const done = await deps.completePaidCheckout(attempt.reference);
+      const done = attempt.source === "payment_page" && deps.completeExternalPayment
+        ? await deps.completeExternalPayment(attempt.reference, group)
+        : await deps.completePaidCheckout(attempt.reference);
       if (done.ok) {
         await db.from("payment_recovery_attempts").update({ ...base, status: "successful" }).eq("id", attempt.id);
         await markGroupPaid(db, deps, group.id, { via: "paystack", reference: attempt.reference, amountKobo: attempt.amount_kobo });
