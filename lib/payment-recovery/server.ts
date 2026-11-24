@@ -5,6 +5,8 @@ import type { Json } from "@/types/database";
 import { createAdminClientAsync } from "@/lib/supabase/admin";
 import { getPaystackSecretKey } from "@/lib/env-paystack";
 import { generateReference, initializeTransaction } from "@/lib/paystack";
+import { nairaToKobo } from "@/lib/currency";
+import { resolveFinalCertificatePrice } from "@/lib/learn-certificate-pricing";
 import { completePaidCheckout, resolveOrCreateStudentForPurchase } from "@/lib/guest-checkout";
 import { fulfillPurchase } from "@/lib/purchase";
 import { fulfillPaystackExternalCharge } from "@/lib/paystack-external-fulfillment";
@@ -157,27 +159,30 @@ export async function buildRecoveryDeps(admin?: DbClient): Promise<{ db: Db; dep
         const courseId = group.course_id ?? group.product_id;
         const { data } = await client
           .from("courses")
-          .select("title, visibility, is_coming_soon, enrollment_type")
+          .select("title, price_ngn, visibility, is_coming_soon, enrollment_type")
           .eq("id", courseId)
           .maybeSingle();
         if (!data) return null;
         return {
           title: data.title,
+          priceKobo: nairaToKobo(Number(data.price_ngn ?? 0)),
           available: data.visibility === "published" && !data.is_coming_soon && data.enrollment_type === "open",
         };
       }
       if (group.product_type === "bundle") {
         const { data } = await client
           .from("course_bundles")
-          .select("title, is_active")
+          .select("title, price_ngn, is_active")
           .eq("id", group.product_id)
           .maybeSingle();
-        return data ? { title: data.title, available: data.is_active === true } : null;
+        return data
+          ? { title: data.title, priceKobo: nairaToKobo(Number(data.price_ngn ?? 0)), available: data.is_active === true }
+          : null;
       }
       if (group.product_type === "offer") {
         const { data } = await client
           .from("commerce_offers")
-          .select("title, is_active, starts_at, ends_at, target_type, target_id")
+          .select("title, price_ngn, is_active, starts_at, ends_at, target_type, target_id")
           .eq("id", group.product_id)
           .maybeSingle();
         if (!data || data.is_active !== true) return null;
@@ -199,15 +204,21 @@ export async function buildRecoveryDeps(admin?: DbClient): Promise<{ db: Db; dep
         } else {
           return null;
         }
-        return { title: data.title, available: true };
+        return { title: data.title, priceKobo: nairaToKobo(Number(data.price_ngn ?? 0)), available: Number(data.price_ngn ?? 0) > 0 };
       }
       if (group.product_type === "digital_product") {
         const { data } = await client
           .from("digital_products")
-          .select("id, is_active")
+          .select("id, title, price_ngn, is_active")
           .eq("id", group.product_id)
           .maybeSingle();
-        return data ? { title: group.product_title, available: data.is_active === true } : null;
+        return data
+          ? {
+              title: data.title || group.product_title,
+              priceKobo: nairaToKobo(Number(data.price_ngn ?? 0)),
+              available: data.is_active === true,
+            }
+          : null;
       }
       if (group.product_type === "certificate") {
         const { data } = await client
@@ -215,12 +226,17 @@ export async function buildRecoveryDeps(admin?: DbClient): Promise<{ db: Db; dep
           .select("title, status, certificate_enabled, certificate_price_ngn, certificate_pricing_mode, certificate_recommended_price_ngn")
           .eq("id", group.product_id)
           .maybeSingle();
-        return data
-          ? {
-              title: `${data.title} Certificate`,
-              available: pathCertificateOfferable(data),
-            }
-          : null;
+        if (!data) return null;
+        const priceNgn = resolveFinalCertificatePrice({
+          mode: data.certificate_pricing_mode,
+          recommendedPriceNgn: data.certificate_recommended_price_ngn,
+          fixedPriceNgn: data.certificate_price_ngn,
+        });
+        return {
+          title: `${data.title} Certificate`,
+          priceKobo: nairaToKobo(priceNgn),
+          available: pathCertificateOfferable(data) && priceNgn > 0,
+        };
       }
       return null;
     },
