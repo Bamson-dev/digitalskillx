@@ -21,7 +21,7 @@ their email, so there is nothing to capture before checkout. They keep their own
      - `ongoing` / `pending` / `processing` / `queued`: stays pending, re-checked (5 min, then 30 min, then 6 h).
      - Paystack unreachable: no status change, backoff 5 min to 6 h.
      - `reversed`: marked reversed, no emails, never treated as paid.
-   - Sends due emails: initial, +24 h reminder, +48 h final, then stops. Before every send it
+   - Sends due emails: the seven-email sequence (see below), then stops. Before every send it
      re-checks: paid on any attempt or enrolled already, active payment in the last 2 h,
      suppression/opt-out, valid email.
 4. Paystack does not send `charge.failed` or `charge.abandoned` webhooks (only `charge.success`
@@ -63,9 +63,8 @@ retry ends on the same success page as normal checkout. Bank transfers send no P
 | `RESEND_WEBHOOK_SECRET` | none | Svix signing secret from Resend |
 | `PAYMENT_RECOVERY_FIRST_FAILED_DELAY_MINUTES` | `10` | Delay after a confirmed failure |
 | `PAYMENT_RECOVERY_ABANDONED_DELAY_MINUTES` | `30` | Inactivity before abandoned |
-| `PAYMENT_RECOVERY_REMINDER_24H_ENABLED` | `true` | Second email |
-| `PAYMENT_RECOVERY_REMINDER_48H_ENABLED` | `true` | Final email |
-| `PAYMENT_RECOVERY_REMINDER_1_HOURS` / `_2_HOURS` | `24` / `48` | Reminder timing after the first email |
+| `PAYMENT_RECOVERY_MIN_GAP_MINUTES` | `120` | Minimum gap between two emails (stops bursts after downtime) |
+| `PAYMENT_RECOVERY_WINDOW_START_MINUTES` / `_END_MINUTES` | `510` / `1200` | Sending window, minutes after midnight Africa/Lagos (08:30 to 20:00) |
 | `PAYMENT_RECOVERY_VERIFY_INTERVAL_MINUTES` | `5` | Base re-verify interval |
 | `PAYMENT_RECOVERY_BATCH_LIMIT` | `40` | Attempts and emails per run |
 
@@ -88,3 +87,22 @@ All actions use `requireAdmin()` and write `audit_logs`.
 - Recovery rate = recovered orders / orders that failed or were abandoned.
 - Recovered = paid (Paystack verified or admin-confirmed transfer) after at least one recovery email.
 - Recovery revenue = verified amount of recovered orders only.
+
+## Seven-email sequence (migration 0059)
+
+One incomplete order gets at most seven emails over five days. Hours count from the first email.
+
+| # | Step | After first email | Subject |
+| --- | --- | --- | --- |
+| 1 | `initial` | 0 (10 min after confirmed failure, 30 min after abandon) | Your {product} payment is not complete |
+| 2 | `followup_3h` | 3 h | Would you like to try your payment again? |
+| 3 | `help_12h` | 12 h | You can still complete your {product} purchase |
+| 4 | `reminder_24h` | 24 h | Still interested in {product}? |
+| 5 | `reminder_48h` | 48 h | Need help completing your payment? |
+| 6 | `reminder_72h` | 72 h | Your {product} order is still incomplete |
+| 7 | `final_120h` | 120 h | Last reminder about your {product} checkout |
+
+Rules: sends only between 08:30 and 20:00 Africa/Lagos (later times move to the next 08:30), at least
+2 hours between emails, one email per order per run, idempotency key per step, retries never restart
+the sequence, payment/opt-out/bounce/complaint/suppression stops it. Groups that already received the old
+`final_48h` email are treated as at step 5 and continue from step 6.
