@@ -39,6 +39,7 @@ export async function initializeLearningPathCertificateCheckout(params: {
     learningPathId: string;
     email?: string;
     fullName?: string;
+    phone?: string;
     completedLessonNumbers?: string[];
     currency?: "NGN" | "USD";
   };
@@ -239,6 +240,7 @@ export async function initializeLearningPathCertificateCheckout(params: {
       reference,
       email: checkoutEmail,
       fullName: checkoutName,
+      phone: params.body.phone ?? null,
       studentId: params.userId,
       courseId: null,
       productType: "certificate",
