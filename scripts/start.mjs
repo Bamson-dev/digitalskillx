@@ -76,10 +76,22 @@ async function enrichSecretsFromDatabase() {
     );
     const row = res.rows[0];
     if (row) {
+      const paystackDbKey = row.paystack_secret_key;
+      if (
+        typeof paystackDbKey === "string" &&
+        paystackDbKey.trim() &&
+        !(paystackDbKey.includes("PASTE_") && paystackDbKey.includes("_HERE"))
+      ) {
+        // The app's integration-secret cache gives platform_secrets priority over env.
+        // Mirror that exact precedence so the live-key safety check validates the key
+        // that checkout and payment verification will actually use.
+        process.env.PAYSTACK_SECRET_KEY = paystackDbKey.trim();
+        console.log("[digitalskillx] Loaded PAYSTACK_SECRET_KEY from platform_secrets");
+      }
+
       const dbFallbacks = {
         YOUTUBE_API_KEY: row.youtube_api_key,
         DEEPSEEK_API_KEY: row.deepseek_api_key,
-        PAYSTACK_SECRET_KEY: row.paystack_secret_key,
         ZEPTOMAIL_SMTP_PASSWORD: row.zeptomail_smtp_password,
       };
       for (const [envKey, dbValue] of Object.entries(dbFallbacks)) {
