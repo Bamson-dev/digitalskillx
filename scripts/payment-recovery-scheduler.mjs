@@ -16,7 +16,7 @@ const stop = { requested: false };
 let activeController;
 
 function log(message) {
-  console.log(\`[digitalskillx] payment-recovery scheduler: \${message}\`);
+  console.log("[digitalskillx] payment-recovery scheduler: " + message);
 }
 
 function sleep(ms) {
@@ -24,7 +24,7 @@ function sleep(ms) {
 }
 
 async function waitForLocalApp() {
-  const url = \`http://127.0.0.1:\${PORT}/api/health\`;
+  const url = "http://127.0.0.1:" + PORT + "/api/health";
   const deadline = Date.now() + 180_000;
   while (!stop.requested && Date.now() < deadline) {
     try {
@@ -60,28 +60,28 @@ async function runOnce() {
     activeController = new AbortController();
     const timeout = setTimeout(() => activeController?.abort(), 290_000);
     try {
-      const response = await fetch(\`http://127.0.0.1:\${PORT}/api/cron/payment-recovery\`, {
+      const response = await fetch("http://127.0.0.1:" + PORT + "/api/cron/payment-recovery", {
         method: "GET",
-        headers: { Authorization: \`Bearer \${CRON_SECRET}\` },
+        headers: { Authorization: "Bearer " + CRON_SECRET },
         cache: "no-store",
         signal: activeController.signal,
       });
       const payload = await response.json().catch(() => null);
       if (!response.ok || payload?.enabled !== true) {
-        const status = response.status;
-        throw new Error(\`recovery endpoint did not complete successfully (HTTP \${status})\`);
+        throw new Error("recovery endpoint did not complete successfully (HTTP " + response.status + ")");
       }
       const registered = Number(payload.pagePull?.registered ?? 0);
       const skipped = Number(payload.pagePull?.skipped ?? 0);
       const verified = Number(payload.reconcile?.verified ?? 0);
       const sent = Number(payload.messages?.sent ?? 0);
-      log(\`cycle completed; imported=\${registered}, skipped=\${skipped}, verified=\${verified}, emails_sent=\${sent}\`);
+      log("cycle completed; imported=" + registered + ", skipped=" + skipped +
+        ", verified=" + verified + ", emails_sent=" + sent);
     } finally {
       clearTimeout(timeout);
       activeController = undefined;
     }
   } catch (error) {
-    log(\`cycle failed: \${error instanceof Error ? error.message : "unknown error"}\`);
+    log("cycle failed: " + (error instanceof Error ? error.message : "unknown error"));
   } finally {
     if (locked) {
       await client.query(
@@ -120,6 +120,6 @@ for (const signal of ["SIGTERM", "SIGINT", "SIGHUP"]) {
 }
 
 main().catch((error) => {
-  log(\`stopped after an unexpected error: \${error instanceof Error ? error.message : "unknown error"}\`);
+  log("stopped after an unexpected error: " + (error instanceof Error ? error.message : "unknown error"));
   process.exitCode = 1;
 });
