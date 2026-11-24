@@ -138,7 +138,8 @@ function createDb(clock) {
 /* ------------------------------------------------------------------------ */
 /* Harness                                                                   */
 /* ------------------------------------------------------------------------ */
-function harness({ verify, product, enabled = true } = {}) {
+function harness({ verify, product, enabled = true, env } = {}) {
+  const opts = { env };
   const clock = { now: Date.parse("2026-11-24T10:00:00Z") };
   const db = createDb(clock);
   const calls = { fulfil: [], emails: [], bankFulfil: 0, init: [], pendingTx: [] };
@@ -146,7 +147,7 @@ function harness({ verify, product, enabled = true } = {}) {
   let refN = 0;
   const deps = {
     now: () => clock.now,
-    config: { ...readRecoveryConfig({}), enabled },
+    config: { ...readRecoveryConfig({ PAYMENT_RECOVERY_WINDOW_START_MINUTES: "0", PAYMENT_RECOVERY_WINDOW_END_MINUTES: "1440", ...(opts.env ?? {}) }), enabled },
     siteUrl: "https://www.digitalskillx.com",
     randomToken: (bytes) => crypto.randomBytes(bytes).toString("hex"),
     newReference: () => `dsx_retry_${++refN}`,
@@ -176,7 +177,7 @@ function harness({ verify, product, enabled = true } = {}) {
     });
   const cycle = () => engine.runRecoveryCycle(db, deps);
   const group = () => db.t("payment_recovery_groups")[0];
-  return { db, deps, calls, clock, advance, start, cycle, group, paid };
+  return { db, deps, calls, clock, advance, start, cycle, group, paid, now: () => clock.now };
 }
 
 async function failThenEmail(h) {
@@ -234,7 +235,7 @@ await test("2. confirmed failed payment: email ~10 min later with product, price
   await h.cycle();
   assert.equal(h.calls.emails.length, 1);
   const e = h.calls.emails[0];
-  assert.equal(e.subject, "Your AI Ads Automation Masterclass Payment Is Not Complete");
+  assert.equal(e.subject, "Your AI Ads Automation Masterclass payment is not complete");
   assert.match(e.html, /AI Ads Automation Masterclass/);
   assert.match(e.html, /₦14,999/);
   assert.match(e.html, /COMPLETE MY PAYMENT/);
@@ -491,31 +492,77 @@ await test("12. security: signatures, secrets, admin guards, server-side price",
   assert.match(src("app/api/webhooks/paystack/route.ts"), /recoveryOnChargeHint\(admin, reference\)/);
 });
 
-await test("reminders: 24h and 48h after the first email, then the sequence closes", async () => {
-  const h = harness({ verify: () => ok("failed") });
-  await h.start("ref_seq");
+const lagosHour = (ms) => ((new Date(ms).getUTCHours() + 1) % 24) + new Date(ms).getUTCMinutes() / 60;
+
+await test("seven emails over five days, simulated clock, Lagos quiet hours", async () => {
+  const h = harness({ verify: () => ok("failed"), env: { PAYMENT_RECOVERY_WINDOW_START_MINUTES: "510", PAYMENT_RECOVERY_WINDOW_END_MINUTES: "1200" } });
+  await h.start("ref_seven");
+  const t0 = h.now();
+  const sentAt = [];
+  for (let i = 0; i < 14 * 24 * 12; i++) {
+    const before = h.calls.emails.length;
+    await h.cycle();
+    if (h.calls.emails.length > before) sentAt.push(h.now());
+    h.advance(5 * MIN);
+  }
+  assert.equal(h.calls.emails.length, 7, "exactly seven emails");
+  const subjects = h.calls.emails.map((e) => e.subject);
+  assert.equal(new Set(subjects).size, 7, "seven distinct subjects");
+  assert.equal(subjects[0], "Your AI Ads Automation Masterclass payment is not complete");
+  assert.equal(subjects[1], "Would you like to try your payment again?");
+  assert.equal(subjects[2], "You can still complete your AI Ads Automation Masterclass purchase");
+  assert.equal(subjects[3], "Still interested in AI Ads Automation Masterclass?");
+  assert.equal(subjects[4], "Need help completing your payment?");
+  assert.equal(subjects[5], "Your AI Ads Automation Masterclass order is still incomplete");
+  assert.equal(subjects[6], "Last reminder about your AI Ads Automation Masterclass checkout");
+  assert.equal(new Set(h.calls.emails.map((e) => e.html)).size, 7, "seven distinct bodies");
+  const keys = h.calls.emails.map((e) => e.idempotencyKey);
+  assert.equal(new Set(keys).size, 7, "unique idempotency key per message");
+  const offsetsH = [0, 3, 12, 24, 48, 72, 120];
+  const first = sentAt[0];
+  assert.ok(first - t0 >= 10 * MIN && first - t0 < 25 * MIN, "first email about 10 minutes after verified failure");
+  sentAt.forEach((at, i) => {
+    assert.ok(at - first >= offsetsH[i] * HOUR - 5 * MIN, `email ${i + 1} not earlier than its offset`);
+    const hr = lagosHour(at);
+    assert.ok(hr >= 8.5 && hr < 20, `email ${i + 1} inside the Lagos window (${hr})`);
+    if (i) assert.ok(at - sentAt[i - 1] >= 2 * HOUR, "minimum spacing");
+  });
+  assert.match(h.calls.emails[0].html, /COMPLETE MY PAYMENT/);
+  assert.match(h.calls.emails[0].html, /0125912341/);
+  assert.match(h.calls.emails[6].html, /last automated reminder/);
+  assert.equal(h.group().payment_status, "expired");
+  assert.equal(h.group().is_open, false);
+});
+
+await test("after downtime overdue emails are spaced, never sent together", async () => {
+  const h = harness({ verify: () => ok("failed"), env: { PAYMENT_RECOVERY_WINDOW_START_MINUTES: "510", PAYMENT_RECOVERY_WINDOW_END_MINUTES: "1200" } });
+  await h.start("ref_down");
   h.advance(10 * MIN);
   await h.cycle();
   h.advance(11 * MIN);
   await h.cycle();
-  h.advance(23 * HOUR);
-  await h.cycle();
   assert.equal(h.calls.emails.length, 1);
-  h.advance(2 * HOUR);
+  h.advance(6 * 24 * HOUR); // app was down for six days
+  await h.cycle();
+  assert.equal(h.calls.emails.length, 2, "one email per run");
+  await h.cycle();
+  assert.equal(h.calls.emails.length, 2, "next one waits at least the minimum gap");
+});
+
+await test("payment, opt-out and bounce stop the sequence mid-way", async () => {
+  const h = harness({ verify: () => ok("failed") });
+  await h.start("ref_mid");
+  h.advance(10 * MIN);
+  await h.cycle();
+  h.advance(11 * MIN);
+  await h.cycle();
+  h.advance(4 * HOUR);
   await h.cycle();
   assert.equal(h.calls.emails.length, 2);
-  assert.equal(h.calls.emails[1].subject, "Your AI Ads Automation Masterclass Is Still Waiting for You");
-  h.advance(24 * HOUR);
+  h.paid.add(`ada@example.com:${COURSE}`);
+  h.advance(13 * HOUR);
   await h.cycle();
-  assert.equal(h.calls.emails.length, 3);
-  assert.equal(h.calls.emails[2].subject, "A Quick Reminder About Your AI Ads Automation Masterclass Order");
-  assert.equal(h.group().recovery_status, "completed");
-  h.advance(5 * 24 * HOUR);
-  await h.cycle();
-  assert.equal(h.calls.emails.length, 3, "no fourth email");
-  h.advance(3 * 24 * HOUR);
-  await h.cycle();
-  assert.equal(h.group().payment_status, "expired");
+  assert.equal(h.calls.emails.length, 2, "no email after payment");
   assert.equal(h.group().is_open, false);
 });
 
