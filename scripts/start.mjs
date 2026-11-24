@@ -251,20 +251,53 @@ async function main() {
   });
 
   let scheduler = null;
-  if (recoveryEnabled) {
+  let stopping = false;
+  let restartScheduled = false;
+
+  const stopChild = (child, signal = "SIGTERM") => {
+    if (child && child.exitCode === null && child.signalCode === null) child.kill(signal);
+  };
+
+  const startScheduler = () => {
+    if (!recoveryEnabled || stopping || app.exitCode !== null || app.signalCode !== null) return;
     scheduler = spawn(process.execPath, [join(root, "scripts/payment-recovery-scheduler.mjs")], {
       cwd: root,
       env: process.env,
       stdio: "inherit",
     });
-  }
 
-  const stopChild = (child, signal = "SIGTERM") => {
-    if (child && child.exitCode === null && child.signalCode === null) child.kill(signal);
+    const scheduleRestart = () => {
+      if (stopping || restartScheduled || app.exitCode !== null || app.signalCode !== null) return;
+      restartScheduled = true;
+      console.error("[digitalskillx] Payment recovery scheduler stopped; restarting it in 10 seconds");
+      setTimeout(() => {
+        restartScheduled = false;
+        startScheduler();
+      }, 10_000).unref();
+    };
+
+    scheduler.on("error", (err) => {
+      console.error("[digitalskillx] Could not start payment recovery scheduler:", err.message);
+      scheduleRestart();
+    });
+    scheduler.on("exit", (code) => {
+      if (!stopping && app.exitCode === null && app.signalCode === null) {
+        console.error("[digitalskillx] Payment recovery scheduler exited with code " + (code ?? "unknown"));
+        scheduleRestart();
+      }
+    });
   };
+
+  if (recoveryEnabled) startScheduler();
+
   const finish = (code, signal) => {
-    if (signal) process.kill(process.pid, signal);
-    else process.exit(code ?? 1);
+    stopping = true;
+    if (signal) {
+      const signalNumber = { SIGHUP: 1, SIGINT: 2, SIGTERM: 15 }[signal] ?? 1;
+      process.exit(128 + signalNumber);
+    } else {
+      process.exit(code ?? 1);
+    }
   };
 
   app.on("exit", (code, signal) => {
@@ -277,16 +310,9 @@ async function main() {
     finish(code, signal);
   });
 
-  if (scheduler) {
-    scheduler.on("exit", (code) => {
-      if (app.exitCode === null && app.signalCode === null && code !== 0) {
-        console.error("[digitalskillx] Payment recovery scheduler exited; recovery will pause until the container restarts");
-      }
-    });
-  }
-
   for (const signal of ["SIGTERM", "SIGINT", "SIGHUP"]) {
     process.on(signal, () => {
+      stopping = true;
       stopChild(scheduler, signal);
       stopChild(app, signal);
     });
