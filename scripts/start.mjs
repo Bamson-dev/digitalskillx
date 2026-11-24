@@ -128,6 +128,42 @@ function isTruthy(value) {
   return ["1", "true", "yes", "on"].includes(String(value ?? "").trim().toLowerCase());
 }
 
+/** Serialize Resend webhook creation across simultaneous application replicas. */
+async function ensureResendWebhookWithLock() {
+  const pg = (await import("pg")).default;
+  const client = new pg.Client({
+    connectionString: readEnv("DATABASE_URL"),
+    connectionTimeoutMillis: 10_000,
+    query_timeout: 10_000,
+  });
+  let locked = false;
+  try {
+    await client.connect();
+    const deadline = Date.now() + 120_000;
+    while (!locked && Date.now() < deadline) {
+      const result = await client.query(
+        "select pg_try_advisory_lock($1::integer, $2::integer) as locked",
+        [7_265_004, 1],
+      );
+      locked = result.rows[0]?.locked === true;
+      if (!locked) await new Promise((resolve) => setTimeout(resolve, 2_000));
+    }
+    if (!locked) throw new Error("Resend webhook setup lock could not be acquired");
+    return await ensureResendRecoveryWebhook({
+      apiKey: readEnv("RESEND_API_KEY"),
+      endpoint: "https://www.digitalskillx.com/api/webhooks/resend",
+    });
+  } finally {
+    if (locked) {
+      await client.query(
+        "select pg_advisory_unlock($1::integer, $2::integer)",
+        [7_265_004, 1],
+      ).catch(() => undefined);
+    }
+    await client.end().catch(() => undefined);
+  }
+}
+
 /** Enable recovery only after migrations and all payment/email integrations are ready. */
 async function configurePaymentRecovery(migrationsReady) {
   process.env.PAYMENT_RECOVERY_ENABLED = "false";
@@ -157,10 +193,7 @@ async function configurePaymentRecovery(migrationsReady) {
   }
 
   try {
-    const webhook = await ensureResendRecoveryWebhook({
-      apiKey: readEnv("RESEND_API_KEY"),
-      endpoint: "https://www.digitalskillx.com/api/webhooks/resend",
-    });
+    const webhook = await ensureResendWebhookWithLock();
     process.env.RESEND_WEBHOOK_SECRET = webhook.signingSecret;
     process.env.PAYMENT_RECOVERY_ENABLED = "true";
     console.log("[digitalskillx] Resend recovery webhook ready (" +
