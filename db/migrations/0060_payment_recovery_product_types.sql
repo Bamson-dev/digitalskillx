@@ -7,8 +7,8 @@ alter table public.payment_recovery_groups
   add column if not exists product_context jsonb not null default '{}'::jsonb;
 
 update public.payment_recovery_groups
-set product_type = 'course',
-    product_id = coalesce(course_id::text, id::text)
+set product_type = case when course_id is null then 'legacy' else 'course' end,
+    product_id = coalesce(course_id::text, 'legacy:' || id::text)
 where product_type is null or product_id is null;
 
 alter table public.payment_recovery_groups
