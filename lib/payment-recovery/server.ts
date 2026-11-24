@@ -216,7 +216,7 @@ export async function buildRecoveryDeps(admin?: DbClient): Promise<{ db: Db; dep
           ? {
               title: data.title || group.product_title,
               priceKobo: nairaToKobo(Number(data.price_ngn ?? 0)),
-              available: data.is_active === true,
+              available: data.is_active === true && Number(data.price_ngn ?? 0) > 0,
             }
           : null;
       }
