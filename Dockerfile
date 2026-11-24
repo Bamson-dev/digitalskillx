@@ -23,6 +23,8 @@ COPY --from=build --chown=node:node /app/.next ./.next
 COPY --from=build --chown=node:node /app/public ./public
 COPY --from=build --chown=node:node /app/content ./content
 COPY --from=build --chown=node:node /app/scripts/start.mjs ./scripts/start.mjs
+COPY --from=build --chown=node:node /app/scripts/payment-recovery-bootstrap.mjs ./scripts/payment-recovery-bootstrap.mjs
+COPY --from=build --chown=node:node /app/scripts/payment-recovery-scheduler.mjs ./scripts/payment-recovery-scheduler.mjs
 COPY --from=build --chown=node:node /app/scripts/runtime-env-preload.cjs ./scripts/runtime-env-preload.cjs
 COPY --from=build --chown=node:node /app/scripts/db-migrate.mjs ./scripts/db-migrate.mjs
 COPY --from=build --chown=node:node /app/db ./db
@@ -30,6 +32,6 @@ COPY --from=build --chown=node:node /app/supabase/migrations ./supabase/migratio
 RUN mkdir -p /app/.data/storage && chown -R node:node /app/.data
 USER node
 EXPOSE 3000
-HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=5 \
+HEALTHCHECK --interval=30s --timeout=5s --start-period=180s --retries=5 \
   CMD node -e "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 CMD ["node", "scripts/start.mjs"]
