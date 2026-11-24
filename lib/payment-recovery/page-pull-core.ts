@@ -5,6 +5,7 @@ import type { Db, RecoveryDeps } from "./engine";
 export type PulledRow = {
   reference?: string;
   status?: string;
+  created_at?: string;
   amount?: number;
   currency?: string;
   customer?: { email?: string; first_name?: string; last_name?: string; phone?: string };
@@ -47,6 +48,8 @@ export async function registerPulledRows(db: Db, deps: RecoveryDeps, rows: Pulle
       fullName: name || null,
       phone: row.customer?.phone ?? null,
       courseId: configuredExternalCourseId(product),
+      attemptCreatedAt: row.created_at ?? null,
+      verifyImmediately: true,
       productTitle: product.title,
       amountKobo: product.expectedAmountKobo,
       source: "checkout",
