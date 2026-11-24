@@ -84,7 +84,7 @@ export type RecoveryDeps = {
     tags: Array<{ name: string; value: string }>;
   }) => Promise<SendResult>;
   /** Current product availability from trusted server-side tables. The original server-calculated amount is kept as the retry quote. */
-  loadProduct: (group: Group) => Promise<{ title: string; available: boolean } | null>;
+  loadProduct: (group: Group) => Promise<{ title: string; priceKobo: number; available: boolean } | null>;
   /** Inserts the pending transactions row for a retry, same shape as normal checkout. */
   createPendingTransaction: (params: { reference: string; group: Group; amountKobo: number }) => Promise<void>;
   initializePaystack: (params: {
@@ -770,11 +770,19 @@ export async function createRetryCheckout(db: Db, deps: RecoveryDeps, token: str
     return { kind: "already_paid", courseId: group.course_id };
   }
   const product = await deps.loadProduct(group);
-  if (!product || !product.available || !(group.amount_kobo > 0)) return { kind: "error", code: "unavailable" };
+  if (!product || !product.available || !Number.isInteger(product.priceKobo) || !(product.priceKobo > 0)) {
+    return { kind: "error", code: "unavailable" };
+  }
 
   const reference = deps.newReference();
-  const amountKobo = group.amount_kobo;
-  const fresh: Group = { ...group, product_title: product.title || group.product_title };
+  // Always re-read the current server-side price. The token never carries a price,
+  // and a stored order row can never lower or raise the amount sent to Paystack.
+  const amountKobo = product.priceKobo;
+  const fresh: Group = {
+    ...group,
+    product_title: product.title || group.product_title,
+    amount_kobo: amountKobo,
+  };
   try {
     await deps.createPendingTransaction({ reference, group: fresh, amountKobo });
   } catch {
