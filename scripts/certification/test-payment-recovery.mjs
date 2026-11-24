@@ -221,7 +221,7 @@ await test("1. successful payment: fulfils once, no recovery email", async () =>
   assert.equal(h.calls.emails.length, 0, "no recovery email");
 });
 
-await test("2. confirmed failed payment: email ~10 min later with product, price, retry, Wema, WhatsApp", async () => {
+await test("2. confirmed failed payment: email ~10 min later with product, price, Paystack retry and WhatsApp", async () => {
   const h = harness({ verify: () => ok("failed", { gatewayResponse: "Declined" }) });
   await h.start("ref_fail");
   h.advance(10 * MIN);
@@ -575,7 +575,7 @@ await test("seven emails over five days, simulated clock, Lagos quiet hours", as
     if (i) assert.ok(at - sentAt[i - 1] >= 2 * HOUR, "minimum spacing");
   });
   assert.match(h.calls.emails[0].html, /COMPLETE MY PAYMENT/);
-  assert.match(h.calls.emails[0].html, /0125912341/);
+  assert.doesNotMatch(h.calls.emails[0].html, /0125912341|Autoquicky Limited|Wema Bank/);
   assert.match(h.calls.emails[6].html, /last automated reminder/);
   assert.equal(h.group().payment_status, "expired");
   assert.equal(h.group().is_open, false);
