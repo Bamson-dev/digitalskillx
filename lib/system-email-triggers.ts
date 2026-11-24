@@ -79,7 +79,7 @@ export async function sendWelcomeEmailIfNeeded(params: {
   const baseUrl = siteUrl();
   const courseNames =
     params.courseNamesOverride?.filter(Boolean).length
-      ? [...new Set(params.courseNamesOverride.filter(Boolean))]
+      ? [...new Set<any>(params.courseNamesOverride.filter(Boolean))]
       : await loadStudentCourseNames(params.studentId, params.checkoutCourseId);
 
   const tpl = studentWelcomeEmail({
@@ -420,7 +420,7 @@ async function resolveResumeLessonId(studentId: string, courseId: string) {
     .eq("student_id", studentId)
     .in("lesson_id", orderedLessonIds);
 
-  const progressByLesson = new Map(
+  const progressByLesson = new Map<any, any>(
     (progressRows ?? []).map((row) => [row.lesson_id, row]),
   );
 

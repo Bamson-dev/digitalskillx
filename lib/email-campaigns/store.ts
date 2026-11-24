@@ -1,5 +1,5 @@
 import "server-only";
-import type { SupabaseClient } from "@supabase/supabase-js";
+import type { DbClient } from "@/lib/db/client";
 import { isMissingRelationError } from "@/lib/schema-guard";
 import type { Database } from "@/types/database";
 import {
@@ -19,7 +19,7 @@ import type {
 import type { CandidateRecipient, SelectionPreview } from "@/lib/email-campaigns/selection";
 import { extractEmailsFromCsv, filterEnrollmentCandidates, uniqueCandidates } from "@/lib/email-campaigns/selection";
 
-type Admin = SupabaseClient<Database>;
+type Admin = DbClient;
 
 export type CampaignCounts = {
   total: number;
@@ -286,7 +286,7 @@ export async function previewBuyers(
   if (error) throw new Error(error.message);
 
   const studentIds = [
-    ...new Set((txs ?? []).map((row) => row.student_id).filter((id): id is string => Boolean(id))),
+    ...new Set<any>((txs ?? []).map((row) => row.student_id).filter((id): id is string => Boolean(id))),
   ];
   return previewFromProfileIds(admin, campaignId, "buyers", studentIds);
 }

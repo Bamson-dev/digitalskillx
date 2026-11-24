@@ -1,12 +1,10 @@
 import "server-only";
-import { createClient as createSupabaseClient } from "@supabase/supabase-js";
+import { createAuthOnlyClient } from "@/lib/db/client";
 import { createAdminClientAsync } from "@/lib/supabase/admin";
 import {
   reconcileOrphanCertificatesForEmail,
   syncStudentCourseAccess,
 } from "@/lib/admin-student-onboarding";
-import type { Database } from "@/types/database";
-import { getAdminSupabaseUrl, getAuthSupabaseUrl } from "@/lib/supabase/url";
 
 export type LoginSession = {
   access_token: string;
@@ -41,25 +39,7 @@ export async function runStudentLogin(params: {
     return { ok: false, error: "Email and password are required." };
   }
 
-  // Password verify may use Kong; session cookies are set via auth URL (/api/sb).
-  const supabaseUrl = getAdminSupabaseUrl() ?? getAuthSupabaseUrl();
-  if (!supabaseUrl || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
-    return { ok: false, error: "Supabase is not configured." };
-  }
-
-  const authClient = createSupabaseClient<Database>(
-    supabaseUrl,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      auth: { persistSession: false, autoRefreshToken: false },
-      global: {
-        fetch: (await import("@/lib/supabase/fetch-bridge")).createServerSupabaseFetch({
-          retries: 1,
-          timeoutMs: 20_000,
-        }),
-      },
-    },
-  );
+  const authClient = createAuthOnlyClient();
 
   const { data, error } = await authClient.auth.signInWithPassword({ email, password });
   if (error) return { ok: false, error: studentFacingLoginError(error.message) };

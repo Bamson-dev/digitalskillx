@@ -9,6 +9,7 @@
     "allowJs": true,
     "skipLibCheck": true,
     "strict": true,
+    "noImplicitAny": false,
     "noEmit": true,
     "esModuleInterop": true,
     "module": "esnext",
@@ -24,6 +25,9 @@
     "paths": {
       "@/*": [
         "./*"
+      ],
+      "@supabase/supabase-js": [
+        "./lib/db/supabase-types.ts"
       ]
     },
     "incremental": true

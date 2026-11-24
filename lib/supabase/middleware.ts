@@ -1,13 +1,6 @@
-import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
-import type { Database } from "@/types/database";
-import { createSupabaseFetch } from "@/lib/supabase/fetch-retry";
+import { SESSION_COOKIE_NAME, verifyAccessToken } from "@/lib/db/jwt";
 import { publicAbsoluteUrl } from "@/lib/public-site-origin";
-import {
-  authCookieOptions,
-  hasCanonicalAuthCookie,
-} from "@/lib/supabase/auth-cookie";
-import { getMiddlewareSupabaseUrl } from "@/lib/supabase/url";
 import {
   COURSE_CONTINUITY_COOKIE,
   isClassroomContinuityPath,
@@ -27,7 +20,6 @@ const PUBLIC_PREFIXES = [
   "/enroll",
   "/enrollment",
   "/continue", // offline / outage classroom continuity
-  "/api/sb", // same-origin Contabo Supabase gateway
   "/api/webhooks",
   "/api/health",
   "/api/cron",
@@ -69,36 +61,8 @@ function isPublic(pathname: string) {
   });
 }
 
-function hasSupabaseAuthCookie(request: NextRequest) {
-  const all = request.cookies.getAll();
-  if (hasCanonicalAuthCookie(all)) return true;
-  // Soft-open still honors any auth-token cookie during Auth blips (legacy keys).
-  return all.some((c) => c.name.includes("-auth-token") && c.value.length > 20);
-}
-
-/** Avoid MIDDLEWARE_INVOCATION_TIMEOUT when Supabase auth is slow or unreachable. */
-const AUTH_GET_USER_TIMEOUT_MS = 4_000;
-
-async function getUserWithTimeout(
-  supabase: ReturnType<typeof createServerClient<Database>>,
-) {
-  return Promise.race([
-    supabase.auth.getUser(),
-    new Promise<{ data: { user: null }; error: Error }>((resolve) =>
-      setTimeout(
-        () =>
-          resolve({
-            data: { user: null },
-            error: new Error("middleware_auth_timeout"),
-          }),
-        AUTH_GET_USER_TIMEOUT_MS,
-      ),
-    ),
-  ]);
-}
-
 /**
- * Refreshes the Supabase session on protected requests and enforces coarse
+ * Verifies the session cookie on protected requests and enforces coarse
  * route protection. Fine-grained admin role checks happen server-side in
  * the admin layout; RLS is the ultimate source of truth.
  */
@@ -116,23 +80,16 @@ export async function updateSession(request: NextRequest) {
 
   const { pathname } = request.nextUrl;
 
-  // Admin auth is enforced in server layouts (requireAdmin). Skipping Supabase here
+  // Admin auth is enforced in server layouts (requireAdmin). Skipping the check here
   // avoids MIDDLEWARE_INVOCATION_TIMEOUT when auth is slow and removes duplicate
   // round-trips on every admin navigation.
   if (pathname.startsWith("/admin") && pathname !== "/admin/login") {
     return NextResponse.next({ request });
   }
 
-  // Public pages skip Supabase round-trips — prevents MIDDLEWARE_INVOCATION_TIMEOUT
+  // Public pages skip the session check — prevents MIDDLEWARE_INVOCATION_TIMEOUT
   // on /, /learn, marketing pages, etc. Protected routes still refresh the session.
   if (isPublic(pathname)) {
-    return NextResponse.next({ request });
-  }
-
-  const supabaseUrl = getMiddlewareSupabaseUrl();
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-  if (!supabaseUrl || !supabaseAnonKey) {
     return NextResponse.next({ request });
   }
 
@@ -141,72 +98,29 @@ export async function updateSession(request: NextRequest) {
   );
   const allowContinuity =
     Boolean(continuity) && isClassroomContinuityPath(pathname);
-  const softOpenStudentPath =
-    hasSupabaseAuthCookie(request) && isClassroomContinuityPath(pathname);
 
   try {
-    let response = NextResponse.next({ request });
+    // Stateless check: signature and expiry only. Revocation is enforced against
+    // auth.sessions by the server-side request client.
+    const token = request.cookies.get(SESSION_COOKIE_NAME)?.value;
+    const claims = await verifyAccessToken(token);
 
-    const supabase = createServerClient<Database>(
-      supabaseUrl,
-      supabaseAnonKey,
-      {
-        cookieOptions: authCookieOptions(),
-        cookies: {
-          getAll() {
-            return request.cookies.getAll();
-          },
-          setAll(
-            cookiesToSet: {
-              name: string;
-              value: string;
-              options?: Record<string, unknown>;
-            }[],
-          ) {
-            cookiesToSet.forEach(({ name, value }) =>
-              request.cookies.set(name, value),
-            );
-            response = NextResponse.next({ request });
-            cookiesToSet.forEach(({ name, value, options }) =>
-              response.cookies.set(name, value, options),
-            );
-          },
-        },
-        global: { fetch: createSupabaseFetch({ retries: 1, timeoutMs: 4_000 }) },
-      },
-    );
-
-    const {
-      data: { user },
-      error: authError,
-    } = await getUserWithTimeout(supabase);
-
-    if (!user) {
-      // Soft-open student classroom routes during Auth timeouts / blips when the
-      // browser already has a session cookie or a signed continuity token.
-      // Never bounce a cookied student to /login just because Auth was slow.
-      if (allowContinuity || softOpenStudentPath) {
-        response.headers.set(
-          "x-dsx-continuity",
-          allowContinuity
-            ? "token"
-            : authError?.message === "middleware_auth_timeout"
-              ? "session-soft"
-              : "session-cookie",
-        );
+    if (!claims) {
+      if (allowContinuity) {
+        const response = NextResponse.next({ request });
+        response.headers.set("x-dsx-continuity", "token");
         return response;
       }
-
       if (pathname.startsWith("/api/")) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
       }
       return redirectToLogin(request, pathname);
     }
 
-    return response;
+    return NextResponse.next({ request });
   } catch (err) {
-    console.error("[digitalskillx] middleware session refresh failed:", err);
-    if (allowContinuity || softOpenStudentPath) {
+    console.error("[digitalskillx] middleware session check failed:", err);
+    if (allowContinuity) {
       return NextResponse.next({ request });
     }
     if (pathname.startsWith("/api/")) {

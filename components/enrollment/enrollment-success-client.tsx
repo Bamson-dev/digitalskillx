@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
 
 type CourseCard = {
   id: string;
@@ -21,28 +20,9 @@ export function EnrollmentSuccessClient() {
     let cancelled = false;
     (async () => {
       try {
-        const supabase = createClient();
-        const {
-          data: { user },
-        } = await supabase.auth.getUser();
-        if (!user) {
-          if (!cancelled) setLoading(false);
-          return;
-        }
-
-        const { data: enrollments } = await supabase
-          .from("enrollments")
-          .select("course_id, courses(id, title, thumbnail_url)")
-          .eq("student_id", user.id)
-          .order("enrolled_at", { ascending: false })
-          .limit(12);
-
-        const cards: CourseCard[] = [];
-        for (const row of enrollments ?? []) {
-          const c = row.courses as unknown as CourseCard | CourseCard[] | null;
-          const course = Array.isArray(c) ? c[0] : c;
-          if (course?.id) cards.push(course);
-        }
+        const res = await fetch("/api/student/recent-enrollments", { credentials: "include", cache: "no-store" });
+        const body = (await res.json().catch(() => null)) as { courses?: CourseCard[] } | null;
+        const cards: CourseCard[] = body?.courses ?? [];
         if (!cancelled) setCourses(cards);
       } finally {
         if (!cancelled) setLoading(false);

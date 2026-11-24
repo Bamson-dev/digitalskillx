@@ -32,7 +32,7 @@ function normalizeHexColor(raw: string) {
 
 function friendlyDbError(message: string) {
   if (message.includes("platform_settings") && message.includes("does not exist")) {
-    return "The platform_settings table is missing. Run sql/platform-settings-only.sql (or RUN_IN_SUPABASE.sql) in the Supabase SQL Editor, then try again.";
+    return "The platform_settings table is missing. Run sql/platform-settings-only.sql through the database migrations (npm run db:migrate), then try again.";
   }
   if (message.includes("platform_secrets") && message.includes("does not exist")) {
     return "The platform_secrets table is missing. Run sql/platform-secrets-youtube.sql in the Supabase SQL Editor, then try again.";
@@ -187,9 +187,8 @@ export async function saveIntegrationSettings(
     const youtubeApiKey = String(formData.get("youtube_api_key") ?? "").trim();
     const deepseekApiKey = String(formData.get("deepseek_api_key") ?? "").trim();
     const paystackSecretKey = String(formData.get("paystack_secret_key") ?? "").trim();
-    const serviceRoleKey = String(formData.get("supabase_service_role_key") ?? "").trim();
 
-    if (!youtubeApiKey && !deepseekApiKey && !paystackSecretKey && !serviceRoleKey) {
+    if (!youtubeApiKey && !deepseekApiKey && !paystackSecretKey) {
       return { error: "Paste at least one key to save." };
     }
     if (youtubeApiKey === "your-youtube-data-api-key") {
@@ -203,7 +202,6 @@ export async function saveIntegrationSettings(
     if (youtubeApiKey) patch.youtube_api_key = youtubeApiKey;
     if (deepseekApiKey) patch.deepseek_api_key = deepseekApiKey;
     if (paystackSecretKey) patch.paystack_secret_key = paystackSecretKey;
-    if (serviceRoleKey) patch.supabase_service_role_key = serviceRoleKey;
 
     const supabase = createClient();
     const { error } = await supabase.from("platform_secrets").upsert(patch, { onConflict: "id" });
@@ -212,7 +210,6 @@ export async function saveIntegrationSettings(
     if (youtubeApiKey) setCachedIntegrationSecret("YOUTUBE_API_KEY", youtubeApiKey);
     if (deepseekApiKey) setCachedIntegrationSecret("DEEPSEEK_API_KEY", deepseekApiKey);
     if (paystackSecretKey) setCachedIntegrationSecret("PAYSTACK_SECRET_KEY", paystackSecretKey);
-    if (serviceRoleKey) setCachedIntegrationSecret("SUPABASE_SERVICE_ROLE_KEY", serviceRoleKey);
     await warmIntegrationSecretsFromAdminSession(supabase);
 
     await logAudit({ action: "settings_integrations_saved" });

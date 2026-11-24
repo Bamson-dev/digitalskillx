@@ -143,7 +143,7 @@ export default async function CourseDetailPage({
   const ordered: Lesson[] = modules.flatMap((m) =>
     [...(m.lessons ?? [])].sort((a, b) => a.position - b.position),
   );
-  const completedIds = new Set((progress ?? []).filter((p) => p.completed).map((p) => p.lesson_id));
+  const completedIds = new Set<any>((progress ?? []).filter((p) => p.completed).map((p) => p.lesson_id));
   const lockedIds = isAdminPreview
     ? new Set<string>()
     : computeLockedIds(ordered, completedIds, enrollmentRow?.enrolled_at ?? null);

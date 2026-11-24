@@ -1,5 +1,5 @@
 import "server-only";
-import type { SupabaseClient } from "@supabase/supabase-js";
+import type { DbClient } from "@/lib/db/client";
 import {
   getSalesFunnelAnalytics,
   type SalesFunnelRange,
@@ -28,7 +28,7 @@ function koboToNaira(amount: number) {
   return (Number(amount) || 0) / 100;
 }
 
-export async function getBusinessOverview(admin: SupabaseClient, range: BusinessRange = "30d") {
+export async function getBusinessOverview(admin: DbClient, range: BusinessRange = "30d") {
   const start = rangeStart(range);
 
   let txQ = admin
@@ -142,7 +142,7 @@ export async function getBusinessOverview(admin: SupabaseClient, range: Business
       : 0;
 
   // Product performance join enrollments
-  const productPerformance = [];
+  const productPerformance: any[] = [];
   for (const p of topProducts.slice(0, 8)) {
     const { count: enrCount } = await admin
       .from("enrollments")

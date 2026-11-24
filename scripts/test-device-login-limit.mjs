@@ -10,7 +10,7 @@ import { existsSync, mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { createClient } from "@supabase/supabase-js";
+import { createServiceClient } from "../lib/db/client.ts";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const base = (process.argv[2] ?? "https://www.digitalskillx.com").replace(/\/$/, "");
@@ -123,37 +123,11 @@ function extractAccessToken(jarPath) {
 }
 
 async function supabaseFromHealthAndAdmin(jar) {
-  const health = JSON.parse(curl([`${base}/api/health`]));
-  const ref = health.supabaseProjectRef;
-  assert(ref, "health missing supabaseProjectRef");
-  const url = `https://${ref}.supabase.co`;
-  const token = extractAccessToken(jar);
-  assert(token, "could not extract admin access token from cookie jar");
-
-  // Prefer service role from env when present; else use admin JWT (RLS may limit writes).
-  const service = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
-  if (service && service.length > 40 && !/your-|paste_/i.test(service)) {
-    return {
-      admin: createClient(url, service, { auth: { persistSession: false, autoRefreshToken: false } }),
-      mode: "service",
-      url,
-    };
+  // Database access goes through the same service connection the app uses.
+  if (!process.env.DATABASE_URL?.trim()) {
+    return { admin: null, mode: "none", url: base };
   }
-
-  const anon =
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim() ||
-    process.env.SUPABASE_ANON_KEY?.trim() ||
-    "";
-  // Without anon key we can still hit REST with the user JWT as both apikey+bearer on some setups — skip DB write tests.
-  if (!anon || /your-anon|placeholder/i.test(anon)) {
-    return { admin: null, mode: "none", url, token };
-  }
-
-  const client = createClient(url, anon, {
-    global: { headers: { Authorization: `Bearer ${token}` } },
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
-  return { admin: client, mode: "user", url };
+  return { admin: createServiceClient(), mode: "service", url: base };
 }
 
 function adminUiSmoke(jar) {
@@ -372,7 +346,7 @@ async function main() {
   if (admin && mode === "service") {
     await testDeviceCapLogic(admin);
   } else {
-    console.log(`SKIP: DB cap logic (need SUPABASE_SERVICE_ROLE_KEY; mode=${mode})`);
+    console.log(`SKIP: DB cap logic (need DATABASE_URL; mode=${mode})`);
   }
 
   console.log("=== ALL PASSED ===");

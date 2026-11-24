@@ -245,21 +245,6 @@ function IntegrationSettingsForm({
               : "Required for Enroll Now on paid courses. Coolify env vars often do not reach Next.js — saving here is recommended."}
           </p>
         </div>
-        <div>
-          <Label htmlFor="supabase_service_role_key">Supabase service role key</Label>
-          <Input
-            id="supabase_service_role_key"
-            name="supabase_service_role_key"
-            type="password"
-            autoComplete="off"
-            placeholder={serviceRoleConfigured ? "Key saved — paste to replace" : "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9…"}
-          />
-          <p className="mt-1 text-xs text-muted">
-            {serviceRoleConfigured
-              ? "Admin actions such as creating students can use the service role key."
-              : "Required for Admin → Students (create account). If Coolify env vars fail, save the service_role secret from Supabase → Project Settings → API here."}
-          </p>
-        </div>
         <div className="rounded-lg border border-border bg-muted/30 px-3 py-3 text-sm">
           <p className="font-medium text-foreground">Transactional email (Resend)</p>
           <p className="mt-1 text-xs text-muted">

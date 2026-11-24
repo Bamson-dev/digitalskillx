@@ -1,178 +1,35 @@
 import "server-only";
-import type { SupabaseClient } from "@supabase/supabase-js";
-import { createClient } from "@/lib/supabase/server";
-import {
-  getCachedIntegrationSecret,
-  setCachedIntegrationSecret,
-} from "@/lib/integration-secrets-cache";
-import { runtimeEnv, preloadRuntimeEnvIntoProcessEnv } from "@/lib/runtime-env";
-import type { Database } from "@/types/database";
-import { bootstrapPlatformSecrets } from "@/lib/platform-secrets-bootstrap";
-
-const ENV_NAMES = [
-  "SUPABASE_SERVICE_ROLE_KEY",
-  "SUPABASE_SERVICE_KEY",
-  "SERVICE_ROLE_KEY",
-] as const;
-
-function normalizeKey(raw: string | null | undefined): string | undefined {
-  if (!raw) return undefined;
-  const key = raw.trim();
-  return key || undefined;
-}
-
-export function setServiceRoleKeyCache(key: string) {
-  const normalized = normalizeKey(key);
-  if (normalized) setCachedIntegrationSecret("SUPABASE_SERVICE_ROLE_KEY", normalized);
-}
-
-/** Sync lookup: in-memory cache then runtime env file / process.env. */
-export function getServiceRoleKeySync(): string | undefined {
-  preloadRuntimeEnvIntoProcessEnv();
-
-  const cached = getCachedIntegrationSecret("SUPABASE_SERVICE_ROLE_KEY");
-  if (cached) return cached;
-
-  for (const name of ENV_NAMES) {
-    const value = normalizeKey(runtimeEnv(name));
-    if (value) {
-      setCachedIntegrationSecret("SUPABASE_SERVICE_ROLE_KEY", value);
-      return value;
-    }
-  }
-  return undefined;
-}
-
-function readFromEnv(): string | undefined {
-  for (const name of ENV_NAMES) {
-    const value = normalizeKey(runtimeEnv(name));
-    if (value) return value;
-  }
-  return undefined;
-}
-
-async function readFromPlatformSecrets(
-  supabase: SupabaseClient<Database>,
-): Promise<{ key?: string; error?: string }> {
-  const { data, error } = await supabase
-    .from("platform_secrets")
-    .select("supabase_service_role_key")
-    .eq("id", "default")
-    .maybeSingle();
-
-  if (error) {
-    const message = error.message ?? "Unknown database error";
-    if (message.includes("supabase_service_role_key")) {
-      return {
-        error:
-          "Database column missing. Run sql/platform-secrets-service-role.sql in Supabase SQL Editor, then save the key under Admin → Settings → Integrations.",
-      };
-    }
-    return { error: `Could not read platform_secrets: ${message}` };
-  }
-
-  const key = normalizeKey(data?.supabase_service_role_key);
-  return key ? { key } : {};
-}
-
-async function readFromPlatformSecretsRpc(
-  supabase: SupabaseClient<Database>,
-): Promise<string | undefined> {
-  const { data, error } = await supabase.rpc("admin_get_service_role_key");
-  if (error) return undefined;
-  return normalizeKey(typeof data === "string" ? data : undefined);
-}
-
-export type ServiceRoleKeyResolution = {
-  key?: string;
-  hint?: string;
-};
+import { isDatabaseConfigured } from "@/lib/db/pool";
 
 /**
- * Resolve service role: memory/runtime env → admin session DB → RPC → env fallback.
+ * Compatibility shim. The old service-role key no longer exists: privileged
+ * access is the DATABASE_URL connection, which only the server holds.
  */
-export async function resolveServiceRoleKey(
-  supabase?: SupabaseClient<Database>,
-): Promise<ServiceRoleKeyResolution> {
-  preloadRuntimeEnvIntoProcessEnv();
-  await bootstrapPlatformSecrets();
+export function setServiceRoleKeyCache(_key: string) {}
 
-  const cached = getServiceRoleKeySync();
-  if (cached) return { key: cached };
-
-  const client = supabase ?? createClient();
-
-  const fromDb = await readFromPlatformSecrets(client);
-  if (fromDb.error) return { hint: fromDb.error };
-  if (fromDb.key) {
-    setCachedIntegrationSecret("SUPABASE_SERVICE_ROLE_KEY", fromDb.key);
-    return { key: fromDb.key };
-  }
-
-  const fromRpc = await readFromPlatformSecretsRpc(client);
-  if (fromRpc) {
-    setCachedIntegrationSecret("SUPABASE_SERVICE_ROLE_KEY", fromRpc);
-    return { key: fromRpc };
-  }
-
-  const fromEnv = readFromEnv();
-  if (fromEnv) {
-    setCachedIntegrationSecret("SUPABASE_SERVICE_ROLE_KEY", fromEnv);
-    return { key: fromEnv };
-  }
-
-  return {
-    hint:
-      "Set SUPABASE_SERVICE_ROLE_KEY in this deployment's runtime environment and redeploy, or configure it under Admin → Settings → Integrations.",
-  };
+export function getServiceRoleKeySync(): string | undefined {
+  return isDatabaseConfigured() ? process.env.DATABASE_URL : undefined;
 }
 
-/** @deprecated Use resolveServiceRoleKey */
-export async function bootstrapServiceRoleKey(
-  supabase?: SupabaseClient<Database>,
-): Promise<string | undefined> {
-  const resolved = await resolveServiceRoleKey(supabase);
-  return resolved.key;
+export type ServiceRoleKeyResolution = { key?: string; hint?: string };
+
+export async function resolveServiceRoleKey(_client?: unknown): Promise<ServiceRoleKeyResolution> {
+  const key = getServiceRoleKeySync();
+  return key ? { key } : { hint: serviceRoleKeyMissingMessage() };
 }
 
-export async function serviceRoleKeyConfigured(supabase?: SupabaseClient<Database>) {
-  return Boolean((await resolveServiceRoleKey(supabase)).key);
+export async function bootstrapServiceRoleKey(_client?: unknown): Promise<string | undefined> {
+  return getServiceRoleKeySync();
+}
+
+export async function serviceRoleKeyConfigured(_client?: unknown) {
+  return isDatabaseConfigured();
 }
 
 export function serviceRoleKeyMissingMessage() {
-  return (
-    "Server could not load the Supabase service role key. Set SUPABASE_SERVICE_ROLE_KEY in this deployment's runtime environment and redeploy. " +
-    "Or configure the key in the authoritative Supabase project's platform_secrets table."
-  );
+  return "DATABASE_URL is not set. Add it to this deployment's runtime environment and redeploy.";
 }
 
 export async function serviceRoleKeyMissingMessageAsync(): Promise<string> {
-  const { integrationSecretsDiagnostics } = await import("@/lib/secrets-diagnostics");
-  const d = await integrationSecretsDiagnostics();
-
-  if (
-    d.cronBootstrapDetail.includes("PASTE_") ||
-    d.cronBootstrapDetail.includes("placeholder")
-  ) {
-    return (
-      "The authoritative Supabase database still has placeholder integration keys. " +
-      "Set SUPABASE_SERVICE_ROLE_KEY securely in the production runtime for the matching project, redeploy, " +
-      "then use the protected setup-production route only after confirming the target project."
-    );
-  }
-
-  if (d.cronBootstrapDetail.includes("cron_auth_secret")) {
-    return (
-      "CRON_SECRET does not match platform_settings.cron_auth_secret in Supabase. " +
-      "Review the secure runtime value and the authoritative database setting before retrying."
-    );
-  }
-
-  if (d.deployment === "vercel" && !d.serviceRoleFromEnv) {
-    return (
-      "Set SUPABASE_SERVICE_ROLE_KEY in the production deployment's runtime environment and redeploy."
-    );
-  }
-
   return serviceRoleKeyMissingMessage();
 }

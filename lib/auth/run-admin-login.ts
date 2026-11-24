@@ -1,13 +1,11 @@
 import "server-only";
-import { createClient as createSupabaseClient } from "@supabase/supabase-js";
+import { createAuthOnlyClient } from "@/lib/db/client";
 import { createAdminClientAsync } from "@/lib/supabase/admin";
 import { ensureAdminProfile } from "@/lib/ensure-admin-profile";
 import { isPlatformAdminEmail } from "@/lib/admin-email";
 import { isAdminMfaRequired } from "@/lib/admin-mfa";
 import { logAudit } from "@/lib/audit";
-import type { Database } from "@/types/database";
 import type { LoginSession } from "@/lib/auth/run-student-login";
-import { getAdminSupabaseUrl, getAuthSupabaseUrl } from "@/lib/supabase/url";
 
 export async function runAdminLogin(params: {
   email: string;
@@ -21,24 +19,7 @@ export async function runAdminLogin(params: {
     return { ok: false, error: "Email and password are required." };
   }
 
-  const supabaseUrl = getAdminSupabaseUrl() ?? getAuthSupabaseUrl();
-  if (!supabaseUrl || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
-    return { ok: false, error: "Supabase is not configured." };
-  }
-
-  const authClient = createSupabaseClient<Database>(
-    supabaseUrl,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      auth: { persistSession: false, autoRefreshToken: false },
-      global: {
-        fetch: (await import("@/lib/supabase/fetch-bridge")).createServerSupabaseFetch({
-          retries: 1,
-          timeoutMs: 20_000,
-        }),
-      },
-    },
-  );
+  const authClient = createAuthOnlyClient();
 
   const { data, error } = await authClient.auth.signInWithPassword({ email, password });
   if (error) {
@@ -75,7 +56,7 @@ export async function runAdminLogin(params: {
       const message = err instanceof Error ? err.message : "Could not create admin profile.";
       return {
         ok: false,
-        error: `${message} (auth user ${data.user.id}). Check /api/health → supabaseProjectRef.`,
+        error: `${message} (auth user ${data.user.id}).`,
       };
     }
   } else {

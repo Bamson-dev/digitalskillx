@@ -30,13 +30,13 @@ async function ensureStorageBucketsInner() {
 
     if (error && !/already exists/i.test(error.message)) {
       throw new Error(
-        `Storage bucket "${bucket.id}" is missing and could not be created: ${error.message}. Run supabase/migrations/0004_storage.sql in the Supabase SQL Editor.`,
+        `Storage bucket "${bucket.id}" is missing and could not be created: ${error.message}.`,
       );
     }
   }
 }
 
-/** Creates public-assets and private-files buckets when missing (production Supabase setup). */
+/** Creates public-assets and private-files buckets when missing (created on first use). */
 export async function ensureStorageBuckets() {
   ensurePromise ??= ensureStorageBucketsInner().catch((err) => {
     ensurePromise = null;

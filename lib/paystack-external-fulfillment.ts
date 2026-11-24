@@ -1,5 +1,5 @@
 import "server-only";
-import type { SupabaseClient } from "@supabase/supabase-js";
+import type { DbClient } from "@/lib/db/client";
 import { createAdminClientAsync } from "@/lib/supabase/admin";
 import { logAudit } from "@/lib/audit";
 import { resolveOrCreateStudentForPurchase } from "@/lib/guest-checkout";
@@ -34,7 +34,7 @@ import {
 } from "@/lib/paystack-external-claim";
 import type { Database, Json } from "@/types/database";
 
-type Admin = SupabaseClient<Database>;
+type Admin = DbClient;
 
 export type LeadthurHandoffPayment = {
   productKey: string;
@@ -905,7 +905,7 @@ async function runClaimedFulfillment(input: ClaimedRunInput): Promise<ExternalFu
       email: buyerEmail,
       fullName: buyerName,
     });
-    studentId = resolved.studentId;
+    studentId = resolved.studentId as string;
     isNewAccount = resolved.isNewAccount;
     loginPassword = resolved.password;
     if (params.issueLoginPassword) {

@@ -1,5 +1,5 @@
 import "server-only";
-import type { SupabaseClient } from "@supabase/supabase-js";
+import type { DbClient } from "@/lib/db/client";
 import type { Database } from "@/types/database";
 import { isSyntheticTestRecipient } from "@/lib/email/synthetic-recipient";
 import {
@@ -20,7 +20,7 @@ import type { WfuCampaign, WfuContact, WfuSend, WfuStep, WfuStore } from "./proc
 import { encodeStepBodyHtml, parseStepMeta, stripStepMeta } from "./step-meta";
 import { assertValidWebinarSequence } from "./validate-sequence";
 
-type Admin = SupabaseClient<Database>;
+type Admin = DbClient;
 
 function isMissingRelationError(message: string): boolean {
   return /schema cache|does not exist|could not find the table|relation .* does not exist/i.test(
@@ -151,7 +151,7 @@ export async function listWebinarCampaigns(admin: Admin): Promise<{
     throw new Error(error.message);
   }
   const rows = (data as Array<Record<string, unknown>> | null) ?? [];
-  const campaigns = [];
+  const campaigns: any[] = [];
   for (const row of rows) {
     const base = asCampaign(row)!;
     const counts = await loadCampaignCounts(admin, base.id);

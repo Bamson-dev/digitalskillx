@@ -17,7 +17,7 @@ export default async function AdminBundlesPage() {
     listCourseBundles(admin),
     admin.from("courses").select("id, title").order("title").then((r) => r.data ?? []),
   ]);
-  const titleById = new Map(courses.map((c) => [c.id, c.title]));
+  const titleById = new Map<string, string>(courses.map((c) => [c.id, c.title]));
 
   return (
     <div className="space-y-6">

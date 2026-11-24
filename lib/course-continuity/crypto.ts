@@ -8,7 +8,7 @@ function getSecretBytes(): ArrayBuffer {
   const raw =
     env.COURSE_CONTINUITY_SECRET?.trim() ||
     env.CRON_SECRET?.trim() ||
-    env.SUPABASE_SERVICE_ROLE_KEY?.trim() ||
+    env.AUTH_JWT_SECRET?.trim() ||
     "";
   const bytes = new TextEncoder().encode(
     raw || "digitalskillx-continuity-dev-only",

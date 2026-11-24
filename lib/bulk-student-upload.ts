@@ -1,5 +1,5 @@
 import "server-only";
-import type { SupabaseClient } from "@supabase/supabase-js";
+import type { DbClient } from "@/lib/db/client";
 import { runAutomations } from "@/lib/automation";
 import {
   buildCourseResolver,
@@ -99,7 +99,7 @@ export async function readCsvFromFormData(formData: FormData): Promise<string | 
  * Uses slim enroll path — no Auth full-scan, deferred welcome emails via fire-and-forget.
  */
 export async function runBulkStudentCsvUpload(params: {
-  admin: SupabaseClient<Database>;
+  admin: DbClient;
   adminUserId: string;
   csvText: string;
   defaultCourseId: string | null;
@@ -189,7 +189,7 @@ export async function runBulkStudentCsvUpload(params: {
     }
 
     try {
-      let studentId = knownIds.get(email) ?? null;
+      let studentId: string = (knownIds.get(email) ?? null) as string;
       let isNew = false;
       let password: string | null = null;
 
