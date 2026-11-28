@@ -78,7 +78,7 @@ async function isAlreadyPaid(admin: DbClient, group: Group) {
     digital_product: "digital_product_id",
   };
   const column = columns[group.product_type];
-  if (!column) return false;
+  if (!column) return null;
 
   let query = admin
     .from("transactions")
@@ -89,11 +89,11 @@ async function isAlreadyPaid(admin: DbClient, group: Group) {
     ? query.eq("student_id", group.student_id)
     : query.eq("paystack_data->>checkout_email", email);
   const { data: tx } = await query.limit(1);
-  if ((tx ?? []).length > 0) return true;
+  if ((tx ?? []).length > 0) return { matched: "transaction" as const };
 
   const { data: profile } = await admin.from("profiles").select("id").eq("email", email).maybeSingle();
   const studentId = group.student_id ?? profile?.id ?? null;
-  if (!studentId) return false;
+  if (!studentId) return null;
 
   if (group.product_type === "course" && group.course_id) {
     const { data: enrollment } = await admin
@@ -102,7 +102,7 @@ async function isAlreadyPaid(admin: DbClient, group: Group) {
       .eq("student_id", studentId)
       .eq("course_id", group.course_id)
       .maybeSingle();
-    return Boolean(enrollment);
+    return enrollment ? { matched: "enrollment" as const } : null;
   }
 
   if (group.product_type === "certificate") {
@@ -113,10 +113,10 @@ async function isAlreadyPaid(admin: DbClient, group: Group) {
       .eq("learning_path_id", group.product_id)
       .eq("is_valid", true)
       .maybeSingle();
-    return Boolean(certificate);
+    return certificate ? { matched: "enrollment" as const } : null;
   }
 
-  return false;
+  return null;
 }
 
 export async function buildRecoveryDeps(admin?: DbClient): Promise<{ db: Db; deps: RecoveryDeps; admin: DbClient }> {
