@@ -60,7 +60,7 @@ export async function registerPulledRows(db: Db, deps: RecoveryDeps, rows: Pulle
       amountKobo: product.expectedAmountKobo,
       source: "payment_page",
     });
-    if (r.ok) summary.registered += 1;
+    if (r.ok && r.reason !== "already_tracked") summary.registered += 1;
     else summary.skipped += 1;
   }
   return summary;
