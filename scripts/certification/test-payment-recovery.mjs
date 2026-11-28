@@ -915,5 +915,202 @@ await test("regression B5: duplicate webhook events cannot create false or dupli
   assert.equal(stats.revenueKobo, PRICE, "revenue counted once");
 });
 
+/* ------------------------------------------------------------------------ */
+/* Go-live hardening: duplicate groups, Resend dedup, analytics partition    */
+/* ------------------------------------------------------------------------ */
+
+await test("go-live C1: duplicate import creates one group — re-import of a known reference is a no-op", async () => {
+  const h = harness({ verify: () => ok("failed") });
+  const first = await h.start("ref_c1");
+  assert.equal(first.ok, true);
+  const again = await h.start("ref_c1"); // same reference, group still open
+  assert.equal(again.ok, true);
+  assert.equal(again.reason, "already_tracked");
+  assert.equal(again.groupId, first.groupId);
+  assert.equal(h.db.t("payment_recovery_groups").length, 1, "still one group");
+  assert.equal(h.db.t("payment_recovery_attempts").length, 1, "still one attempt row");
+  assert.equal(
+    h.db.t("payment_recovery_events").filter((e) => e.kind === "attempt_created").length,
+    1,
+    "no phantom attempt_created event for the duplicate import",
+  );
+  // After the group closes, a re-import must NOT create a zombie group.
+  h.paid.add(`ada@example.com:${COURSE}`);
+  h.advance(10 * MIN);
+  await h.cycle(); // attempt verifies failed, recovery scheduled
+  h.advance(11 * MIN);
+  await h.cycle(); // due pass closes already-owned
+  assert.equal(h.group().is_open, false);
+  const reimport = await h.start("ref_c1");
+  assert.equal(reimport.reason, "already_tracked");
+  assert.equal(h.db.t("payment_recovery_groups").length, 1, "no second group for a closed checkout");
+  assert.equal(h.db.t("payment_recovery_attempts").length, 1);
+});
+
+await test("go-live C2: repeated page-pull + verification cycles create no new group and no event spam", async () => {
+  const { registerPulledRows } = await import(ts("lib/payment-recovery/page-pull-core.ts"));
+  const h = harness({ verify: () => ok("abandoned") });
+  const row = {
+    reference: "T_CYCLE", status: "abandoned", amount: PRICE, currency: "NGN",
+    customer: { email: "cycle@example.com", first_name: "Cy", last_name: "Cle" },
+    metadata: {}, page: { slug: "ai-ads-masterclass", name: "AI Ads Automation Masterclass" },
+    created_at: new Date(h.now() - 45 * MIN).toISOString(),
+  };
+  for (let i = 0; i < 5; i++) {
+    const s = await registerPulledRows(h.db, h.deps, [row]); // scheduler pull every cycle
+    if (i > 0) assert.equal(s.registered, 0, "repeat pulls register nothing new");
+    await h.cycle();
+    h.advance(5 * MIN);
+  }
+  assert.equal(h.db.t("payment_recovery_groups").length, 1, "one group after five pulls");
+  assert.equal(h.db.t("payment_recovery_attempts").length, 1, "one attempt row after five pulls");
+  assert.equal(
+    h.db.t("payment_recovery_events").filter((e) => e.kind === "attempt_created").length,
+    1,
+    "exactly one attempt_created event after five pulls",
+  );
+});
+
+await test("go-live C3: duplicate open groups cannot both send — surplus closes as auditable duplicate", async () => {
+  const h = harness({ verify: () => ok("failed") });
+  await h.start("ref_c3");
+  const keeper = h.group();
+  // A legacy-representation duplicate of the same checkout identity (same
+  // email + course_id, different product_id form), open and empty — the shape
+  // the pre-fix import produced. Inserted directly, as production data exists.
+  const zombieInsert = await h.db.from("payment_recovery_groups").insert({
+    customer_email: "ada@example.com", customer_name: "Ada Obi", student_id: null,
+    course_id: COURSE, product_type: "legacy", product_id: `legacy:dup`,
+    product_context: {}, product_title: "AI Ads Automation Masterclass",
+    amount_kobo: PRICE, currency: "NGN", payment_status: "failed", recovery_status: "scheduled",
+    is_open: true, source: "checkout", bank_reference: "DSX-REC-DUP001", retry_token: "d".repeat(48),
+    first_attempt_at: new Date(h.now()).toISOString(), failed_at: new Date(h.now()).toISOString(),
+    next_message_at: new Date(h.now()).toISOString(),
+  }).select("*").maybeSingle();
+  assert.equal(zombieInsert.error, null);
+  const zombie = h.db.t("payment_recovery_groups").find((g) => g.bank_reference === "DSX-REC-DUP001");
+  assert.ok(zombie && zombie.id !== keeper.id);
+
+  h.advance(10 * MIN);
+  const r = await h.cycle(); // dedupe runs first, then verify + due pass
+  assert.equal(r.dedupe.closedDuplicates, 1, "the surplus group was closed by dedupe");
+  const after = h.db.t("payment_recovery_groups").find((g) => g.id === zombie.id);
+  assert.equal(after.is_open, false);
+  assert.equal(after.recovery_status, "cancelled");
+  assert.equal(after.payment_status, "failed", "duplicate close never touches the verified payment status");
+  const dupEvent = h.db.t("payment_recovery_events").find((e) => e.group_id === zombie.id && e.kind === "closed_duplicate");
+  assert.ok(dupEvent, "auditable closed_duplicate event written");
+  assert.equal(dupEvent.detail.duplicate_of, keeper.id);
+  assert.ok(!h.db.t("payment_recovery_events").some((e) => e.group_id === zombie.id && (e.kind === "paid" || e.kind === "recovered")), "no paid event on the duplicate");
+  h.advance(11 * MIN);
+  await h.cycle();
+  assert.equal(h.calls.emails.length, 1, "exactly one sequence sends — the keeper's");
+  assert.equal(h.calls.emails[0].to, "ada@example.com");
+});
+
+await test("go-live C4: zombie group with no attempts closes as duplicate of the closed attempt owner (DSX-REC-B722EF shape)", async () => {
+  const h = harness({ verify: () => ok("abandoned") });
+  // Original group: imports the checkout, verifies abandoned, closes already-owned.
+  const created = await engine.registerCheckoutAttempt(h.db, h.deps, {
+    reference: "T_ZOMBIE_SRC", email: "zombie@example.com", fullName: "Zed Zombie",
+    courseId: COURSE, productType: "course", productId: COURSE,
+    productTitle: "AI Ads Automation Masterclass", amountKobo: PRICE,
+    source: "payment_page", verifyImmediately: true,
+    attemptCreatedAt: new Date(h.now() - 45 * MIN).toISOString(),
+  });
+  assert.equal(created.ok, true);
+  h.paid.add(`zombie@example.com:${COURSE}`);
+  await h.cycle();
+  const owner = h.group();
+  assert.equal(owner.is_open, false);
+  assert.ok(h.db.t("payment_recovery_events").some((e) => e.kind === "closed_already_owned"));
+  // The zombie: an open group for the same identity with NO attempt rows,
+  // exactly what production group DSX-REC-B722EF looks like.
+  const zInsert = await h.db.from("payment_recovery_groups").insert({
+    customer_email: "zombie@example.com", customer_name: "Zed Zombie", student_id: null,
+    course_id: COURSE, product_type: "course", product_id: COURSE,
+    product_context: {}, product_title: "AI Ads Automation Masterclass",
+    amount_kobo: PRICE, currency: "NGN", payment_status: "awaiting_payment", recovery_status: "none",
+    is_open: true, source: "payment_page", bank_reference: "DSX-REC-ZOMB01", retry_token: "e".repeat(48),
+    first_attempt_at: new Date(h.now()).toISOString(),
+  }).select("*").maybeSingle();
+  assert.equal(zInsert.error, null, "zombie insert succeeds because the owner group is closed");
+  const zombie = h.db.t("payment_recovery_groups").find((g) => g.bank_reference === "DSX-REC-ZOMB01");
+  const r = await h.cycle();
+  assert.equal(r.dedupe.closedDuplicates, 1);
+  const after = h.db.t("payment_recovery_groups").find((g) => g.id === zombie.id);
+  assert.equal(after.is_open, false, "zombie is closed, never message-eligible");
+  assert.equal(after.payment_status, "awaiting_payment", "status untouched — no manufactured outcome");
+  const dupEvent = h.db.t("payment_recovery_events").find((e) => e.group_id === zombie.id && e.kind === "closed_duplicate");
+  assert.ok(dupEvent);
+  assert.equal(dupEvent.detail.duplicate_of, owner.id, "attributed to the group that owns the attempts");
+  assert.equal(h.calls.emails.length, 0, "no email from either group");
+  assert.ok(!h.db.t("payment_recovery_events").some((e) => e.group_id === zombie.id && (e.kind === "paid" || e.kind === "recovered")));
+});
+
+await test("go-live C5: duplicate Resend delivery webhook is idempotent", async () => {
+  const h = harness({ verify: () => ok("failed") });
+  await h.start("ref_resend_dup");
+  await failThenEmail(h);
+  const msg = h.db.t("payment_recovery_messages")[0];
+  const evt = { type: "email.delivered", created_at: new Date(h.now()).toISOString(), data: { email_id: msg.resend_id } };
+  const r1 = await engine.handleResendEvent(h.db, h.deps, evt);
+  const r2 = await engine.handleResendEvent(h.db, h.deps, evt); // Resend retries the same delivery
+  assert.ok(r1.handled && r2.handled);
+  assert.equal(h.db.t("payment_recovery_messages").length, 1, "still one message row");
+  assert.equal(h.db.t("payment_recovery_messages")[0].status, "delivered", "status applied once, stable on redelivery");
+  assert.equal(h.group().last_email_status, "delivered");
+  assert.equal(h.calls.emails.length, 1, "a delivery webhook never triggers a resend");
+  // The route additionally dedupes by svix-id before the engine is reached.
+  const route = src("app/api/webhooks/resend/route.ts");
+  assert.match(route, /payment_recovery_webhook_events/);
+  assert.match(route, /duplicate: true/);
+});
+
+await test("go-live C6: analytics payment states partition the order total; already-owned is never recovered", async () => {
+  const g = (over) => ({
+    course_id: COURSE, product_title: "AI Ads Automation Masterclass",
+    payment_status: "awaiting_payment", recovery_status: "none",
+    failed_at: null, abandoned_at: null, emails_sent: 0,
+    recovered_via: null, recovered_amount_kobo: null, recovered_after_step: null, ...over,
+  });
+  const groups = [
+    g({ payment_status: "successful", recovery_status: "recovered", emails_sent: 2, recovered_via: "paystack", recovered_amount_kobo: PRICE, recovered_after_step: "initial" }),
+    g({ payment_status: "bank_transfer_confirmed", recovery_status: "recovered", emails_sent: 1, recovered_via: "bank_transfer", recovered_amount_kobo: PRICE }),
+    g({ payment_status: "failed", failed_at: "2026-11-28T10:00:00Z" }),
+    // The production overlap shape: abandoned once, then a new attempt flipped
+    // the current status back to awaiting_payment while abandoned_at persisted.
+    g({ payment_status: "awaiting_payment", abandoned_at: "2026-11-28T09:00:00Z" }),
+    g({ payment_status: "abandoned", abandoned_at: "2026-11-28T09:30:00Z" }),
+    // Already-owned close: verified status abandoned, recovery cancelled.
+    g({ payment_status: "abandoned", recovery_status: "cancelled", abandoned_at: "2026-11-28T09:45:00Z" }),
+    g({ payment_status: "bank_transfer_pending", abandoned_at: "2026-11-28T08:00:00Z" }),
+    g({ payment_status: "reversed" }),
+    g({ payment_status: "expired", abandoned_at: "2026-11-20T08:00:00Z" }),
+    g({ payment_status: "pending" }),
+  ];
+  const stats = computeRecoveryAnalytics(groups, [
+    { status: "delivered" }, { status: "sent" }, { status: "bounced" },
+  ]);
+  assert.equal(stats.started, 10);
+  assert.equal(
+    stats.successful + stats.failed + stats.abandoned + stats.pending + stats.bankPending + stats.other,
+    stats.started,
+    "payment-state buckets partition the total (no double counting)",
+  );
+  assert.equal(stats.successful, 2);
+  assert.equal(stats.abandoned, 2, "current-status abandoned only — the awaiting_payment group is not double counted");
+  assert.equal(stats.pending, 2);
+  assert.equal(stats.other, 2, "reversed + expired");
+  assert.equal(stats.everAbandoned, 5, "ever-abandoned remains available as its own metric");
+  assert.equal(stats.eligible, 6, "ever failed or abandoned");
+  assert.equal(stats.recovered, 2, "already-owned close is not a recovery");
+  assert.equal(stats.revenueKobo, 2 * PRICE, "revenue only from verified recovered orders — never from abandoned or already-owned groups");
+  assert.equal(stats.bankRevenueKobo, PRICE, "the bank-transfer share of recovered revenue is also broken out");
+  assert.equal(stats.emailsSent, 3, "sent counts messages that left, incl. later states");
+  assert.equal(stats.emailsDelivered, 1, "delivered counts provider-confirmed only — sent is not delivered");
+  assert.equal(stats.emailsBounced, 1);
+});
+
 console.log(`\n${passed} payment recovery tests passed`);
 if (process.exitCode) process.exit(process.exitCode);

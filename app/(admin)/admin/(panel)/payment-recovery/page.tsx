@@ -60,6 +60,7 @@ export default async function PaymentRecoveryPage({ searchParams }: { searchPara
         ["Failed", String(s.failed)],
         ["Abandoned", String(s.abandoned)],
         ["Pending", String(s.pending)],
+        ["Reversed / expired", String(s.other)],
         ["Recoveries completed", String(s.recovered)],
         ["Recovery emails sent", String(s.emailsSent)],
         ["Emails delivered", String(s.emailsDelivered)],

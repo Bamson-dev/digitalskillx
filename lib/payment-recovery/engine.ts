@@ -46,6 +46,7 @@ export type Group = {
   last_email_at: string | null;
   last_email_step: string | null;
   emails_sent: number;
+  created_at?: string;
 };
 
 export type Attempt = {
@@ -180,6 +181,27 @@ export async function registerCheckoutAttempt(
     ? iso(parsedCreatedAt)
     : iso(now);
 
+  // Reference-first idempotency: a Paystack reference belongs to exactly one
+  // group for its whole life (payment_recovery_attempts.reference is globally
+  // unique). Re-imports of a known reference — the Payment Page pull re-lists
+  // every failed/abandoned row for hours — must attach to that group, never
+  // create a second one. Before this check, once the owning group closed, the
+  // next pull created an empty zombie group for the same checkout: its attempt
+  // insert failed on the unique reference index, the error was swallowed, and
+  // a phantom attempt_created event was written every cycle, while all
+  // verification stayed on the original group's attempt rows.
+  if (!input.groupId) {
+    const { data: known } = await db
+      .from("payment_recovery_attempts")
+      .select("id, group_id")
+      .eq("reference", input.reference)
+      .limit(1);
+    const knownAttempt = ((known ?? []) as Array<{ id: string; group_id: string }>)[0];
+    if (knownAttempt) {
+      return { ok: true, groupId: knownAttempt.group_id, reason: "already_tracked" };
+    }
+  }
+
   let group: Group | null = null;
   if (input.groupId) {
     group = await loadGroup(db, input.groupId);
@@ -264,8 +286,14 @@ export async function registerCheckoutAttempt(
     created_at: attemptCreatedAt,
     next_verify_at: iso(input.source === "historical" || input.verifyImmediately ? now : firstVerify),
   });
-  if (attempt.error && !isDuplicate(attempt.error)) {
-    return { ok: false, groupId: group.id, reason: attempt.error.message };
+  if (attempt.error) {
+    if (!isDuplicate(attempt.error)) {
+      return { ok: false, groupId: group.id, reason: attempt.error.message };
+    }
+    // Lost a race on the unique reference index: the reference is tracked by
+    // whichever group won. Never write an attempt_created event for an
+    // attempt row that does not exist.
+    return { ok: true, groupId: group.id, reason: "already_tracked" };
   }
   await event(db, group.id, "attempt_created", { reference: input.reference, source: input.source ?? "checkout" });
   return { ok: true, groupId: group.id };
@@ -368,6 +396,114 @@ export async function markGroupAlreadyOwned(
     }, params.actorId);
   }
   return { changed };
+}
+
+/**
+ * Close a surplus open group for a checkout that another group already tracks.
+ * Auditable, never a payment: payment_status is left exactly as verified, no
+ * recovered_* fields are set, no paid/recovered event is written, and the
+ * group stops being message-eligible because it is no longer open.
+ */
+export async function markGroupDuplicate(
+  db: Db,
+  deps: RecoveryDeps,
+  groupId: string,
+  params: { duplicateOf: string; actorId?: string | null },
+) {
+  const now = deps.now();
+  const group = await loadGroup(db, groupId);
+  if (!group || !group.is_open) return { changed: false };
+  const result = await db
+    .from("payment_recovery_groups")
+    .update({
+      is_open: false,
+      recovery_status: "cancelled",
+      next_message_at: null,
+      closed_at: iso(now),
+      updated_at: iso(now),
+    })
+    .eq("id", groupId)
+    .eq("is_open", true)
+    .select("id");
+  const changed = (result.data?.length ?? 0) > 0;
+  if (changed) {
+    await event(db, groupId, "closed_duplicate", { duplicate_of: params.duplicateOf }, params.actorId);
+  }
+  return { changed };
+}
+
+function groupIdentityKey(g: Group) {
+  return `${g.customer_email.toLowerCase()}|${g.course_id ?? g.product_id}`;
+}
+
+/**
+ * One checkout = one active recovery sequence. The reference-first check in
+ * registerCheckoutAttempt stops new duplicates; this pass repairs duplicates
+ * that already exist:
+ *  - several OPEN groups share one checkout identity: the group that owns the
+ *    attempt rows (oldest first) stays; the rest close as duplicates.
+ *  - an OPEN group owns NO attempt rows while a sibling group (open or
+ *    closed) owns them: the empty group is a re-import zombie (its attempt
+ *    inserts failed on the unique reference index) and closes as a duplicate
+ *    of the attempt-owning group. This is the DSX-REC-B722EF shape.
+ * An open group with no attempts and no attempt-owning sibling is left alone:
+ * it can never become due, and there is nothing to attribute it to.
+ */
+export async function dedupeOpenGroups(db: Db, deps: RecoveryDeps) {
+  const { data } = await db.from("payment_recovery_groups").select("*").eq("is_open", true);
+  const open = ((data ?? []) as Group[]).slice();
+  if (!open.length) return { openGroups: 0, closedDuplicates: 0 };
+
+  const attemptCounts = new Map<string, number>();
+  const countAttempts = async (ids: string[]) => {
+    for (let i = 0; i < ids.length; i += 200) {
+      const { data: rows } = await db
+        .from("payment_recovery_attempts")
+        .select("group_id")
+        .in("group_id", ids.slice(i, i + 200));
+      for (const r of (rows ?? []) as Array<{ group_id: string }>) {
+        attemptCounts.set(r.group_id, (attemptCounts.get(r.group_id) ?? 0) + 1);
+      }
+    }
+  };
+  await countAttempts(open.map((g) => g.id));
+
+  const byIdentity = new Map<string, Group[]>();
+  for (const g of open) {
+    const key = groupIdentityKey(g);
+    byIdentity.set(key, [...(byIdentity.get(key) ?? []), g]);
+  }
+
+  let closedDuplicates = 0;
+  for (const siblings of byIdentity.values()) {
+    // Sibling groups of any status with the same identity (for zombie repair).
+    const email = siblings[0].customer_email.toLowerCase();
+    const { data: allRows } = await db
+      .from("payment_recovery_groups")
+      .select("*")
+      .eq("customer_email", email);
+    const identity = groupIdentityKey(siblings[0]);
+    const all = ((allRows ?? []) as Group[]).filter((g) => groupIdentityKey(g) === identity);
+    const missing = all.filter((g) => !attemptCounts.has(g.id)).map((g) => g.id);
+    if (missing.length) await countAttempts(missing);
+
+    const byAge = (a: Group, b: Group) =>
+      String(a.created_at ?? a.first_attempt_at).localeCompare(String(b.created_at ?? b.first_attempt_at));
+    const has = (g: Group) => (attemptCounts.get(g.id) ?? 0) > 0;
+    const keeperOpen = siblings.filter(has).sort(byAge)[0] ?? null;
+    const anyOwner = all.filter(has).sort(byAge)[0] ?? null;
+
+    for (const g of siblings) {
+      if (keeperOpen && g.id === keeperOpen.id) continue;
+      // Empty zombie: close against whichever group owns the attempts.
+      // Surplus open group with attempts: close against the keeper open group.
+      const target = has(g) ? keeperOpen : keeperOpen ?? anyOwner;
+      if (!target) continue; // orphan with nothing to attribute to
+      const r = await markGroupDuplicate(db, deps, g.id, { duplicateOf: target.id });
+      if (r.changed) closedDuplicates += 1;
+    }
+  }
+  return { openGroups: open.length, closedDuplicates };
 }
 
 /** Called after the existing success flow fulfils a reference (webhook or reconcile). */
@@ -1105,7 +1241,8 @@ export async function verifyGroupNow(db: Db, deps: RecoveryDeps, groupId: string
 /* ------------------------------------------------------------------------ */
 
 export async function runRecoveryCycle(db: Db, deps: RecoveryDeps) {
+  const dedupe = await dedupeOpenGroups(db, deps);
   const reconcile = await reconcileAttempts(db, deps);
   const messages = await processDueMessages(db, deps);
-  return { reconcile, messages };
+  return { dedupe, reconcile, messages };
 }
