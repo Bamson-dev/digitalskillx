@@ -1,5 +1,5 @@
 {
-  "description": "Coolify scheduled task plan derived from vercel.json. Tasks marked missing are NOT created or enabled. Vercel schedules stay in place until Vercel cron execution is shown to be off.",
+  "description": "Coolify scheduled task plan derived from vercel.json. Payment recovery runs inside the application container on a five-minute schedule and does not require a separate Coolify task.",
   "command_template": "curl -fsS -m 300 -H \"Authorization: Bearer $CRON_SECRET\" http://localhost:3000{path}",
   "tasks": [
     {
@@ -155,15 +155,6 @@
       "schedule": "*/15 * * * *",
       "timezone": "UTC",
       "status": "existing_in_coolify"
-    }
-  ],
-  "required_manual_tasks": [
-    {
-      "name": "payment-recovery-every5min",
-      "path": "/api/cron/payment-recovery",
-      "schedule": "*/5 * * * *",
-      "timezone": "UTC",
-      "status": "required_missing_in_coolify_create_manually"
     }
   ]
 }
