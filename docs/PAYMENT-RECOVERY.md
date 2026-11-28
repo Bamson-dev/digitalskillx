@@ -46,7 +46,7 @@ For the Docker/Coolify production container, setup runs during every container s
 
 1. `scripts/start.mjs` runs the repository's tracked migration runner using `DATABASE_URL`. The runner applies pending migrations and verifies checksums for migrations it has already applied.
 2. Startup loads the Paystack secret from `platform_secrets` when that row contains a configured value, matching the app's existing secret precedence. Otherwise it uses the runtime environment. It checks that `DATABASE_URL`, `CRON_SECRET`, a live `PAYSTACK_SECRET_KEY` and `RESEND_API_KEY` are available.
-3. Startup checks Resend for the exact endpoint `https://www.digitalskillx.com/api/webhooks/resend`. It creates the endpoint when missing. If it already exists, it enables it and adds any missing recovery event subscriptions without removing other subscriptions. It retrieves the current signing secret from Resend and writes it to the app's private runtime environment file. It does not store the secret in the repository or database.
+3. Startup checks Resend for the exact endpoint `https://www.digitalskillx.com/api/webhooks/resend`. It creates the endpoint when missing. If it already exists, it enables it and adds any missing recovery event subscriptions without removing other subscriptions. It retrieves the current signing secret from Resend and writes it to the app's private runtime environment file. It does not store the secret in the repository or database. These webhook management calls authenticate with `RESEND_WEBHOOK_API_KEY` (a Full access key) when that variable is set, and fall back to `RESEND_API_KEY` when it is not. Sending-access keys cannot manage webhooks — Resend returns HTTP 401 — so without a Full access key the webhook step fails and recovery stays disabled (fail-closed).
 4. After Next.js responds successfully to its local health check, the container starts the recovery scheduler. The scheduler runs the recovery route every five minutes and uses a PostgreSQL advisory lock to avoid duplicate cycles across application replicas.
 5. The startup wrapper enables `PAYMENT_RECOVERY_ENABLED` only after migrations and required integrations pass. If a setup step fails, the website still starts, but recovery remains disabled. Check the container logs for the missing environment value or integration error.
 6. To pause recovery without removing its setup, set `PAYMENT_RECOVERY_FORCE_DISABLED=true` in the container environment and restart it. Leave it `false` for normal operation.
@@ -60,7 +60,8 @@ These values must already exist in Coolify or the existing platform secret store
 - `DATABASE_URL`: PostgreSQL connection used by the migration runner and scheduler.
 - `CRON_SECRET`: bearer secret used by the recovery route and existing cron jobs.
 - `PAYSTACK_SECRET_KEY`: may come from the runtime environment or `platform_secrets`.
-- `RESEND_API_KEY`: allows startup to manage the Resend webhook and send recovery mail.
+- `RESEND_API_KEY`: the Sending-access key used to send all email, including recovery mail. This is the only key the sending code uses.
+- `RESEND_WEBHOOK_API_KEY`: a separate Full access key used **only** by startup for Resend webhook verification, creation and reconciliation. It is never used to send email. Set it in Coolify alongside `RESEND_API_KEY`; when it is absent, webhook management falls back to `RESEND_API_KEY` (which fails with HTTP 401 if that key is Sending-access only, leaving recovery disabled).
 
 `RESEND_FROM_EMAIL` is used when set. Otherwise startup falls back to `ZEPTOMAIL_FROM_EMAIL`, then `courses@digitalskillx.com`.
 
@@ -91,6 +92,7 @@ The scheduler waits for the local health check, runs a cycle and then continues 
 | `PAYMENT_RECOVERY_BATCH_LIMIT` | `40` | Maximum attempts and emails per run |
 | `PAYMENT_RECOVERY_ENABLED` | Managed at startup | Enables only after migration and integration checks pass |
 | `RESEND_WEBHOOK_SECRET` | Managed at startup | Retrieved from Resend and kept in the private runtime environment |
+| `RESEND_WEBHOOK_API_KEY` | Set in Coolify | Full access key used only for webhook management at startup; falls back to `RESEND_API_KEY` when unset |
 
 ## Admin pages
 

@@ -2,6 +2,12 @@
 /**
  * Keeps the Resend webhook for payment recovery present and enabled.
  * The signing secret is fetched at startup and passed only to the app process.
+ *
+ * Key split: webhook management (list/get/create/patch) authenticates with
+ * RESEND_WEBHOOK_API_KEY (a Full access key) when it is set, because
+ * Sending-access keys cannot manage webhooks and Resend returns HTTP 401.
+ * When RESEND_WEBHOOK_API_KEY is not set it falls back to RESEND_API_KEY,
+ * which remains the only key used for sending email anywhere in the app.
  */
 
 export const RESEND_RECOVERY_EVENTS = [
@@ -15,6 +21,18 @@ export const RESEND_RECOVERY_EVENTS = [
 ];
 
 const RESEND_API = "https://api.resend.com";
+
+/**
+ * Resolve the key used for webhook management calls only.
+ * RESEND_WEBHOOK_API_KEY (Full access) wins when set; otherwise the
+ * sending key RESEND_API_KEY is used, preserving the previous behaviour.
+ * This key is never used to send email.
+ */
+export function resolveResendWebhookApiKey(env = process.env) {
+  const webhookKey = typeof env?.RESEND_WEBHOOK_API_KEY === "string" ? env.RESEND_WEBHOOK_API_KEY.trim() : "";
+  if (webhookKey) return webhookKey;
+  return typeof env?.RESEND_API_KEY === "string" ? env.RESEND_API_KEY.trim() : "";
+}
 
 async function request(path, { apiKey, method = "GET", body, fetchImpl = fetch } = {}) {
   const controller = new AbortController();
@@ -63,14 +81,20 @@ async function findWebhook(endpoint, options) {
  */
 export async function ensureResendRecoveryWebhook({
   apiKey,
+  webhookApiKey,
   endpoint = "https://www.digitalskillx.com/api/webhooks/resend",
   fetchImpl = fetch,
 }) {
-  if (!apiKey || !String(apiKey).trim()) throw new Error("RESEND_API_KEY is required");
+  // Webhook management prefers the dedicated Full access key; the sending
+  // key is only a fallback for deployments that have not split the keys yet.
+  const resolvedApiKey =
+    (typeof webhookApiKey === "string" && webhookApiKey.trim()) ||
+    (typeof apiKey === "string" ? apiKey.trim() : "");
+  if (!resolvedApiKey) throw new Error("RESEND_API_KEY is required");
   const parsedEndpoint = new URL(endpoint);
   if (parsedEndpoint.protocol !== "https:") throw new Error("Resend webhook endpoint must use HTTPS");
 
-  const options = { apiKey: String(apiKey).trim(), fetchImpl };
+  const options = { apiKey: resolvedApiKey, fetchImpl };
   let listed = await findWebhook(endpoint, options);
   let created = false;
   let createdSecret = "";

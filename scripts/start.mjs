@@ -161,8 +161,16 @@ async function ensureResendWebhookWithLock() {
       if (!locked) await new Promise((resolve) => setTimeout(resolve, 2_000));
     }
     if (!locked) throw new Error("Resend webhook setup lock could not be acquired");
+    // Webhook management uses the dedicated Full access key when configured;
+    // RESEND_API_KEY (sending) is only the fallback. Names only, never values.
+    const webhookApiKey = readEnv("RESEND_WEBHOOK_API_KEY");
+    console.log(
+      "[digitalskillx] Resend webhook management key source: " +
+        (webhookApiKey ? "RESEND_WEBHOOK_API_KEY" : "RESEND_API_KEY (fallback)"),
+    );
     return await ensureResendRecoveryWebhook({
       apiKey: readEnv("RESEND_API_KEY"),
+      webhookApiKey,
       endpoint: "https://www.digitalskillx.com/api/webhooks/resend",
     });
   } finally {
@@ -253,6 +261,7 @@ async function main() {
   console.log("  PAYSTACK_SECRET_KEY=" + secretStatus("PAYSTACK_SECRET_KEY"));
   console.log("  EMAIL_PROVIDER=" + (readEnv("EMAIL_PROVIDER") || "(resend)"));
   console.log("  RESEND_API_KEY=" + secretStatus("RESEND_API_KEY"));
+  console.log("  RESEND_WEBHOOK_API_KEY=" + secretStatus("RESEND_WEBHOOK_API_KEY"));
   console.log("  RESEND_FROM_EMAIL=" + (readEnv("RESEND_FROM_EMAIL") ? "set" : "missing"));
   console.log("  PAYMENT_RECOVERY_ENABLED=" + readEnv("PAYMENT_RECOVERY_ENABLED"));
 

@@ -3,7 +3,11 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { ensureResendRecoveryWebhook, RESEND_RECOVERY_EVENTS } from "../payment-recovery-bootstrap.mjs";
+import {
+  ensureResendRecoveryWebhook,
+  resolveResendWebhookApiKey,
+  RESEND_RECOVERY_EVENTS,
+} from "../payment-recovery-bootstrap.mjs";
 
 const root = resolve(import.meta.dirname, "../..");
 const endpoint = "https://www.digitalskillx.com/api/webhooks/resend";
@@ -103,6 +107,62 @@ await test("missing API key and non-HTTPS webhook URLs fail closed", async () =>
   );
 });
 
+await test("webhook key resolution prefers RESEND_WEBHOOK_API_KEY and falls back to RESEND_API_KEY", async () => {
+  assert.equal(
+    resolveResendWebhookApiKey({ RESEND_WEBHOOK_API_KEY: " re_full_access ", RESEND_API_KEY: "re_sending" }),
+    "re_full_access",
+  );
+  assert.equal(resolveResendWebhookApiKey({ RESEND_API_KEY: " re_sending " }), "re_sending");
+  assert.equal(
+    resolveResendWebhookApiKey({ RESEND_WEBHOOK_API_KEY: "   ", RESEND_API_KEY: "re_sending" }),
+    "re_sending",
+  );
+  assert.equal(resolveResendWebhookApiKey({}), "");
+});
+
+function enabledWebhookFetch(calls, details) {
+  return async (url, init = {}) => {
+    const parsed = new URL(url);
+    const method = init.method || "GET";
+    calls.push({ path: parsed.pathname, method, authorization: init.headers?.Authorization || null });
+    if (parsed.pathname === "/webhooks" && method === "GET") {
+      return response({ data: [{ id: details.id, endpoint, signing_secret: signingSecret }], has_more: false });
+    }
+    if (parsed.pathname === "/webhooks/" + details.id && method === "GET") {
+      return response(details);
+    }
+    throw new Error("Unexpected Resend API request: " + method + " " + parsed.pathname);
+  };
+}
+
+await test("webhook management calls authenticate with RESEND_WEBHOOK_API_KEY when it is set", async () => {
+  const calls = [];
+  const details = { id: "webhook_existing", endpoint, status: "enabled", events: [...RESEND_RECOVERY_EVENTS] };
+  const result = await ensureResendRecoveryWebhook({
+    apiKey: "re_sending_only",
+    webhookApiKey: "re_full_access",
+    endpoint,
+    fetchImpl: enabledWebhookFetch(calls, details),
+  });
+  assert.equal(result.created, false);
+  assert.ok(calls.length >= 2);
+  for (const call of calls) assert.equal(call.authorization, "Bearer re_full_access");
+  assert.equal(calls.filter((call) => call.method === "POST").length, 0, "existing webhook must be reconciled, not recreated");
+});
+
+await test("webhook management falls back to RESEND_API_KEY when no webhook key is set", async () => {
+  const calls = [];
+  const details = { id: "webhook_existing", endpoint, status: "enabled", events: [...RESEND_RECOVERY_EVENTS] };
+  const result = await ensureResendRecoveryWebhook({
+    apiKey: "re_sending_only",
+    endpoint,
+    fetchImpl: enabledWebhookFetch(calls, details),
+  });
+  assert.equal(result.created, false);
+  assert.ok(calls.length >= 2);
+  for (const call of calls) assert.equal(call.authorization, "Bearer re_sending_only");
+});
+
 const start = readFileSync(resolve(root, "scripts/start.mjs"), "utf8");
 const scheduler = readFileSync(resolve(root, "scripts/payment-recovery-scheduler.mjs"), "utf8");
 const docker = readFileSync(resolve(root, "Dockerfile"), "utf8");
@@ -120,6 +180,21 @@ for (const file of [
 
 assert.match(start, /scripts\/db-migrate\.mjs/);
 assert.match(start, /ensureResendRecoveryWebhook/);
+assert.match(start, /const webhookApiKey = readEnv\("RESEND_WEBHOOK_API_KEY"\)/);
+assert.match(start, /webhookApiKey,\s*\n\s*endpoint:/);
+assert.match(start, /RESEND_WEBHOOK_API_KEY=" \+ secretStatus\("RESEND_WEBHOOK_API_KEY"\)/);
+
+const bootstrap = readFileSync(resolve(root, "scripts/payment-recovery-bootstrap.mjs"), "utf8");
+assert.match(bootstrap, /resolveResendWebhookApiKey/);
+assert.match(bootstrap, /RESEND_WEBHOOK_API_KEY/);
+
+const resendProvider = readFileSync(resolve(root, "lib/email/providers/resend.ts"), "utf8");
+assert.match(resendProvider, /RESEND_API_KEY/);
+assert.doesNotMatch(
+  resendProvider,
+  /RESEND_WEBHOOK_API_KEY/,
+  "email sending must keep using the sending-only RESEND_API_KEY, never the webhook key",
+);
 assert.match(start, /PAYMENT_RECOVERY_FORCE_DISABLED/);
 assert.match(start, /PAYMENT_RECOVERY_ENABLED = "true"/);
 assert.match(start, /startsWith\("sk_live_"\)/);
