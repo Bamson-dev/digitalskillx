@@ -156,7 +156,7 @@ function harness({ verify, product, enabled = true, env } = {}) {
       calls.fulfil.push(ref);
       return { ok: true };
     },
-    isAlreadyPaid: async (g) => paid.has(`${g.customer_email}:${g.course_id}`),
+    isAlreadyPaid: async (g) => (paid.has(`${g.customer_email}:${g.course_id}`) ? { matched: "transaction" } : null),
     sendEmail: async (p) => {
       calls.emails.push(p);
       return { messageId: `re_${calls.emails.length}` };
@@ -764,6 +764,155 @@ await test("native bundle and certificate checkout routes capture recovery conte
   assert.match(src("lib/commerce-checkout-initialize.ts"), /productType: offerId \? "offer" : "bundle"/);
   assert.match(src("lib/learn-certificate-checkout.ts"), /productType: "certificate"/);
   assert.match(src("lib/learn-certificate-checkout.ts"), /currency === "NGN"/);
+});
+
+/* ------------------------------------------------------------------------ */
+/* False-paid regression suite (production incident DSX-REC-E4A58D)          */
+/* ------------------------------------------------------------------------ */
+
+await test("regression B1: abandoned payment cannot become paid — already-owned close keeps Paystack's status", async () => {
+  const h = harness({ verify: () => ok("abandoned") });
+  // Payment Page attempt imported already aged past the 30-minute abandon
+  // window, exactly like production group DSX-REC-E4A58D: it becomes due in
+  // the same cycle that creates it.
+  const created = await engine.registerCheckoutAttempt(h.db, h.deps, {
+    reference: "T_OWNED_PAGE",
+    email: "owner@example.com",
+    fullName: "Olivia Owner",
+    courseId: COURSE,
+    productType: "course",
+    productId: COURSE,
+    productTitle: "AI Ads Automation Masterclass",
+    amountKobo: PRICE,
+    source: "payment_page",
+    verifyImmediately: true,
+    attemptCreatedAt: new Date(h.now() - 45 * MIN).toISOString(),
+  });
+  assert.equal(created.ok, true);
+  h.paid.add(`owner@example.com:${COURSE}`); // she bought this course before
+  const r = await h.cycle();
+  const g = h.group();
+  assert.equal(g.payment_status, "abandoned", "Paystack's verified status is never overwritten by association");
+  assert.equal(g.recovery_status, "cancelled");
+  assert.equal(g.is_open, false);
+  assert.equal(g.recovered_reference ?? null, null, "no recovered reference is fabricated");
+  assert.equal(g.recovered_amount_kobo ?? null, null, "no recovered amount is fabricated");
+  assert.equal(h.calls.emails.length, 0, "ownership still suppresses the recovery email");
+  const kinds = h.db.t("payment_recovery_events").map((e) => e.kind);
+  assert.ok(!kinds.includes("paid") && !kinds.includes("recovered"), "no paid/recovered event is written");
+  const close = h.db.t("payment_recovery_events").find((e) => e.kind === "closed_already_owned");
+  assert.ok(close, "the close is recorded as closed_already_owned");
+  assert.equal(close.detail.via, "association");
+  assert.equal(close.detail.matched, "transaction");
+  assert.equal(r.messages.closedAlreadyOwned, 1);
+  assert.equal(r.messages.closedPaid, 0);
+  const stats = computeRecoveryAnalytics(h.db.t("payment_recovery_groups"), h.db.t("payment_recovery_messages"));
+  assert.equal(stats.successful, 0, "analytics: not a successful payment");
+  assert.equal(stats.recovered, 0, "analytics: not a recovered order");
+  assert.equal(stats.revenueKobo, 0, "analytics: no recovered revenue");
+});
+
+await test("regression B2: missing transaction reference cannot establish payment", async () => {
+  const h = harness({ verify: () => ok("failed") });
+  await h.start("ref_guard");
+  await assert.rejects(
+    () => engine.markGroupPaid(h.db, h.deps, h.group().id, { via: "paystack", reference: null, amountKobo: PRICE }),
+    /without its transaction reference/,
+  );
+  await assert.rejects(
+    () => engine.markGroupPaid(h.db, h.deps, h.group().id, { via: "paystack", reference: "", amountKobo: PRICE }),
+    /without its transaction reference/,
+  );
+  assert.equal(h.group().is_open, true, "the rejected close leaves the group untouched");
+  assert.equal(h.group().payment_status, "awaiting_payment");
+  assert.ok(!h.db.t("payment_recovery_events").some((e) => e.kind === "paid" || e.kind === "recovered"));
+  // A referenced Paystack close still works.
+  await engine.markGroupPaid(h.db, h.deps, h.group().id, { via: "paystack", reference: "ref_guard", amountKobo: PRICE });
+  assert.equal(h.group().payment_status, "successful");
+  assert.equal(h.group().recovered_reference, "ref_guard");
+});
+
+await test("regression B3: previous purchases and enrollments cannot falsely mark a new checkout as paid", async () => {
+  // Enrollment branch of isAlreadyPaid.
+  const h = harness({ verify: () => ok("failed") });
+  h.deps.isAlreadyPaid = async () => ({ matched: "enrollment" });
+  await h.start("ref_owned_enrol");
+  h.advance(10 * MIN);
+  await h.cycle(); // Paystack verifies this attempt as failed
+  h.advance(11 * MIN);
+  const r = await h.cycle(); // due: closes already-owned instead of emailing
+  const g = h.group();
+  assert.equal(g.payment_status, "failed", "the group's own verified failure stands");
+  assert.equal(g.is_open, false);
+  assert.equal(h.calls.emails.length, 0, "no recovery email to a customer who already owns the course");
+  const close = h.db.t("payment_recovery_events").find((e) => e.kind === "closed_already_owned");
+  assert.ok(close);
+  assert.equal(close.detail.matched, "enrollment");
+  assert.equal(r.messages.closedAlreadyOwned, 1);
+  assert.equal(r.messages.closedPaid, 0);
+
+  // The retry-link call site: same already-owned close, already-paid response.
+  const h2 = harness({ verify: () => ok("failed") });
+  await h2.start("ref_owned_retry");
+  h2.advance(10 * MIN);
+  await h2.cycle();
+  h2.paid.add(`ada@example.com:${COURSE}`);
+  const retry = await engine.createRetryCheckout(h2.db, h2.deps, h2.group().retry_token);
+  assert.equal(retry.kind, "already_paid");
+  assert.equal(h2.group().payment_status, "failed");
+  assert.equal(h2.group().is_open, false);
+  assert.ok(h2.db.t("payment_recovery_events").some((e) => e.kind === "closed_already_owned"));
+  assert.ok(!h2.db.t("payment_recovery_events").some((e) => e.kind === "paid" || e.kind === "recovered"));
+
+  // The admin manual-send call site: same already-owned close, no email sent.
+  const h3 = harness({ verify: () => ok("failed") });
+  await h3.start("ref_owned_manual");
+  h3.advance(10 * MIN);
+  await h3.cycle();
+  h3.paid.add(`ada@example.com:${COURSE}`);
+  const manual = await engine.sendManualRecoveryEmail(h3.db, h3.deps, h3.group().id, "admin_1");
+  assert.equal(manual.ok, false);
+  assert.equal(h3.group().payment_status, "failed");
+  assert.equal(h3.group().is_open, false);
+  assert.equal(h3.calls.emails.length, 0);
+  assert.ok(h3.db.t("payment_recovery_events").some((e) => e.kind === "closed_already_owned"));
+  assert.ok(!h3.db.t("payment_recovery_events").some((e) => e.kind === "paid" || e.kind === "recovered"));
+});
+
+await test("regression B4: genuine successful payment correctly stops recovery", async () => {
+  const h = harness({ verify: () => ok("failed") });
+  await h.start("ref_genuine");
+  await failThenEmail(h);
+  assert.equal(h.calls.emails.length, 1);
+  await engine.markPaidByReference(h.db, h.deps, "ref_genuine");
+  const g = h.group();
+  assert.equal(g.payment_status, "successful");
+  assert.equal(g.recovery_status, "recovered");
+  assert.equal(g.recovered_reference, "ref_genuine", "the verified reference is recorded");
+  assert.equal(g.next_message_at, null, "sequence cancelled");
+  const ev = h.db.t("payment_recovery_events").find((e) => e.kind === "recovered");
+  assert.ok(ev, "recovered event written");
+  assert.equal(ev.detail.via, "paystack");
+  assert.equal(ev.detail.reference, "ref_genuine", "the paid outcome carries its Paystack reference");
+  h.advance(5 * 24 * HOUR);
+  await h.cycle();
+  assert.equal(h.calls.emails.length, 1, "no further messages after payment");
+});
+
+await test("regression B5: duplicate webhook events cannot create false or duplicate payment records", async () => {
+  const h = harness({ verify: () => ok("failed") });
+  await h.start("ref_whdup");
+  await failThenEmail(h);
+  // Paystack retries webhooks: the same charge.success arrives twice.
+  await engine.markPaidByReference(h.db, h.deps, "ref_whdup");
+  await engine.markPaidByReference(h.db, h.deps, "ref_whdup");
+  const closes = h.db.t("payment_recovery_events").filter((e) => e.kind === "paid" || e.kind === "recovered");
+  assert.equal(closes.length, 1, "exactly one paid outcome for duplicate deliveries");
+  assert.equal(closes[0].detail.reference, "ref_whdup");
+  assert.equal(h.group().recovered_reference, "ref_whdup");
+  const stats = computeRecoveryAnalytics(h.db.t("payment_recovery_groups"), h.db.t("payment_recovery_messages"));
+  assert.equal(stats.recovered, 1, "recovery counted once");
+  assert.equal(stats.revenueKobo, PRICE, "revenue counted once");
 });
 
 console.log(`\n${passed} payment recovery tests passed`);

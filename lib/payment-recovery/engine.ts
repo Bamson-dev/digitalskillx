@@ -63,6 +63,9 @@ export type Attempt = {
 
 export type SendResult = { messageId?: string; error?: string; skipped?: boolean };
 
+/** How an outside-the-group ownership match was established. */
+export type AlreadyPaidMatch = { matched: "transaction" | "enrollment" };
+
 export type RecoveryDeps = {
   now: () => number;
   config: RecoveryConfig;
@@ -74,8 +77,10 @@ export type RecoveryDeps = {
   completePaidCheckout: (reference: string) => Promise<{ ok: boolean; error?: string }>;
   /** Fulfil a verified external Paystack Payment Page success using stored catalog attribution. */
   completeExternalPayment?: (reference: string, group: Group) => Promise<{ ok: boolean; error?: string }>;
-  /** True when this customer already paid for this course outside the group (other checkout, enrolment). */
-  isAlreadyPaid: (group: Group) => Promise<boolean>;
+  /** Set when this customer already owns the product outside this group (a successful
+   * transaction elsewhere, or an enrolment). Suppresses recovery email only: an
+   * association match is never recorded as a payment of this group. */
+  isAlreadyPaid: (group: Group) => Promise<AlreadyPaidMatch | null>;
   sendEmail: (params: {
     to: string;
     subject: string;
@@ -285,6 +290,13 @@ export async function markGroupPaid(
   groupId: string,
   params: { via: "paystack" | "bank_transfer"; reference: string | null; amountKobo: number; actorId?: string | null },
 ) {
+  // A Paystack payment is only ever recorded against the verified transaction
+  // reference that proves it. An association match (the customer already owns
+  // the product) is not a payment of this group: close those groups with
+  // markGroupAlreadyOwned instead, so no path can fabricate a payment record.
+  if (params.via === "paystack" && !params.reference) {
+    throw new Error("markGroupPaid: a Paystack payment cannot be recorded without its transaction reference");
+  }
   const now = deps.now();
   const group = await loadGroup(db, groupId);
   if (!group || !group.is_open) return { changed: false };
@@ -314,6 +326,45 @@ export async function markGroupPaid(
       via: params.via,
       reference: params.reference,
       amount_kobo: params.amountKobo,
+    }, params.actorId);
+  }
+  return { changed };
+}
+
+/**
+ * Close a group because the customer already owns the product outside this
+ * group (isAlreadyPaid association match). This suppresses recovery email, but
+ * it is NOT a payment of this group: payment_status keeps whatever Paystack
+ * verification established for the group's own attempts, no recovered_* fields
+ * are set, and the close is recorded as `closed_already_owned`, never `paid`,
+ * so analytics never count it as a recovery or as revenue.
+ */
+export async function markGroupAlreadyOwned(
+  db: Db,
+  deps: RecoveryDeps,
+  groupId: string,
+  params: { matched: AlreadyPaidMatch["matched"]; actorId?: string | null },
+) {
+  const now = deps.now();
+  const group = await loadGroup(db, groupId);
+  if (!group || !group.is_open) return { changed: false };
+  const result = await db
+    .from("payment_recovery_groups")
+    .update({
+      is_open: false,
+      recovery_status: "cancelled",
+      next_message_at: null,
+      closed_at: iso(now),
+      updated_at: iso(now),
+    })
+    .eq("id", groupId)
+    .eq("is_open", true)
+    .select("id");
+  const changed = (result.data?.length ?? 0) > 0;
+  if (changed) {
+    await event(db, groupId, "closed_already_owned", {
+      via: "association",
+      matched: params.matched,
     }, params.actorId);
   }
   return { changed };
@@ -678,19 +729,29 @@ export async function processDueMessages(db: Db, deps: RecoveryDeps, limit?: num
     .limit(limit ?? deps.config.batchLimit);
   if (error) return { ok: false as const, error: error.message };
 
-  const summary = { due: 0, sent: 0, failed: 0, closedPaid: 0, postponed: 0, suppressed: 0, expired: 0 };
+  const summary = { due: 0, sent: 0, failed: 0, closedPaid: 0, closedAlreadyOwned: 0, postponed: 0, suppressed: 0, expired: 0 };
   for (const group of (data ?? []) as Group[]) {
     summary.due += 1;
 
-    // Paid already? Close the group, never email.
+    // A verified success on one of this group's own attempts? Close as paid,
+    // never email. The reference is the Paystack proof of that payment.
     const success = await hasSuccessfulAttempt(db, group.id);
-    if (success || (await deps.isAlreadyPaid(group))) {
+    if (success) {
       await markGroupPaid(db, deps, group.id, {
         via: "paystack",
-        reference: success?.reference ?? null,
-        amountKobo: success?.amount_kobo ?? group.amount_kobo,
+        reference: success.reference,
+        amountKobo: success.amount_kobo,
       });
       summary.closedPaid += 1;
+      continue;
+    }
+
+    // Already owns the product outside this group? Suppress the emails, but
+    // never record a payment this group did not make.
+    const owned = await deps.isAlreadyPaid(group);
+    if (owned) {
+      await markGroupAlreadyOwned(db, deps, group.id, { matched: owned.matched });
+      summary.closedAlreadyOwned += 1;
       continue;
     }
 
@@ -765,8 +826,9 @@ export async function createRetryCheckout(db: Db, deps: RecoveryDeps, token: str
   if (!group) return { kind: "error", code: "not_found" };
   if (PAID_STATUSES.has(group.payment_status)) return { kind: "already_paid", courseId: group.course_id };
   if (!group.is_open) return { kind: "error", code: "closed" };
-  if (await deps.isAlreadyPaid(group)) {
-    await markGroupPaid(db, deps, group.id, { via: "paystack", reference: null, amountKobo: group.amount_kobo });
+  const owned = await deps.isAlreadyPaid(group);
+  if (owned) {
+    await markGroupAlreadyOwned(db, deps, group.id, { matched: owned.matched });
     return { kind: "already_paid", courseId: group.course_id };
   }
   const product = await deps.loadProduct(group);
@@ -1000,8 +1062,9 @@ export async function sendManualRecoveryEmail(db: Db, deps: RecoveryDeps, groupI
   if (!["failed", "abandoned"].includes(group.payment_status)) {
     return { ok: false, error: "Only failed or abandoned orders can receive a recovery email." };
   }
-  if (await deps.isAlreadyPaid(group)) {
-    await markGroupPaid(db, deps, group.id, { via: "paystack", reference: null, amountKobo: group.amount_kobo });
+  const owned = await deps.isAlreadyPaid(group);
+  if (owned) {
+    await markGroupAlreadyOwned(db, deps, group.id, { matched: owned.matched });
     return { ok: false, error: "Customer has already paid. Order closed." };
   }
   const suppressed = await isSuppressed(db, group.customer_email);
