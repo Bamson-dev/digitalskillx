@@ -13,9 +13,10 @@ There is **no** SMTP path and **no** ZeptoMail delivery path.
 | Variable | Value |
 |----------|--------|
 | `EMAIL_PROVIDER` | `resend` |
-| `RESEND_API_KEY` | Resend API key (`re_…`) — never `NEXT_PUBLIC_` |
+| `RESEND_API_KEY` | Resend API key (`re_…`) — never `NEXT_PUBLIC_`. Sending-access key; the only key used to send email |
 | `RESEND_FROM_EMAIL` | `courses@digitalskillx.com` |
 | `RESEND_FROM_NAME` | `DigitalSkillX` |
+| `RESEND_WEBHOOK_API_KEY` | Separate Full access Resend key used **only** by the payment-recovery startup bootstrap to verify/create/reconcile the Resend webhook (see `docs/PAYMENT-RECOVERY.md`). Never used for sending. Set it in Coolify; when absent, webhook management falls back to `RESEND_API_KEY` |
 
 Configure these in Coolify Runtime for the production app that runs Next.js / cron workers.
 
