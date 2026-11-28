@@ -27,6 +27,7 @@ COPY --from=build --chown=node:node /app/scripts/payment-recovery-bootstrap.mjs 
 COPY --from=build --chown=node:node /app/scripts/payment-recovery-scheduler.mjs ./scripts/payment-recovery-scheduler.mjs
 COPY --from=build --chown=node:node /app/scripts/runtime-env-preload.cjs ./scripts/runtime-env-preload.cjs
 COPY --from=build --chown=node:node /app/scripts/db-migrate.mjs ./scripts/db-migrate.mjs
+COPY --from=build --chown=node:node /app/scripts/payment-recovery-correct-false-paid.mjs ./scripts/payment-recovery-correct-false-paid.mjs
 COPY --from=build --chown=node:node /app/db ./db
 COPY --from=build --chown=node:node /app/supabase/migrations ./supabase/migrations
 RUN mkdir -p /app/.data/storage && chown -R node:node /app/.data
